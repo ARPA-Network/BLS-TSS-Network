@@ -1,0 +1,20 @@
+use crate::node::dao::types::Group;
+
+use super::types::{Event, Topic};
+
+#[derive(Clone)]
+pub struct DKGSuccess {
+    pub group: Group,
+}
+
+impl DKGSuccess {
+    pub fn new(group: Group) -> Self {
+        DKGSuccess { group }
+    }
+}
+
+impl Event for DKGSuccess {
+    fn topic(&self) -> Topic {
+        Topic::DKGSuccess
+    }
+}

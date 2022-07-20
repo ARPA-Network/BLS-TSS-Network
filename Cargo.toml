@@ -1,0 +1,32 @@
+[workspace]
+
+members = [ 
+    "crates/dkg-core", 
+    "crates/randcast-node",
+    "crates/randcast-contract-mock",
+    "crates/threshold-bls"
+]
+
+[profile.release]
+opt-level = 3
+lto = "thin"
+incremental = true
+
+# build all our deps in release mode 
+[profile.dev.package."*"]
+opt-level = 0
+
+[profile.bench]
+opt-level = 3
+debug = false
+rpath = false
+lto = "thin"
+incremental = true
+debug-assertions = false
+
+
+[profile.test]
+opt-level = 0
+incremental = true
+debug-assertions = true
+debug = true

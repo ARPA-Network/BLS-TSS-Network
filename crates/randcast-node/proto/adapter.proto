@@ -1,0 +1,157 @@
+syntax = "proto3";
+
+import "google/protobuf/empty.proto";
+
+package adapter;
+
+service Transactions {
+  rpc Mine(MineRequest) returns (MineReply);
+
+  rpc RequestRandomness(RequestRandomnessRequest)
+      returns (google.protobuf.Empty);
+
+  rpc FulfillRandomness(FulfillRandomnessRequest)
+      returns (google.protobuf.Empty);
+
+  rpc SetInitialGroup(SetInitialGroupRequest) returns (google.protobuf.Empty);
+
+  rpc FulfillRelay(FulfillRelayRequest) returns (google.protobuf.Empty);
+
+  rpc CancelInvalidRelayConfirmationTask(
+      CancelInvalidRelayConfirmationTaskRequest)
+      returns (google.protobuf.Empty);
+
+  rpc ConfirmRelay(ConfirmRelayRequest) returns (google.protobuf.Empty);
+}
+
+message MineRequest {
+  uint32 block_number_increment = 1;
+}
+
+message MineReply {
+  uint32 block_number = 1;
+}
+
+message RequestRandomnessRequest {
+  string message = 1;
+}
+
+message FulfillRandomnessRequest {
+  string id_address = 1;
+  uint32 group_index = 2;
+  uint32 signature_index = 3;
+  bytes signature = 4;
+  map<string, bytes> partial_signatures = 5;
+}
+
+message SetInitialGroupRequest {
+  string id_address = 1;
+  bytes group = 2;
+}
+
+message FulfillRelayRequest {
+  string id_address = 1;
+  uint32 relayer_group_index = 2;
+  uint32 task_index = 3;
+  bytes signature = 4;
+  bytes group_as_bytes = 5;
+}
+
+message CancelInvalidRelayConfirmationTaskRequest {
+  string id_address = 1;
+  uint32 task_index = 2;
+}
+
+message ConfirmRelayRequest {
+  string id_address = 1;
+  uint32 task_index = 2;
+  bytes group_relay_confirmation_as_bytes = 3;
+  bytes signature = 4;
+}
+
+service Views {
+  rpc GetGroup(GetGroupRequest) returns (GroupReply);
+
+  rpc GetLastOutput(google.protobuf.Empty) returns (LastOutputReply);
+
+  rpc EmitSignatureTask(google.protobuf.Empty) returns (SignatureTaskReply);
+
+  rpc GetSignatureTaskCompletionState(GetSignatureTaskCompletionStateRequest)
+      returns (GetSignatureTaskCompletionStateReply);
+
+  rpc GetGroupRelayCache(GetGroupRelayCacheRequest) returns (GroupReply);
+
+  rpc GetGroupRelayConfirmationTaskState(
+      GetGroupRelayConfirmationTaskStateRequest)
+      returns (GetGroupRelayConfirmationTaskStateReply);
+
+  rpc EmitGroupRelayConfirmationTask(google.protobuf.Empty)
+      returns (GroupRelayConfirmationTaskReply);
+}
+
+message GetGroupRequest {
+  uint32 index = 1;
+}
+
+message GroupReply {
+  uint32 index = 1;
+  uint32 epoch = 2;
+  uint32 capacity = 3;
+  uint32 size = 4;
+  uint32 threshold = 5;
+  bool state = 6;
+  bytes public_key = 7;
+  map<string, Member> members = 8;
+  repeated string committers = 9;
+}
+
+message Member {
+  uint32 index = 1;
+  string id_address = 2;
+  bytes partial_public_key = 3;
+}
+
+message SignatureTaskReply {
+  uint32 index = 1;
+  string message = 2;
+  uint32 group_index = 3;
+  uint32 assignment_block_height = 4;
+}
+
+message LastOutputReply {
+  uint64 last_output = 1;
+}
+
+message GetSignatureTaskCompletionStateRequest {
+  uint32 index = 1;
+}
+
+message GetSignatureTaskCompletionStateReply {
+  bool state = 1;
+}
+
+message GroupRelayConfirmationTaskReply {
+  uint32 index = 1;
+  uint32 group_relay_cache_index = 2;
+  uint32 relayed_group_index = 3;
+  uint32 relayed_group_epoch = 4;
+  uint32 relayer_group_index = 5;
+  uint32 assignment_block_height = 6;
+}
+
+message GetGroupRelayCacheRequest {
+  uint32 index = 1;
+}
+
+message GetGroupRelayConfirmationTaskStateRequest {
+  uint32 index = 1;
+}
+
+message GetGroupRelayConfirmationTaskStateReply {
+  enum GroupRelayConfirmationTaskState {
+    NotExisted = 0;
+    Available = 1;
+    Invalid = 2;
+  }
+  GroupRelayConfirmationTaskState state = 1;
+}
