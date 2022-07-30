@@ -90,10 +90,10 @@ where
         };
 
         // Instantiate the DKG with the group info
-        println!("Calculating and broadcasting our shares...");
+        println!("Calculating and broadcasting our shares... Running Phase 0.");
         let phase0 = DKG::new(dkg_private_key, node_rpc_endpoint, group)?;
 
-        // Run Phase 1 and publish to the chain
+        // Run Phase 0 and publish to the chain
         let phase1 = phase0.run(&mut coordinator_client, rng).await?;
 
         // Wait for Phase 1
@@ -103,8 +103,9 @@ where
         let shares = coordinator_client.get_shares().await?;
         println!("Got {} shares...", shares.len());
         let shares = parse_bundle(&shares)?;
-        println!("Parsed {} shares. Running Phase 2", shares.len());
+        println!("Parsed {} shares. Running Phase 1.", shares.len());
 
+        // Run Phase 1
         let phase2 = phase1.run(&mut coordinator_client, &shares).await?;
 
         // Wait for Phase 2
@@ -114,7 +115,7 @@ where
         let responses = coordinator_client.get_responses().await?;
         println!("Got {} responses...", responses.len());
         let responses = parse_bundle(&responses)?;
-        println!("Parsed the responses. Getting result.");
+        println!("Parsed {} responses. Running Phase 2.", responses.len());
 
         // Run Phase 2
         let result = match phase2.run(&mut coordinator_client, &responses).await? {
@@ -128,6 +129,7 @@ where
                 let justifications = coordinator_client.get_justifications().await?;
                 let justifications = parse_bundle(&justifications)?;
 
+                // Run Phase 3
                 phase3.run(&mut coordinator_client, &justifications).await
             }
         };
