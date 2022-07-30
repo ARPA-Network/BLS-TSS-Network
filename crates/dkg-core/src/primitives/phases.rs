@@ -15,6 +15,8 @@ use std::fmt::Debug;
 pub trait Phase0<C: Curve>: Clone + Debug + Serialize + for<'a> Deserialize<'a> {
     type Next: Phase1<C>;
 
+    fn set_rpc_endpoint(&mut self);
+
     fn encrypt_shares<R, F>(self, rng: F) -> DKGResult<(Self::Next, Option<BundledShares<C>>)>
     where
         R: RngCore,

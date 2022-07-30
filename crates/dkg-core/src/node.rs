@@ -61,11 +61,12 @@ where
 {
     type Next = P::Next;
 
-    async fn run(self, board: &mut B, rng: F) -> NodeResult<Self::Next>
+    async fn run(mut self, board: &mut B, rng: F) -> NodeResult<Self::Next>
     where
         C: 'async_trait,
         F: 'async_trait,
     {
+        self.set_rpc_endpoint();
         let (next, shares) = self.encrypt_shares(rng)?;
         if let Some(sh) = shares {
             board

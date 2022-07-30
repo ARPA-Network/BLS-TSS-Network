@@ -134,6 +134,9 @@ impl<C: Curve> RDKG<C> {
 
 impl<C: Curve> Phase0<C> for RDKG<C> {
     type Next = RDKGWaitingShare<C>;
+
+    fn set_rpc_endpoint(&mut self) {}
+
     fn encrypt_shares<R, F>(
         self,
         rng: F,

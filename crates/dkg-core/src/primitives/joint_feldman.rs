@@ -110,6 +110,21 @@ impl<C: Curve> DKG<C> {
 
 impl<C: Curve> Phase0<C> for DKG<C> {
     type Next = DKGWaitingShare<C>;
+
+    fn set_rpc_endpoint(&mut self) {
+        let my_idx = self.info.index;
+
+        let my_node = self
+            .info
+            .group
+            .nodes
+            .iter_mut()
+            .find(|node| node.id() == my_idx)
+            .unwrap();
+
+        my_node.set_rpc_endpoint(self.info.rpc_endpoint.clone());
+    }
+
     /// Evaluates the secret polynomial at the index of each DKG participant and encrypts
     /// the result with the corresponding public key. Returns the bundled encrypted shares
     /// as well as the next phase of the DKG.
