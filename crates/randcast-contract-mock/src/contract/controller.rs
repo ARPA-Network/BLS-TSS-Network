@@ -17,7 +17,7 @@ pub const NODE_STAKING_AMOUNT: usize = 50000;
 
 pub const DISQUALIFIED_NODE_PENALTY_AMOUNT: usize = 1000;
 
-pub const COORDINATOR_STATE_TRIGGER_REWARD: usize = 100;
+pub const DKG_POST_PROCESS_REWARD: usize = 100;
 
 pub const DEFAULT_MINIMUM_THRESHOLD: usize = 3;
 
@@ -801,7 +801,7 @@ impl ControllerTransactions for Controller {
         let (_, coordinator) = self
             .coordinators
             .get(&group_index)
-            .ok_or(ControllerError::CoordinatorNotExisted)?;
+            .ok_or(ControllerError::CoordinatorNotExisted(group_index))?;
 
         if coordinator.in_phase().is_err() {
             return Err(ControllerError::CoordinatorEnded);
@@ -944,7 +944,7 @@ impl ControllerTransactions for Controller {
         let (_, coordinator) = self
             .coordinators
             .get(&group_index)
-            .ok_or(ControllerError::CoordinatorNotExisted)?;
+            .ok_or(ControllerError::CoordinatorNotExisted(group_index))?;
 
         if coordinator.in_phase().is_ok() {
             return Err(ControllerError::CoordinatorNotEnded);
@@ -1028,7 +1028,7 @@ impl ControllerTransactions for Controller {
 
         let trigger_reward = self.rewards.get_mut(id_address).unwrap();
 
-        *trigger_reward += COORDINATOR_STATE_TRIGGER_REWARD;
+        *trigger_reward += DKG_POST_PROCESS_REWARD;
 
         Ok(())
     }

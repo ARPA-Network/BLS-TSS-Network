@@ -50,8 +50,8 @@ pub enum ControllerError {
     #[error("there is already an initial group")]
     InitialGroupExisted,
 
-    #[error("the coordinator with the group index is not exist")]
-    CoordinatorNotExisted,
+    #[error("the coordinator with the group index: {0} is not exist")]
+    CoordinatorNotExisted(usize),
 
     #[error("the coordinator has not ended yet")]
     CoordinatorNotEnded,

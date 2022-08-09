@@ -83,10 +83,9 @@ impl MockCoordinator {
 
         let controller = self.controller.read();
 
-        let (_, coordinator) = controller
-            .coordinators
-            .get(&req_index)
-            .ok_or_else(|| Status::not_found(ControllerError::CoordinatorNotExisted.to_string()))?;
+        let (_, coordinator) = controller.coordinators.get(&req_index).ok_or_else(|| {
+            Status::not_found(ControllerError::CoordinatorNotExisted(req_index).to_string())
+        })?;
 
         if coordinator.epoch != req_epoch {
             return Err(Status::internal(
