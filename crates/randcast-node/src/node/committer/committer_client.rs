@@ -2,6 +2,7 @@ use self::committer::committer_service_client::CommitterServiceClient;
 use self::committer::CommitPartialSignatureRequest;
 use crate::node::dao::types::TaskType;
 use crate::node::error::errors::NodeResult;
+use crate::node::ServiceClient;
 use async_trait::async_trait;
 use tonic::Request;
 
@@ -12,7 +13,7 @@ pub mod committer {
 #[async_trait]
 pub trait CommitterService {
     async fn commit_partial_signature(
-        &mut self,
+        self,
         chain_id: usize,
         task_type: TaskType,
         message: Vec<u8>,
@@ -21,31 +22,58 @@ pub trait CommitterService {
     ) -> NodeResult<bool>;
 }
 
+pub trait CommitterClient {
+    fn get_id_address(&self) -> &str;
+
+    fn get_committer_endpoint(&self) -> &str;
+
+    fn build(id_address: String, committer_endpoint: String) -> Self;
+}
+
+#[derive(Clone, Debug)]
 pub struct MockCommitterClient {
     id_address: String,
-    committer_service_client: CommitterServiceClient<tonic::transport::Channel>,
+    committer_endpoint: String,
 }
 
 impl MockCommitterClient {
-    pub async fn new(
-        id_address: String,
-        committer_endpoint: String,
-    ) -> NodeResult<MockCommitterClient> {
-        let committer_service_client: CommitterServiceClient<tonic::transport::Channel> =
-            CommitterServiceClient::connect(format!("{}{}", "http://", committer_endpoint.clone()))
-                .await?;
-
-        Ok(MockCommitterClient {
+    pub fn new(id_address: String, committer_endpoint: String) -> Self {
+        MockCommitterClient {
             id_address,
-            committer_service_client,
-        })
+            committer_endpoint,
+        }
+    }
+}
+
+impl CommitterClient for MockCommitterClient {
+    fn get_id_address(&self) -> &str {
+        &self.id_address
+    }
+
+    fn get_committer_endpoint(&self) -> &str {
+        &self.committer_endpoint
+    }
+
+    fn build(id_address: String, committer_endpoint: String) -> Self {
+        Self::new(id_address, committer_endpoint)
+    }
+}
+
+#[async_trait]
+impl ServiceClient<CommitterServiceClient<tonic::transport::Channel>> for MockCommitterClient {
+    async fn prepare_service_client(
+        &self,
+    ) -> NodeResult<CommitterServiceClient<tonic::transport::Channel>> {
+        CommitterServiceClient::connect(format!("{}{}", "http://", self.committer_endpoint.clone()))
+            .await
+            .map_err(|err| err.into())
     }
 }
 
 #[async_trait]
 impl CommitterService for MockCommitterClient {
     async fn commit_partial_signature(
-        &mut self,
+        self,
         chain_id: usize,
         task_type: TaskType,
         message: Vec<u8>,
@@ -61,7 +89,9 @@ impl CommitterService for MockCommitterClient {
             message,
         });
 
-        self.committer_service_client
+        let mut committer_client = self.prepare_service_client().await?;
+
+        committer_client
             .commit_partial_signature(request)
             .await
             .map(|r| r.into_inner().result)

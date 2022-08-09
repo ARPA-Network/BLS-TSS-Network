@@ -85,7 +85,7 @@ impl CommitterService for BLSCommitterServiceServer {
                         _ => {
                             if !self.context.read().contains_chain(chain_id) {
                                 return Err(Status::invalid_argument(
-                                    NodeError::InvalidChainId.to_string(),
+                                    NodeError::InvalidChainId(chain_id).to_string(),
                                 ));
                             }
                             self.context
@@ -180,7 +180,7 @@ impl CommitterService for BLSCommitterServiceServer {
                 TaskType::GroupRelayConfirmation => {
                     if chain_id == 0 || !self.context.read().contains_chain(chain_id) {
                         return Err(Status::invalid_argument(
-                            NodeError::InvalidChainId.to_string(),
+                            NodeError::InvalidChainId(chain_id).to_string(),
                         ));
                     }
 
