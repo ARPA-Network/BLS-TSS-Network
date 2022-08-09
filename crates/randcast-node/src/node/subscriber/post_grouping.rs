@@ -11,6 +11,7 @@ use crate::node::{
     scheduler::dynamic::{DynamicTaskScheduler, SimpleDynamicTaskScheduler},
 };
 use async_trait::async_trait;
+use log::{error, info};
 use parking_lot::RwLock;
 use std::sync::Arc;
 
@@ -47,9 +48,8 @@ pub struct MockDKGPostProcessHandler {
 #[async_trait]
 impl DKGPostProcessHandler for MockDKGPostProcessHandler {
     async fn handle(&self, group_index: usize, group_epoch: usize) -> NodeResult<()> {
-        let mut client =
-            MockControllerClient::new(self.controller_address.clone(), self.id_address.clone())
-                .await?;
+        let client =
+            MockControllerClient::new(self.controller_address.clone(), self.id_address.clone());
 
         client.post_process_dkg(group_index, group_epoch).await?;
 
@@ -59,7 +59,7 @@ impl DKGPostProcessHandler for MockDKGPostProcessHandler {
 
 impl Subscriber for PostGroupingSubscriber {
     fn notify(&self, topic: Topic, payload: Box<dyn Event>) -> NodeResult<()> {
-        println!("{:?}", topic);
+        info!("{:?}", topic);
 
         unsafe {
             let ptr = Box::into_raw(payload);
@@ -80,17 +80,17 @@ impl Subscriber for PostGroupingSubscriber {
             let id_address = self.main_chain_identity.read().get_id_address().to_string();
 
             self.ts.write().add_task(async move {
-            let handler = MockDKGPostProcessHandler {
-                controller_address,
-                id_address,
-            };
+                let handler = MockDKGPostProcessHandler {
+                    controller_address,
+                    id_address,
+                };
 
-            if let Err(e) = handler.handle(group_index, group_epoch).await {
-                println!("{:?}", e);
-            } else {
-                println!("-------------------------call post process successfully-------------------------");
-            }
-        });
+                if let Err(e) = handler.handle(group_index, group_epoch).await {
+                    error!("{:?}", e);
+                } else {
+                    info!("-------------------------call post process successfully-------------------------");
+                }
+            });
         }
 
         Ok(())

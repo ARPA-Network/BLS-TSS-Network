@@ -12,6 +12,7 @@ use crate::node::{
     },
 };
 use async_trait::async_trait;
+use log::error;
 use parking_lot::RwLock;
 use std::{collections::HashMap, sync::Arc};
 use threshold_bls::curve::bls12381::{Scalar, G1};
@@ -188,7 +189,7 @@ impl CommitterServerStarter for SimpleFixedTaskScheduler {
     ) {
         self.add_task(async move {
             if let Err(e) = committer_server::start_committer_server(rpc_endpoint, context).await {
-                println!("{:?}", e);
+                error!("{:?}", e);
             };
         });
     }

@@ -6,13 +6,15 @@ use crate::node::{
         types::ChainIdentity,
     },
     dao::{cache::InMemoryBLSTasksQueue, types::GroupRelayTask},
-    error::errors::NodeResult,
+    error::errors::{NodeError, NodeResult},
     event::new_group_relay_task::NewGroupRelayTask,
     queue::event_queue::{EventPublisher, EventQueue},
 };
 use async_trait::async_trait;
+use log::{error, info};
 use parking_lot::RwLock;
 use std::sync::Arc;
+use tokio_retry::{strategy::FixedInterval, RetryIf};
 
 pub struct MockNewGroupRelayTaskListener {
     main_chain_identity: Arc<RwLock<ChainIdentity>>,
@@ -51,25 +53,41 @@ impl Listener for MockNewGroupRelayTaskListener {
 
         let id_address = self.main_chain_identity.read().get_id_address().to_string();
 
-        let mut client = MockControllerClient::new(rpc_endpoint, id_address).await?;
+        let client = MockControllerClient::new(rpc_endpoint, id_address);
+
+        let retry_strategy = FixedInterval::from_millis(2000);
 
         loop {
-            let task_reply = client.emit_group_relay_task().await;
+            if let Err(err) = RetryIf::spawn(
+                retry_strategy.clone(),
+                || async {
+                    let task_reply = client.emit_group_relay_task().await;
 
-            if let Ok(group_relay_task) = task_reply {
-                if !self
-                    .group_relay_tasks_cache
-                    .read()
-                    .contains(group_relay_task.controller_global_epoch)
-                {
-                    println!("received new group relay task. {:?}", group_relay_task);
+                    if let Ok(group_relay_task) = task_reply {
+                        if !self
+                            .group_relay_tasks_cache
+                            .read()
+                            .contains(group_relay_task.controller_global_epoch)
+                        {
+                            info!("received new group relay task. {:?}", group_relay_task);
 
-                    self.group_relay_tasks_cache
-                        .write()
-                        .add(group_relay_task.clone())?;
+                            self.group_relay_tasks_cache
+                                .write()
+                                .add(group_relay_task.clone())?;
 
-                    self.publish(NewGroupRelayTask::new(group_relay_task));
-                }
+                            self.publish(NewGroupRelayTask::new(group_relay_task));
+                        }
+                    }
+                    NodeResult::Ok(())
+                },
+                |e: &NodeError| {
+                    error!("listener is interrupted. Retry... Error: {:?}, ", e);
+                    true
+                },
+            )
+            .await
+            {
+                error!("{:?}", err);
             }
 
             tokio::time::sleep(std::time::Duration::from_millis(2000)).await;

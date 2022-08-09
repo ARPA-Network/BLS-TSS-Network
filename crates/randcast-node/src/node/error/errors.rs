@@ -67,8 +67,8 @@ pub enum NodeError {
     #[error("there is no task yet")]
     NoTaskAvailable,
 
-    #[error("the chain id is not supported in the group")]
-    InvalidChainId,
+    #[error("the chain id: {0} is not supported in the group")]
+    InvalidChainId(usize),
 
     #[error("the message of the task is different from the committer")]
     InvalidTaskMessage,

@@ -13,6 +13,7 @@ use crate::node::{
     },
     queue::event_queue::{EventPublisher, EventQueue, EventSubscriber},
 };
+use log::info;
 use parking_lot::RwLock;
 use std::sync::Arc;
 
@@ -38,7 +39,7 @@ impl EventPublisher<RunDKG> for PreGroupingSubscriber {
 
 impl Subscriber for PreGroupingSubscriber {
     fn notify(&self, topic: Topic, payload: Box<dyn Event>) -> NodeResult<()> {
-        println!("{:?}", topic);
+        info!("{:?}", topic);
 
         unsafe {
             let ptr = Box::into_raw(payload);
@@ -72,7 +73,7 @@ impl Subscriber for PreGroupingSubscriber {
                 if res {
                     self.publish(RunDKG { dkg_task });
 
-                    println!(
+                    info!(
                         "received new dkg_task: index:{} epoch:{}, start handling...",
                         task_group_index, task_epoch
                     );

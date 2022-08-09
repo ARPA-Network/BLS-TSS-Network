@@ -2,13 +2,15 @@ use super::types::Listener;
 use crate::node::{
     contract_client::controller_client::{ControllerMockHelper, MockControllerClient},
     dao::{api::GroupInfoFetcher, cache::InMemoryGroupInfoCache, types::ChainIdentity},
-    error::errors::NodeResult,
+    error::errors::{NodeError, NodeResult},
     event::new_dkg_task::NewDKGTask,
     queue::event_queue::{EventPublisher, EventQueue},
 };
 use async_trait::async_trait;
+use log::error;
 use parking_lot::RwLock;
 use std::sync::Arc;
+use tokio_retry::{strategy::FixedInterval, RetryIf};
 
 pub struct MockPreGroupingListener {
     main_chain_identity: Arc<RwLock<ChainIdentity>>,
@@ -47,26 +49,46 @@ impl Listener for MockPreGroupingListener {
 
         let id_address = self.main_chain_identity.read().get_id_address().to_string();
 
-        let mut client = MockControllerClient::new(rpc_endpoint, id_address).await?;
+        let client = MockControllerClient::new(rpc_endpoint, id_address);
+
+        let retry_strategy = FixedInterval::from_millis(1000);
 
         loop {
-            if let Ok(dkg_task) = client.emit_dkg_task().await {
-                if let Some((_, node_index)) = dkg_task.members.iter().find(|(id_address, _)| {
-                    **id_address == self.main_chain_identity.read().get_id_address()
-                }) {
-                    let cache_index = self.group_cache.read().get_index().unwrap_or(0);
+            if let Err(err) = RetryIf::spawn(
+                retry_strategy.clone(),
+                || async {
+                    if let Ok(dkg_task) = client.emit_dkg_task().await {
+                        if let Some((_, node_index)) =
+                            dkg_task.members.iter().find(|(id_address, _)| {
+                                **id_address == self.main_chain_identity.read().get_id_address()
+                            })
+                        {
+                            let cache_index = self.group_cache.read().get_index().unwrap_or(0);
 
-                    let cache_epoch = self.group_cache.read().get_epoch().unwrap_or(0);
+                            let cache_epoch = self.group_cache.read().get_epoch().unwrap_or(0);
 
-                    if cache_index != dkg_task.group_index || cache_epoch != dkg_task.epoch {
-                        let self_index = *node_index;
+                            if cache_index != dkg_task.group_index || cache_epoch != dkg_task.epoch
+                            {
+                                let self_index = *node_index;
 
-                        self.publish(NewDKGTask {
-                            dkg_task,
-                            self_index,
-                        });
+                                self.publish(NewDKGTask {
+                                    dkg_task,
+                                    self_index,
+                                });
+                            }
+                        }
                     }
-                }
+
+                    NodeResult::Ok(())
+                },
+                |e: &NodeError| {
+                    error!("listener is interrupted. Retry... Error: {:?}, ", e);
+                    true
+                },
+            )
+            .await
+            {
+                error!("{:?}", err);
             }
 
             tokio::time::sleep(std::time::Duration::from_millis(1000)).await;

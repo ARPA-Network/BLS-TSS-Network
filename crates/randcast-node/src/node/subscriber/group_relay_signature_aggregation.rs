@@ -12,6 +12,7 @@ use crate::node::{
     scheduler::dynamic::{DynamicTaskScheduler, SimpleDynamicTaskScheduler},
 };
 use async_trait::async_trait;
+use log::{error, info};
 use parking_lot::RwLock;
 use std::sync::Arc;
 
@@ -66,8 +67,7 @@ impl FulfillGroupRelayHandler for MockFulfillGroupRelayHandler {
         signature: Vec<u8>,
         group_as_bytes: Vec<u8>,
     ) -> NodeResult<()> {
-        let mut client =
-            MockAdapterClient::new(self.adapter_address.clone(), self.id_address.clone()).await?;
+        let client = MockAdapterClient::new(self.adapter_address.clone(), self.id_address.clone());
 
         match client
             .fulfill_relay(
@@ -79,13 +79,13 @@ impl FulfillGroupRelayHandler for MockFulfillGroupRelayHandler {
             .await
         {
             Ok(()) => {
-                println!(
+                info!(
                     "fulfill group_relay successfully! task index: {}, group_index: {}",
                     group_relay_task_index, group_index
                 );
             }
             Err(e) => {
-                println!("{:?}", e);
+                error!("{:?}", e);
             }
         }
 
@@ -95,7 +95,7 @@ impl FulfillGroupRelayHandler for MockFulfillGroupRelayHandler {
 
 impl Subscriber for GroupRelaySignatureAggregationSubscriber {
     fn notify(&self, topic: Topic, payload: Box<dyn Event>) -> NodeResult<()> {
-        println!("{:?}", topic);
+        info!("{:?}", topic);
 
         unsafe {
             let ptr = Box::into_raw(payload);
@@ -147,7 +147,7 @@ impl Subscriber for GroupRelaySignatureAggregationSubscriber {
                         )
                         .await
                     {
-                        println!("{:?}", e);
+                        error!("{:?}", e);
                     }
                 });
             }

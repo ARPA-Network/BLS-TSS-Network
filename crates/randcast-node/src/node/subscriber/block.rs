@@ -8,6 +8,7 @@ use crate::node::{
     },
     queue::event_queue::{EventQueue, EventSubscriber},
 };
+use log::info;
 use parking_lot::RwLock;
 use std::sync::Arc;
 
@@ -33,7 +34,7 @@ impl BlockSubscriber {
 
 impl Subscriber for BlockSubscriber {
     fn notify(&self, topic: Topic, payload: Box<dyn Event>) -> NodeResult<()> {
-        println!("{:?}", topic);
+        info!("{:?}", topic);
 
         unsafe {
             let ptr = Box::into_raw(payload);

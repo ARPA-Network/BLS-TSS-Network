@@ -14,6 +14,7 @@ use crate::node::contract_client::types::{
 };
 use crate::node::error::errors::{NodeError, NodeResult};
 use dkg_core::primitives::DKGOutput;
+use log::info;
 use std::collections::HashMap;
 use threshold_bls::group::Element;
 use threshold_bls::{
@@ -137,7 +138,7 @@ impl GroupInfoUpdater for InMemoryGroupInfoCache {
         if index == self.group.index && epoch == self.group.epoch {
             self.dkg_status = dkg_status;
 
-            println!("dkg_status transfered to {:?}", dkg_status);
+            info!("dkg_status transfered to {:?}", dkg_status);
 
             return Ok(true);
         }
@@ -242,11 +243,6 @@ impl GroupInfoUpdater for InMemoryGroupInfoCache {
             }
 
             member.partial_public_key = Some(output.public.eval(member.index as u32).value);
-
-            // println!(
-            //     "member index: {}, partial_public_key: {:?}",
-            //     member.index, member.partial_public_key
-            // );
 
             if self.self_index == member.index {
                 partial_public_key = member.partial_public_key.unwrap();

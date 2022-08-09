@@ -1,8 +1,9 @@
 use super::types::Subscriber;
 use crate::node::{
     algorithm::dkg::{DKGCore, MockDKGCore},
-    contract_client::controller_client::{
-        ControllerTransactions, MockControllerClient, MockCoordinatorClient,
+    contract_client::{
+        controller_client::{ControllerTransactions, MockControllerClient},
+        coordinator_client::MockCoordinatorClient,
     },
     dao::{
         api::GroupInfoUpdater,
@@ -21,6 +22,7 @@ use crate::node::{
     scheduler::dynamic::{DynamicTaskScheduler, SimpleDynamicTaskScheduler},
 };
 use async_trait::async_trait;
+use log::{error, info};
 use parking_lot::RwLock;
 use rand::{prelude::ThreadRng, RngCore};
 use std::sync::Arc;
@@ -99,11 +101,10 @@ impl<F: Fn() -> R + Send + Sync + Copy + 'static, R: RngCore + 'static> DKGHandl
     {
         let node_rpc_endpoint = self.node_cache.read().get_node_rpc_endpoint().to_string();
 
-        let mut controller_client =
-            MockControllerClient::new(self.controller_address.clone(), self.id_address.clone())
-                .await?;
+        let controller_client =
+            MockControllerClient::new(self.controller_address.clone(), self.id_address.clone());
 
-        let mut dkg_core = MockDKGCore {};
+        let dkg_core = MockDKGCore {};
 
         let dkg_private_key = *self.node_cache.read().get_dkg_private_key()?;
 
@@ -113,14 +114,12 @@ impl<F: Fn() -> R + Send + Sync + Copy + 'static, R: RngCore + 'static> DKGHandl
 
         let task_epoch = task.epoch;
 
-        //TODO retry if error happens
         let coordinator_client = MockCoordinatorClient::new(
             self.coordinator_rpc_endpoint.clone(),
             id_address,
             task.group_index,
             task.epoch,
-        )
-        .await?;
+        );
 
         let output = dkg_core
             .run_dkg(
@@ -152,7 +151,7 @@ impl<F: Fn() -> R + Send + Sync + Copy + 'static, R: RngCore + 'static> DKGHandl
 
 impl Subscriber for InGroupingSubscriber {
     fn notify(&self, topic: Topic, payload: Box<dyn Event>) -> NodeResult<()> {
-        println!("{:?}", topic);
+        info!("{:?}", topic);
 
         unsafe {
             let ptr = Box::into_raw(payload);
@@ -197,13 +196,13 @@ impl Subscriber for InGroupingSubscriber {
             self.ts.write().add_task_with_shutdown_signal(
                 async move {
                     if let Err(e) = handler.handle(task).await {
-                        println!("{:?}", e);
+                        error!("{:?}", e);
                     } else if let Err(e) = group_cache_for_handler.write().update_dkg_status(
                         task_group_index,
                         task_epoch,
                         DKGStatus::CommitSuccess,
                     ) {
-                        println!("{:?}", e);
+                        error!("{:?}", e);
                     }
                 },
                 move || {

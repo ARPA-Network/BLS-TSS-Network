@@ -1,7 +1,7 @@
-use super::types::Subscriber;
+use super::types::{CommitterClientHandler, Subscriber};
 use crate::node::{
     algorithm::bls::{BLSCore, MockBLSCore},
-    committer::committer_client::{CommitterService, MockCommitterClient},
+    committer::committer_client::{CommitterClient, CommitterService, MockCommitterClient},
     contract_client::controller_client::{ControllerViews, MockControllerClient},
     contract_client::types::Group as ContractGroup,
     dao::cache::{GroupRelayResultCache, InMemoryGroupInfoCache, InMemorySignatureResultCache},
@@ -9,7 +9,7 @@ use crate::node::{
         api::{GroupInfoFetcher, SignatureResultCacheFetcher, SignatureResultCacheUpdater},
         types::{ChainIdentity, GroupRelayTask, TaskType},
     },
-    error::errors::NodeResult,
+    error::errors::{NodeError, NodeResult},
     event::{
         ready_to_handle_group_relay_task::ReadyToHandleGroupRelayTask,
         types::{Event, Topic},
@@ -18,8 +18,10 @@ use crate::node::{
     scheduler::dynamic::{DynamicTaskScheduler, SimpleDynamicTaskScheduler},
 };
 use async_trait::async_trait;
+use log::{error, info};
 use parking_lot::RwLock;
 use std::sync::Arc;
+use tokio_retry::{strategy::FixedInterval, RetryIf};
 
 pub struct ReadyToHandleGroupRelayTaskSubscriber {
     main_chain_identity: Arc<RwLock<ChainIdentity>>,
@@ -51,9 +53,7 @@ impl ReadyToHandleGroupRelayTaskSubscriber {
 
 #[async_trait]
 pub trait GroupRelayHandler {
-    async fn handle(self, committer_clients: Vec<MockCommitterClient>) -> NodeResult<()>;
-
-    async fn prepare_committer_clients(&self) -> NodeResult<Vec<MockCommitterClient>>;
+    async fn handle(self) -> NodeResult<()>;
 }
 
 pub struct MockGroupRelayHandler {
@@ -64,12 +64,23 @@ pub struct MockGroupRelayHandler {
     group_relay_signature_cache: Arc<RwLock<InMemorySignatureResultCache<GroupRelayResultCache>>>,
 }
 
+impl CommitterClientHandler<MockCommitterClient, InMemoryGroupInfoCache> for MockGroupRelayHandler {
+    fn get_id_address(&self) -> &str {
+        &self.id_address
+    }
+
+    fn get_group_cache(&self) -> Arc<RwLock<InMemoryGroupInfoCache>> {
+        self.group_cache.clone()
+    }
+}
+
 #[async_trait]
 impl GroupRelayHandler for MockGroupRelayHandler {
-    async fn handle(self, mut committer_clients: Vec<MockCommitterClient>) -> NodeResult<()> {
-        let mut client =
-            MockControllerClient::new(self.controller_address.clone(), self.id_address.clone())
-                .await?;
+    async fn handle(self) -> NodeResult<()> {
+        let client =
+            MockControllerClient::new(self.controller_address.clone(), self.id_address.clone());
+
+        let committers = self.prepare_committer_clients()?;
 
         for task in self.tasks {
             let relayed_group = client.get_group(task.relayed_group_index).await?;
@@ -116,69 +127,43 @@ impl GroupRelayHandler for MockGroupRelayHandler {
                     )?;
             }
 
-            // TODO retry
-            tokio::time::sleep(std::time::Duration::from_millis(2000)).await;
+            for committer in committers.iter() {
+                let retry_strategy = FixedInterval::from_millis(2000).take(3);
 
-            for committer in committer_clients.iter_mut() {
-                committer
-                    .commit_partial_signature(
-                        0,
-                        TaskType::GroupRelay,
-                        relayed_group_as_bytes.clone(),
-                        task.controller_global_epoch,
-                        partial_signature.clone(),
-                    )
-                    .await?;
+                if let Err(err) = RetryIf::spawn(
+                    retry_strategy,
+                    || {
+                        committer.clone().commit_partial_signature(
+                            0,
+                            TaskType::GroupRelay,
+                            relayed_group_as_bytes.clone(),
+                            task.controller_global_epoch,
+                            partial_signature.clone(),
+                        )
+                    },
+                    |e: &NodeError| {
+                        error!(
+                            "send partial signature to committer {0} failed. Retry... Error: {1:?}",
+                            committer.get_id_address(),
+                            e
+                        );
+                        true
+                    },
+                )
+                .await
+                {
+                    error!("{:?}", err);
+                }
             }
         }
 
         Ok(())
     }
-
-    async fn prepare_committer_clients(&self) -> NodeResult<Vec<MockCommitterClient>> {
-        let mut committers = self
-            .group_cache
-            .read()
-            .get_committers()?
-            .iter()
-            .map(|c| c.to_string())
-            .collect::<Vec<_>>();
-
-        committers.retain(|c| *c != self.id_address);
-
-        let mut committer_clients = vec![];
-
-        for committer in committers {
-            let endpoint = self
-                .group_cache
-                .read()
-                .get_member(&committer)?
-                .rpc_endpint
-                .as_ref()
-                .unwrap()
-                .to_string();
-
-            // we retry some times here as building tonic connection needs the target rpc server available
-            let mut i = 0;
-            while i < 3 {
-                if let Ok(committer_client) =
-                    MockCommitterClient::new(self.id_address.clone(), endpoint.clone()).await
-                {
-                    committer_clients.push(committer_client);
-                    break;
-                }
-                i += 1;
-                tokio::time::sleep(std::time::Duration::from_millis(1000)).await;
-            }
-        }
-
-        Ok(committer_clients)
-    }
 }
 
 impl Subscriber for ReadyToHandleGroupRelayTaskSubscriber {
     fn notify(&self, topic: Topic, payload: Box<dyn Event>) -> NodeResult<()> {
-        println!("{:?}", topic);
+        info!("{:?}", topic);
 
         unsafe {
             let ptr = Box::into_raw(payload);
@@ -208,10 +193,8 @@ impl Subscriber for ReadyToHandleGroupRelayTaskSubscriber {
                     group_relay_signature_cache: group_relay_signature_cache_for_handler,
                 };
 
-                if let Ok(committer_clients) = handler.prepare_committer_clients().await {
-                    if let Err(e) = handler.handle(committer_clients).await {
-                        println!("{:?}", e);
-                    }
+                if let Err(e) = handler.handle().await {
+                    error!("{:?}", e);
                 }
             });
         }

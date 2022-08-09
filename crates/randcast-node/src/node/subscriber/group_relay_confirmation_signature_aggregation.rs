@@ -12,6 +12,7 @@ use crate::node::{
     scheduler::dynamic::{DynamicTaskScheduler, SimpleDynamicTaskScheduler},
 };
 use async_trait::async_trait;
+use log::{error, info};
 use parking_lot::RwLock;
 use std::sync::Arc;
 
@@ -66,8 +67,7 @@ impl FulfillGroupRelayConfirmationHandler for MockFulfillGroupRelayConfirmationH
         signature: Vec<u8>,
         group_relay_confirmation_as_bytes: Vec<u8>,
     ) -> NodeResult<()> {
-        let mut client =
-            MockAdapterClient::new(self.adapter_address.clone(), self.id_address.clone()).await?;
+        let client = MockAdapterClient::new(self.adapter_address.clone(), self.id_address.clone());
 
         match client
             .confirm_relay(
@@ -78,11 +78,11 @@ impl FulfillGroupRelayConfirmationHandler for MockFulfillGroupRelayConfirmationH
             .await
         {
             Ok(()) => {
-                println!("fulfill group_relay_confirmation successfully! task index: {}, group_index: {}",
+                info!("fulfill group_relay_confirmation successfully! task index: {}, group_index: {}",
                         group_relay_confirmation_task_index, group_index);
             }
             Err(e) => {
-                println!("{:?}", e);
+                error!("{:?}", e);
             }
         }
 
@@ -92,7 +92,7 @@ impl FulfillGroupRelayConfirmationHandler for MockFulfillGroupRelayConfirmationH
 
 impl Subscriber for GroupRelayConfirmationSignatureAggregationSubscriber {
     fn notify(&self, topic: Topic, payload: Box<dyn Event>) -> NodeResult<()> {
-        println!("{:?}", topic);
+        info!("{:?}", topic);
 
         unsafe {
             let ptr = Box::into_raw(payload);
@@ -146,7 +146,7 @@ impl Subscriber for GroupRelayConfirmationSignatureAggregationSubscriber {
                         )
                         .await
                     {
-                        println!("{:?}", e);
+                        error!("{:?}", e);
                     }
                 });
             }

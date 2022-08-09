@@ -10,6 +10,7 @@ use crate::node::{
     queue::event_queue::{EventPublisher, EventQueue},
 };
 use async_trait::async_trait;
+use log::info;
 use parking_lot::RwLock;
 use std::sync::Arc;
 
@@ -58,7 +59,7 @@ impl Listener for MockPostGroupingListener {
 
                         let block_height = self.block_cache.read().get_block_height();
 
-                        println!("dkg_start_block_height: {},current_block_height: {}, timeuout_dkg_block_height:{}",
+                        info!("dkg_start_block_height: {},current_block_height: {}, timeuout_dkg_block_height:{}",
                         dkg_start_block_height,block_height,dkg_start_block_height + DEFAULT_DKG_TIMEOUT_DURATION);
 
                         if block_height > dkg_start_block_height + DEFAULT_DKG_TIMEOUT_DURATION {

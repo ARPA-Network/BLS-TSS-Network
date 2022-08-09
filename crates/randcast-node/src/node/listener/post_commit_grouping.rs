@@ -6,13 +6,15 @@ use crate::node::{
         cache::InMemoryGroupInfoCache,
         types::{ChainIdentity, DKGStatus},
     },
-    error::errors::NodeResult,
+    error::errors::{NodeError, NodeResult},
     event::dkg_success::DKGSuccess,
     queue::event_queue::{EventPublisher, EventQueue},
 };
 use async_trait::async_trait;
+use log::error;
 use parking_lot::RwLock;
 use std::sync::Arc;
+use tokio_retry::{strategy::FixedInterval, RetryIf};
 
 pub struct MockPostCommitGroupingListener {
     main_chain_identity: Arc<RwLock<ChainIdentity>>,
@@ -51,32 +53,49 @@ impl Listener for MockPostCommitGroupingListener {
 
         let id_address = self.main_chain_identity.read().get_id_address().to_string();
 
-        let mut client = MockControllerClient::new(rpc_endpoint, id_address).await?;
+        let client = MockControllerClient::new(rpc_endpoint, id_address);
+
+        let retry_strategy = FixedInterval::from_millis(2000);
 
         loop {
-            let dkg_status = self.group_cache.read().get_dkg_status();
+            if let Err(err) = RetryIf::spawn(
+                retry_strategy.clone(),
+                || async {
+                    let dkg_status = self.group_cache.read().get_dkg_status();
 
-            if let Ok(DKGStatus::CommitSuccess) = dkg_status {
-                let group_index = self.group_cache.read().get_index()?;
+                    if let Ok(DKGStatus::CommitSuccess) = dkg_status {
+                        let group_index = self.group_cache.read().get_index()?;
 
-                let group_epoch = self.group_cache.read().get_epoch()?;
+                        let group_epoch = self.group_cache.read().get_epoch()?;
 
-                if let Ok(group) = client.get_group(group_index).await {
-                    if group.state {
-                        let res = self.group_cache.write().update_dkg_status(
-                            group_index,
-                            group_epoch,
-                            DKGStatus::WaitForPostProcess,
-                        )?;
+                        if let Ok(group) = client.get_group(group_index).await {
+                            if group.state {
+                                let res = self.group_cache.write().update_dkg_status(
+                                    group_index,
+                                    group_epoch,
+                                    DKGStatus::WaitForPostProcess,
+                                )?;
 
-                        if res {
-                            self.publish(DKGSuccess { group });
+                                if res {
+                                    self.publish(DKGSuccess { group });
+                                }
+                            }
                         }
                     }
-                }
+
+                    NodeResult::Ok(())
+                },
+                |e: &NodeError| {
+                    error!("listener is interrupted. Retry... Error: {:?}, ", e);
+                    true
+                },
+            )
+            .await
+            {
+                error!("{:?}", err);
             }
 
-            tokio::time::sleep(std::time::Duration::from_millis(1000)).await;
+            tokio::time::sleep(std::time::Duration::from_millis(2000)).await;
         }
     }
 }

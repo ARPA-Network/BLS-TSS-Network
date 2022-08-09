@@ -36,6 +36,7 @@ use crate::node::{
         ready_to_handle_randomness_task::ReadyToHandleRandomnessTaskSubscriber, types::Subscriber,
     },
 };
+use log::error;
 use parking_lot::RwLock;
 use std::sync::Arc;
 use threshold_bls::curve::bls12381::{Scalar, G1};
@@ -143,7 +144,7 @@ impl Chain for InMemoryAdapterChain {
             .write()
             .add_task(async move {
                 if let Err(e) = p_block.start().await {
-                    println!("{:?}", e);
+                    error!("{:?}", e);
                 };
             });
 
@@ -166,7 +167,7 @@ impl Chain for InMemoryAdapterChain {
             .write()
             .add_task(async move {
                 if let Err(e) = p_new_randomness_task.start().await {
-                    println!("{:?}", e);
+                    error!("{:?}", e);
                 };
             });
 
@@ -190,7 +191,7 @@ impl Chain for InMemoryAdapterChain {
             .write()
             .add_task(async move {
                 if let Err(e) = p_ready_to_handle_randomness_task.start().await {
-                    println!("{:?}", e);
+                    error!("{:?}", e);
                 };
             });
 
@@ -212,7 +213,7 @@ impl Chain for InMemoryAdapterChain {
             .write()
             .add_task(async move {
                 if let Err(e) = p_randomness_signature_aggregation.start().await {
-                    println!("{:?}", e);
+                    error!("{:?}", e);
                 };
             });
 
@@ -235,7 +236,7 @@ impl Chain for InMemoryAdapterChain {
             .write()
             .add_task(async move {
                 if let Err(e) = p_new_group_relay_confirmation_task.start().await {
-                    println!("{:?}", e);
+                    error!("{:?}", e);
                 };
             });
 
@@ -256,7 +257,7 @@ impl Chain for InMemoryAdapterChain {
                     .start()
                     .await
                 {
-                    println!("{:?}", e);
+                    error!("{:?}", e);
                 };
             });
 
@@ -282,7 +283,7 @@ impl Chain for InMemoryAdapterChain {
                     .start()
                     .await
                 {
-                    println!("{:?}", e);
+                    error!("{:?}", e);
                 };
             });
     }
@@ -487,7 +488,7 @@ impl Chain for InMemoryMainChain {
             .write()
             .add_task(async move {
                 if let Err(e) = p_block.start().await {
-                    println!("{:?}", e);
+                    error!("{:?}", e);
                 };
             });
 
@@ -503,7 +504,7 @@ impl Chain for InMemoryMainChain {
             .write()
             .add_task(async move {
                 if let Err(e) = p_pre_grouping.start().await {
-                    println!("{:?}", e);
+                    error!("{:?}", e);
                 };
             });
 
@@ -518,7 +519,7 @@ impl Chain for InMemoryMainChain {
             .write()
             .add_task(async move {
                 if let Err(e) = p_post_commit_grouping.start().await {
-                    println!("{:?}", e);
+                    error!("{:?}", e);
                 };
             });
 
@@ -533,7 +534,7 @@ impl Chain for InMemoryMainChain {
             .write()
             .add_task(async move {
                 if let Err(e) = p_post_grouping.start().await {
-                    println!("{:?}", e);
+                    error!("{:?}", e);
                 };
             });
 
@@ -551,7 +552,7 @@ impl Chain for InMemoryMainChain {
             .write()
             .add_task(async move {
                 if let Err(e) = p_new_randomness_task.start().await {
-                    println!("{:?}", e);
+                    error!("{:?}", e);
                 };
             });
 
@@ -570,7 +571,7 @@ impl Chain for InMemoryMainChain {
             .write()
             .add_task(async move {
                 if let Err(e) = p_ready_to_handle_randomness_task.start().await {
-                    println!("{:?}", e);
+                    error!("{:?}", e);
                 };
             });
 
@@ -587,7 +588,7 @@ impl Chain for InMemoryMainChain {
             .write()
             .add_task(async move {
                 if let Err(e) = p_randomness_signature_aggregation.start().await {
-                    println!("{:?}", e);
+                    error!("{:?}", e);
                 };
             });
 
@@ -603,7 +604,7 @@ impl Chain for InMemoryMainChain {
             .write()
             .add_task(async move {
                 if let Err(e) = p_new_group_relay_task.start().await {
-                    println!("{:?}", e);
+                    error!("{:?}", e);
                 };
             });
 
@@ -619,7 +620,7 @@ impl Chain for InMemoryMainChain {
             .write()
             .add_task(async move {
                 if let Err(e) = p_ready_to_handle_group_relay_task.start().await {
-                    println!("{:?}", e);
+                    error!("{:?}", e);
                 };
             });
 
@@ -635,7 +636,7 @@ impl Chain for InMemoryMainChain {
             .write()
             .add_task(async move {
                 if let Err(e) = p_group_relay_signature_aggregation.start().await {
-                    println!("{:?}", e);
+                    error!("{:?}", e);
                 };
             });
     }

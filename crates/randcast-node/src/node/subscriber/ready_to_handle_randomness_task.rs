@@ -1,7 +1,7 @@
-use super::types::Subscriber;
+use super::types::{CommitterClientHandler, Subscriber};
 use crate::node::{
     algorithm::bls::{BLSCore, MockBLSCore},
-    committer::committer_client::{CommitterService, MockCommitterClient},
+    committer::committer_client::{CommitterClient, CommitterService, MockCommitterClient},
     dao::{
         api::SignatureResultCacheFetcher,
         types::{RandomnessTask, TaskType},
@@ -10,7 +10,7 @@ use crate::node::{
         api::{GroupInfoFetcher, SignatureResultCacheUpdater},
         cache::{InMemoryGroupInfoCache, InMemorySignatureResultCache, RandomnessResultCache},
     },
-    error::errors::NodeResult,
+    error::errors::{NodeError, NodeResult},
     event::{
         ready_to_handle_randomness_task::ReadyToHandleRandomnessTask,
         types::{Event, Topic},
@@ -19,8 +19,10 @@ use crate::node::{
     scheduler::dynamic::{DynamicTaskScheduler, SimpleDynamicTaskScheduler},
 };
 use async_trait::async_trait;
+use log::{error, info};
 use parking_lot::RwLock;
 use std::sync::Arc;
+use tokio_retry::{strategy::FixedInterval, RetryIf};
 
 pub struct ReadyToHandleRandomnessTaskSubscriber {
     pub chain_id: usize,
@@ -55,9 +57,7 @@ impl ReadyToHandleRandomnessTaskSubscriber {
 
 #[async_trait]
 pub trait RandomnessHandler {
-    async fn handle(self, committer_clients: Vec<MockCommitterClient>) -> NodeResult<()>;
-
-    async fn prepare_committer_clients(&self) -> NodeResult<Vec<MockCommitterClient>>;
+    async fn handle(self) -> NodeResult<()>;
 }
 
 pub struct MockRandomnessHandler {
@@ -68,9 +68,21 @@ pub struct MockRandomnessHandler {
     randomness_signature_cache: Arc<RwLock<InMemorySignatureResultCache<RandomnessResultCache>>>,
 }
 
+impl CommitterClientHandler<MockCommitterClient, InMemoryGroupInfoCache> for MockRandomnessHandler {
+    fn get_id_address(&self) -> &str {
+        &self.id_address
+    }
+
+    fn get_group_cache(&self) -> Arc<RwLock<InMemoryGroupInfoCache>> {
+        self.group_cache.clone()
+    }
+}
+
 #[async_trait]
 impl RandomnessHandler for MockRandomnessHandler {
-    async fn handle(self, mut committer_clients: Vec<MockCommitterClient>) -> NodeResult<()> {
+    async fn handle(self) -> NodeResult<()> {
+        let committers = self.prepare_committer_clients()?;
+
         for task in self.tasks {
             let bls_core = MockBLSCore {};
 
@@ -102,69 +114,45 @@ impl RandomnessHandler for MockRandomnessHandler {
                     )?;
             }
 
-            // TODO retry
-            tokio::time::sleep(std::time::Duration::from_millis(2000)).await;
+            for committer in committers.iter() {
+                let retry_strategy = FixedInterval::from_millis(2000).take(3);
 
-            for committer in committer_clients.iter_mut() {
-                committer
-                    .commit_partial_signature(
-                        self.chain_id,
-                        TaskType::Randomness,
-                        task.message.as_bytes().to_vec(),
-                        task.index,
-                        partial_signature.clone(),
-                    )
-                    .await?;
+                let chain_id = self.chain_id;
+
+                if let Err(err) = RetryIf::spawn(
+                    retry_strategy,
+                    || {
+                        committer.clone().commit_partial_signature(
+                            chain_id,
+                            TaskType::Randomness,
+                            task.message.as_bytes().to_vec(),
+                            task.index,
+                            partial_signature.clone(),
+                        )
+                    },
+                    |e: &NodeError| {
+                        error!(
+                            "send partial signature to committer {0} failed. Retry... Error: {1:?}",
+                            committer.get_id_address(),
+                            e
+                        );
+                        true
+                    },
+                )
+                .await
+                {
+                    error!("{:?}", err);
+                }
             }
         }
 
         Ok(())
     }
-
-    async fn prepare_committer_clients(&self) -> NodeResult<Vec<MockCommitterClient>> {
-        let mut committers = self
-            .group_cache
-            .read()
-            .get_committers()?
-            .iter()
-            .map(|c| c.to_string())
-            .collect::<Vec<_>>();
-
-        committers.retain(|c| *c != self.id_address);
-
-        let mut committer_clients = vec![];
-
-        for committer in committers {
-            let endpoint = self
-                .group_cache
-                .read()
-                .get_member(&committer)?
-                .rpc_endpint
-                .as_ref()
-                .unwrap()
-                .to_string();
-
-            // we retry some times here as building tonic connection needs the target rpc server available
-            let mut i = 0;
-            while i < 3 {
-                if let Ok(committer_client) =
-                    MockCommitterClient::new(self.id_address.clone(), endpoint.clone()).await
-                {
-                    committer_clients.push(committer_client);
-                    break;
-                }
-                i += 1;
-                tokio::time::sleep(std::time::Duration::from_millis(1000)).await;
-            }
-        }
-
-        Ok(committer_clients)
-    }
 }
 
 impl Subscriber for ReadyToHandleRandomnessTaskSubscriber {
     fn notify(&self, topic: Topic, payload: Box<dyn Event>) -> NodeResult<()> {
-        println!("{:?}", topic);
+        info!("{:?}", topic);
 
         unsafe {
             let ptr = Box::into_raw(payload);
@@ -190,10 +178,8 @@ impl Subscriber for ReadyToHandleRandomnessTaskSubscriber {
                     randomness_signature_cache: randomness_signature_cache_for_handler,
                 };
 
-                if let Ok(committer_clients) = handler.prepare_committer_clients().await {
-                    if let Err(e) = handler.handle(committer_clients).await {
-                        println!("{:?}", e);
-                    }
+                if let Err(e) = handler.handle().await {
+                    error!("{:?}", e);
                 }
             });
         }

@@ -1,7 +1,7 @@
-use super::types::Subscriber;
+use super::types::{CommitterClientHandler, Subscriber};
 use crate::node::{
     algorithm::bls::{BLSCore, MockBLSCore},
-    committer::committer_client::{CommitterService, MockCommitterClient},
+    committer::committer_client::{CommitterClient, CommitterService, MockCommitterClient},
     contract_client::types::Group as ContractGroup,
     contract_client::{
         adapter_client::{AdapterViews, MockAdapterClient},
@@ -15,7 +15,7 @@ use crate::node::{
         },
         types::ChainIdentity,
     },
-    error::errors::NodeResult,
+    error::errors::{NodeError, NodeResult},
     event::{
         ready_to_handle_group_relay_confirmation_task::ReadyToHandleGroupRelayConfirmationTask,
         types::{Event, Topic},
@@ -24,8 +24,10 @@ use crate::node::{
     scheduler::dynamic::{DynamicTaskScheduler, SimpleDynamicTaskScheduler},
 };
 use async_trait::async_trait;
+use log::{error, info};
 use parking_lot::RwLock;
 use std::sync::Arc;
+use tokio_retry::{strategy::FixedInterval, RetryIf};
 
 pub struct ReadyToHandleGroupRelayConfirmationTaskSubscriber {
     pub chain_id: usize,
@@ -64,9 +66,7 @@ impl ReadyToHandleGroupRelayConfirmationTaskSubscriber {
 
 #[async_trait]
 pub trait GroupRelayConfirmationHandler {
-    async fn handle(self, committer_clients: Vec<MockCommitterClient>) -> NodeResult<()>;
-
-    async fn prepare_committer_clients(&self) -> NodeResult<Vec<MockCommitterClient>>;
+    async fn handle(self) -> NodeResult<()>;
 }
 
 pub struct MockGroupRelayConfirmationHandler {
@@ -80,22 +80,33 @@ pub struct MockGroupRelayConfirmationHandler {
         Arc<RwLock<InMemorySignatureResultCache<GroupRelayConfirmationResultCache>>>,
 }
 
+impl CommitterClientHandler<MockCommitterClient, InMemoryGroupInfoCache>
+    for MockGroupRelayConfirmationHandler
+{
+    fn get_id_address(&self) -> &str {
+        &self.id_address
+    }
+
+    fn get_group_cache(&self) -> Arc<RwLock<InMemoryGroupInfoCache>> {
+        self.group_cache.clone()
+    }
+}
+
 #[async_trait]
 impl GroupRelayConfirmationHandler for MockGroupRelayConfirmationHandler {
-    async fn handle(self, mut committer_clients: Vec<MockCommitterClient>) -> NodeResult<()> {
-        let mut controller_client =
-            MockControllerClient::new(self.controller_address.clone(), self.id_address.clone())
-                .await?;
+    async fn handle(self) -> NodeResult<()> {
+        let controller_client =
+            MockControllerClient::new(self.controller_address.clone(), self.id_address.clone());
 
-        let mut adapter_client =
-            MockAdapterClient::new(self.adapter_address.clone(), self.id_address.clone()).await?;
+        let adapter_client =
+            MockAdapterClient::new(self.adapter_address.clone(), self.id_address.clone());
+
+        let committers = self.prepare_committer_clients()?;
 
         for task in self.tasks {
             let relayed_group = controller_client
                 .get_group(task.relayed_group_index)
                 .await?;
-
-            println!("get group from controller success.");
 
             let relayed_group: ContractGroup = relayed_group.into();
 
@@ -116,7 +127,7 @@ impl GroupRelayConfirmationHandler for MockGroupRelayConfirmationHandler {
                 status,
             };
 
-            println!("group_relay_confirmation: {:?}", group_relay_confirmation);
+            info!("group_relay_confirmation: {:?}", group_relay_confirmation);
 
             let group_relay_confirmation_as_bytes = bincode::serialize(&group_relay_confirmation)?;
 
@@ -154,69 +165,45 @@ impl GroupRelayConfirmationHandler for MockGroupRelayConfirmationHandler {
                     )?;
             }
 
-            // TODO retry
-            tokio::time::sleep(std::time::Duration::from_millis(2000)).await;
+            for committer in committers.iter() {
+                let retry_strategy = FixedInterval::from_millis(2000).take(3);
 
-            for committer in committer_clients.iter_mut() {
-                committer
-                    .commit_partial_signature(
-                        self.chain_id,
-                        TaskType::GroupRelayConfirmation,
-                        group_relay_confirmation_as_bytes.clone(),
-                        task.index,
-                        partial_signature.clone(),
-                    )
-                    .await?;
+                let chain_id = self.chain_id;
+
+                if let Err(err) = RetryIf::spawn(
+                    retry_strategy,
+                    || {
+                        committer.clone().commit_partial_signature(
+                            chain_id,
+                            TaskType::GroupRelayConfirmation,
+                            group_relay_confirmation_as_bytes.clone(),
+                            task.index,
+                            partial_signature.clone(),
+                        )
+                    },
+                    |e: &NodeError| {
+                        error!(
+                            "send partial signature to committer {0} failed. Retry... Error: {1:?}",
+                            committer.get_id_address(),
+                            e
+                        );
+                        true
+                    },
+                )
+                .await
+                {
+                    error!("{:?}", err);
+                }
             }
         }
 
         Ok(())
     }
-
-    async fn prepare_committer_clients(&self) -> NodeResult<Vec<MockCommitterClient>> {
-        let mut committers = self
-            .group_cache
-            .read()
-            .get_committers()?
-            .iter()
-            .map(|c| c.to_string())
-            .collect::<Vec<_>>();
-
-        committers.retain(|c| *c != self.id_address);
-
-        let mut committer_clients = vec![];
-
-        for committer in committers {
-            let endpoint = self
-                .group_cache
-                .read()
-                .get_member(&committer)?
-                .rpc_endpint
-                .as_ref()
-                .unwrap()
-                .to_string();
-
-            // we retry some times here as building tonic connection needs the target rpc server available
-            let mut i = 0;
-            while i < 3 {
-                if let Ok(committer_client) =
-                    MockCommitterClient::new(self.id_address.clone(), endpoint.clone()).await
-                {
-                    committer_clients.push(committer_client);
-                    break;
-                }
-                i += 1;
-                tokio::time::sleep(std::time::Duration::from_millis(1000)).await;
-            }
-        }
-
-        Ok(committer_clients)
-    }
 }
 
 impl Subscriber for ReadyToHandleGroupRelayConfirmationTaskSubscriber {
     fn notify(&self, topic: Topic, payload: Box<dyn Event>) -> NodeResult<()> {
-        println!("{:?}", topic);
+        info!("{:?}", topic);
 
         unsafe {
             let ptr = Box::into_raw(payload);
@@ -259,10 +246,8 @@ impl Subscriber for ReadyToHandleGroupRelayConfirmationTaskSubscriber {
                         group_relay_confirmation_signature_cache_for_handler,
                 };
 
-                if let Ok(committer_clients) = handler.prepare_committer_clients().await {
-                    if let Err(e) = handler.handle(committer_clients).await {
-                        println!("{:?}", e);
-                    }
+                if let Err(e) = handler.handle().await {
+                    error!("{:?}", e);
                 }
             });
         }

@@ -6,13 +6,15 @@ use crate::node::{
         api::{BLSTasksUpdater, BlockInfoFetcher, GroupInfoFetcher},
         types::{ChainIdentity, RandomnessTask},
     },
-    error::errors::NodeResult,
+    error::errors::{NodeError, NodeResult},
     event::ready_to_handle_randomness_task::ReadyToHandleRandomnessTask,
     queue::event_queue::{EventPublisher, EventQueue},
 };
 use async_trait::async_trait;
+use log::error;
 use parking_lot::RwLock;
 use std::sync::Arc;
+use tokio_retry::{strategy::FixedInterval, RetryIf};
 
 pub struct MockReadyToHandleRandomnessTaskListener {
     chain_id: usize,
@@ -61,36 +63,57 @@ impl Listener for MockReadyToHandleRandomnessTaskListener {
             .get_provider_rpc_endpoint()
             .to_string();
 
-        let mut client = MockAdapterClient::new(rpc_endpoint, self.id_address.clone()).await?;
+        let client = MockAdapterClient::new(rpc_endpoint, self.id_address.clone());
+
+        let retry_strategy = FixedInterval::from_millis(1000);
 
         loop {
-            let is_bls_ready = self.group_cache.read().get_state();
+            if let Err(err) = RetryIf::spawn(
+                retry_strategy.clone(),
+                || async {
+                    let is_bls_ready = self.group_cache.read().get_state();
 
-            if let Ok(true) = is_bls_ready {
-                let current_group_index = self.group_cache.read().get_index()?;
+                    if let Ok(true) = is_bls_ready {
+                        let current_group_index = self.group_cache.read().get_index()?;
 
-                let current_block_height = self.block_cache.read().get_block_height();
+                        let current_block_height = self.block_cache.read().get_block_height();
 
-                let available_tasks = self
-                    .randomness_tasks_cache
-                    .write()
-                    .check_and_get_available_tasks(current_block_height, current_group_index);
+                        let available_tasks = self
+                            .randomness_tasks_cache
+                            .write()
+                            .check_and_get_available_tasks(
+                                current_block_height,
+                                current_group_index,
+                            );
 
-                let mut tasks_to_process: Vec<RandomnessTask> = vec![];
+                        let mut tasks_to_process: Vec<RandomnessTask> = vec![];
 
-                for task in available_tasks {
-                    if let Ok(false) = client.get_signature_task_completion_state(task.index).await
-                    {
-                        tasks_to_process.push(task);
+                        for task in available_tasks {
+                            if let Ok(false) =
+                                client.get_signature_task_completion_state(task.index).await
+                            {
+                                tasks_to_process.push(task);
+                            }
+                        }
+
+                        if !tasks_to_process.is_empty() {
+                            self.publish(ReadyToHandleRandomnessTask {
+                                chain_id: self.chain_id,
+                                tasks: tasks_to_process,
+                            });
+                        }
                     }
-                }
 
-                if !tasks_to_process.is_empty() {
-                    self.publish(ReadyToHandleRandomnessTask {
-                        chain_id: self.chain_id,
-                        tasks: tasks_to_process,
-                    });
-                }
+                    NodeResult::Ok(())
+                },
+                |e: &NodeError| {
+                    error!("listener is interrupted. Retry... Error: {:?}, ", e);
+                    true
+                },
+            )
+            .await
+            {
+                error!("{:?}", err);
             }
 
             tokio::time::sleep(std::time::Duration::from_millis(1000)).await;

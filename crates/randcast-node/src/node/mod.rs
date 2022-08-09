@@ -1,3 +1,7 @@
+use async_trait::async_trait;
+
+use self::error::errors::NodeResult;
+
 pub mod error;
 
 pub mod dao;
@@ -19,3 +23,8 @@ pub mod algorithm;
 pub mod contract_client;
 
 pub mod committer;
+
+#[async_trait]
+pub trait ServiceClient<C> {
+    async fn prepare_service_client(&self) -> NodeResult<C>;
+}

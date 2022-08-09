@@ -25,7 +25,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         None => panic!("Didn't get an instruction string"),
     };
 
-    let mut client = MockAdapterClient::new(adapter_rpc_endpoint, id_address).await?;
+    let client = MockAdapterClient::new(adapter_rpc_endpoint, id_address);
 
     if instruction == "request" {
         let seed = match args.next() {

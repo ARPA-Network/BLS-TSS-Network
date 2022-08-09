@@ -1,9 +1,9 @@
-use std::collections::HashMap;
-
 use crate::node::{
     event::types::{Event, Topic},
     subscriber::types::Subscriber,
 };
+use log::error;
+use std::collections::HashMap;
 
 #[derive(Default)]
 pub struct EventQueue {
@@ -43,7 +43,7 @@ impl<E: Event + Clone + Send + Sync + 'static> EventPublisher<E> for EventQueue 
         if let Some(subscribers) = self.subscribers.get(&topic) {
             for subscriber in subscribers {
                 if let Err(e) = subscriber.notify(topic, s_ptr.clone()) {
-                    println!("{:?}", e);
+                    error!("{:?}", e);
                 }
             }
         }

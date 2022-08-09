@@ -12,6 +12,7 @@ use crate::node::{
     scheduler::dynamic::{DynamicTaskScheduler, SimpleDynamicTaskScheduler},
 };
 use async_trait::async_trait;
+use log::{error, info};
 use parking_lot::RwLock;
 use std::{collections::HashMap, sync::Arc};
 
@@ -66,8 +67,7 @@ impl FulfillRandomnessHandler for MockFulfillRandomnessHandler {
         signature: Vec<u8>,
         partial_signatures: HashMap<String, Vec<u8>>,
     ) -> NodeResult<()> {
-        let mut client =
-            MockAdapterClient::new(self.adapter_address.clone(), self.id_address.clone()).await?;
+        let client = MockAdapterClient::new(self.adapter_address.clone(), self.id_address.clone());
 
         if !client
             .get_signature_task_completion_state(randomness_task_index)
@@ -83,11 +83,11 @@ impl FulfillRandomnessHandler for MockFulfillRandomnessHandler {
                 .await
             {
                 Ok(()) => {
-                    println!("fulfill randomness successfully! signature index: {}, group_index: {}, signature: {}",
+                    info!("fulfill randomness successfully! signature index: {}, group_index: {}, signature: {}",
                         randomness_task_index, group_index, hex::encode(signature));
                 }
                 Err(e) => {
-                    println!("{:?}", e);
+                    error!("{:?}", e);
                 }
             }
         }
@@ -98,7 +98,7 @@ impl FulfillRandomnessHandler for MockFulfillRandomnessHandler {
 
 impl Subscriber for RandomnessSignatureAggregationSubscriber {
     fn notify(&self, topic: Topic, payload: Box<dyn Event>) -> NodeResult<()> {
-        println!("{:?}", topic);
+        info!("{:?}", topic);
 
         unsafe {
             let ptr = Box::into_raw(payload);
@@ -149,7 +149,7 @@ impl Subscriber for RandomnessSignatureAggregationSubscriber {
                         )
                         .await
                     {
-                        println!("{:?}", e);
+                        error!("{:?}", e);
                     }
                 });
             }

@@ -2,13 +2,15 @@ use super::types::Listener;
 use crate::node::{
     contract_client::adapter_client::{AdapterMockHelper, MockAdapterClient},
     dao::types::ChainIdentity,
-    error::errors::NodeResult,
+    error::errors::{NodeError, NodeResult},
     event::new_block::NewBlock,
     queue::event_queue::{EventPublisher, EventQueue},
 };
 use async_trait::async_trait;
+use log::error;
 use parking_lot::RwLock;
 use std::sync::Arc;
+use tokio_retry::{strategy::FixedInterval, RetryIf};
 
 pub struct MockBlockListener {
     chain_id: usize,
@@ -48,15 +50,32 @@ impl Listener for MockBlockListener {
             .get_provider_rpc_endpoint()
             .to_string();
 
-        let mut client = MockAdapterClient::new(rpc_endpoint, self.id_address.to_string()).await?;
+        let client = MockAdapterClient::new(rpc_endpoint.clone(), self.id_address.to_string());
+
+        let retry_strategy = FixedInterval::from_millis(1000);
 
         loop {
-            let block_height = client.mine(1).await?;
+            if let Err(err) = RetryIf::spawn(
+                retry_strategy.clone(),
+                || async {
+                    let block_height = client.mine(1).await?;
 
-            self.publish(NewBlock {
-                chain_id: self.chain_id,
-                block_height,
-            });
+                    self.publish(NewBlock {
+                        chain_id: self.chain_id,
+                        block_height,
+                    });
+
+                    NodeResult::Ok(())
+                },
+                |e: &NodeError| {
+                    error!("listener is interrupted. Retry... Error: {:?}, ", e);
+                    true
+                },
+            )
+            .await
+            {
+                error!("{:?}", err);
+            }
 
             tokio::time::sleep(std::time::Duration::from_millis(1000)).await;
         }
