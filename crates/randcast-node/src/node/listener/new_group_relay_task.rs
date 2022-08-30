@@ -1,11 +1,11 @@
 use super::types::Listener;
 use crate::node::{
     contract_client::controller_client::{ControllerMockHelper, MockControllerClient},
-    dao::{
+    dal::{
         api::{BLSTasksFetcher, BLSTasksUpdater},
         types::ChainIdentity,
     },
-    dao::{cache::InMemoryBLSTasksQueue, types::GroupRelayTask},
+    dal::{cache::InMemoryBLSTasksQueue, types::GroupRelayTask},
     error::errors::{NodeError, NodeResult},
     event::new_group_relay_task::NewGroupRelayTask,
     queue::event_queue::{EventPublisher, EventQueue},
@@ -64,7 +64,7 @@ impl Listener for MockNewGroupRelayTaskListener {
                     let task_reply = client.emit_group_relay_task().await;
 
                     if let Ok(group_relay_task) = task_reply {
-                        if !self
+                        if let Ok(false) = self
                             .group_relay_tasks_cache
                             .read()
                             .contains(group_relay_task.controller_global_epoch)

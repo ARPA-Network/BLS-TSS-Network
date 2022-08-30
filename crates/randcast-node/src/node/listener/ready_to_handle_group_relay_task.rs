@@ -1,7 +1,7 @@
 use super::types::Listener;
 use crate::node::{
-    dao::cache::{InMemoryBLSTasksQueue, InMemoryBlockInfoCache, InMemoryGroupInfoCache},
-    dao::{
+    dal::cache::{InMemoryBLSTasksQueue, InMemoryBlockInfoCache},
+    dal::{
         api::{BLSTasksUpdater, BlockInfoFetcher, GroupInfoFetcher},
         types::GroupRelayTask,
     },
@@ -13,17 +13,17 @@ use async_trait::async_trait;
 use parking_lot::RwLock;
 use std::sync::Arc;
 
-pub struct MockReadyToHandleGroupRelayTaskListener {
+pub struct MockReadyToHandleGroupRelayTaskListener<G: GroupInfoFetcher + Sync + Send> {
     block_cache: Arc<RwLock<InMemoryBlockInfoCache>>,
-    group_cache: Arc<RwLock<InMemoryGroupInfoCache>>,
+    group_cache: Arc<RwLock<G>>,
     group_relay_tasks_cache: Arc<RwLock<InMemoryBLSTasksQueue<GroupRelayTask>>>,
     eq: Arc<RwLock<EventQueue>>,
 }
 
-impl MockReadyToHandleGroupRelayTaskListener {
+impl<G: GroupInfoFetcher + Sync + Send> MockReadyToHandleGroupRelayTaskListener<G> {
     pub fn new(
         block_cache: Arc<RwLock<InMemoryBlockInfoCache>>,
-        group_cache: Arc<RwLock<InMemoryGroupInfoCache>>,
+        group_cache: Arc<RwLock<G>>,
         group_relay_tasks_cache: Arc<RwLock<InMemoryBLSTasksQueue<GroupRelayTask>>>,
         eq: Arc<RwLock<EventQueue>>,
     ) -> Self {
@@ -36,14 +36,16 @@ impl MockReadyToHandleGroupRelayTaskListener {
     }
 }
 
-impl EventPublisher<ReadyToHandleGroupRelayTask> for MockReadyToHandleGroupRelayTaskListener {
+impl<G: GroupInfoFetcher + Sync + Send> EventPublisher<ReadyToHandleGroupRelayTask>
+    for MockReadyToHandleGroupRelayTaskListener<G>
+{
     fn publish(&self, event: ReadyToHandleGroupRelayTask) {
         self.eq.read().publish(event);
     }
 }
 
 #[async_trait]
-impl Listener for MockReadyToHandleGroupRelayTaskListener {
+impl<G: GroupInfoFetcher + Sync + Send> Listener for MockReadyToHandleGroupRelayTaskListener<G> {
     async fn start(mut self) -> NodeResult<()> {
         loop {
             let is_bls_ready = self.group_cache.read().get_state();
@@ -56,7 +58,7 @@ impl Listener for MockReadyToHandleGroupRelayTaskListener {
                 let available_tasks = self
                     .group_relay_tasks_cache
                     .write()
-                    .check_and_get_available_tasks(current_block_height, current_group_index);
+                    .check_and_get_available_tasks(current_block_height, current_group_index)?;
 
                 if !available_tasks.is_empty() {
                     self.publish(ReadyToHandleGroupRelayTask {

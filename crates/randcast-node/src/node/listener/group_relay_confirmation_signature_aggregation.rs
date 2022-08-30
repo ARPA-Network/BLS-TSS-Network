@@ -1,10 +1,8 @@
 use super::types::Listener;
 use crate::node::{
-    dao::{
+    dal::{
         api::{GroupInfoFetcher, SignatureResultCacheUpdater},
-        cache::{
-            GroupRelayConfirmationResultCache, InMemoryGroupInfoCache, InMemorySignatureResultCache,
-        },
+        cache::{GroupRelayConfirmationResultCache, InMemorySignatureResultCache},
     },
     error::errors::NodeResult,
     event::ready_to_fulfill_group_relay_confirmation_task::ReadyToFulfillGroupRelayConfirmationTask,
@@ -14,20 +12,21 @@ use async_trait::async_trait;
 use parking_lot::RwLock;
 use std::sync::Arc;
 
-pub struct MockGroupRelayConfirmationSignatureAggregationListener {
+pub struct MockGroupRelayConfirmationSignatureAggregationListener<G: GroupInfoFetcher + Sync + Send>
+{
     chain_id: usize,
     id_address: String,
-    group_cache: Arc<RwLock<InMemoryGroupInfoCache>>,
+    group_cache: Arc<RwLock<G>>,
     group_relay_confirmation_signature_cache:
         Arc<RwLock<InMemorySignatureResultCache<GroupRelayConfirmationResultCache>>>,
     eq: Arc<RwLock<EventQueue>>,
 }
 
-impl MockGroupRelayConfirmationSignatureAggregationListener {
+impl<G: GroupInfoFetcher + Sync + Send> MockGroupRelayConfirmationSignatureAggregationListener<G> {
     pub fn new(
         chain_id: usize,
         id_address: String,
-        group_cache: Arc<RwLock<InMemoryGroupInfoCache>>,
+        group_cache: Arc<RwLock<G>>,
         group_relay_confirmation_signature_cache: Arc<
             RwLock<InMemorySignatureResultCache<GroupRelayConfirmationResultCache>>,
         >,
@@ -43,8 +42,8 @@ impl MockGroupRelayConfirmationSignatureAggregationListener {
     }
 }
 
-impl EventPublisher<ReadyToFulfillGroupRelayConfirmationTask>
-    for MockGroupRelayConfirmationSignatureAggregationListener
+impl<G: GroupInfoFetcher + Sync + Send> EventPublisher<ReadyToFulfillGroupRelayConfirmationTask>
+    for MockGroupRelayConfirmationSignatureAggregationListener<G>
 {
     fn publish(&self, event: ReadyToFulfillGroupRelayConfirmationTask) {
         self.eq.read().publish(event);
@@ -52,7 +51,9 @@ impl EventPublisher<ReadyToFulfillGroupRelayConfirmationTask>
 }
 
 #[async_trait]
-impl Listener for MockGroupRelayConfirmationSignatureAggregationListener {
+impl<G: GroupInfoFetcher + Sync + Send> Listener
+    for MockGroupRelayConfirmationSignatureAggregationListener<G>
+{
     async fn start(mut self) -> NodeResult<()> {
         loop {
             let is_committer = self.group_cache.read().is_committer(&self.id_address);

@@ -1,7 +1,7 @@
 use super::types::Listener;
 use crate::node::{
     contract_client::adapter_client::{AdapterMockHelper, MockAdapterClient},
-    dao::types::ChainIdentity,
+    dal::types::ChainIdentity,
     error::errors::{NodeError, NodeResult},
     event::new_block::NewBlock,
     queue::event_queue::{EventPublisher, EventQueue},

@@ -1,9 +1,12 @@
-use super::chain::{
-    Chain, ChainFetcher, InMemoryAdapterChain, InMemoryMainChain, MainChainFetcher,
-};
+use super::chain::{Chain, ChainFetcher, GeneralAdapterChain, GeneralMainChain, MainChainFetcher};
 use crate::node::{
     committer::committer_server,
-    dao::{api::NodeInfoFetcher, types::ChainIdentity},
+    dal::{
+        api::{
+            BLSTasksFetcher, BLSTasksUpdater, GroupInfoFetcher, GroupInfoUpdater, NodeInfoFetcher,
+        },
+        types::RandomnessTask,
+    },
     error::errors::{NodeError, NodeResult},
     queue::event_queue::EventQueue,
     scheduler::{
@@ -15,7 +18,6 @@ use async_trait::async_trait;
 use log::error;
 use parking_lot::RwLock;
 use std::{collections::HashMap, sync::Arc};
-use threshold_bls::curve::bls12381::{Scalar, G1};
 
 pub trait Context {
     type MainChain;
@@ -25,12 +27,23 @@ pub trait Context {
     fn deploy(self) -> ContextHandle;
 }
 
-impl Context for InMemoryContext {
-    type MainChain = InMemoryMainChain;
+impl<
+        N: NodeInfoFetcher + Sync + Send + 'static,
+        G: GroupInfoFetcher + GroupInfoUpdater + Sync + Send + 'static,
+        T: BLSTasksFetcher<RandomnessTask> + BLSTasksUpdater<RandomnessTask> + Sync + Send + 'static,
+    > Context for GeneralContext<N, G, T>
+{
+    type MainChain = GeneralMainChain<N, G, T>;
 
-    type AdapterChain = InMemoryAdapterChain;
+    type AdapterChain = GeneralAdapterChain<N, G, T>;
 
     fn deploy(self) -> ContextHandle {
+        self.get_main_chain().init_components(&self);
+
+        for adapter_chain in self.adapter_chains.values() {
+            adapter_chain.init_components(&self);
+        }
+
         let f_ts = self.get_fixed_task_handler();
 
         let rpc_endpoint = self
@@ -38,6 +51,7 @@ impl Context for InMemoryContext {
             .get_node_cache()
             .read()
             .get_node_rpc_endpoint()
+            .unwrap()
             .to_string();
 
         let context = Arc::new(RwLock::new(self));
@@ -51,49 +65,41 @@ impl Context for InMemoryContext {
     }
 }
 
-pub struct InMemoryContext {
-    main_chain: InMemoryMainChain,
-    adapter_chains: HashMap<usize, InMemoryAdapterChain>,
+pub struct GeneralContext<
+    N: NodeInfoFetcher,
+    G: GroupInfoFetcher + GroupInfoUpdater,
+    T: BLSTasksFetcher<RandomnessTask> + BLSTasksUpdater<RandomnessTask>,
+> {
+    main_chain: GeneralMainChain<N, G, T>,
+    adapter_chains: HashMap<usize, GeneralAdapterChain<N, G, T>>,
     eq: Arc<RwLock<EventQueue>>,
     ts: Arc<RwLock<SimpleDynamicTaskScheduler>>,
     f_ts: Arc<RwLock<SimpleFixedTaskScheduler>>,
 }
 
-impl InMemoryContext {
-    pub fn new(
-        main_chain_identity: ChainIdentity,
-        node_rpc_endpoint: String,
-        dkg_private_key: Scalar,
-        dkg_public_key: G1,
-    ) -> Self {
-        let main_chain = InMemoryMainChain::new(
-            0,
-            "main".to_string(),
-            main_chain_identity,
-            node_rpc_endpoint,
-            dkg_private_key,
-            dkg_public_key,
-        );
-
-        let context = InMemoryContext {
+impl<
+        N: NodeInfoFetcher + Sync + Send + 'static,
+        G: GroupInfoFetcher + GroupInfoUpdater + Sync + Send + 'static,
+        T: BLSTasksFetcher<RandomnessTask> + BLSTasksUpdater<RandomnessTask> + Sync + Send + 'static,
+    > GeneralContext<N, G, T>
+{
+    pub fn new(main_chain: GeneralMainChain<N, G, T>) -> Self {
+        GeneralContext {
             main_chain,
             adapter_chains: HashMap::new(),
             eq: Arc::new(RwLock::new(EventQueue::new())),
             ts: Arc::new(RwLock::new(SimpleDynamicTaskScheduler::new())),
             f_ts: Arc::new(RwLock::new(SimpleFixedTaskScheduler::new())),
-        };
-
-        context.get_main_chain().init_components(&context);
-
-        context
+        }
     }
 
-    pub fn add_adapter_chain(&mut self, adapter_chain: InMemoryAdapterChain) -> NodeResult<()> {
+    pub fn add_adapter_chain(
+        &mut self,
+        adapter_chain: GeneralAdapterChain<N, G, T>,
+    ) -> NodeResult<()> {
         if self.adapter_chains.contains_key(&adapter_chain.id()) {
             return Err(NodeError::RepeatedChainId);
         }
-
-        adapter_chain.init_components(self);
 
         self.adapter_chains
             .insert(adapter_chain.id(), adapter_chain);
@@ -116,7 +122,12 @@ pub trait ContextFetcher<T: Context> {
     fn get_event_queue(&self) -> Arc<RwLock<EventQueue>>;
 }
 
-impl ContextFetcher<InMemoryContext> for InMemoryContext {
+impl<
+        N: NodeInfoFetcher + Sync + Send + 'static,
+        G: GroupInfoFetcher + GroupInfoUpdater + Sync + Send + 'static,
+        T: BLSTasksFetcher<RandomnessTask> + BLSTasksUpdater<RandomnessTask> + Sync + Send + 'static,
+    > ContextFetcher<GeneralContext<N, G, T>> for GeneralContext<N, G, T>
+{
     fn contains_chain(&self, index: usize) -> bool {
         self.adapter_chains.contains_key(&index)
     }
@@ -124,11 +135,11 @@ impl ContextFetcher<InMemoryContext> for InMemoryContext {
     fn get_adapter_chain(
         &self,
         index: usize,
-    ) -> Option<&<InMemoryContext as Context>::AdapterChain> {
+    ) -> Option<&<GeneralContext<N, G, T> as Context>::AdapterChain> {
         self.adapter_chains.get(&index)
     }
 
-    fn get_main_chain(&self) -> &<InMemoryContext as Context>::MainChain {
+    fn get_main_chain(&self) -> &<GeneralContext<N, G, T> as Context>::MainChain {
         &self.main_chain
     }
 
@@ -173,19 +184,20 @@ impl TaskWaiter for ContextHandle {
     }
 }
 
-trait CommitterServerStarter {
-    fn start_committer_server(
-        &mut self,
-        rpc_endpoint: String,
-        context: Arc<RwLock<InMemoryContext>>,
-    );
+trait CommitterServerStarter<T: Context> {
+    fn start_committer_server(&mut self, rpc_endpoint: String, context: Arc<RwLock<T>>);
 }
 
-impl CommitterServerStarter for SimpleFixedTaskScheduler {
+impl<
+        N: NodeInfoFetcher + Sync + Send + 'static,
+        G: GroupInfoFetcher + GroupInfoUpdater + Sync + Send + 'static,
+        T: BLSTasksFetcher<RandomnessTask> + BLSTasksUpdater<RandomnessTask> + Sync + Send + 'static,
+    > CommitterServerStarter<GeneralContext<N, G, T>> for SimpleFixedTaskScheduler
+{
     fn start_committer_server(
         &mut self,
         rpc_endpoint: String,
-        context: Arc<RwLock<InMemoryContext>>,
+        context: Arc<RwLock<GeneralContext<N, G, T>>>,
     ) {
         self.add_task(async move {
             if let Err(e) = committer_server::start_committer_server(rpc_endpoint, context).await {

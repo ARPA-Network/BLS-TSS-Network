@@ -1,4 +1,4 @@
-use crate::node::dao::types::GroupRelayConfirmationTask;
+use crate::node::dal::types::GroupRelayConfirmationTask;
 
 use super::types::{Event, Topic};
 

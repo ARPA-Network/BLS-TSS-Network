@@ -1,4 +1,4 @@
-use crate::node::dao::types::DKGTask;
+use crate::node::dal::types::DKGTask;
 
 use super::types::{Event, Topic};
 

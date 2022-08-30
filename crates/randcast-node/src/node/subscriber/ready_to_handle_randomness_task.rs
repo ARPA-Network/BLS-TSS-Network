@@ -2,13 +2,13 @@ use super::types::{CommitterClientHandler, Subscriber};
 use crate::node::{
     algorithm::bls::{BLSCore, MockBLSCore},
     committer::committer_client::{CommitterClient, CommitterService, MockCommitterClient},
-    dao::{
+    dal::{
         api::SignatureResultCacheFetcher,
         types::{RandomnessTask, TaskType},
     },
-    dao::{
+    dal::{
         api::{GroupInfoFetcher, SignatureResultCacheUpdater},
-        cache::{InMemoryGroupInfoCache, InMemorySignatureResultCache, RandomnessResultCache},
+        cache::{InMemorySignatureResultCache, RandomnessResultCache},
     },
     error::errors::{NodeError, NodeResult},
     event::{
@@ -24,20 +24,20 @@ use parking_lot::RwLock;
 use std::sync::Arc;
 use tokio_retry::{strategy::FixedInterval, RetryIf};
 
-pub struct ReadyToHandleRandomnessTaskSubscriber {
+pub struct ReadyToHandleRandomnessTaskSubscriber<G: GroupInfoFetcher + Sync + Send> {
     pub chain_id: usize,
     id_address: String,
-    group_cache: Arc<RwLock<InMemoryGroupInfoCache>>,
+    group_cache: Arc<RwLock<G>>,
     randomness_signature_cache: Arc<RwLock<InMemorySignatureResultCache<RandomnessResultCache>>>,
     eq: Arc<RwLock<EventQueue>>,
     ts: Arc<RwLock<SimpleDynamicTaskScheduler>>,
 }
 
-impl ReadyToHandleRandomnessTaskSubscriber {
+impl<G: GroupInfoFetcher + Sync + Send> ReadyToHandleRandomnessTaskSubscriber<G> {
     pub fn new(
         chain_id: usize,
         id_address: String,
-        group_cache: Arc<RwLock<InMemoryGroupInfoCache>>,
+        group_cache: Arc<RwLock<G>>,
         randomness_signature_cache: Arc<
             RwLock<InMemorySignatureResultCache<RandomnessResultCache>>,
         >,
@@ -60,26 +60,28 @@ pub trait RandomnessHandler {
     async fn handle(self) -> NodeResult<()>;
 }
 
-pub struct MockRandomnessHandler {
+pub struct MockRandomnessHandler<G: GroupInfoFetcher + Sync + Send> {
     chain_id: usize,
     id_address: String,
     tasks: Vec<RandomnessTask>,
-    group_cache: Arc<RwLock<InMemoryGroupInfoCache>>,
+    group_cache: Arc<RwLock<G>>,
     randomness_signature_cache: Arc<RwLock<InMemorySignatureResultCache<RandomnessResultCache>>>,
 }
 
-impl CommitterClientHandler<MockCommitterClient, InMemoryGroupInfoCache> for MockRandomnessHandler {
+impl<G: GroupInfoFetcher + Sync + Send> CommitterClientHandler<MockCommitterClient, G>
+    for MockRandomnessHandler<G>
+{
     fn get_id_address(&self) -> &str {
         &self.id_address
     }
 
-    fn get_group_cache(&self) -> Arc<RwLock<InMemoryGroupInfoCache>> {
+    fn get_group_cache(&self) -> Arc<RwLock<G>> {
         self.group_cache.clone()
     }
 }
 
 #[async_trait]
-impl RandomnessHandler for MockRandomnessHandler {
+impl<G: GroupInfoFetcher + Sync + Send> RandomnessHandler for MockRandomnessHandler<G> {
     async fn handle(self) -> NodeResult<()> {
         let committers = self.prepare_committer_clients()?;
 
@@ -150,7 +152,9 @@ impl RandomnessHandler for MockRandomnessHandler {
     }
 }
 
-impl Subscriber for ReadyToHandleRandomnessTaskSubscriber {
+impl<G: GroupInfoFetcher + Sync + Send + 'static> Subscriber
+    for ReadyToHandleRandomnessTaskSubscriber<G>
+{
     fn notify(&self, topic: Topic, payload: Box<dyn Event>) -> NodeResult<()> {
         info!("{:?}", topic);
 

@@ -4,7 +4,7 @@ use self::controller::{
     GroupReply, Member, NodeRegisterRequest, PostProcessDkgRequest,
 };
 use self::controller::{DkgTaskReply, GroupRelayTaskReply, MineRequest};
-use crate::node::dao::types::{DKGTask, Group, GroupRelayTask, Member as ModelMember};
+use crate::node::dal::types::{DKGTask, Group, GroupRelayTask, Member as ModelMember};
 use crate::node::error::errors::{NodeError, NodeResult};
 use crate::node::ServiceClient;
 use async_trait::async_trait;

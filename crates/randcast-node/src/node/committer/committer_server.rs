@@ -6,15 +6,18 @@ use crate::node::{
     algorithm::bls::{BLSCore, MockBLSCore},
     context::{
         chain::{AdapterChainFetcher, ChainFetcher},
-        context::{ContextFetcher, InMemoryContext},
+        context::{ContextFetcher, GeneralContext},
     },
-    error::errors::NodeError,
+    dal::{
+        api::{BLSTasksFetcher, BLSTasksUpdater, GroupInfoUpdater, NodeInfoFetcher},
+        types::RandomnessTask,
+    },
+    error::errors::{GroupError, NodeError},
 };
 use crate::node::{
     context::chain::MainChainFetcher,
-    dao::{
+    dal::{
         api::{GroupInfoFetcher, SignatureResultCacheFetcher, SignatureResultCacheUpdater},
-        cache::InMemoryGroupInfoCache,
         types::TaskType,
     },
 };
@@ -27,17 +30,26 @@ pub mod committer {
     include!("../../../stub/committer.rs");
 }
 
-pub struct BLSCommitterServiceServer {
+pub struct BLSCommitterServiceServer<
+    N: NodeInfoFetcher,
+    G: GroupInfoFetcher + GroupInfoUpdater,
+    T: BLSTasksFetcher<RandomnessTask> + BLSTasksUpdater<RandomnessTask>,
+> {
     id_address: String,
-    group_cache: Arc<RwLock<InMemoryGroupInfoCache>>,
-    context: Arc<RwLock<InMemoryContext>>,
+    group_cache: Arc<RwLock<G>>,
+    context: Arc<RwLock<GeneralContext<N, G, T>>>,
 }
 
-impl BLSCommitterServiceServer {
+impl<
+        N: NodeInfoFetcher,
+        G: GroupInfoFetcher + GroupInfoUpdater,
+        T: BLSTasksFetcher<RandomnessTask> + BLSTasksUpdater<RandomnessTask>,
+    > BLSCommitterServiceServer<N, G, T>
+{
     pub fn new(
         id_address: String,
-        group_cache: Arc<RwLock<InMemoryGroupInfoCache>>,
-        context: Arc<RwLock<InMemoryContext>>,
+        group_cache: Arc<RwLock<G>>,
+        context: Arc<RwLock<GeneralContext<N, G, T>>>,
     ) -> Self {
         BLSCommitterServiceServer {
             id_address,
@@ -48,7 +60,12 @@ impl BLSCommitterServiceServer {
 }
 
 #[tonic::async_trait]
-impl CommitterService for BLSCommitterServiceServer {
+impl<
+        N: NodeInfoFetcher + Sync + Send + 'static,
+        G: GroupInfoFetcher + GroupInfoUpdater + Sync + Send + 'static,
+        T: BLSTasksFetcher<RandomnessTask> + BLSTasksUpdater<RandomnessTask> + Sync + Send + 'static,
+    > CommitterService for BLSCommitterServiceServer<N, G, T>
+{
     async fn commit_partial_signature(
         &self,
         request: Request<CommitPartialSignatureRequest>,
@@ -56,7 +73,7 @@ impl CommitterService for BLSCommitterServiceServer {
         let req = request.into_inner();
 
         if let Err(_) | Ok(false) = self.group_cache.read().get_state() {
-            return Err(Status::not_found(NodeError::GroupNotReady.to_string()));
+            return Err(Status::not_found(GroupError::GroupNotReady.to_string()));
         }
 
         if let Err(_) | Ok(false) = self.group_cache.read().is_committer(&self.id_address) {
@@ -233,13 +250,18 @@ impl CommitterService for BLSCommitterServiceServer {
             return Ok(Response::new(CommitPartialSignatureReply { result: true }));
         }
 
-        Err(Status::not_found(NodeError::MemberNotExisted.to_string()))
+        Err(Status::not_found(GroupError::MemberNotExisted.to_string()))
     }
 }
 
-pub async fn start_committer_server_with_shutdown<F: Future<Output = ()>>(
+pub async fn start_committer_server_with_shutdown<
+    F: Future<Output = ()>,
+    N: NodeInfoFetcher + Sync + Send + 'static,
+    G: GroupInfoFetcher + GroupInfoUpdater + Sync + Send + 'static,
+    T: BLSTasksFetcher<RandomnessTask> + BLSTasksUpdater<RandomnessTask> + Sync + Send + 'static,
+>(
     endpoint: String,
-    context: Arc<RwLock<InMemoryContext>>,
+    context: Arc<RwLock<GeneralContext<N, G, T>>>,
     shutdown_signal: F,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let addr = endpoint.parse()?;
@@ -264,9 +286,13 @@ pub async fn start_committer_server_with_shutdown<F: Future<Output = ()>>(
     Ok(())
 }
 
-pub async fn start_committer_server(
+pub async fn start_committer_server<
+    N: NodeInfoFetcher + Sync + Send + 'static,
+    G: GroupInfoFetcher + GroupInfoUpdater + Sync + Send + 'static,
+    T: BLSTasksFetcher<RandomnessTask> + BLSTasksUpdater<RandomnessTask> + Sync + Send + 'static,
+>(
     endpoint: String,
-    context: Arc<RwLock<InMemoryContext>>,
+    context: Arc<RwLock<GeneralContext<N, G, T>>>,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let addr = endpoint.parse()?;
 

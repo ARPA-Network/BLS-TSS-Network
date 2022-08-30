@@ -1,7 +1,7 @@
 use super::types::Subscriber;
 use crate::node::{
     contract_client::controller_client::{ControllerTransactions, MockControllerClient},
-    dao::types::ChainIdentity,
+    dal::types::ChainIdentity,
     error::errors::NodeResult,
     event::{
         dkg_post_process::DKGPostProcess,

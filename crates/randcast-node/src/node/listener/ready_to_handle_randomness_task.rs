@@ -1,8 +1,8 @@
 use super::types::Listener;
 use crate::node::{
     contract_client::adapter_client::{AdapterViews, MockAdapterClient},
-    dao::cache::{InMemoryBLSTasksQueue, InMemoryBlockInfoCache, InMemoryGroupInfoCache},
-    dao::{
+    dal::cache::InMemoryBlockInfoCache,
+    dal::{
         api::{BLSTasksUpdater, BlockInfoFetcher, GroupInfoFetcher},
         types::{ChainIdentity, RandomnessTask},
     },
@@ -16,24 +16,29 @@ use parking_lot::RwLock;
 use std::sync::Arc;
 use tokio_retry::{strategy::FixedInterval, RetryIf};
 
-pub struct MockReadyToHandleRandomnessTaskListener {
+pub struct MockReadyToHandleRandomnessTaskListener<
+    G: GroupInfoFetcher,
+    T: BLSTasksUpdater<RandomnessTask>,
+> {
     chain_id: usize,
     id_address: String,
     chain_identity: Arc<RwLock<ChainIdentity>>,
     block_cache: Arc<RwLock<InMemoryBlockInfoCache>>,
-    group_cache: Arc<RwLock<InMemoryGroupInfoCache>>,
-    randomness_tasks_cache: Arc<RwLock<InMemoryBLSTasksQueue<RandomnessTask>>>,
+    group_cache: Arc<RwLock<G>>,
+    randomness_tasks_cache: Arc<RwLock<T>>,
     eq: Arc<RwLock<EventQueue>>,
 }
 
-impl MockReadyToHandleRandomnessTaskListener {
+impl<G: GroupInfoFetcher, T: BLSTasksUpdater<RandomnessTask>>
+    MockReadyToHandleRandomnessTaskListener<G, T>
+{
     pub fn new(
         chain_id: usize,
         id_address: String,
         chain_identity: Arc<RwLock<ChainIdentity>>,
         block_cache: Arc<RwLock<InMemoryBlockInfoCache>>,
-        group_cache: Arc<RwLock<InMemoryGroupInfoCache>>,
-        randomness_tasks_cache: Arc<RwLock<InMemoryBLSTasksQueue<RandomnessTask>>>,
+        group_cache: Arc<RwLock<G>>,
+        randomness_tasks_cache: Arc<RwLock<T>>,
         eq: Arc<RwLock<EventQueue>>,
     ) -> Self {
         MockReadyToHandleRandomnessTaskListener {
@@ -48,14 +53,18 @@ impl MockReadyToHandleRandomnessTaskListener {
     }
 }
 
-impl EventPublisher<ReadyToHandleRandomnessTask> for MockReadyToHandleRandomnessTaskListener {
+impl<G: GroupInfoFetcher, T: BLSTasksUpdater<RandomnessTask>>
+    EventPublisher<ReadyToHandleRandomnessTask> for MockReadyToHandleRandomnessTaskListener<G, T>
+{
     fn publish(&self, event: ReadyToHandleRandomnessTask) {
         self.eq.read().publish(event);
     }
 }
 
 #[async_trait]
-impl Listener for MockReadyToHandleRandomnessTaskListener {
+impl<G: GroupInfoFetcher + Sync + Send, T: BLSTasksUpdater<RandomnessTask> + Sync + Send> Listener
+    for MockReadyToHandleRandomnessTaskListener<G, T>
+{
     async fn start(mut self) -> NodeResult<()> {
         let rpc_endpoint = self
             .chain_identity
@@ -84,7 +93,7 @@ impl Listener for MockReadyToHandleRandomnessTaskListener {
                             .check_and_get_available_tasks(
                                 current_block_height,
                                 current_group_index,
-                            );
+                            )?;
 
                         let mut tasks_to_process: Vec<RandomnessTask> = vec![];
 

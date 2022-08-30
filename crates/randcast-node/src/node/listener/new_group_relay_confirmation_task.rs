@@ -1,11 +1,11 @@
 use super::types::Listener;
 use crate::node::{
     contract_client::adapter_client::{AdapterMockHelper, MockAdapterClient},
-    dao::{
+    dal::{
         api::BLSTasksFetcher,
         types::{ChainIdentity, GroupRelayConfirmationTask},
     },
-    dao::{api::BLSTasksUpdater, cache::InMemoryBLSTasksQueue},
+    dal::{api::BLSTasksUpdater, cache::InMemoryBLSTasksQueue},
     error::errors::{NodeError, NodeResult},
     event::new_group_relay_confirmation_task::NewGroupRelayConfirmationTask,
     queue::event_queue::{EventPublisher, EventQueue},
@@ -71,7 +71,7 @@ impl Listener for MockNewGroupRelayConfirmationTaskListener {
                     let task_reply = client.emit_group_relay_confirmation_task().await;
 
                     if let Ok(group_relay_confirmation_task) = task_reply {
-                        if !self
+                        if let Ok(false) = self
                             .group_relay_confirmation_tasks_cache
                             .read()
                             .contains(group_relay_confirmation_task.index)

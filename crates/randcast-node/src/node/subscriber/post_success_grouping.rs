@@ -1,6 +1,6 @@
 use super::types::Subscriber;
 use crate::node::{
-    dao::{api::GroupInfoUpdater, cache::InMemoryGroupInfoCache},
+    dal::api::GroupInfoUpdater,
     error::errors::NodeResult,
     event::{
         dkg_success::DKGSuccess,
@@ -12,21 +12,18 @@ use log::info;
 use parking_lot::RwLock;
 use std::sync::Arc;
 
-pub struct PostSuccessGroupingSubscriber {
-    group_cache: Arc<RwLock<InMemoryGroupInfoCache>>,
+pub struct PostSuccessGroupingSubscriber<G: GroupInfoUpdater + Sync + Send> {
+    group_cache: Arc<RwLock<G>>,
     eq: Arc<RwLock<EventQueue>>,
 }
 
-impl PostSuccessGroupingSubscriber {
-    pub fn new(
-        group_cache: Arc<RwLock<InMemoryGroupInfoCache>>,
-        eq: Arc<RwLock<EventQueue>>,
-    ) -> Self {
+impl<G: GroupInfoUpdater + Sync + Send> PostSuccessGroupingSubscriber<G> {
+    pub fn new(group_cache: Arc<RwLock<G>>, eq: Arc<RwLock<EventQueue>>) -> Self {
         PostSuccessGroupingSubscriber { group_cache, eq }
     }
 }
 
-impl Subscriber for PostSuccessGroupingSubscriber {
+impl<G: GroupInfoUpdater + Sync + Send + 'static> Subscriber for PostSuccessGroupingSubscriber<G> {
     fn notify(&self, topic: Topic, payload: Box<dyn Event>) -> NodeResult<()> {
         info!("{:?}", topic);
 

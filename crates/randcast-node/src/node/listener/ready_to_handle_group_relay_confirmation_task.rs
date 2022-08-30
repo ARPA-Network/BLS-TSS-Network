@@ -1,7 +1,7 @@
 use super::types::Listener;
 use crate::node::{
-    dao::cache::{InMemoryBLSTasksQueue, InMemoryBlockInfoCache, InMemoryGroupInfoCache},
-    dao::{
+    dal::cache::{InMemoryBLSTasksQueue, InMemoryBlockInfoCache},
+    dal::{
         api::{BLSTasksUpdater, BlockInfoFetcher, GroupInfoFetcher},
         types::GroupRelayConfirmationTask,
     },
@@ -13,20 +13,20 @@ use async_trait::async_trait;
 use parking_lot::RwLock;
 use std::sync::Arc;
 
-pub struct MockReadyToHandleGroupRelayConfirmationTaskListener {
+pub struct MockReadyToHandleGroupRelayConfirmationTaskListener<G: GroupInfoFetcher + Sync + Send> {
     chain_id: usize,
     block_cache: Arc<RwLock<InMemoryBlockInfoCache>>,
-    group_cache: Arc<RwLock<InMemoryGroupInfoCache>>,
+    group_cache: Arc<RwLock<G>>,
     group_relay_confirmation_tasks_cache:
         Arc<RwLock<InMemoryBLSTasksQueue<GroupRelayConfirmationTask>>>,
     eq: Arc<RwLock<EventQueue>>,
 }
 
-impl MockReadyToHandleGroupRelayConfirmationTaskListener {
+impl<G: GroupInfoFetcher + Sync + Send> MockReadyToHandleGroupRelayConfirmationTaskListener<G> {
     pub fn new(
         chain_id: usize,
         block_cache: Arc<RwLock<InMemoryBlockInfoCache>>,
-        group_cache: Arc<RwLock<InMemoryGroupInfoCache>>,
+        group_cache: Arc<RwLock<G>>,
         group_relay_confirmation_tasks_cache: Arc<
             RwLock<InMemoryBLSTasksQueue<GroupRelayConfirmationTask>>,
         >,
@@ -42,8 +42,8 @@ impl MockReadyToHandleGroupRelayConfirmationTaskListener {
     }
 }
 
-impl EventPublisher<ReadyToHandleGroupRelayConfirmationTask>
-    for MockReadyToHandleGroupRelayConfirmationTaskListener
+impl<G: GroupInfoFetcher + Sync + Send> EventPublisher<ReadyToHandleGroupRelayConfirmationTask>
+    for MockReadyToHandleGroupRelayConfirmationTaskListener<G>
 {
     fn publish(&self, event: ReadyToHandleGroupRelayConfirmationTask) {
         self.eq.read().publish(event);
@@ -51,7 +51,9 @@ impl EventPublisher<ReadyToHandleGroupRelayConfirmationTask>
 }
 
 #[async_trait]
-impl Listener for MockReadyToHandleGroupRelayConfirmationTaskListener {
+impl<G: GroupInfoFetcher + Sync + Send> Listener
+    for MockReadyToHandleGroupRelayConfirmationTaskListener<G>
+{
     async fn start(mut self) -> NodeResult<()> {
         loop {
             let is_bls_ready = self.group_cache.read().get_state();
@@ -64,7 +66,7 @@ impl Listener for MockReadyToHandleGroupRelayConfirmationTaskListener {
                 let available_tasks = self
                     .group_relay_confirmation_tasks_cache
                     .write()
-                    .check_and_get_available_tasks(current_block_height, current_group_index);
+                    .check_and_get_available_tasks(current_block_height, current_group_index)?;
 
                 if !available_tasks.is_empty() {
                     self.publish(ReadyToHandleGroupRelayConfirmationTask {

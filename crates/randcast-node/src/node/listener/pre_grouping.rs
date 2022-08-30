@@ -1,7 +1,7 @@
 use super::types::Listener;
 use crate::node::{
     contract_client::controller_client::{ControllerMockHelper, MockControllerClient},
-    dao::{api::GroupInfoFetcher, cache::InMemoryGroupInfoCache, types::ChainIdentity},
+    dal::{api::GroupInfoFetcher, types::ChainIdentity},
     error::errors::{NodeError, NodeResult},
     event::new_dkg_task::NewDKGTask,
     queue::event_queue::{EventPublisher, EventQueue},
@@ -12,16 +12,16 @@ use parking_lot::RwLock;
 use std::sync::Arc;
 use tokio_retry::{strategy::FixedInterval, RetryIf};
 
-pub struct MockPreGroupingListener {
+pub struct MockPreGroupingListener<G: GroupInfoFetcher + Sync + Send> {
     main_chain_identity: Arc<RwLock<ChainIdentity>>,
-    group_cache: Arc<RwLock<InMemoryGroupInfoCache>>,
+    group_cache: Arc<RwLock<G>>,
     eq: Arc<RwLock<EventQueue>>,
 }
 
-impl MockPreGroupingListener {
+impl<G: GroupInfoFetcher + Sync + Send> MockPreGroupingListener<G> {
     pub fn new(
         main_chain_identity: Arc<RwLock<ChainIdentity>>,
-        group_cache: Arc<RwLock<InMemoryGroupInfoCache>>,
+        group_cache: Arc<RwLock<G>>,
         eq: Arc<RwLock<EventQueue>>,
     ) -> Self {
         MockPreGroupingListener {
@@ -32,14 +32,14 @@ impl MockPreGroupingListener {
     }
 }
 
-impl EventPublisher<NewDKGTask> for MockPreGroupingListener {
+impl<G: GroupInfoFetcher + Sync + Send> EventPublisher<NewDKGTask> for MockPreGroupingListener<G> {
     fn publish(&self, event: NewDKGTask) {
         self.eq.read().publish(event);
     }
 }
 
 #[async_trait]
-impl Listener for MockPreGroupingListener {
+impl<G: GroupInfoFetcher + Sync + Send> Listener for MockPreGroupingListener<G> {
     async fn start(mut self) -> NodeResult<()> {
         let rpc_endpoint = self
             .main_chain_identity

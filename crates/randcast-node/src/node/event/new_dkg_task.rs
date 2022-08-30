@@ -1,5 +1,5 @@
 use super::types::{Event, Topic};
-use crate::node::dao::types::DKGTask;
+use crate::node::dal::types::DKGTask;
 
 #[derive(Clone)]
 pub struct NewDKGTask {

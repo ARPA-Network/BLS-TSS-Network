@@ -1,4 +1,4 @@
-use crate::node::dao::cache::RandomnessResultCache;
+use crate::node::dal::cache::RandomnessResultCache;
 
 use super::types::{Event, Topic};
 

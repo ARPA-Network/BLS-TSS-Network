@@ -7,12 +7,10 @@ use crate::node::{
         adapter_client::{AdapterViews, MockAdapterClient},
         controller_client::{ControllerViews, MockControllerClient},
     },
-    dao::types::{GroupRelayConfirmation, GroupRelayConfirmationTask, Status, TaskType},
-    dao::{
+    dal::types::{GroupRelayConfirmation, GroupRelayConfirmationTask, Status, TaskType},
+    dal::{
         api::{GroupInfoFetcher, SignatureResultCacheFetcher, SignatureResultCacheUpdater},
-        cache::{
-            GroupRelayConfirmationResultCache, InMemoryGroupInfoCache, InMemorySignatureResultCache,
-        },
+        cache::{GroupRelayConfirmationResultCache, InMemorySignatureResultCache},
         types::ChainIdentity,
     },
     error::errors::{NodeError, NodeResult},
@@ -29,23 +27,23 @@ use parking_lot::RwLock;
 use std::sync::Arc;
 use tokio_retry::{strategy::FixedInterval, RetryIf};
 
-pub struct ReadyToHandleGroupRelayConfirmationTaskSubscriber {
+pub struct ReadyToHandleGroupRelayConfirmationTaskSubscriber<G: GroupInfoFetcher + Sync + Send> {
     pub chain_id: usize,
     main_chain_identity: Arc<RwLock<ChainIdentity>>,
     chain_identity: Arc<RwLock<ChainIdentity>>,
-    group_cache: Arc<RwLock<InMemoryGroupInfoCache>>,
+    group_cache: Arc<RwLock<G>>,
     group_relay_confirmation_signature_cache:
         Arc<RwLock<InMemorySignatureResultCache<GroupRelayConfirmationResultCache>>>,
     eq: Arc<RwLock<EventQueue>>,
     ts: Arc<RwLock<SimpleDynamicTaskScheduler>>,
 }
 
-impl ReadyToHandleGroupRelayConfirmationTaskSubscriber {
+impl<G: GroupInfoFetcher + Sync + Send> ReadyToHandleGroupRelayConfirmationTaskSubscriber<G> {
     pub fn new(
         chain_id: usize,
         main_chain_identity: Arc<RwLock<ChainIdentity>>,
         chain_identity: Arc<RwLock<ChainIdentity>>,
-        group_cache: Arc<RwLock<InMemoryGroupInfoCache>>,
+        group_cache: Arc<RwLock<G>>,
         group_relay_confirmation_signature_cache: Arc<
             RwLock<InMemorySignatureResultCache<GroupRelayConfirmationResultCache>>,
         >,
@@ -69,31 +67,33 @@ pub trait GroupRelayConfirmationHandler {
     async fn handle(self) -> NodeResult<()>;
 }
 
-pub struct MockGroupRelayConfirmationHandler {
+pub struct MockGroupRelayConfirmationHandler<G: GroupInfoFetcher + Sync + Send> {
     chain_id: usize,
     controller_address: String,
     adapter_address: String,
     id_address: String,
     tasks: Vec<GroupRelayConfirmationTask>,
-    group_cache: Arc<RwLock<InMemoryGroupInfoCache>>,
+    group_cache: Arc<RwLock<G>>,
     group_relay_confirmation_signature_cache:
         Arc<RwLock<InMemorySignatureResultCache<GroupRelayConfirmationResultCache>>>,
 }
 
-impl CommitterClientHandler<MockCommitterClient, InMemoryGroupInfoCache>
-    for MockGroupRelayConfirmationHandler
+impl<G: GroupInfoFetcher + Sync + Send> CommitterClientHandler<MockCommitterClient, G>
+    for MockGroupRelayConfirmationHandler<G>
 {
     fn get_id_address(&self) -> &str {
         &self.id_address
     }
 
-    fn get_group_cache(&self) -> Arc<RwLock<InMemoryGroupInfoCache>> {
+    fn get_group_cache(&self) -> Arc<RwLock<G>> {
         self.group_cache.clone()
     }
 }
 
 #[async_trait]
-impl GroupRelayConfirmationHandler for MockGroupRelayConfirmationHandler {
+impl<G: GroupInfoFetcher + Sync + Send> GroupRelayConfirmationHandler
+    for MockGroupRelayConfirmationHandler<G>
+{
     async fn handle(self) -> NodeResult<()> {
         let controller_client =
             MockControllerClient::new(self.controller_address.clone(), self.id_address.clone());
@@ -201,7 +201,9 @@ impl GroupRelayConfirmationHandler for MockGroupRelayConfirmationHandler {
     }
 }
 
-impl Subscriber for ReadyToHandleGroupRelayConfirmationTaskSubscriber {
+impl<G: GroupInfoFetcher + Sync + Send + 'static> Subscriber
+    for ReadyToHandleGroupRelayConfirmationTaskSubscriber<G>
+{
     fn notify(&self, topic: Topic, payload: Box<dyn Event>) -> NodeResult<()> {
         info!("{:?}", topic);
 

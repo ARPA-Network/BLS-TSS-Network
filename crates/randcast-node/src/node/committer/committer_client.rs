@@ -1,6 +1,6 @@
 use self::committer::committer_service_client::CommitterServiceClient;
 use self::committer::CommitPartialSignatureRequest;
-use crate::node::dao::types::TaskType;
+use crate::node::dal::types::TaskType;
 use crate::node::error::errors::NodeResult;
 use crate::node::ServiceClient;
 use async_trait::async_trait;

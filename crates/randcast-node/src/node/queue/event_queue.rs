@@ -57,7 +57,7 @@ pub mod tests {
     use parking_lot::RwLock;
 
     use crate::node::{
-        dao::{api::BlockInfoFetcher, cache::InMemoryBlockInfoCache, types::ChainIdentity},
+        dal::{api::BlockInfoFetcher, cache::InMemoryBlockInfoCache, types::ChainIdentity},
         event::new_block::NewBlock,
         listener::block::MockBlockListener,
         queue::event_queue::EventQueue,

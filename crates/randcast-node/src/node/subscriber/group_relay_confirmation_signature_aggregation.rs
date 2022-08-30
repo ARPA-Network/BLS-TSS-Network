@@ -2,7 +2,7 @@ use super::types::Subscriber;
 use crate::node::{
     algorithm::bls::{BLSCore, MockBLSCore},
     contract_client::adapter_client::{AdapterTransactions, MockAdapterClient},
-    dao::{cache::GroupRelayConfirmationResultCache, types::ChainIdentity},
+    dal::{cache::GroupRelayConfirmationResultCache, types::ChainIdentity},
     error::errors::NodeResult,
     event::{
         ready_to_fulfill_group_relay_confirmation_task::ReadyToFulfillGroupRelayConfirmationTask,

@@ -1,8 +1,7 @@
 use super::types::Subscriber;
 use crate::node::{
-    dao::{
+    dal::{
         api::{GroupInfoFetcher, GroupInfoUpdater},
-        cache::InMemoryGroupInfoCache,
         types::DKGStatus,
     },
     error::errors::NodeResult,
@@ -17,27 +16,28 @@ use log::info;
 use parking_lot::RwLock;
 use std::sync::Arc;
 
-pub struct PreGroupingSubscriber {
-    group_cache: Arc<RwLock<InMemoryGroupInfoCache>>,
+pub struct PreGroupingSubscriber<G: GroupInfoFetcher + GroupInfoUpdater + Sync + Send> {
+    group_cache: Arc<RwLock<G>>,
     eq: Arc<RwLock<EventQueue>>,
 }
 
-impl PreGroupingSubscriber {
-    pub fn new(
-        group_cache: Arc<RwLock<InMemoryGroupInfoCache>>,
-        eq: Arc<RwLock<EventQueue>>,
-    ) -> Self {
+impl<G: GroupInfoFetcher + GroupInfoUpdater + Sync + Send> PreGroupingSubscriber<G> {
+    pub fn new(group_cache: Arc<RwLock<G>>, eq: Arc<RwLock<EventQueue>>) -> Self {
         PreGroupingSubscriber { group_cache, eq }
     }
 }
 
-impl EventPublisher<RunDKG> for PreGroupingSubscriber {
+impl<G: GroupInfoFetcher + GroupInfoUpdater + Sync + Send> EventPublisher<RunDKG>
+    for PreGroupingSubscriber<G>
+{
     fn publish(&self, event: RunDKG) {
         self.eq.read().publish(event);
     }
 }
 
-impl Subscriber for PreGroupingSubscriber {
+impl<G: GroupInfoFetcher + GroupInfoUpdater + Sync + Send + 'static> Subscriber
+    for PreGroupingSubscriber<G>
+{
     fn notify(&self, topic: Topic, payload: Box<dyn Event>) -> NodeResult<()> {
         info!("{:?}", topic);
 

@@ -1,10 +1,7 @@
 use super::types::Listener;
 use crate::node::{
-    dao::api::{BlockInfoFetcher, GroupInfoFetcher, GroupInfoUpdater},
-    dao::{
-        cache::{InMemoryBlockInfoCache, InMemoryGroupInfoCache},
-        types::DKGStatus,
-    },
+    dal::api::{BlockInfoFetcher, GroupInfoFetcher, GroupInfoUpdater},
+    dal::{cache::InMemoryBlockInfoCache, types::DKGStatus},
     error::errors::NodeResult,
     event::dkg_post_process::DKGPostProcess,
     queue::event_queue::{EventPublisher, EventQueue},
@@ -16,16 +13,16 @@ use std::sync::Arc;
 
 pub const DEFAULT_DKG_TIMEOUT_DURATION: usize = 10 * 4;
 
-pub struct MockPostGroupingListener {
+pub struct MockPostGroupingListener<G: GroupInfoFetcher + GroupInfoUpdater + Sync + Send> {
     block_cache: Arc<RwLock<InMemoryBlockInfoCache>>,
-    group_cache: Arc<RwLock<InMemoryGroupInfoCache>>,
+    group_cache: Arc<RwLock<G>>,
     eq: Arc<RwLock<EventQueue>>,
 }
 
-impl MockPostGroupingListener {
+impl<G: GroupInfoFetcher + GroupInfoUpdater + Sync + Send> MockPostGroupingListener<G> {
     pub fn new(
         block_cache: Arc<RwLock<InMemoryBlockInfoCache>>,
-        group_cache: Arc<RwLock<InMemoryGroupInfoCache>>,
+        group_cache: Arc<RwLock<G>>,
         eq: Arc<RwLock<EventQueue>>,
     ) -> Self {
         MockPostGroupingListener {
@@ -36,14 +33,18 @@ impl MockPostGroupingListener {
     }
 }
 
-impl EventPublisher<DKGPostProcess> for MockPostGroupingListener {
+impl<G: GroupInfoFetcher + GroupInfoUpdater + Sync + Send> EventPublisher<DKGPostProcess>
+    for MockPostGroupingListener<G>
+{
     fn publish(&self, event: DKGPostProcess) {
         self.eq.read().publish(event);
     }
 }
 
 #[async_trait]
-impl Listener for MockPostGroupingListener {
+impl<G: GroupInfoFetcher + GroupInfoUpdater + Sync + Send> Listener
+    for MockPostGroupingListener<G>
+{
     async fn start(mut self) -> NodeResult<()> {
         loop {
             let dkg_status = self.group_cache.read().get_dkg_status();

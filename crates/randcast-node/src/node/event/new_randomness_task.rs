@@ -1,4 +1,4 @@
-use crate::node::dao::types::RandomnessTask;
+use crate::node::dal::types::RandomnessTask;
 
 use super::types::{Event, Topic};
 

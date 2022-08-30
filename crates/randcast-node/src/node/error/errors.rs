@@ -3,6 +3,8 @@ use threshold_bls::sig::{BLSError, G1Scheme, ThresholdError};
 
 use dkg_core::{primitives::DKGError, NodeError as DKGNodeError};
 
+use crate::node::dal::sqlite::DBError;
+
 pub type NodeResult<A> = Result<A, NodeError>;
 
 #[derive(Debug, Error)]
@@ -31,9 +33,39 @@ pub enum NodeError {
     #[error(transparent)]
     RpcResponseError(#[from] tonic::Status),
 
-    #[error("there is no dkg key pair yet")]
-    NoDKGKeyPair,
+    #[error("there is no signature cache yet")]
+    CommitterCacheNotExisted,
 
+    #[error("the node is not the committer of the group")]
+    NotCommitter,
+
+    #[error("there is no task yet")]
+    NoTaskAvailable,
+
+    #[error("randomness task not found")]
+    TaskNotFound,
+
+    #[error("the chain id: {0} is not supported in the group")]
+    InvalidChainId(usize),
+
+    #[error("the message of the task is different from the committer")]
+    InvalidTaskMessage,
+
+    #[error("There is already this chain id in the context. Please check config.yml")]
+    RepeatedChainId,
+
+    #[error(transparent)]
+    NodeInfoError(#[from] NodeInfoError),
+
+    #[error(transparent)]
+    GroupError(#[from] GroupError),
+
+    #[error(transparent)]
+    DBError(#[from] DBError),
+}
+
+#[derive(Debug, Error, PartialEq)]
+pub enum GroupError {
     #[error("there is no group task yet")]
     NoGroupTask,
 
@@ -57,22 +89,16 @@ pub enum NodeError {
 
     #[error("the group is still waiting for other's DKGOutput to commit")]
     GroupWaitingForConsensus,
+}
 
-    #[error("there is no signature cache yet")]
-    CommitterCacheNotExisted,
+#[derive(Debug, Error, PartialEq)]
+pub enum NodeInfoError {
+    #[error("there is no node record yet, please run node with new-run mode")]
+    NoNodeRecord,
 
-    #[error("the node is not the committer of the group")]
-    NotCommitter,
+    #[error("there is no rpc endpoint yet")]
+    NoRpcEndpoint,
 
-    #[error("there is no task yet")]
-    NoTaskAvailable,
-
-    #[error("the chain id: {0} is not supported in the group")]
-    InvalidChainId(usize),
-
-    #[error("the message of the task is different from the committer")]
-    InvalidTaskMessage,
-
-    #[error("There is already this chain id in the context. Please check config.yml")]
-    RepeatedChainId,
+    #[error("there is no dkg key pair yet")]
+    NoDKGKeyPair,
 }

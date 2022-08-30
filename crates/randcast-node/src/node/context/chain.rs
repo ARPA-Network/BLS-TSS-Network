@@ -1,12 +1,15 @@
-use super::context::{ContextFetcher, InMemoryContext};
+use super::context::{ContextFetcher, GeneralContext};
 use crate::node::{
-    dao::{
-        api::NodeInfoFetcher,
+    dal::{
+        api::{
+            BLSTasksFetcher, BLSTasksUpdater, GroupInfoFetcher, GroupInfoUpdater, NodeInfoFetcher,
+        },
         cache::{
             GroupRelayConfirmationResultCache, GroupRelayResultCache, InMemoryBLSTasksQueue,
             InMemoryBlockInfoCache, InMemoryGroupInfoCache, InMemoryNodeInfoCache,
             InMemorySignatureResultCache, RandomnessResultCache,
         },
+        sqlite::{BLSTasksDBClient, GroupInfoDBClient, NodeInfoDBClient},
         types::{ChainIdentity, GroupRelayConfirmationTask, GroupRelayTask, RandomnessTask},
     },
     listener::{
@@ -38,23 +41,23 @@ use crate::node::{
 };
 use log::error;
 use parking_lot::RwLock;
-use std::sync::Arc;
-use threshold_bls::curve::bls12381::{Scalar, G1};
+use std::{marker::PhantomData, sync::Arc};
 
 pub trait Chain {
     type BlockInfoCache;
     type RandomnessTasksQueue;
     type RandomnessResultCaches;
+    type Context;
 
-    fn init_components(&self, context: &InMemoryContext) {
+    fn init_components(&self, context: &Self::Context) {
         self.init_listeners(context);
 
         self.init_subscribers(context);
     }
 
-    fn init_listeners(&self, context: &InMemoryContext);
+    fn init_listeners(&self, context: &Self::Context);
 
-    fn init_subscribers(&self, context: &InMemoryContext);
+    fn init_subscribers(&self, context: &Self::Context);
 }
 
 pub trait AdapterChain: Chain {
@@ -103,29 +106,41 @@ pub trait MainChainFetcher<T: MainChain> {
     fn get_group_relay_result_cache(&self) -> Arc<RwLock<T::GroupRelayResultCaches>>;
 }
 
-pub struct InMemoryAdapterChain {
+pub struct GeneralAdapterChain<
+    N: NodeInfoFetcher,
+    G: GroupInfoFetcher + GroupInfoUpdater,
+    T: BLSTasksFetcher<RandomnessTask> + BLSTasksUpdater<RandomnessTask>,
+> {
     id: usize,
     description: String,
     chain_identity: Arc<RwLock<ChainIdentity>>,
     block_cache: Arc<RwLock<InMemoryBlockInfoCache>>,
-    randomness_tasks_cache: Arc<RwLock<InMemoryBLSTasksQueue<RandomnessTask>>>,
+    randomness_tasks_cache: Arc<RwLock<T>>,
     group_relay_confirmation_tasks_cache:
         Arc<RwLock<InMemoryBLSTasksQueue<GroupRelayConfirmationTask>>>,
     committer_randomness_result_cache:
         Arc<RwLock<InMemorySignatureResultCache<RandomnessResultCache>>>,
-
     committer_group_relay_confirmation_result_cache:
         Arc<RwLock<InMemorySignatureResultCache<GroupRelayConfirmationResultCache>>>,
+    n: PhantomData<N>,
+    g: PhantomData<G>,
 }
 
-impl Chain for InMemoryAdapterChain {
+impl<
+        N: NodeInfoFetcher + Sync + Send + 'static,
+        G: GroupInfoFetcher + GroupInfoUpdater + Sync + Send + 'static,
+        T: BLSTasksFetcher<RandomnessTask> + BLSTasksUpdater<RandomnessTask> + Sync + Send + 'static,
+    > Chain for GeneralAdapterChain<N, G, T>
+{
     type BlockInfoCache = InMemoryBlockInfoCache;
 
-    type RandomnessTasksQueue = InMemoryBLSTasksQueue<RandomnessTask>;
+    type RandomnessTasksQueue = T;
 
     type RandomnessResultCaches = InMemorySignatureResultCache<RandomnessResultCache>;
 
-    fn init_listeners(&self, context: &InMemoryContext) {
+    type Context = GeneralContext<N, G, T>;
+
+    fn init_listeners(&self, context: &GeneralContext<N, G, T>) {
         // block
         let p_block = MockBlockListener::new(
             self.id(),
@@ -288,7 +303,7 @@ impl Chain for InMemoryAdapterChain {
             });
     }
 
-    fn init_subscribers(&self, context: &InMemoryContext) {
+    fn init_subscribers(&self, context: &GeneralContext<N, G, T>) {
         // block
         let s_block =
             BlockSubscriber::new(self.id(), self.get_block_cache(), context.get_event_queue());
@@ -375,25 +390,38 @@ impl Chain for InMemoryAdapterChain {
     }
 }
 
-impl AdapterChain for InMemoryAdapterChain {
+impl<
+        N: NodeInfoFetcher + Sync + Send + 'static,
+        G: GroupInfoFetcher + GroupInfoUpdater + Sync + Send + 'static,
+        T: BLSTasksFetcher<RandomnessTask> + BLSTasksUpdater<RandomnessTask> + Sync + Send + 'static,
+    > AdapterChain for GeneralAdapterChain<N, G, T>
+{
     type GroupRelayConfirmationTasksQueue = InMemoryBLSTasksQueue<GroupRelayConfirmationTask>;
 
     type GroupRelayConfirmationResultCaches =
         InMemorySignatureResultCache<GroupRelayConfirmationResultCache>;
 }
 
-impl InMemoryAdapterChain {
-    pub fn new(id: usize, description: String, chain_identity: ChainIdentity) -> Self {
+impl<
+        N: NodeInfoFetcher,
+        G: GroupInfoFetcher + GroupInfoUpdater,
+        T: BLSTasksFetcher<RandomnessTask> + BLSTasksUpdater<RandomnessTask>,
+    > GeneralAdapterChain<N, G, T>
+{
+    pub fn new(
+        id: usize,
+        description: String,
+        chain_identity: ChainIdentity,
+        randomness_tasks_cache: T,
+    ) -> Self {
         let chain_identity = Arc::new(RwLock::new(chain_identity));
 
-        InMemoryAdapterChain {
+        GeneralAdapterChain {
             id,
             description,
             chain_identity,
             block_cache: Arc::new(RwLock::new(InMemoryBlockInfoCache::new())),
-            randomness_tasks_cache: Arc::new(RwLock::new(
-                InMemoryBLSTasksQueue::<RandomnessTask>::new(),
-            )),
+            randomness_tasks_cache: Arc::new(RwLock::new(randomness_tasks_cache)),
             committer_randomness_result_cache: Arc::new(RwLock::new(
                 InMemorySignatureResultCache::<RandomnessResultCache>::new(),
             )),
@@ -403,55 +431,52 @@ impl InMemoryAdapterChain {
             committer_group_relay_confirmation_result_cache: Arc::new(RwLock::new(
                 InMemorySignatureResultCache::<GroupRelayConfirmationResultCache>::new(),
             )),
+            n: PhantomData,
+            g: PhantomData,
         }
     }
 }
 
-pub struct InMemoryMainChain {
+pub struct GeneralMainChain<
+    N: NodeInfoFetcher,
+    G: GroupInfoFetcher + GroupInfoUpdater,
+    T: BLSTasksFetcher<RandomnessTask> + BLSTasksUpdater<RandomnessTask>,
+> {
     id: usize,
     description: String,
     chain_identity: Arc<RwLock<ChainIdentity>>,
-    node_cache: Arc<RwLock<InMemoryNodeInfoCache>>,
-    group_cache: Arc<RwLock<InMemoryGroupInfoCache>>,
+    node_cache: Arc<RwLock<N>>,
+    group_cache: Arc<RwLock<G>>,
     group_relay_tasks_cache: Arc<RwLock<InMemoryBLSTasksQueue<GroupRelayTask>>>,
     committer_group_relay_result_cache:
         Arc<RwLock<InMemorySignatureResultCache<GroupRelayResultCache>>>,
     block_cache: Arc<RwLock<InMemoryBlockInfoCache>>,
-    randomness_tasks_cache: Arc<RwLock<InMemoryBLSTasksQueue<RandomnessTask>>>,
+    randomness_tasks_cache: Arc<RwLock<T>>,
     committer_randomness_result_cache:
         Arc<RwLock<InMemorySignatureResultCache<RandomnessResultCache>>>,
 }
 
-impl InMemoryMainChain {
+impl
+    GeneralMainChain<
+        InMemoryNodeInfoCache,
+        InMemoryGroupInfoCache,
+        InMemoryBLSTasksQueue<RandomnessTask>,
+    >
+{
     pub fn new(
         id: usize,
         description: String,
         chain_identity: ChainIdentity,
-        node_rpc_endpoint: String,
-        dkg_private_key: Scalar,
-        dkg_public_key: G1,
+        node_cache: InMemoryNodeInfoCache,
+        group_cache: InMemoryGroupInfoCache,
+        randomness_tasks_cache: InMemoryBLSTasksQueue<RandomnessTask>,
     ) -> Self {
-        let id_address = chain_identity.get_id_address().to_string();
-
-        let chain_identity = Arc::new(RwLock::new(chain_identity));
-
-        let node_cache = InMemoryNodeInfoCache::new(
-            id_address,
-            node_rpc_endpoint,
-            dkg_private_key,
-            dkg_public_key,
-        );
-
-        let group_cache = InMemoryGroupInfoCache::new();
-
-        InMemoryMainChain {
+        GeneralMainChain {
             id,
             description,
-            chain_identity,
+            chain_identity: Arc::new(RwLock::new(chain_identity)),
             block_cache: Arc::new(RwLock::new(InMemoryBlockInfoCache::new())),
-            randomness_tasks_cache: Arc::new(RwLock::new(
-                InMemoryBLSTasksQueue::<RandomnessTask>::new(),
-            )),
+            randomness_tasks_cache: Arc::new(RwLock::new(randomness_tasks_cache)),
             committer_randomness_result_cache: Arc::new(RwLock::new(
                 InMemorySignatureResultCache::<RandomnessResultCache>::new(),
             )),
@@ -467,14 +492,51 @@ impl InMemoryMainChain {
     }
 }
 
-impl Chain for InMemoryMainChain {
+impl GeneralMainChain<NodeInfoDBClient, GroupInfoDBClient, BLSTasksDBClient<RandomnessTask>> {
+    pub fn new(
+        id: usize,
+        description: String,
+        chain_identity: ChainIdentity,
+        node_cache: NodeInfoDBClient,
+        group_cache: GroupInfoDBClient,
+        randomness_tasks_cache: BLSTasksDBClient<RandomnessTask>,
+    ) -> Self {
+        GeneralMainChain {
+            id,
+            description,
+            chain_identity: Arc::new(RwLock::new(chain_identity)),
+            block_cache: Arc::new(RwLock::new(InMemoryBlockInfoCache::new())),
+            randomness_tasks_cache: Arc::new(RwLock::new(randomness_tasks_cache)),
+            committer_randomness_result_cache: Arc::new(RwLock::new(
+                InMemorySignatureResultCache::<RandomnessResultCache>::new(),
+            )),
+            node_cache: Arc::new(RwLock::new(node_cache)),
+            group_cache: Arc::new(RwLock::new(group_cache)),
+            group_relay_tasks_cache: Arc::new(RwLock::new(
+                InMemoryBLSTasksQueue::<GroupRelayTask>::new(),
+            )),
+            committer_group_relay_result_cache: Arc::new(RwLock::new(
+                InMemorySignatureResultCache::<GroupRelayResultCache>::new(),
+            )),
+        }
+    }
+}
+
+impl<
+        N: NodeInfoFetcher + Sync + Send + 'static,
+        G: GroupInfoFetcher + GroupInfoUpdater + Sync + Send + 'static,
+        T: BLSTasksFetcher<RandomnessTask> + BLSTasksUpdater<RandomnessTask> + Sync + Send + 'static,
+    > Chain for GeneralMainChain<N, G, T>
+{
     type BlockInfoCache = InMemoryBlockInfoCache;
 
-    type RandomnessTasksQueue = InMemoryBLSTasksQueue<RandomnessTask>;
+    type RandomnessTasksQueue = T;
 
     type RandomnessResultCaches = InMemorySignatureResultCache<RandomnessResultCache>;
 
-    fn init_listeners(&self, context: &InMemoryContext) {
+    type Context = GeneralContext<N, G, T>;
+
+    fn init_listeners(&self, context: &GeneralContext<N, G, T>) {
         // block
         let p_block = MockBlockListener::new(
             self.id(),
@@ -641,7 +703,7 @@ impl Chain for InMemoryMainChain {
             });
     }
 
-    fn init_subscribers(&self, context: &InMemoryContext) {
+    fn init_subscribers(&self, context: &GeneralContext<N, G, T>) {
         // block
         let s_block =
             BlockSubscriber::new(self.id(), self.get_block_cache(), context.get_event_queue());
@@ -712,17 +774,27 @@ impl Chain for InMemoryMainChain {
     }
 }
 
-impl MainChain for InMemoryMainChain {
-    type NodeInfoCache = InMemoryNodeInfoCache;
+impl<
+        N: NodeInfoFetcher + Sync + Send + 'static,
+        G: GroupInfoFetcher + GroupInfoUpdater + Sync + Send + 'static,
+        T: BLSTasksFetcher<RandomnessTask> + BLSTasksUpdater<RandomnessTask> + Sync + Send + 'static,
+    > MainChain for GeneralMainChain<N, G, T>
+{
+    type NodeInfoCache = N;
 
-    type GroupInfoCache = InMemoryGroupInfoCache;
+    type GroupInfoCache = G;
 
     type GroupRelayTasksQueue = InMemoryBLSTasksQueue<GroupRelayTask>;
 
     type GroupRelayResultCaches = InMemorySignatureResultCache<GroupRelayResultCache>;
 }
 
-impl ChainFetcher<InMemoryAdapterChain> for InMemoryAdapterChain {
+impl<
+        N: NodeInfoFetcher + Sync + Send + 'static,
+        G: GroupInfoFetcher + GroupInfoUpdater + Sync + Send + 'static,
+        T: BLSTasksFetcher<RandomnessTask> + BLSTasksUpdater<RandomnessTask> + Sync + Send + 'static,
+    > ChainFetcher<GeneralAdapterChain<N, G, T>> for GeneralAdapterChain<N, G, T>
+{
     fn id(&self) -> usize {
         self.id
     }
@@ -735,39 +807,53 @@ impl ChainFetcher<InMemoryAdapterChain> for InMemoryAdapterChain {
         self.chain_identity.clone()
     }
 
-    fn get_block_cache(&self) -> Arc<RwLock<<InMemoryAdapterChain as Chain>::BlockInfoCache>> {
+    fn get_block_cache(
+        &self,
+    ) -> Arc<RwLock<<GeneralAdapterChain<N, G, T> as Chain>::BlockInfoCache>> {
         self.block_cache.clone()
     }
 
     fn get_randomness_tasks_cache(
         &self,
-    ) -> Arc<RwLock<<InMemoryAdapterChain as Chain>::RandomnessTasksQueue>> {
+    ) -> Arc<RwLock<<GeneralAdapterChain<N, G, T> as Chain>::RandomnessTasksQueue>> {
         self.randomness_tasks_cache.clone()
     }
 
     fn get_randomness_result_cache(
         &self,
-    ) -> Arc<RwLock<<InMemoryAdapterChain as Chain>::RandomnessResultCaches>> {
+    ) -> Arc<RwLock<<GeneralAdapterChain<N, G, T> as Chain>::RandomnessResultCaches>> {
         self.committer_randomness_result_cache.clone()
     }
 }
 
-impl AdapterChainFetcher<InMemoryAdapterChain> for InMemoryAdapterChain {
+impl<
+        N: NodeInfoFetcher + Sync + Send + 'static,
+        G: GroupInfoFetcher + GroupInfoUpdater + Sync + Send + 'static,
+        T: BLSTasksFetcher<RandomnessTask> + BLSTasksUpdater<RandomnessTask> + Sync + Send + 'static,
+    > AdapterChainFetcher<GeneralAdapterChain<N, G, T>> for GeneralAdapterChain<N, G, T>
+{
     fn get_group_relay_confirmation_tasks_cache(
         &self,
-    ) -> Arc<RwLock<<InMemoryAdapterChain as AdapterChain>::GroupRelayConfirmationTasksQueue>> {
+    ) -> Arc<RwLock<<GeneralAdapterChain<N, G, T> as AdapterChain>::GroupRelayConfirmationTasksQueue>>
+    {
         self.group_relay_confirmation_tasks_cache.clone()
     }
 
     fn get_group_relay_confirmation_result_cache(
         &self,
-    ) -> Arc<RwLock<<InMemoryAdapterChain as AdapterChain>::GroupRelayConfirmationResultCaches>>
-    {
+    ) -> Arc<
+        RwLock<<GeneralAdapterChain<N, G, T> as AdapterChain>::GroupRelayConfirmationResultCaches>,
+    > {
         self.committer_group_relay_confirmation_result_cache.clone()
     }
 }
 
-impl ChainFetcher<InMemoryMainChain> for InMemoryMainChain {
+impl<
+        N: NodeInfoFetcher + Sync + Send + 'static,
+        G: GroupInfoFetcher + GroupInfoUpdater + Sync + Send + 'static,
+        T: BLSTasksFetcher<RandomnessTask> + BLSTasksUpdater<RandomnessTask> + Sync + Send + 'static,
+    > ChainFetcher<GeneralMainChain<N, G, T>> for GeneralMainChain<N, G, T>
+{
     fn id(&self) -> usize {
         self.id
     }
@@ -780,41 +866,50 @@ impl ChainFetcher<InMemoryMainChain> for InMemoryMainChain {
         self.chain_identity.clone()
     }
 
-    fn get_block_cache(&self) -> Arc<RwLock<<InMemoryMainChain as Chain>::BlockInfoCache>> {
+    fn get_block_cache(&self) -> Arc<RwLock<<GeneralMainChain<N, G, T> as Chain>::BlockInfoCache>> {
         self.block_cache.clone()
     }
 
     fn get_randomness_tasks_cache(
         &self,
-    ) -> Arc<RwLock<<InMemoryMainChain as Chain>::RandomnessTasksQueue>> {
+    ) -> Arc<RwLock<<GeneralMainChain<N, G, T> as Chain>::RandomnessTasksQueue>> {
         self.randomness_tasks_cache.clone()
     }
 
     fn get_randomness_result_cache(
         &self,
-    ) -> Arc<RwLock<<InMemoryMainChain as Chain>::RandomnessResultCaches>> {
+    ) -> Arc<RwLock<<GeneralMainChain<N, G, T> as Chain>::RandomnessResultCaches>> {
         self.committer_randomness_result_cache.clone()
     }
 }
 
-impl MainChainFetcher<InMemoryMainChain> for InMemoryMainChain {
-    fn get_node_cache(&self) -> Arc<RwLock<<InMemoryMainChain as MainChain>::NodeInfoCache>> {
+impl<
+        N: NodeInfoFetcher + Sync + Send + 'static,
+        G: GroupInfoFetcher + GroupInfoUpdater + Sync + Send + 'static,
+        T: BLSTasksFetcher<RandomnessTask> + BLSTasksUpdater<RandomnessTask> + Sync + Send + 'static,
+    > MainChainFetcher<GeneralMainChain<N, G, T>> for GeneralMainChain<N, G, T>
+{
+    fn get_node_cache(
+        &self,
+    ) -> Arc<RwLock<<GeneralMainChain<N, G, T> as MainChain>::NodeInfoCache>> {
         self.node_cache.clone()
     }
 
-    fn get_group_cache(&self) -> Arc<RwLock<<InMemoryMainChain as MainChain>::GroupInfoCache>> {
+    fn get_group_cache(
+        &self,
+    ) -> Arc<RwLock<<GeneralMainChain<N, G, T> as MainChain>::GroupInfoCache>> {
         self.group_cache.clone()
     }
 
     fn get_group_relay_tasks_cache(
         &self,
-    ) -> Arc<RwLock<<InMemoryMainChain as MainChain>::GroupRelayTasksQueue>> {
+    ) -> Arc<RwLock<<GeneralMainChain<N, G, T> as MainChain>::GroupRelayTasksQueue>> {
         self.group_relay_tasks_cache.clone()
     }
 
     fn get_group_relay_result_cache(
         &self,
-    ) -> Arc<RwLock<<InMemoryMainChain as MainChain>::GroupRelayResultCaches>> {
+    ) -> Arc<RwLock<<GeneralMainChain<N, G, T> as MainChain>::GroupRelayResultCaches>> {
         self.committer_group_relay_result_cache.clone()
     }
 }

@@ -4,8 +4,8 @@ use crate::node::{
     committer::committer_client::{CommitterClient, CommitterService, MockCommitterClient},
     contract_client::controller_client::{ControllerViews, MockControllerClient},
     contract_client::types::Group as ContractGroup,
-    dao::cache::{GroupRelayResultCache, InMemoryGroupInfoCache, InMemorySignatureResultCache},
-    dao::{
+    dal::cache::{GroupRelayResultCache, InMemorySignatureResultCache},
+    dal::{
         api::{GroupInfoFetcher, SignatureResultCacheFetcher, SignatureResultCacheUpdater},
         types::{ChainIdentity, GroupRelayTask, TaskType},
     },
@@ -23,18 +23,18 @@ use parking_lot::RwLock;
 use std::sync::Arc;
 use tokio_retry::{strategy::FixedInterval, RetryIf};
 
-pub struct ReadyToHandleGroupRelayTaskSubscriber {
+pub struct ReadyToHandleGroupRelayTaskSubscriber<G: GroupInfoFetcher + Sync + Send> {
     main_chain_identity: Arc<RwLock<ChainIdentity>>,
-    group_cache: Arc<RwLock<InMemoryGroupInfoCache>>,
+    group_cache: Arc<RwLock<G>>,
     group_relay_signature_cache: Arc<RwLock<InMemorySignatureResultCache<GroupRelayResultCache>>>,
     eq: Arc<RwLock<EventQueue>>,
     ts: Arc<RwLock<SimpleDynamicTaskScheduler>>,
 }
 
-impl ReadyToHandleGroupRelayTaskSubscriber {
+impl<G: GroupInfoFetcher + Sync + Send> ReadyToHandleGroupRelayTaskSubscriber<G> {
     pub fn new(
         main_chain_identity: Arc<RwLock<ChainIdentity>>,
-        group_cache: Arc<RwLock<InMemoryGroupInfoCache>>,
+        group_cache: Arc<RwLock<G>>,
         group_relay_signature_cache: Arc<
             RwLock<InMemorySignatureResultCache<GroupRelayResultCache>>,
         >,
@@ -56,26 +56,28 @@ pub trait GroupRelayHandler {
     async fn handle(self) -> NodeResult<()>;
 }
 
-pub struct MockGroupRelayHandler {
+pub struct MockGroupRelayHandler<G: GroupInfoFetcher + Sync + Send> {
     controller_address: String,
     id_address: String,
     tasks: Vec<GroupRelayTask>,
-    group_cache: Arc<RwLock<InMemoryGroupInfoCache>>,
+    group_cache: Arc<RwLock<G>>,
     group_relay_signature_cache: Arc<RwLock<InMemorySignatureResultCache<GroupRelayResultCache>>>,
 }
 
-impl CommitterClientHandler<MockCommitterClient, InMemoryGroupInfoCache> for MockGroupRelayHandler {
+impl<G: GroupInfoFetcher + Sync + Send> CommitterClientHandler<MockCommitterClient, G>
+    for MockGroupRelayHandler<G>
+{
     fn get_id_address(&self) -> &str {
         &self.id_address
     }
 
-    fn get_group_cache(&self) -> Arc<RwLock<InMemoryGroupInfoCache>> {
+    fn get_group_cache(&self) -> Arc<RwLock<G>> {
         self.group_cache.clone()
     }
 }
 
 #[async_trait]
-impl GroupRelayHandler for MockGroupRelayHandler {
+impl<G: GroupInfoFetcher + Sync + Send> GroupRelayHandler for MockGroupRelayHandler<G> {
     async fn handle(self) -> NodeResult<()> {
         let client =
             MockControllerClient::new(self.controller_address.clone(), self.id_address.clone());
@@ -161,7 +163,9 @@ impl GroupRelayHandler for MockGroupRelayHandler {
     }
 }
 
-impl Subscriber for ReadyToHandleGroupRelayTaskSubscriber {
+impl<G: GroupInfoFetcher + Sync + Send + 'static> Subscriber
+    for ReadyToHandleGroupRelayTaskSubscriber<G>
+{
     fn notify(&self, topic: Topic, payload: Box<dyn Event>) -> NodeResult<()> {
         info!("{:?}", topic);
 

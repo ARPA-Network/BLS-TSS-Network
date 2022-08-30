@@ -4,7 +4,7 @@ use self::error::errors::NodeResult;
 
 pub mod error;
 
-pub mod dao;
+pub mod dal;
 
 pub mod context;
 

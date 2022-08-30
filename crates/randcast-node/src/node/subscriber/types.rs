@@ -4,7 +4,7 @@ use parking_lot::RwLock;
 
 use crate::node::{
     committer::committer_client::CommitterClient,
-    dao::api::GroupInfoFetcher,
+    dal::api::GroupInfoFetcher,
     error::errors::NodeResult,
     event::types::{Event, Topic},
 };

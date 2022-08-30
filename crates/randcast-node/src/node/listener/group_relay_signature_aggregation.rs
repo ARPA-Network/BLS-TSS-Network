@@ -1,8 +1,8 @@
 use super::types::Listener;
 use crate::node::{
-    dao::{
+    dal::{
         api::{GroupInfoFetcher, SignatureResultCacheUpdater},
-        cache::{GroupRelayResultCache, InMemoryGroupInfoCache, InMemorySignatureResultCache},
+        cache::{GroupRelayResultCache, InMemorySignatureResultCache},
     },
     error::errors::NodeResult,
     event::ready_to_fulfill_group_relay_task::ReadyToFulfillGroupRelayTask,
@@ -12,17 +12,17 @@ use async_trait::async_trait;
 use parking_lot::RwLock;
 use std::sync::Arc;
 
-pub struct MockGroupRelaySignatureAggregationListener {
+pub struct MockGroupRelaySignatureAggregationListener<G: GroupInfoFetcher + Sync + Send> {
     id_address: String,
-    group_cache: Arc<RwLock<InMemoryGroupInfoCache>>,
+    group_cache: Arc<RwLock<G>>,
     group_relay_signature_cache: Arc<RwLock<InMemorySignatureResultCache<GroupRelayResultCache>>>,
     eq: Arc<RwLock<EventQueue>>,
 }
 
-impl MockGroupRelaySignatureAggregationListener {
+impl<G: GroupInfoFetcher + Sync + Send> MockGroupRelaySignatureAggregationListener<G> {
     pub fn new(
         id_address: String,
-        group_cache: Arc<RwLock<InMemoryGroupInfoCache>>,
+        group_cache: Arc<RwLock<G>>,
         group_relay_signature_cache: Arc<
             RwLock<InMemorySignatureResultCache<GroupRelayResultCache>>,
         >,
@@ -37,14 +37,16 @@ impl MockGroupRelaySignatureAggregationListener {
     }
 }
 
-impl EventPublisher<ReadyToFulfillGroupRelayTask> for MockGroupRelaySignatureAggregationListener {
+impl<G: GroupInfoFetcher + Sync + Send> EventPublisher<ReadyToFulfillGroupRelayTask>
+    for MockGroupRelaySignatureAggregationListener<G>
+{
     fn publish(&self, event: ReadyToFulfillGroupRelayTask) {
         self.eq.read().publish(event);
     }
 }
 
 #[async_trait]
-impl Listener for MockGroupRelaySignatureAggregationListener {
+impl<G: GroupInfoFetcher + Sync + Send> Listener for MockGroupRelaySignatureAggregationListener<G> {
     async fn start(mut self) -> NodeResult<()> {
         loop {
             let is_committer = self.group_cache.read().is_committer(&self.id_address);

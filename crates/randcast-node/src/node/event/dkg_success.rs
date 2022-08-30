@@ -1,4 +1,4 @@
-use crate::node::dao::types::Group;
+use crate::node::dal::types::Group;
 
 use super::types::{Event, Topic};
 

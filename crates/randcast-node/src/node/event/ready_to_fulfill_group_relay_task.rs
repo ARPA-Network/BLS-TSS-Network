@@ -1,4 +1,4 @@
-use crate::node::dao::cache::GroupRelayResultCache;
+use crate::node::dal::cache::GroupRelayResultCache;
 
 use super::types::{Event, Topic};
 

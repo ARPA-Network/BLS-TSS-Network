@@ -5,11 +5,8 @@ use crate::node::{
         controller_client::{ControllerTransactions, MockControllerClient},
         coordinator_client::MockCoordinatorClient,
     },
-    dao::{
-        api::GroupInfoUpdater,
-        cache::{InMemoryGroupInfoCache, InMemoryNodeInfoCache},
-    },
-    dao::{
+    dal::api::GroupInfoUpdater,
+    dal::{
         api::{GroupInfoFetcher, NodeInfoFetcher},
         types::{ChainIdentity, DKGStatus, DKGTask},
     },
@@ -27,19 +24,24 @@ use parking_lot::RwLock;
 use rand::{prelude::ThreadRng, RngCore};
 use std::sync::Arc;
 
-pub struct InGroupingSubscriber {
+pub struct InGroupingSubscriber<
+    N: NodeInfoFetcher + Sync + Send,
+    G: GroupInfoFetcher + GroupInfoUpdater + Sync + Send,
+> {
     main_chain_identity: Arc<RwLock<ChainIdentity>>,
-    node_cache: Arc<RwLock<InMemoryNodeInfoCache>>,
-    group_cache: Arc<RwLock<InMemoryGroupInfoCache>>,
+    node_cache: Arc<RwLock<N>>,
+    group_cache: Arc<RwLock<G>>,
     eq: Arc<RwLock<EventQueue>>,
     ts: Arc<RwLock<SimpleDynamicTaskScheduler>>,
 }
 
-impl InGroupingSubscriber {
+impl<N: NodeInfoFetcher + Sync + Send, G: GroupInfoFetcher + GroupInfoUpdater + Sync + Send>
+    InGroupingSubscriber<N, G>
+{
     pub fn new(
         main_chain_identity: Arc<RwLock<ChainIdentity>>,
-        node_cache: Arc<RwLock<InMemoryNodeInfoCache>>,
-        group_cache: Arc<RwLock<InMemoryGroupInfoCache>>,
+        node_cache: Arc<RwLock<N>>,
+        group_cache: Arc<RwLock<G>>,
         eq: Arc<RwLock<EventQueue>>,
         ts: Arc<RwLock<SimpleDynamicTaskScheduler>>,
     ) -> Self {
@@ -53,23 +55,34 @@ impl InGroupingSubscriber {
     }
 }
 
-pub struct AllInOneDKGHandler<F: Fn() -> R, R: RngCore> {
+pub struct AllInOneDKGHandler<
+    F: Fn() -> R,
+    R: RngCore,
+    N: NodeInfoFetcher + Sync + Send,
+    G: GroupInfoFetcher + GroupInfoUpdater + Sync + Send,
+> {
     id_address: String,
     controller_address: String,
     coordinator_rpc_endpoint: String,
     rng: F,
-    node_cache: Arc<RwLock<InMemoryNodeInfoCache>>,
-    group_cache: Arc<RwLock<InMemoryGroupInfoCache>>,
+    node_cache: Arc<RwLock<N>>,
+    group_cache: Arc<RwLock<G>>,
 }
 
-impl<F: Fn() -> R, R: RngCore> AllInOneDKGHandler<F, R> {
+impl<
+        F: Fn() -> R,
+        R: RngCore,
+        N: NodeInfoFetcher + Sync + Send,
+        G: GroupInfoFetcher + GroupInfoUpdater + Sync + Send,
+    > AllInOneDKGHandler<F, R, N, G>
+{
     pub fn new(
         id_address: String,
         controller_address: String,
         coordinator_rpc_endpoint: String,
         rng: F,
-        node_cache: Arc<RwLock<InMemoryNodeInfoCache>>,
-        group_cache: Arc<RwLock<InMemoryGroupInfoCache>>,
+        node_cache: Arc<RwLock<N>>,
+        group_cache: Arc<RwLock<G>>,
     ) -> Self {
         AllInOneDKGHandler {
             id_address,
@@ -91,15 +104,19 @@ pub trait DKGHandler<F, R> {
 }
 
 #[async_trait]
-impl<F: Fn() -> R + Send + Sync + Copy + 'static, R: RngCore + 'static> DKGHandler<F, R>
-    for AllInOneDKGHandler<F, R>
+impl<
+        F: Fn() -> R + Send + Sync + Copy + 'static,
+        R: RngCore + 'static,
+        N: NodeInfoFetcher + Sync + Send,
+        G: GroupInfoFetcher + GroupInfoUpdater + Sync + Send,
+    > DKGHandler<F, R> for AllInOneDKGHandler<F, R, N, G>
 {
     async fn handle(&self, task: DKGTask) -> NodeResult<()>
     where
         R: RngCore,
         F: Fn() -> R + Send + 'async_trait,
     {
-        let node_rpc_endpoint = self.node_cache.read().get_node_rpc_endpoint().to_string();
+        let node_rpc_endpoint = self.node_cache.read().get_node_rpc_endpoint()?.to_string();
 
         let controller_client =
             MockControllerClient::new(self.controller_address.clone(), self.id_address.clone());
@@ -149,7 +166,11 @@ impl<F: Fn() -> R + Send + Sync + Copy + 'static, R: RngCore + 'static> DKGHandl
     }
 }
 
-impl Subscriber for InGroupingSubscriber {
+impl<
+        N: NodeInfoFetcher + Sync + Send + 'static,
+        G: GroupInfoFetcher + GroupInfoUpdater + Sync + Send + 'static,
+    > Subscriber for InGroupingSubscriber<N, G>
+{
     fn notify(&self, topic: Topic, payload: Box<dyn Event>) -> NodeResult<()> {
         info!("{:?}", topic);
 

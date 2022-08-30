@@ -2,7 +2,7 @@ use super::types::Subscriber;
 use crate::node::{
     algorithm::bls::{BLSCore, MockBLSCore},
     contract_client::adapter_client::{AdapterTransactions, AdapterViews, MockAdapterClient},
-    dao::{cache::RandomnessResultCache, types::ChainIdentity},
+    dal::{cache::RandomnessResultCache, types::ChainIdentity},
     error::errors::NodeResult,
     event::{
         ready_to_fulfill_randomness_task::ReadyToFulfillRandomnessTask,

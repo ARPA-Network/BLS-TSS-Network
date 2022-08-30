@@ -1,4 +1,4 @@
-use crate::node::dao::types::GroupRelayTask;
+use crate::node::dal::types::GroupRelayTask;
 
 use super::types::{Event, Topic};
 

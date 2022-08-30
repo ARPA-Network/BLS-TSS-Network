@@ -1,6 +1,6 @@
 use super::types::Subscriber;
 use crate::node::{
-    dao::{api::BlockInfoUpdater, cache::InMemoryBlockInfoCache},
+    dal::{api::BlockInfoUpdater, cache::InMemoryBlockInfoCache},
     error::errors::NodeResult,
     event::{
         new_block::NewBlock,

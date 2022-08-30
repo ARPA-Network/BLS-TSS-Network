@@ -1,8 +1,8 @@
 use super::types::Listener;
 use crate::node::{
-    dao::{
+    dal::{
         api::{GroupInfoFetcher, SignatureResultCacheUpdater},
-        cache::{InMemoryGroupInfoCache, InMemorySignatureResultCache, RandomnessResultCache},
+        cache::{InMemorySignatureResultCache, RandomnessResultCache},
     },
     error::errors::NodeResult,
     event::ready_to_fulfill_randomness_task::ReadyToFulfillRandomnessTask,
@@ -12,19 +12,19 @@ use async_trait::async_trait;
 use parking_lot::RwLock;
 use std::sync::Arc;
 
-pub struct MockRandomnessSignatureAggregationListener {
+pub struct MockRandomnessSignatureAggregationListener<G: GroupInfoFetcher + Sync + Send> {
     chain_id: usize,
     id_address: String,
-    group_cache: Arc<RwLock<InMemoryGroupInfoCache>>,
+    group_cache: Arc<RwLock<G>>,
     randomness_signature_cache: Arc<RwLock<InMemorySignatureResultCache<RandomnessResultCache>>>,
     eq: Arc<RwLock<EventQueue>>,
 }
 
-impl MockRandomnessSignatureAggregationListener {
+impl<G: GroupInfoFetcher + Sync + Send> MockRandomnessSignatureAggregationListener<G> {
     pub fn new(
         chain_id: usize,
         id_address: String,
-        group_cache: Arc<RwLock<InMemoryGroupInfoCache>>,
+        group_cache: Arc<RwLock<G>>,
         randomness_signature_cache: Arc<
             RwLock<InMemorySignatureResultCache<RandomnessResultCache>>,
         >,
@@ -40,14 +40,16 @@ impl MockRandomnessSignatureAggregationListener {
     }
 }
 
-impl EventPublisher<ReadyToFulfillRandomnessTask> for MockRandomnessSignatureAggregationListener {
+impl<G: GroupInfoFetcher + Sync + Send> EventPublisher<ReadyToFulfillRandomnessTask>
+    for MockRandomnessSignatureAggregationListener<G>
+{
     fn publish(&self, event: ReadyToFulfillRandomnessTask) {
         self.eq.read().publish(event);
     }
 }
 
 #[async_trait]
-impl Listener for MockRandomnessSignatureAggregationListener {
+impl<G: GroupInfoFetcher + Sync + Send> Listener for MockRandomnessSignatureAggregationListener<G> {
     async fn start(mut self) -> NodeResult<()> {
         loop {
             let is_committer = self.group_cache.read().is_committer(&self.id_address);

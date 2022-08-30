@@ -1,4 +1,4 @@
-use crate::node::dao::types::{Group as NodeGroup, Member as NodeMember};
+use crate::node::dal::types::{Group as NodeGroup, Member as NodeMember};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use std::hash::{Hash, Hasher};

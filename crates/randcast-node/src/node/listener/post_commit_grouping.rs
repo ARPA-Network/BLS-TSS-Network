@@ -1,9 +1,8 @@
 use super::types::Listener;
 use crate::node::{
     contract_client::controller_client::{ControllerViews, MockControllerClient},
-    dao::{
+    dal::{
         api::{GroupInfoFetcher, GroupInfoUpdater},
-        cache::InMemoryGroupInfoCache,
         types::{ChainIdentity, DKGStatus},
     },
     error::errors::{NodeError, NodeResult},
@@ -16,16 +15,16 @@ use parking_lot::RwLock;
 use std::sync::Arc;
 use tokio_retry::{strategy::FixedInterval, RetryIf};
 
-pub struct MockPostCommitGroupingListener {
+pub struct MockPostCommitGroupingListener<G: GroupInfoFetcher + GroupInfoUpdater + Sync + Send> {
     main_chain_identity: Arc<RwLock<ChainIdentity>>,
-    group_cache: Arc<RwLock<InMemoryGroupInfoCache>>,
+    group_cache: Arc<RwLock<G>>,
     eq: Arc<RwLock<EventQueue>>,
 }
 
-impl MockPostCommitGroupingListener {
+impl<G: GroupInfoFetcher + GroupInfoUpdater + Sync + Send> MockPostCommitGroupingListener<G> {
     pub fn new(
         main_chain_identity: Arc<RwLock<ChainIdentity>>,
-        group_cache: Arc<RwLock<InMemoryGroupInfoCache>>,
+        group_cache: Arc<RwLock<G>>,
         eq: Arc<RwLock<EventQueue>>,
     ) -> Self {
         MockPostCommitGroupingListener {
@@ -36,14 +35,18 @@ impl MockPostCommitGroupingListener {
     }
 }
 
-impl EventPublisher<DKGSuccess> for MockPostCommitGroupingListener {
+impl<G: GroupInfoFetcher + GroupInfoUpdater + Sync + Send> EventPublisher<DKGSuccess>
+    for MockPostCommitGroupingListener<G>
+{
     fn publish(&self, event: DKGSuccess) {
         self.eq.read().publish(event);
     }
 }
 
 #[async_trait]
-impl Listener for MockPostCommitGroupingListener {
+impl<G: GroupInfoFetcher + GroupInfoUpdater + Sync + Send> Listener
+    for MockPostCommitGroupingListener<G>
+{
     async fn start(mut self) -> NodeResult<()> {
         let rpc_endpoint = self
             .main_chain_identity

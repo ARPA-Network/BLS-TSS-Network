@@ -13,7 +13,7 @@ use self::adapter::{
 use async_trait::async_trait;
 use tonic::{Code, Request, Response};
 
-use crate::node::dao::types::{
+use crate::node::dal::types::{
     Group, GroupRelayConfirmationTask, GroupRelayConfirmationTaskState, Member as ModelMember,
     RandomnessTask,
 };

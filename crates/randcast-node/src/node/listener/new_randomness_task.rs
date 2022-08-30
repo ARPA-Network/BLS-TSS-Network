@@ -1,8 +1,8 @@
 use super::types::Listener;
 use crate::node::{
     contract_client::adapter_client::{AdapterMockHelper, MockAdapterClient},
-    dao::{api::BLSTasksFetcher, cache::InMemoryBLSTasksQueue, types::ChainIdentity},
-    dao::{api::BLSTasksUpdater, types::RandomnessTask},
+    dal::{api::BLSTasksFetcher, types::ChainIdentity},
+    dal::{api::BLSTasksUpdater, types::RandomnessTask},
     error::errors::{NodeError, NodeResult},
     event::new_randomness_task::NewRandomnessTask,
     queue::event_queue::{EventPublisher, EventQueue},
@@ -13,20 +13,24 @@ use parking_lot::RwLock;
 use std::sync::Arc;
 use tokio_retry::{strategy::FixedInterval, RetryIf};
 
-pub struct MockNewRandomnessTaskListener {
+pub struct MockNewRandomnessTaskListener<
+    T: BLSTasksFetcher<RandomnessTask> + BLSTasksUpdater<RandomnessTask>,
+> {
     chain_id: usize,
     id_address: String,
     chain_identity: Arc<RwLock<ChainIdentity>>,
-    randomness_tasks_cache: Arc<RwLock<InMemoryBLSTasksQueue<RandomnessTask>>>,
+    randomness_tasks_cache: Arc<RwLock<T>>,
     eq: Arc<RwLock<EventQueue>>,
 }
 
-impl MockNewRandomnessTaskListener {
+impl<T: BLSTasksFetcher<RandomnessTask> + BLSTasksUpdater<RandomnessTask>>
+    MockNewRandomnessTaskListener<T>
+{
     pub fn new(
         chain_id: usize,
         id_address: String,
         chain_identity: Arc<RwLock<ChainIdentity>>,
-        randomness_tasks_cache: Arc<RwLock<InMemoryBLSTasksQueue<RandomnessTask>>>,
+        randomness_tasks_cache: Arc<RwLock<T>>,
         eq: Arc<RwLock<EventQueue>>,
     ) -> Self {
         MockNewRandomnessTaskListener {
@@ -39,14 +43,18 @@ impl MockNewRandomnessTaskListener {
     }
 }
 
-impl EventPublisher<NewRandomnessTask> for MockNewRandomnessTaskListener {
+impl<T: BLSTasksFetcher<RandomnessTask> + BLSTasksUpdater<RandomnessTask>>
+    EventPublisher<NewRandomnessTask> for MockNewRandomnessTaskListener<T>
+{
     fn publish(&self, event: NewRandomnessTask) {
         self.eq.read().publish(event);
     }
 }
 
 #[async_trait]
-impl Listener for MockNewRandomnessTaskListener {
+impl<T: BLSTasksFetcher<RandomnessTask> + BLSTasksUpdater<RandomnessTask> + Sync + Send> Listener
+    for MockNewRandomnessTaskListener<T>
+{
     async fn start(mut self) -> NodeResult<()> {
         let rpc_endpoint = self
             .chain_identity
@@ -65,7 +73,7 @@ impl Listener for MockNewRandomnessTaskListener {
                     let task_reply = client.emit_signature_task().await;
 
                     if let Ok(randomness_task) = task_reply {
-                        if !self
+                        if let Ok(false) = self
                             .randomness_tasks_cache
                             .read()
                             .contains(randomness_task.index)
