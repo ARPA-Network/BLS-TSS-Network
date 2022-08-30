@@ -7,6 +7,7 @@ pub trait Task {
     fn index(&self) -> usize;
 }
 
+#[derive(Debug)]
 pub struct BLSTask<T: Task> {
     pub task: T,
     pub state: bool,
@@ -30,7 +31,7 @@ impl Task for GroupRelayConfirmationTask {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct RandomnessTask {
     pub index: usize,
     pub message: String,
@@ -231,4 +232,26 @@ pub enum DKGStatus {
     InPhase,
     CommitSuccess,
     WaitForPostProcess,
+}
+
+impl DKGStatus {
+    pub(crate) fn to_usize(self) -> usize {
+        match self {
+            DKGStatus::None => 0,
+            DKGStatus::InPhase => 1,
+            DKGStatus::CommitSuccess => 2,
+            DKGStatus::WaitForPostProcess => 3,
+        }
+    }
+}
+
+impl From<usize> for DKGStatus {
+    fn from(s: usize) -> Self {
+        match s {
+            1 => DKGStatus::InPhase,
+            2 => DKGStatus::CommitSuccess,
+            3 => DKGStatus::WaitForPostProcess,
+            _ => DKGStatus::None,
+        }
+    }
 }

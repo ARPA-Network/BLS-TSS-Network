@@ -1,18 +1,19 @@
 use super::{
     api::{
         BLSTasksFetcher, BLSTasksUpdater, BlockInfoFetcher, BlockInfoUpdater, GroupInfoFetcher,
-        GroupInfoUpdater, NodeInfoFetcher, ResultCache, SignatureResultCacheFetcher,
-        SignatureResultCacheUpdater,
+        GroupInfoUpdater, NodeInfoFetcher, NodeInfoUpdater, ResultCache,
+        SignatureResultCacheFetcher, SignatureResultCacheUpdater,
     },
     types::{
         BLSTask, DKGStatus, DKGTask, Group, GroupRelayConfirmation, GroupRelayConfirmationTask,
         GroupRelayTask, Member, RandomnessTask, Task,
     },
 };
-use crate::node::contract_client::types::{
-    Group as ContractGroup, SIGNATURE_TASK_EXCLUSIVE_WINDOW,
+use crate::node::error::errors::{GroupError, NodeInfoError, NodeResult};
+use crate::node::{
+    contract_client::types::{Group as ContractGroup, SIGNATURE_TASK_EXCLUSIVE_WINDOW},
+    error::errors::NodeError,
 };
-use crate::node::error::errors::{NodeError, NodeResult};
 use dkg_core::primitives::DKGOutput;
 use log::info;
 use std::collections::HashMap;
@@ -45,26 +46,35 @@ impl BlockInfoUpdater for InMemoryBlockInfoCache {
     }
 }
 
+#[derive(Debug)]
 pub struct InMemoryNodeInfoCache {
-    id_address: String,
-    node_rpc_endpoint: String,
-    dkg_private_key: Option<Scalar>,
-    dkg_public_key: Option<G1>,
+    pub(crate) id_address: String,
+    pub(crate) node_rpc_endpoint: Option<String>,
+    pub(crate) dkg_private_key: Option<Scalar>,
+    pub(crate) dkg_public_key: Option<G1>,
 }
 
 impl InMemoryNodeInfoCache {
-    pub fn new(
-        id_address: String,
-        node_rpc_endpoint: String,
-        dkg_private_key: Scalar,
-        dkg_public_key: G1,
-    ) -> Self {
+    pub fn new(id_address: String) -> Self {
         InMemoryNodeInfoCache {
             id_address,
-            node_rpc_endpoint,
-            dkg_private_key: Some(dkg_private_key),
-            dkg_public_key: Some(dkg_public_key),
+            node_rpc_endpoint: None,
+            dkg_private_key: None,
+            dkg_public_key: None,
         }
+    }
+}
+
+impl NodeInfoUpdater for InMemoryNodeInfoCache {
+    fn set_node_rpc_endpoint(&mut self, node_rpc_endpoint: String) -> NodeResult<()> {
+        self.node_rpc_endpoint = Some(node_rpc_endpoint);
+        Ok(())
+    }
+
+    fn set_dkg_key_pair(&mut self, dkg_private_key: Scalar, dkg_public_key: G1) -> NodeResult<()> {
+        self.dkg_private_key = Some(dkg_private_key);
+        self.dkg_public_key = Some(dkg_public_key);
+        Ok(())
     }
 }
 
@@ -73,29 +83,33 @@ impl NodeInfoFetcher for InMemoryNodeInfoCache {
         &self.id_address
     }
 
-    fn get_node_rpc_endpoint(&self) -> &str {
-        &self.node_rpc_endpoint
+    fn get_node_rpc_endpoint(&self) -> NodeResult<&str> {
+        self.node_rpc_endpoint
+            .as_ref()
+            .map(|e| e as &str)
+            .ok_or_else(|| NodeInfoError::NoRpcEndpoint.into())
     }
 
     fn get_dkg_private_key(&self) -> NodeResult<&Scalar> {
-        self.dkg_private_key.as_ref().ok_or(NodeError::NoDKGKeyPair)
+        self.dkg_private_key
+            .as_ref()
+            .ok_or_else(|| NodeInfoError::NoDKGKeyPair.into())
     }
 
     fn get_dkg_public_key(&self) -> NodeResult<&G1> {
-        self.dkg_public_key.as_ref().ok_or(NodeError::NoDKGKeyPair)
+        self.dkg_public_key
+            .as_ref()
+            .ok_or_else(|| NodeInfoError::NoDKGKeyPair.into())
     }
 }
 
+#[derive(Debug)]
 pub struct InMemoryGroupInfoCache {
-    share: Option<Share<Scalar>>,
-
-    group: Group,
-
-    dkg_status: DKGStatus,
-
-    self_index: usize,
-
-    dkg_start_block_height: usize,
+    pub(crate) share: Option<Share<Scalar>>,
+    pub(crate) group: Group,
+    pub(crate) dkg_status: DKGStatus,
+    pub(crate) self_index: usize,
+    pub(crate) dkg_start_block_height: usize,
 }
 
 impl Default for InMemoryGroupInfoCache {
@@ -119,7 +133,7 @@ impl InMemoryGroupInfoCache {
 
     fn only_has_group_task(&self) -> NodeResult<()> {
         if self.group.index == 0 {
-            return Err(NodeError::NoGroupTask);
+            return Err(GroupError::NoGroupTask.into());
         }
 
         Ok(())
@@ -189,18 +203,16 @@ impl GroupInfoUpdater for InMemoryGroupInfoCache {
         self.only_has_group_task()?;
 
         if self.group.index != index {
-            return Err(NodeError::GroupIndexObsolete(self.group.index));
+            return Err(GroupError::GroupIndexObsolete(self.group.index).into());
         }
 
         if self.group.epoch != epoch {
-            return Err(NodeError::GroupEpochObsolete(self.group.epoch));
+            return Err(GroupError::GroupEpochObsolete(self.group.epoch).into());
         }
 
         if self.group.state {
-            return Err(NodeError::GroupAlreadyReady);
+            return Err(GroupError::GroupAlreadyReady.into());
         }
-
-        self.share = Some(output.share);
 
         // every member index is started from 0
         let qualified_node_indices = output
@@ -210,8 +222,6 @@ impl GroupInfoUpdater for InMemoryGroupInfoCache {
             .map(|node| node.id() as usize)
             .collect::<Vec<_>>();
 
-        self.group.size = qualified_node_indices.len();
-
         let disqualified_nodes = self
             .group
             .members
@@ -220,15 +230,16 @@ impl GroupInfoUpdater for InMemoryGroupInfoCache {
             .map(|(id_address, _)| id_address.to_string())
             .collect::<Vec<_>>();
 
+        let public_key = *output.public.public_key();
+
+        let mut partial_public_key = G1::new();
+
+        self.share = Some(output.share);
+        self.group.size = qualified_node_indices.len();
         self.group
             .members
             .retain(|node, _| !disqualified_nodes.contains(node));
-
-        let public_key = *output.public.public_key();
-
         self.group.public_key = Some(public_key);
-
-        let mut partial_public_key = G1::new();
 
         for (_, member) in self.group.members.iter_mut() {
             if let Some(node) = output
@@ -261,15 +272,15 @@ impl GroupInfoUpdater for InMemoryGroupInfoCache {
         self.only_has_group_task()?;
 
         if self.group.index != index {
-            return Err(NodeError::GroupIndexObsolete(self.group.index));
+            return Err(GroupError::GroupIndexObsolete(self.group.index).into());
         }
 
         if self.group.epoch != epoch {
-            return Err(NodeError::GroupEpochObsolete(self.group.epoch));
+            return Err(GroupError::GroupEpochObsolete(self.group.epoch).into());
         }
 
         if self.group.state {
-            return Err(NodeError::GroupAlreadyReady);
+            return Err(GroupError::GroupAlreadyReady.into());
         }
 
         self.group.committers = committer_indices;
@@ -317,13 +328,17 @@ impl GroupInfoFetcher for InMemoryGroupInfoCache {
         self.group
             .public_key
             .as_ref()
-            .ok_or(NodeError::GroupNotExisted)
+            .ok_or(GroupError::GroupNotExisted)
+            .map_err(|e| e.into())
     }
 
     fn get_secret_share(&self) -> NodeResult<&Share<Scalar>> {
         self.only_has_group_task()?;
 
-        self.share.as_ref().ok_or(NodeError::GroupNotReady)
+        self.share
+            .as_ref()
+            .ok_or(GroupError::GroupNotReady)
+            .map_err(|e| e.into())
     }
 
     fn get_member(&self, id_address: &str) -> NodeResult<&Member> {
@@ -332,7 +347,8 @@ impl GroupInfoFetcher for InMemoryGroupInfoCache {
         self.group
             .members
             .get(id_address)
-            .ok_or(NodeError::GroupNotExisted)
+            .ok_or(GroupError::GroupNotExisted)
+            .map_err(|e| e.into())
     }
 
     fn get_committers(&self) -> NodeResult<Vec<&str>> {
@@ -378,24 +394,28 @@ impl<T: Task> InMemoryBLSTasksQueue<T> {
     }
 }
 
-impl<T: Task> BLSTasksFetcher<T> for InMemoryBLSTasksQueue<T> {
-    fn contains(&self, task_index: usize) -> bool {
-        self.bls_tasks
+impl<T: Task + Clone> BLSTasksFetcher<T> for InMemoryBLSTasksQueue<T> {
+    fn contains(&self, task_index: usize) -> NodeResult<bool> {
+        Ok(self
+            .bls_tasks
             .iter()
-            .any(|task| task.task.index() == task_index)
+            .any(|task| task.task.index() == task_index))
     }
 
-    fn get(&self, task_index: usize) -> Option<&T> {
-        self.bls_tasks.get(task_index).map(|task| &task.task)
+    fn get(&self, task_index: usize) -> NodeResult<T> {
+        self.bls_tasks
+            .get(task_index)
+            .map(|task| task.task.clone())
+            .ok_or(NodeError::TaskNotFound)
     }
 
-    fn is_handled(&self, task_index: usize) -> bool {
-        *self
+    fn is_handled(&self, task_index: usize) -> NodeResult<bool> {
+        Ok(*self
             .bls_tasks
             .get(task_index)
             .map(|task| &task.state)
             .or(Some(&false))
-            .unwrap()
+            .unwrap())
     }
 }
 
@@ -410,7 +430,7 @@ impl BLSTasksUpdater<RandomnessTask> for InMemoryBLSTasksQueue<RandomnessTask> {
         &mut self,
         current_block_height: usize,
         current_group_index: usize,
-    ) -> Vec<RandomnessTask> {
+    ) -> NodeResult<Vec<RandomnessTask>> {
         let available_tasks = self
             .bls_tasks
             .iter_mut()
@@ -426,7 +446,7 @@ impl BLSTasksUpdater<RandomnessTask> for InMemoryBLSTasksQueue<RandomnessTask> {
             })
             .collect::<Vec<_>>();
 
-        available_tasks
+        Ok(available_tasks)
     }
 }
 
@@ -441,7 +461,7 @@ impl BLSTasksUpdater<GroupRelayTask> for InMemoryBLSTasksQueue<GroupRelayTask> {
         &mut self,
         _: usize,
         current_group_index: usize,
-    ) -> Vec<GroupRelayTask> {
+    ) -> NodeResult<Vec<GroupRelayTask>> {
         let available_tasks = self
             .bls_tasks
             .iter_mut()
@@ -453,7 +473,7 @@ impl BLSTasksUpdater<GroupRelayTask> for InMemoryBLSTasksQueue<GroupRelayTask> {
             })
             .collect::<Vec<_>>();
 
-        available_tasks
+        Ok(available_tasks)
     }
 }
 
@@ -470,7 +490,7 @@ impl BLSTasksUpdater<GroupRelayConfirmationTask>
         &mut self,
         _: usize,
         current_group_index: usize,
-    ) -> Vec<GroupRelayConfirmationTask> {
+    ) -> NodeResult<Vec<GroupRelayConfirmationTask>> {
         let available_tasks = self
             .bls_tasks
             .iter_mut()
@@ -482,7 +502,7 @@ impl BLSTasksUpdater<GroupRelayConfirmationTask>
             })
             .collect::<Vec<_>>();
 
-        available_tasks
+        Ok(available_tasks)
     }
 }
 

@@ -18,10 +18,16 @@ pub trait BlockInfoUpdater {
     fn set_block_height(&mut self, block_height: usize);
 }
 
+pub trait NodeInfoUpdater {
+    fn set_node_rpc_endpoint(&mut self, node_rpc_endpoint: String) -> NodeResult<()>;
+
+    fn set_dkg_key_pair(&mut self, dkg_private_key: Scalar, dkg_public_key: G1) -> NodeResult<()>;
+}
+
 pub trait NodeInfoFetcher {
     fn get_id_address(&self) -> &str;
 
-    fn get_node_rpc_endpoint(&self) -> &str;
+    fn get_node_rpc_endpoint(&self) -> NodeResult<&str>;
 
     fn get_dkg_private_key(&self) -> NodeResult<&Scalar>;
 
@@ -80,11 +86,11 @@ pub trait GroupInfoFetcher {
 }
 
 pub trait BLSTasksFetcher<T> {
-    fn contains(&self, task_index: usize) -> bool;
+    fn contains(&self, task_index: usize) -> NodeResult<bool>;
 
-    fn get(&self, task_index: usize) -> Option<&T>;
+    fn get(&self, task_index: usize) -> NodeResult<T>;
 
-    fn is_handled(&self, task_index: usize) -> bool;
+    fn is_handled(&self, task_index: usize) -> NodeResult<bool>;
 }
 
 pub trait BLSTasksUpdater<T: Task> {
@@ -94,7 +100,7 @@ pub trait BLSTasksUpdater<T: Task> {
         &mut self,
         current_block_height: usize,
         current_group_index: usize,
-    ) -> Vec<T>;
+    ) -> NodeResult<Vec<T>>;
 }
 
 pub trait SignatureResultCacheFetcher<T: ResultCache> {
