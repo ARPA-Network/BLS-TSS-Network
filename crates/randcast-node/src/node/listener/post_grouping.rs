@@ -1,10 +1,10 @@
-use super::types::Listener;
+use super::Listener;
 use crate::node::{
-    dal::api::{BlockInfoFetcher, GroupInfoFetcher, GroupInfoUpdater},
     dal::{cache::InMemoryBlockInfoCache, types::DKGStatus},
-    error::errors::NodeResult,
+    dal::{BlockInfoFetcher, GroupInfoFetcher, GroupInfoUpdater},
+    error::NodeResult,
     event::dkg_post_process::DKGPostProcess,
-    queue::event_queue::{EventPublisher, EventQueue},
+    queue::{event_queue::EventQueue, EventPublisher},
 };
 use async_trait::async_trait;
 use log::info;

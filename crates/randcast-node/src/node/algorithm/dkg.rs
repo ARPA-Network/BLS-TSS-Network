@@ -1,6 +1,8 @@
 use crate::node::{
-    contract_client::coordinator_client::{CoordinatorViews, MockCoordinatorClient},
-    error::errors::NodeResult,
+    contract_client::{
+        coordinator::CoordinatorViews, rpc_mock::coordinator::MockCoordinatorClient,
+    },
+    error::NodeResult,
 };
 use async_trait::async_trait;
 use dkg_core::{
@@ -17,7 +19,7 @@ use threshold_bls::{
 };
 
 #[async_trait]
-pub trait DKGCore<F, R> {
+pub(crate) trait DKGCore<F, R> {
     async fn run_dkg(
         &self,
         dkg_private_key: Scalar,
@@ -30,7 +32,7 @@ pub trait DKGCore<F, R> {
         F: Fn() -> R + Send + 'async_trait;
 }
 
-pub struct MockDKGCore {}
+pub(crate) struct MockDKGCore {}
 
 #[async_trait]
 impl<F, R> DKGCore<F, R> for MockDKGCore

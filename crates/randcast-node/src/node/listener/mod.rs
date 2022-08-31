@@ -11,4 +11,11 @@ pub mod randomness_signature_aggregation;
 pub mod ready_to_handle_group_relay_confirmation_task;
 pub mod ready_to_handle_group_relay_task;
 pub mod ready_to_handle_randomness_task;
-pub mod types;
+
+use crate::node::error::NodeResult;
+use async_trait::async_trait;
+
+#[async_trait]
+pub trait Listener {
+    async fn start(self) -> NodeResult<()>;
+}

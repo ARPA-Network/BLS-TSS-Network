@@ -7,13 +7,11 @@ use log4rs::config::{Appender, Root};
 use log4rs::encode::pattern::PatternEncoder;
 use log4rs::filter::threshold::ThresholdFilter;
 use log4rs::Config as LogConfig;
-use randcast_node::node::context::chain::GeneralMainChain;
-use randcast_node::node::context::context::{Context, GeneralContext, TaskWaiter};
-use randcast_node::node::context::types::Config;
-use randcast_node::node::contract_client::controller_client::{
-    ControllerTransactions, MockControllerClient,
-};
-use randcast_node::node::dal::api::{NodeInfoFetcher, NodeInfoUpdater};
+use randcast_node::node::context::chain::types::GeneralMainChain;
+use randcast_node::node::context::types::{Config, GeneralContext};
+use randcast_node::node::context::{Context, TaskWaiter};
+use randcast_node::node::contract_client::controller::ControllerTransactions;
+use randcast_node::node::contract_client::rpc_mock::controller::MockControllerClient;
 use randcast_node::node::dal::cache::{
     InMemoryBLSTasksQueue, InMemoryGroupInfoCache, InMemoryNodeInfoCache,
 };
@@ -22,6 +20,7 @@ use randcast_node::node::dal::sqlite::{
 };
 use randcast_node::node::dal::types::{ChainIdentity, RandomnessTask};
 use randcast_node::node::dal::utils::format_now_date;
+use randcast_node::node::dal::{NodeInfoFetcher, NodeInfoUpdater};
 use std::fs::{self, read_to_string};
 use structopt::StructOpt;
 use threshold_bls::schemes::bls12_381::G1Scheme;

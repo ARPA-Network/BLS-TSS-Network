@@ -1,14 +1,14 @@
-use super::types::Listener;
+use super::Listener;
 use crate::node::{
-    contract_client::adapter_client::{AdapterMockHelper, MockAdapterClient},
+    contract_client::rpc_mock::adapter::{AdapterMockHelper, MockAdapterClient},
+    dal::{cache::InMemoryBLSTasksQueue, BLSTasksUpdater},
     dal::{
-        api::BLSTasksFetcher,
         types::{ChainIdentity, GroupRelayConfirmationTask},
+        BLSTasksFetcher,
     },
-    dal::{api::BLSTasksUpdater, cache::InMemoryBLSTasksQueue},
-    error::errors::{NodeError, NodeResult},
+    error::{NodeError, NodeResult},
     event::new_group_relay_confirmation_task::NewGroupRelayConfirmationTask,
-    queue::event_queue::{EventPublisher, EventQueue},
+    queue::{event_queue::EventQueue, EventPublisher},
 };
 use async_trait::async_trait;
 use log::{error, info};

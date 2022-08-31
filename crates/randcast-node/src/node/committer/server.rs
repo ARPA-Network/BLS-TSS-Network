@@ -1,4 +1,4 @@
-use self::committer::{
+use self::committer_stub::{
     committer_service_server::{CommitterService, CommitterServiceServer},
     CommitPartialSignatureReply, CommitPartialSignatureRequest,
 };
@@ -6,19 +6,20 @@ use crate::node::{
     algorithm::bls::{BLSCore, MockBLSCore},
     context::{
         chain::{AdapterChainFetcher, ChainFetcher},
-        context::{ContextFetcher, GeneralContext},
+        types::GeneralContext,
+        ContextFetcher,
     },
     dal::{
-        api::{BLSTasksFetcher, BLSTasksUpdater, GroupInfoUpdater, NodeInfoFetcher},
         types::RandomnessTask,
+        {BLSTasksFetcher, BLSTasksUpdater, GroupInfoUpdater, NodeInfoFetcher},
     },
-    error::errors::{GroupError, NodeError},
+    error::{GroupError, NodeError},
 };
 use crate::node::{
     context::chain::MainChainFetcher,
     dal::{
-        api::{GroupInfoFetcher, SignatureResultCacheFetcher, SignatureResultCacheUpdater},
         types::TaskType,
+        {GroupInfoFetcher, SignatureResultCacheFetcher, SignatureResultCacheUpdater},
     },
 };
 use futures::Future;
@@ -26,11 +27,11 @@ use parking_lot::RwLock;
 use std::sync::Arc;
 use tonic::{transport::Server, Request, Response, Status};
 
-pub mod committer {
+pub mod committer_stub {
     include!("../../../stub/committer.rs");
 }
 
-pub struct BLSCommitterServiceServer<
+pub(crate) struct BLSCommitterServiceServer<
     N: NodeInfoFetcher,
     G: GroupInfoFetcher + GroupInfoUpdater,
     T: BLSTasksFetcher<RandomnessTask> + BLSTasksUpdater<RandomnessTask>,

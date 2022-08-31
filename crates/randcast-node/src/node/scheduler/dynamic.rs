@@ -4,22 +4,7 @@ use tokio::{
     task::JoinHandle,
 };
 
-pub trait DynamicTaskScheduler {
-    fn add_task<T>(&mut self, future: T)
-    where
-        T: Future<Output = ()> + Send + 'static,
-        T::Output: Send + 'static;
-
-    fn add_task_with_shutdown_signal<T, P>(
-        &mut self,
-        future: T,
-        shutdown_predicate: P,
-        shutdown_check_frequency: u64,
-    ) where
-        T: Future<Output = ()> + Send + 'static,
-        T::Output: Send + 'static,
-        P: Fn() -> bool + Send + 'static;
-}
+use super::{DynamicTaskScheduler, TaskScheduler};
 
 #[derive(Default)]
 pub struct SimpleDynamicTaskScheduler {
@@ -35,7 +20,7 @@ impl SimpleDynamicTaskScheduler {
     }
 }
 
-impl DynamicTaskScheduler for SimpleDynamicTaskScheduler {
+impl TaskScheduler for SimpleDynamicTaskScheduler {
     fn add_task<T>(&mut self, future: T)
     where
         T: Future<Output = ()> + Send + 'static,
@@ -50,7 +35,9 @@ impl DynamicTaskScheduler for SimpleDynamicTaskScheduler {
 
         self.dynamic_tasks.push((recv, None));
     }
+}
 
+impl DynamicTaskScheduler for SimpleDynamicTaskScheduler {
     fn add_task_with_shutdown_signal<T, P>(
         &mut self,
         future: T,

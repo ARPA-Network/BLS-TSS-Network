@@ -2,15 +2,7 @@ use async_trait::async_trait;
 use futures::Future;
 use tokio::task::JoinHandle;
 
-#[async_trait]
-pub trait FixedTaskScheduler {
-    fn add_task<T>(&mut self, future: T)
-    where
-        T: Future<Output = ()> + Send + 'static,
-        T::Output: Send + 'static;
-
-    async fn join(mut self);
-}
+use super::{FixedTaskScheduler, TaskScheduler};
 
 #[derive(Default)]
 pub struct SimpleFixedTaskScheduler {
@@ -25,8 +17,7 @@ impl SimpleFixedTaskScheduler {
     }
 }
 
-#[async_trait]
-impl FixedTaskScheduler for SimpleFixedTaskScheduler {
+impl TaskScheduler for SimpleFixedTaskScheduler {
     fn add_task<T>(&mut self, future: T)
     where
         T: Future<Output = ()> + Send + 'static,
@@ -34,7 +25,10 @@ impl FixedTaskScheduler for SimpleFixedTaskScheduler {
     {
         tokio::spawn(future);
     }
+}
 
+#[async_trait]
+impl FixedTaskScheduler for SimpleFixedTaskScheduler {
     async fn join(mut self) {
         for fixed_task in self.fixed_tasks.iter_mut() {
             let _ = fixed_task.await;

@@ -1,9 +1,11 @@
 use crate::node::{
-    event::types::{Event, Topic},
-    subscriber::types::Subscriber,
+    event::{types::Topic, Event},
+    subscriber::Subscriber,
 };
 use log::error;
 use std::collections::HashMap;
+
+use super::{EventPublisher, EventSubscriber};
 
 #[derive(Default)]
 pub struct EventQueue {
@@ -18,20 +20,12 @@ impl EventQueue {
     }
 }
 
-pub trait EventSubscriber {
-    fn subscribe(&mut self, topic: Topic, subscriber: Box<dyn Subscriber + Send + Sync>);
-}
-
 impl EventSubscriber for EventQueue {
     fn subscribe(&mut self, topic: Topic, subscriber: Box<dyn Subscriber + Send + Sync>) {
         self.subscribers.entry(topic).or_insert_with(Vec::new);
 
         self.subscribers.get_mut(&topic).unwrap().push(subscriber);
     }
-}
-
-pub trait EventPublisher<E: Event + Clone + Send + Sync + 'static> {
-    fn publish(&self, event: E);
 }
 
 impl<E: Event + Clone + Send + Sync + 'static> EventPublisher<E> for EventQueue {
@@ -57,11 +51,11 @@ pub mod tests {
     use parking_lot::RwLock;
 
     use crate::node::{
-        dal::{api::BlockInfoFetcher, cache::InMemoryBlockInfoCache, types::ChainIdentity},
+        dal::{cache::InMemoryBlockInfoCache, types::ChainIdentity, BlockInfoFetcher},
         event::new_block::NewBlock,
         listener::block::MockBlockListener,
         queue::event_queue::EventQueue,
-        subscriber::{block::BlockSubscriber, types::Subscriber},
+        subscriber::{block::BlockSubscriber, Subscriber},
     };
 
     use super::EventPublisher;

@@ -1,10 +1,10 @@
 use std::collections::{BTreeMap, HashMap};
 
-use self::adapter::{
+use self::adapter_stub::{
     transactions_client::TransactionsClient as AdapterTransactionsClient,
     views_client::ViewsClient as AdapterViewsClient, GetGroupRequest, GroupReply, Member,
 };
-use self::adapter::{
+use self::adapter_stub::{
     CancelInvalidRelayConfirmationTaskRequest, ConfirmRelayRequest, FulfillRandomnessRequest,
     FulfillRelayRequest, GetGroupRelayCacheRequest, GetGroupRelayConfirmationTaskStateRequest,
     GetSignatureTaskCompletionStateRequest, GroupRelayConfirmationTaskReply, MineRequest,
@@ -13,47 +13,16 @@ use self::adapter::{
 use async_trait::async_trait;
 use tonic::{Code, Request, Response};
 
+use crate::node::contract_client::adapter::{AdapterTransactions, AdapterViews};
 use crate::node::dal::types::{
     Group, GroupRelayConfirmationTask, GroupRelayConfirmationTaskState, Member as ModelMember,
     RandomnessTask,
 };
-use crate::node::error::errors::{NodeError, NodeResult};
+use crate::node::error::{NodeError, NodeResult};
 use crate::node::ServiceClient;
 
-pub mod adapter {
-    include!("../../../stub/adapter.rs");
-}
-
-#[async_trait]
-pub trait AdapterTransactions {
-    async fn request_randomness(&self, message: &str) -> NodeResult<()>;
-
-    async fn fulfill_randomness(
-        &self,
-        group_index: usize,
-        signature_index: usize,
-        signature: Vec<u8>,
-        partial_signatures: HashMap<String, Vec<u8>>,
-    ) -> NodeResult<()>;
-
-    async fn fulfill_relay(
-        &self,
-        relayer_group_index: usize,
-        task_index: usize,
-        signature: Vec<u8>,
-        group_as_bytes: Vec<u8>,
-    ) -> NodeResult<()>;
-
-    async fn cancel_invalid_relay_confirmation_task(&self, task_index: usize) -> NodeResult<()>;
-
-    async fn confirm_relay(
-        &self,
-        task_index: usize,
-        group_relay_confirmation_as_bytes: Vec<u8>,
-        signature: Vec<u8>,
-    ) -> NodeResult<()>;
-
-    async fn set_initial_group(&self, group: Vec<u8>) -> NodeResult<()>;
+pub mod adapter_stub {
+    include!("../../../../stub/adapter.rs");
 }
 
 #[async_trait]
@@ -63,22 +32,6 @@ pub trait AdapterMockHelper {
     async fn emit_signature_task(&self) -> NodeResult<RandomnessTask>;
 
     async fn emit_group_relay_confirmation_task(&self) -> NodeResult<GroupRelayConfirmationTask>;
-}
-
-#[async_trait]
-pub trait AdapterViews {
-    async fn get_group(&self, group_index: usize) -> NodeResult<Group>;
-
-    async fn get_last_output(&self) -> NodeResult<u64>;
-
-    async fn get_signature_task_completion_state(&self, index: usize) -> NodeResult<bool>;
-
-    async fn get_group_relay_cache(&self, group_index: usize) -> NodeResult<Group>;
-
-    async fn get_group_relay_confirmation_task_state(
-        &self,
-        task_index: usize,
-    ) -> NodeResult<GroupRelayConfirmationTaskState>;
 }
 
 pub struct MockAdapterClient {

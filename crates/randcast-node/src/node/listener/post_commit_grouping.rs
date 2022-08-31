@@ -1,13 +1,13 @@
-use super::types::Listener;
+use super::Listener;
 use crate::node::{
-    contract_client::controller_client::{ControllerViews, MockControllerClient},
+    contract_client::{controller::ControllerViews, rpc_mock::controller::MockControllerClient},
     dal::{
-        api::{GroupInfoFetcher, GroupInfoUpdater},
         types::{ChainIdentity, DKGStatus},
+        {GroupInfoFetcher, GroupInfoUpdater},
     },
-    error::errors::{NodeError, NodeResult},
+    error::{NodeError, NodeResult},
     event::dkg_success::DKGSuccess,
-    queue::event_queue::{EventPublisher, EventQueue},
+    queue::{event_queue::EventQueue, EventPublisher},
 };
 use async_trait::async_trait;
 use log::error;

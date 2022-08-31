@@ -1,22 +1,19 @@
-use super::types::Subscriber;
+use super::Subscriber;
 use crate::node::{
     algorithm::dkg::{DKGCore, MockDKGCore},
     contract_client::{
-        controller_client::{ControllerTransactions, MockControllerClient},
-        coordinator_client::MockCoordinatorClient,
+        controller::ControllerTransactions,
+        rpc_mock::{controller::MockControllerClient, coordinator::MockCoordinatorClient},
     },
-    dal::api::GroupInfoUpdater,
+    dal::GroupInfoUpdater,
     dal::{
-        api::{GroupInfoFetcher, NodeInfoFetcher},
         types::{ChainIdentity, DKGStatus, DKGTask},
+        {GroupInfoFetcher, NodeInfoFetcher},
     },
-    error::errors::NodeResult,
-    event::{
-        run_dkg::RunDKG,
-        types::{Event, Topic},
-    },
-    queue::event_queue::{EventQueue, EventSubscriber},
-    scheduler::dynamic::{DynamicTaskScheduler, SimpleDynamicTaskScheduler},
+    error::NodeResult,
+    event::{run_dkg::RunDKG, types::Topic, Event},
+    queue::{event_queue::EventQueue, EventSubscriber},
+    scheduler::{dynamic::SimpleDynamicTaskScheduler, DynamicTaskScheduler},
 };
 use async_trait::async_trait;
 use log::{error, info};

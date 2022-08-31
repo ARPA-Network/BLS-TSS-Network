@@ -1,6 +1,6 @@
 use crate::node::dal::cache::RandomnessResultCache;
 
-use super::types::{Event, Topic};
+use super::{types::Topic, Event};
 
 #[derive(Clone)]
 pub struct ReadyToFulfillRandomnessTask {

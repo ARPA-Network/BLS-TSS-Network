@@ -1,6 +1,6 @@
 use crate::node::dal::cache::GroupRelayResultCache;
 
-use super::types::{Event, Topic};
+use super::{types::Topic, Event};
 
 #[derive(Clone)]
 pub struct ReadyToFulfillGroupRelayTask {

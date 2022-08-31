@@ -1,11 +1,8 @@
+use super::Task;
 use crate::node::contract_client::types::Group as ContractGroup;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use threshold_bls::curve::bls12381::G1;
-
-pub trait Task {
-    fn index(&self) -> usize;
-}
 
 #[derive(Debug)]
 pub struct BLSTask<T: Task> {

@@ -3,16 +3,16 @@ use std::marker::PhantomData;
 use std::path::PathBuf;
 
 use crate::node::contract_client::types::SIGNATURE_TASK_EXCLUSIVE_WINDOW;
-use crate::node::error::errors::{GroupError, NodeInfoError, NodeResult};
+use crate::node::error::{GroupError, NodeInfoError, NodeResult};
 
-use super::api::{
-    BLSTasksFetcher, BLSTasksUpdater, GroupInfoFetcher, GroupInfoUpdater, NodeInfoFetcher,
-    NodeInfoUpdater,
-};
 use super::cache::InMemoryNodeInfoCache;
-use super::types::{DKGStatus, Member, RandomnessTask, Task};
+use super::types::{DKGStatus, Member, RandomnessTask};
 use super::utils::format_now_date;
 use super::{cache::InMemoryGroupInfoCache, types::Group};
+use super::{
+    BLSTasksFetcher, BLSTasksUpdater, GroupInfoFetcher, GroupInfoUpdater, NodeInfoFetcher,
+    NodeInfoUpdater, Task,
+};
 use log::info;
 use rusqlite::Connection;
 use thiserror::Error;
@@ -1033,14 +1033,14 @@ pub mod sqlite_tests {
     use super::{BLSTasksDBClient, DBClient, DBError, GroupInfoDBClient, NodeInfoDBClient};
     use crate::node::{
         dal::{
-            api::{
+            test_helper,
+            types::{DKGStatus, DKGTask, RandomnessTask},
+            {
                 BLSTasksFetcher, BLSTasksUpdater, GroupInfoFetcher, GroupInfoUpdater,
                 NodeInfoFetcher, NodeInfoUpdater,
             },
-            test_helper,
-            types::{DKGStatus, DKGTask, RandomnessTask},
         },
-        error::errors::GroupError,
+        error::GroupError,
     };
     use std::{collections::BTreeMap, fs, path::PathBuf};
     use threshold_bls::{

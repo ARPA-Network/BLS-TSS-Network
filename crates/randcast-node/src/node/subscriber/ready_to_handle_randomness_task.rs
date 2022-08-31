@@ -1,28 +1,28 @@
-use super::types::{CommitterClientHandler, Subscriber};
 use crate::node::{
     algorithm::bls::{BLSCore, MockBLSCore},
-    committer::committer_client::{CommitterClient, CommitterService, MockCommitterClient},
-    dal::{
-        api::SignatureResultCacheFetcher,
-        types::{RandomnessTask, TaskType},
+    committer::{
+        client::MockCommitterClient, CommitterClient, CommitterClientHandler, CommitterService,
     },
     dal::{
-        api::{GroupInfoFetcher, SignatureResultCacheUpdater},
         cache::{InMemorySignatureResultCache, RandomnessResultCache},
+        {GroupInfoFetcher, SignatureResultCacheUpdater},
     },
-    error::errors::{NodeError, NodeResult},
-    event::{
-        ready_to_handle_randomness_task::ReadyToHandleRandomnessTask,
-        types::{Event, Topic},
+    dal::{
+        types::{RandomnessTask, TaskType},
+        SignatureResultCacheFetcher,
     },
-    queue::event_queue::{EventQueue, EventSubscriber},
-    scheduler::dynamic::{DynamicTaskScheduler, SimpleDynamicTaskScheduler},
+    error::{NodeError, NodeResult},
+    event::{ready_to_handle_randomness_task::ReadyToHandleRandomnessTask, types::Topic, Event},
+    queue::{event_queue::EventQueue, EventSubscriber},
+    scheduler::{dynamic::SimpleDynamicTaskScheduler, TaskScheduler},
 };
 use async_trait::async_trait;
 use log::{error, info};
 use parking_lot::RwLock;
 use std::sync::Arc;
 use tokio_retry::{strategy::FixedInterval, RetryIf};
+
+use super::Subscriber;
 
 pub struct ReadyToHandleRandomnessTaskSubscriber<G: GroupInfoFetcher + Sync + Send> {
     pub chain_id: usize,

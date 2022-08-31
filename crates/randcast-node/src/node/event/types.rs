@@ -1,9 +1,5 @@
 use serde::{Deserialize, Serialize};
 
-pub trait Event {
-    fn topic(&self) -> Topic;
-}
-
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Hash, Eq)]
 pub enum Topic {
     NewBlock(usize),

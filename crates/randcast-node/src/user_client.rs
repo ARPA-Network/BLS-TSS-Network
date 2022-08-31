@@ -1,7 +1,8 @@
 use std::env;
 
-use randcast_node::node::contract_client::adapter_client::{
-    AdapterTransactions, AdapterViews, MockAdapterClient,
+use randcast_node::node::contract_client::{
+    adapter::{AdapterTransactions, AdapterViews},
+    rpc_mock::adapter::MockAdapterClient,
 };
 
 #[tokio::main]

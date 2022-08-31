@@ -1,12 +1,9 @@
-use super::types::Subscriber;
+use super::Subscriber;
 use crate::node::{
-    dal::{api::BlockInfoUpdater, cache::InMemoryBlockInfoCache},
-    error::errors::NodeResult,
-    event::{
-        new_block::NewBlock,
-        types::{Event, Topic},
-    },
-    queue::event_queue::{EventQueue, EventSubscriber},
+    dal::{cache::InMemoryBlockInfoCache, BlockInfoUpdater},
+    error::NodeResult,
+    event::{new_block::NewBlock, types::Topic, Event},
+    queue::{event_queue::EventQueue, EventSubscriber},
 };
 use log::info;
 use parking_lot::RwLock;

@@ -1,8 +1,8 @@
-use randcast_node::node::contract_client::adapter_client::AdapterViews;
+use randcast_node::node::contract_client::adapter::{AdapterTransactions, AdapterViews};
+use randcast_node::node::contract_client::controller::ControllerViews;
 use randcast_node::node::contract_client::types::Group as ContractGroup;
 use randcast_node::node::contract_client::{
-    adapter_client::{AdapterTransactions, MockAdapterClient},
-    controller_client::{ControllerViews, MockControllerClient},
+    rpc_mock::adapter::MockAdapterClient, rpc_mock::controller::MockControllerClient,
 };
 use std::env;
 

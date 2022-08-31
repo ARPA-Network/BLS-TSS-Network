@@ -1,11 +1,11 @@
-use super::types::Listener;
+use super::Listener;
 use crate::node::{
-    contract_client::adapter_client::{AdapterMockHelper, MockAdapterClient},
-    dal::{api::BLSTasksFetcher, types::ChainIdentity},
-    dal::{api::BLSTasksUpdater, types::RandomnessTask},
-    error::errors::{NodeError, NodeResult},
+    contract_client::rpc_mock::adapter::{AdapterMockHelper, MockAdapterClient},
+    dal::{types::ChainIdentity, BLSTasksFetcher},
+    dal::{types::RandomnessTask, BLSTasksUpdater},
+    error::{NodeError, NodeResult},
     event::new_randomness_task::NewRandomnessTask,
-    queue::event_queue::{EventPublisher, EventQueue},
+    queue::{event_queue::EventQueue, EventPublisher},
 };
 use async_trait::async_trait;
 use log::{error, info};

@@ -1,14 +1,13 @@
-use super::types::Subscriber;
+use super::Subscriber;
 use crate::node::{
-    contract_client::controller_client::{ControllerTransactions, MockControllerClient},
-    dal::types::ChainIdentity,
-    error::errors::NodeResult,
-    event::{
-        dkg_post_process::DKGPostProcess,
-        types::{Event, Topic},
+    contract_client::{
+        controller::ControllerTransactions, rpc_mock::controller::MockControllerClient,
     },
-    queue::event_queue::{EventQueue, EventSubscriber},
-    scheduler::dynamic::{DynamicTaskScheduler, SimpleDynamicTaskScheduler},
+    dal::types::ChainIdentity,
+    error::NodeResult,
+    event::{dkg_post_process::DKGPostProcess, types::Topic, Event},
+    queue::{event_queue::EventQueue, EventSubscriber},
+    scheduler::{dynamic::SimpleDynamicTaskScheduler, TaskScheduler},
 };
 use async_trait::async_trait;
 use log::{error, info};

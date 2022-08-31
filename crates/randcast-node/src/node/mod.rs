@@ -1,6 +1,6 @@
 use async_trait::async_trait;
 
-use self::error::errors::NodeResult;
+use self::error::NodeResult;
 
 pub mod error;
 

@@ -1,6 +1,6 @@
 use crate::node::dal::cache::GroupRelayConfirmationResultCache;
 
-use super::types::{Event, Topic};
+use super::{types::Topic, Event};
 
 #[derive(Clone)]
 pub struct ReadyToFulfillGroupRelayConfirmationTask {

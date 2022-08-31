@@ -1,16 +1,12 @@
-use super::types::Subscriber;
+use super::Subscriber;
 use crate::node::{
     dal::{
-        api::{GroupInfoFetcher, GroupInfoUpdater},
         types::DKGStatus,
+        {GroupInfoFetcher, GroupInfoUpdater},
     },
-    error::errors::NodeResult,
-    event::{
-        new_dkg_task::NewDKGTask,
-        run_dkg::RunDKG,
-        types::{Event, Topic},
-    },
-    queue::event_queue::{EventPublisher, EventQueue, EventSubscriber},
+    error::NodeResult,
+    event::{new_dkg_task::NewDKGTask, run_dkg::RunDKG, types::Topic, Event},
+    queue::{event_queue::EventQueue, EventPublisher, EventSubscriber},
 };
 use log::info;
 use parking_lot::RwLock;

@@ -1,9 +1,6 @@
-use super::context::{ContextFetcher, GeneralContext};
 use crate::node::{
+    context::types::GeneralContext,
     dal::{
-        api::{
-            BLSTasksFetcher, BLSTasksUpdater, GroupInfoFetcher, GroupInfoUpdater, NodeInfoFetcher,
-        },
         cache::{
             GroupRelayConfirmationResultCache, GroupRelayResultCache, InMemoryBLSTasksQueue,
             InMemoryBlockInfoCache, InMemoryGroupInfoCache, InMemoryNodeInfoCache,
@@ -11,6 +8,7 @@ use crate::node::{
         },
         sqlite::{BLSTasksDBClient, GroupInfoDBClient, NodeInfoDBClient},
         types::{ChainIdentity, GroupRelayConfirmationTask, GroupRelayTask, RandomnessTask},
+        {BLSTasksFetcher, BLSTasksUpdater, GroupInfoFetcher, GroupInfoUpdater, NodeInfoFetcher},
     },
     listener::{
         block::MockBlockListener,
@@ -24,9 +22,9 @@ use crate::node::{
         randomness_signature_aggregation::MockRandomnessSignatureAggregationListener,
         ready_to_handle_group_relay_confirmation_task::MockReadyToHandleGroupRelayConfirmationTaskListener,
         ready_to_handle_group_relay_task::MockReadyToHandleGroupRelayTaskListener,
-        ready_to_handle_randomness_task::MockReadyToHandleRandomnessTaskListener, types::Listener,
+        ready_to_handle_randomness_task::MockReadyToHandleRandomnessTaskListener, Listener,
     },
-    scheduler::fixed::FixedTaskScheduler,
+    scheduler::TaskScheduler,
     subscriber::{
         block::BlockSubscriber,
         group_relay_confirmation_signature_aggregation::GroupRelayConfirmationSignatureAggregationSubscriber,
@@ -36,75 +34,17 @@ use crate::node::{
         randomness_signature_aggregation::RandomnessSignatureAggregationSubscriber,
         ready_to_handle_group_relay_confirmation_task::ReadyToHandleGroupRelayConfirmationTaskSubscriber,
         ready_to_handle_group_relay_task::ReadyToHandleGroupRelayTaskSubscriber,
-        ready_to_handle_randomness_task::ReadyToHandleRandomnessTaskSubscriber, types::Subscriber,
+        ready_to_handle_randomness_task::ReadyToHandleRandomnessTaskSubscriber, Subscriber,
     },
 };
 use log::error;
 use parking_lot::RwLock;
 use std::{marker::PhantomData, sync::Arc};
 
-pub trait Chain {
-    type BlockInfoCache;
-    type RandomnessTasksQueue;
-    type RandomnessResultCaches;
-    type Context;
-
-    fn init_components(&self, context: &Self::Context) {
-        self.init_listeners(context);
-
-        self.init_subscribers(context);
-    }
-
-    fn init_listeners(&self, context: &Self::Context);
-
-    fn init_subscribers(&self, context: &Self::Context);
-}
-
-pub trait AdapterChain: Chain {
-    type GroupRelayConfirmationTasksQueue;
-    type GroupRelayConfirmationResultCaches;
-}
-
-pub trait MainChain: Chain {
-    type NodeInfoCache;
-    type GroupInfoCache;
-    type GroupRelayTasksQueue;
-    type GroupRelayResultCaches;
-}
-
-pub trait ChainFetcher<T: Chain> {
-    fn id(&self) -> usize;
-
-    fn description(&self) -> &str;
-
-    fn get_chain_identity(&self) -> Arc<RwLock<ChainIdentity>>;
-
-    fn get_block_cache(&self) -> Arc<RwLock<T::BlockInfoCache>>;
-
-    fn get_randomness_tasks_cache(&self) -> Arc<RwLock<T::RandomnessTasksQueue>>;
-
-    fn get_randomness_result_cache(&self) -> Arc<RwLock<T::RandomnessResultCaches>>;
-}
-
-pub trait AdapterChainFetcher<T: AdapterChain> {
-    fn get_group_relay_confirmation_tasks_cache(
-        &self,
-    ) -> Arc<RwLock<T::GroupRelayConfirmationTasksQueue>>;
-
-    fn get_group_relay_confirmation_result_cache(
-        &self,
-    ) -> Arc<RwLock<T::GroupRelayConfirmationResultCaches>>;
-}
-
-pub trait MainChainFetcher<T: MainChain> {
-    fn get_node_cache(&self) -> Arc<RwLock<T::NodeInfoCache>>;
-
-    fn get_group_cache(&self) -> Arc<RwLock<T::GroupInfoCache>>;
-
-    fn get_group_relay_tasks_cache(&self) -> Arc<RwLock<T::GroupRelayTasksQueue>>;
-
-    fn get_group_relay_result_cache(&self) -> Arc<RwLock<T::GroupRelayResultCaches>>;
-}
+use super::{
+    AdapterChain, AdapterChainFetcher, Chain, ChainFetcher, ContextFetcher, MainChain,
+    MainChainFetcher,
+};
 
 pub struct GeneralAdapterChain<
     N: NodeInfoFetcher,

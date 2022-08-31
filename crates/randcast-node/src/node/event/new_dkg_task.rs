@@ -1,4 +1,4 @@
-use super::types::{Event, Topic};
+use super::{types::Topic, Event};
 use crate::node::dal::types::DKGTask;
 
 #[derive(Clone)]

@@ -1,14 +1,14 @@
-use super::types::Listener;
+use super::Listener;
 use crate::node::{
-    contract_client::adapter_client::{AdapterViews, MockAdapterClient},
+    contract_client::{adapter::AdapterViews, rpc_mock::adapter::MockAdapterClient},
     dal::cache::InMemoryBlockInfoCache,
     dal::{
-        api::{BLSTasksUpdater, BlockInfoFetcher, GroupInfoFetcher},
         types::{ChainIdentity, RandomnessTask},
+        {BLSTasksUpdater, BlockInfoFetcher, GroupInfoFetcher},
     },
-    error::errors::{NodeError, NodeResult},
+    error::{NodeError, NodeResult},
     event::ready_to_handle_randomness_task::ReadyToHandleRandomnessTask,
-    queue::event_queue::{EventPublisher, EventQueue},
+    queue::{event_queue::EventQueue, EventPublisher},
 };
 use async_trait::async_trait;
 use log::error;

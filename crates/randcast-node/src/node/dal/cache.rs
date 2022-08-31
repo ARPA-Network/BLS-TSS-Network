@@ -1,18 +1,19 @@
 use super::{
-    api::{
+    types::{
+        BLSTask, DKGStatus, DKGTask, Group, GroupRelayConfirmation, GroupRelayConfirmationTask,
+        GroupRelayTask, Member, RandomnessTask,
+    },
+    Task,
+    {
         BLSTasksFetcher, BLSTasksUpdater, BlockInfoFetcher, BlockInfoUpdater, GroupInfoFetcher,
         GroupInfoUpdater, NodeInfoFetcher, NodeInfoUpdater, ResultCache,
         SignatureResultCacheFetcher, SignatureResultCacheUpdater,
     },
-    types::{
-        BLSTask, DKGStatus, DKGTask, Group, GroupRelayConfirmation, GroupRelayConfirmationTask,
-        GroupRelayTask, Member, RandomnessTask, Task,
-    },
 };
-use crate::node::error::errors::{GroupError, NodeInfoError, NodeResult};
+use crate::node::error::{GroupError, NodeInfoError, NodeResult};
 use crate::node::{
     contract_client::types::{Group as ContractGroup, SIGNATURE_TASK_EXCLUSIVE_WINDOW},
-    error::errors::NodeError,
+    error::NodeError,
 };
 use dkg_core::primitives::DKGOutput;
 use log::info;

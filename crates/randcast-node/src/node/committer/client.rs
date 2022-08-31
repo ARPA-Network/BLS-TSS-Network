@@ -1,37 +1,19 @@
-use self::committer::committer_service_client::CommitterServiceClient;
-use self::committer::CommitPartialSignatureRequest;
+use self::committer_stub::committer_service_client::CommitterServiceClient;
+use self::committer_stub::CommitPartialSignatureRequest;
 use crate::node::dal::types::TaskType;
-use crate::node::error::errors::NodeResult;
+use crate::node::error::NodeResult;
 use crate::node::ServiceClient;
 use async_trait::async_trait;
 use tonic::Request;
 
-pub mod committer {
+use super::{CommitterClient, CommitterService};
+
+pub mod committer_stub {
     include!("../../../stub/committer.rs");
 }
 
-#[async_trait]
-pub trait CommitterService {
-    async fn commit_partial_signature(
-        self,
-        chain_id: usize,
-        task_type: TaskType,
-        message: Vec<u8>,
-        signature_index: usize,
-        partial_signature: Vec<u8>,
-    ) -> NodeResult<bool>;
-}
-
-pub trait CommitterClient {
-    fn get_id_address(&self) -> &str;
-
-    fn get_committer_endpoint(&self) -> &str;
-
-    fn build(id_address: String, committer_endpoint: String) -> Self;
-}
-
 #[derive(Clone, Debug)]
-pub struct MockCommitterClient {
+pub(crate) struct MockCommitterClient {
     id_address: String,
     committer_endpoint: String,
 }

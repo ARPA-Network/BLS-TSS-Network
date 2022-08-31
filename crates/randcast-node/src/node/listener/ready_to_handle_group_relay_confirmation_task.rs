@@ -1,13 +1,13 @@
-use super::types::Listener;
+use super::Listener;
 use crate::node::{
     dal::cache::{InMemoryBLSTasksQueue, InMemoryBlockInfoCache},
     dal::{
-        api::{BLSTasksUpdater, BlockInfoFetcher, GroupInfoFetcher},
         types::GroupRelayConfirmationTask,
+        {BLSTasksUpdater, BlockInfoFetcher, GroupInfoFetcher},
     },
-    error::errors::NodeResult,
+    error::NodeResult,
     event::ready_to_handle_group_relay_confirmation_task::ReadyToHandleGroupRelayConfirmationTask,
-    queue::event_queue::{EventPublisher, EventQueue},
+    queue::{event_queue::EventQueue, EventPublisher},
 };
 use async_trait::async_trait;
 use parking_lot::RwLock;

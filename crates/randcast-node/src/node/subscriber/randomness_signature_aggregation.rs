@@ -1,15 +1,15 @@
-use super::types::Subscriber;
+use super::Subscriber;
 use crate::node::{
     algorithm::bls::{BLSCore, MockBLSCore},
-    contract_client::adapter_client::{AdapterTransactions, AdapterViews, MockAdapterClient},
-    dal::{cache::RandomnessResultCache, types::ChainIdentity},
-    error::errors::NodeResult,
-    event::{
-        ready_to_fulfill_randomness_task::ReadyToFulfillRandomnessTask,
-        types::{Event, Topic},
+    contract_client::{
+        adapter::{AdapterTransactions, AdapterViews},
+        rpc_mock::adapter::MockAdapterClient,
     },
-    queue::event_queue::{EventQueue, EventSubscriber},
-    scheduler::dynamic::{DynamicTaskScheduler, SimpleDynamicTaskScheduler},
+    dal::{cache::RandomnessResultCache, types::ChainIdentity},
+    error::NodeResult,
+    event::{ready_to_fulfill_randomness_task::ReadyToFulfillRandomnessTask, types::Topic, Event},
+    queue::{event_queue::EventQueue, EventSubscriber},
+    scheduler::{dynamic::SimpleDynamicTaskScheduler, TaskScheduler},
 };
 use async_trait::async_trait;
 use log::{error, info};

@@ -1,25 +1,28 @@
-use super::types::{CommitterClientHandler, Subscriber};
+use super::Subscriber;
 use crate::node::{
     algorithm::bls::{BLSCore, MockBLSCore},
-    committer::committer_client::{CommitterClient, CommitterService, MockCommitterClient},
-    contract_client::types::Group as ContractGroup,
+    committer::{
+        client::MockCommitterClient, CommitterClient, CommitterClientHandler, CommitterService,
+    },
     contract_client::{
-        adapter_client::{AdapterViews, MockAdapterClient},
-        controller_client::{ControllerViews, MockControllerClient},
+        adapter::AdapterViews, controller::ControllerViews, types::Group as ContractGroup,
+    },
+    contract_client::{
+        rpc_mock::adapter::MockAdapterClient, rpc_mock::controller::MockControllerClient,
     },
     dal::types::{GroupRelayConfirmation, GroupRelayConfirmationTask, Status, TaskType},
     dal::{
-        api::{GroupInfoFetcher, SignatureResultCacheFetcher, SignatureResultCacheUpdater},
         cache::{GroupRelayConfirmationResultCache, InMemorySignatureResultCache},
         types::ChainIdentity,
+        {GroupInfoFetcher, SignatureResultCacheFetcher, SignatureResultCacheUpdater},
     },
-    error::errors::{NodeError, NodeResult},
+    error::{NodeError, NodeResult},
     event::{
         ready_to_handle_group_relay_confirmation_task::ReadyToHandleGroupRelayConfirmationTask,
-        types::{Event, Topic},
+        types::Topic, Event,
     },
-    queue::event_queue::{EventQueue, EventSubscriber},
-    scheduler::dynamic::{DynamicTaskScheduler, SimpleDynamicTaskScheduler},
+    queue::{event_queue::EventQueue, EventSubscriber},
+    scheduler::{dynamic::SimpleDynamicTaskScheduler, TaskScheduler},
 };
 use async_trait::async_trait;
 use log::{error, info};

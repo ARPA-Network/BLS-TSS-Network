@@ -1,13 +1,13 @@
-use crate::node::error::errors::NodeResult;
+use crate::node::error::NodeResult;
 use threshold_bls::{
     curve::bls12381::{PairingCurve as BLS12_381, Scalar, G1},
     poly::Eval,
     sig::{G1Scheme, Share, SignatureScheme, ThresholdScheme},
 };
 
-pub struct MockBLSCore {}
+pub(crate) struct MockBLSCore {}
 
-pub trait BLSCore {
+pub(crate) trait BLSCore {
     /// Partially signs a message with a share of the private key
     fn partial_sign(&self, private: &Share<Scalar>, msg: &[u8]) -> NodeResult<Vec<u8>>;
 

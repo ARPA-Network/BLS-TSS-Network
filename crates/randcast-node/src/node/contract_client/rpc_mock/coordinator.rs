@@ -1,7 +1,8 @@
-use self::coordinator::transactions_client::TransactionsClient as CoordinatorTransactionsClient;
-use self::coordinator::views_client::ViewsClient as CoordinatorViewsClient;
-use self::coordinator::{BlsKeysReply, PublishRequest};
-use crate::node::error::errors::{NodeError, NodeResult};
+use self::coordinator_stub::transactions_client::TransactionsClient as CoordinatorTransactionsClient;
+use self::coordinator_stub::views_client::ViewsClient as CoordinatorViewsClient;
+use self::coordinator_stub::{BlsKeysReply, PublishRequest};
+use crate::node::contract_client::coordinator::{CoordinatorTransactions, CoordinatorViews};
+use crate::node::error::{NodeError, NodeResult};
 use crate::node::ServiceClient;
 use async_trait::async_trait;
 use dkg_core::{
@@ -14,40 +15,8 @@ use threshold_bls::curve::bls12381::Curve;
 use tonic::metadata::MetadataValue;
 use tonic::Request;
 
-pub mod coordinator {
-    include!("../../../stub/coordinator.rs");
-}
-
-#[async_trait]
-pub trait CoordinatorTransactions {
-    /// Participant publishes their data and depending on the phase the data gets inserted
-    /// in the shares, responses or justifications mapping. Reverts if the participant
-    /// has already published their data for a phase or if the DKG has ended.
-    async fn publish(&self, value: Vec<u8>) -> NodeResult<()>;
-}
-
-#[async_trait]
-pub trait CoordinatorViews {
-    // Helpers to fetch data in the mappings. If a participant has registered but not
-    // published their data for a phase, the array element at their index is expected to be 0
-
-    /// Gets the participants' shares
-    async fn get_shares(&self) -> NodeResult<Vec<Vec<u8>>>;
-
-    /// Gets the participants' responses
-    async fn get_responses(&self) -> NodeResult<Vec<Vec<u8>>>;
-
-    /// Gets the participants' justifications
-    async fn get_justifications(&self) -> NodeResult<Vec<Vec<u8>>>;
-
-    /// Gets the participants' ethereum addresses
-    async fn get_participants(&self) -> NodeResult<Vec<String>>;
-
-    /// Gets the participants' BLS keys along with the thershold of the DKG
-    async fn get_bls_keys(&self) -> NodeResult<(usize, Vec<Vec<u8>>)>;
-
-    /// Returns the current phase of the DKG.
-    async fn in_phase(&self) -> NodeResult<usize>;
+pub mod coordinator_stub {
+    include!("../../../../stub/coordinator.rs");
 }
 
 pub struct MockCoordinatorClient {

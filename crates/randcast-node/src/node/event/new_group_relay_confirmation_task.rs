@@ -1,6 +1,6 @@
 use crate::node::dal::types::GroupRelayConfirmationTask;
 
-use super::types::{Event, Topic};
+use super::{types::Topic, Event};
 
 #[derive(Clone)]
 pub struct NewGroupRelayConfirmationTask {

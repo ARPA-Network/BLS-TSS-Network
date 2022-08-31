@@ -1,34 +1,19 @@
-use self::controller::{
+use self::controller_stub::{
     transactions_client::TransactionsClient as ControllerTransactionsClient,
     views_client::ViewsClient as ControllerViewsClient, CommitDkgRequest, GetGroupRequest,
     GroupReply, Member, NodeRegisterRequest, PostProcessDkgRequest,
 };
-use self::controller::{DkgTaskReply, GroupRelayTaskReply, MineRequest};
+use self::controller_stub::{DkgTaskReply, GroupRelayTaskReply, MineRequest};
+use crate::node::contract_client::controller::{ControllerTransactions, ControllerViews};
 use crate::node::dal::types::{DKGTask, Group, GroupRelayTask, Member as ModelMember};
-use crate::node::error::errors::{NodeError, NodeResult};
+use crate::node::error::{NodeError, NodeResult};
 use crate::node::ServiceClient;
 use async_trait::async_trait;
 use std::collections::BTreeMap;
 use tonic::{Code, Request};
 
-pub mod controller {
-    include!("../../../stub/controller.rs");
-}
-
-#[async_trait]
-pub trait ControllerTransactions {
-    async fn node_register(&self, id_public_key: Vec<u8>) -> NodeResult<()>;
-
-    async fn commit_dkg(
-        &self,
-        group_index: usize,
-        group_epoch: usize,
-        public_key: Vec<u8>,
-        partial_public_key: Vec<u8>,
-        disqualified_nodes: Vec<String>,
-    ) -> NodeResult<()>;
-
-    async fn post_process_dkg(&self, group_index: usize, group_epoch: usize) -> NodeResult<()>;
+pub mod controller_stub {
+    include!("../../../../stub/controller.rs");
 }
 
 #[async_trait]
@@ -38,11 +23,6 @@ pub trait ControllerMockHelper {
     async fn emit_dkg_task(&self) -> NodeResult<DKGTask>;
 
     async fn emit_group_relay_task(&self) -> NodeResult<GroupRelayTask>;
-}
-
-#[async_trait]
-pub trait ControllerViews {
-    async fn get_group(&self, group_index: usize) -> NodeResult<Group>;
 }
 
 pub struct MockControllerClient {

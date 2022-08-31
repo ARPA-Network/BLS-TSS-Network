@@ -1,12 +1,12 @@
-use super::types::Listener;
+use super::Listener;
 use crate::node::{
     dal::{
-        api::{GroupInfoFetcher, SignatureResultCacheUpdater},
         cache::{GroupRelayConfirmationResultCache, InMemorySignatureResultCache},
+        {GroupInfoFetcher, SignatureResultCacheUpdater},
     },
-    error::errors::NodeResult,
+    error::NodeResult,
     event::ready_to_fulfill_group_relay_confirmation_task::ReadyToFulfillGroupRelayConfirmationTask,
-    queue::event_queue::{EventPublisher, EventQueue},
+    queue::{event_queue::EventQueue, EventPublisher},
 };
 use async_trait::async_trait;
 use parking_lot::RwLock;
