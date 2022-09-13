@@ -228,10 +228,10 @@ pub mod coordinator_tests {
     use crate::node::contract_client::coordinator::CoordinatorTransactions;
     use crate::node::dal::types::GeneralChainIdentity;
     use ethers::abi::Tokenize;
+    use ethers::prelude::*;
     use ethers::signers::coins_bip39::English;
     use ethers::utils::Anvil;
     use ethers::utils::AnvilInstance;
-    use ethers::{abi::AbiDecode, prelude::*, utils::keccak256};
     use std::env;
     use std::path::PathBuf;
     use std::{convert::TryFrom, sync::Arc, time::Duration};
@@ -367,43 +367,5 @@ pub mod coordinator_tests {
         println!("{:?}", wallet1);
         println!("{:?}", wallet2);
         println!("{:?}", wallet3);
-    }
-
-    #[tokio::test]
-    async fn test_subscribe_logs() {
-        let anvil = start_chain();
-        let client = Provider::<Http>::try_from(&anvil.endpoint()).unwrap();
-
-        let client = Arc::new(client);
-
-        let last_block = client
-            .get_block(BlockNumber::Latest)
-            .await
-            .unwrap()
-            .unwrap()
-            .number
-            .unwrap();
-        println!("last_block: {}", last_block);
-
-        let erc20_transfer_filter =
-            Filter::new()
-                .from_block(last_block - 25)
-                .topic0(ValueOrArray::Value(H256::from(keccak256(
-                    "Transfer(address,address,uint256)",
-                ))));
-
-        let mut stream = client.watch(&erc20_transfer_filter).await.unwrap();
-
-        while let Some(log) = stream.next().await {
-            println!(
-                "block: {:?}, tx: {:?}, token: {:?}, from: {:?}, to: {:?}, amount: {:?}",
-                log.block_number,
-                log.transaction_hash,
-                log.address,
-                Address::from(log.topics[1]),
-                Address::from(log.topics[2]),
-                U256::decode(log.data)
-            );
-        }
     }
 }

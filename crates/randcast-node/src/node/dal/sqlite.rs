@@ -662,7 +662,7 @@ impl GroupInfoUpdater for GroupInfoDBClient {
             e
         })?;
 
-        let members: BTreeMap<String, Member> = task
+        let members: BTreeMap<Address, Member> = task
             .members
             .iter()
             .map(|(address, index)| {
@@ -672,7 +672,7 @@ impl GroupInfoUpdater for GroupInfoDBClient {
                     rpc_endpint: None,
                     partial_public_key: None,
                 };
-                (address.to_string(), member)
+                (*address, member)
             })
             .collect();
 
