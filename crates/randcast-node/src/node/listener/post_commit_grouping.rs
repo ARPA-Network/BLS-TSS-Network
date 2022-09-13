@@ -1,9 +1,9 @@
 use super::Listener;
 use crate::node::{
-    contract_client::{controller::ControllerViews, rpc_mock::controller::MockControllerClient},
+    contract_client::adapter::{AdapterClientBuilder, AdapterViews},
     dal::{
-        types::{ChainIdentity, DKGStatus},
-        {GroupInfoFetcher, GroupInfoUpdater},
+        types::DKGStatus,
+        ChainIdentity, {GroupInfoFetcher, GroupInfoUpdater},
     },
     error::{NodeError, NodeResult},
     event::dkg_success::DKGSuccess,
@@ -15,19 +15,24 @@ use parking_lot::RwLock;
 use std::sync::Arc;
 use tokio_retry::{strategy::FixedInterval, RetryIf};
 
-pub struct MockPostCommitGroupingListener<G: GroupInfoFetcher + GroupInfoUpdater + Sync + Send> {
-    main_chain_identity: Arc<RwLock<ChainIdentity>>,
+pub struct PostCommitGroupingListener<
+    G: GroupInfoFetcher + GroupInfoUpdater,
+    I: ChainIdentity + AdapterClientBuilder,
+> {
+    main_chain_identity: Arc<RwLock<I>>,
     group_cache: Arc<RwLock<G>>,
     eq: Arc<RwLock<EventQueue>>,
 }
 
-impl<G: GroupInfoFetcher + GroupInfoUpdater + Sync + Send> MockPostCommitGroupingListener<G> {
+impl<G: GroupInfoFetcher + GroupInfoUpdater, I: ChainIdentity + AdapterClientBuilder>
+    PostCommitGroupingListener<G, I>
+{
     pub fn new(
-        main_chain_identity: Arc<RwLock<ChainIdentity>>,
+        main_chain_identity: Arc<RwLock<I>>,
         group_cache: Arc<RwLock<G>>,
         eq: Arc<RwLock<EventQueue>>,
     ) -> Self {
-        MockPostCommitGroupingListener {
+        PostCommitGroupingListener {
             main_chain_identity,
             group_cache,
             eq,
@@ -35,8 +40,8 @@ impl<G: GroupInfoFetcher + GroupInfoUpdater + Sync + Send> MockPostCommitGroupin
     }
 }
 
-impl<G: GroupInfoFetcher + GroupInfoUpdater + Sync + Send> EventPublisher<DKGSuccess>
-    for MockPostCommitGroupingListener<G>
+impl<G: GroupInfoFetcher + GroupInfoUpdater, I: ChainIdentity + AdapterClientBuilder>
+    EventPublisher<DKGSuccess> for PostCommitGroupingListener<G, I>
 {
     fn publish(&self, event: DKGSuccess) {
         self.eq.read().publish(event);
@@ -44,19 +49,18 @@ impl<G: GroupInfoFetcher + GroupInfoUpdater + Sync + Send> EventPublisher<DKGSuc
 }
 
 #[async_trait]
-impl<G: GroupInfoFetcher + GroupInfoUpdater + Sync + Send> Listener
-    for MockPostCommitGroupingListener<G>
+impl<
+        G: GroupInfoFetcher + GroupInfoUpdater + Sync + Send,
+        I: ChainIdentity + AdapterClientBuilder + Sync + Send,
+    > Listener for PostCommitGroupingListener<G, I>
 {
     async fn start(mut self) -> NodeResult<()> {
-        let rpc_endpoint = self
+        let id_address = self.main_chain_identity.read().get_id_address();
+
+        let client = self
             .main_chain_identity
             .read()
-            .get_provider_rpc_endpoint()
-            .to_string();
-
-        let id_address = self.main_chain_identity.read().get_id_address().to_string();
-
-        let client = MockControllerClient::new(rpc_endpoint, id_address);
+            .build_adapter_client(id_address);
 
         let retry_strategy = FixedInterval::from_millis(2000);
 

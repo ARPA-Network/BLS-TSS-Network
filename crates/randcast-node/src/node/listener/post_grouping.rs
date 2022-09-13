@@ -1,6 +1,6 @@
 use super::Listener;
 use crate::node::{
-    dal::{cache::InMemoryBlockInfoCache, types::DKGStatus},
+    dal::types::DKGStatus,
     dal::{BlockInfoFetcher, GroupInfoFetcher, GroupInfoUpdater},
     error::NodeResult,
     event::dkg_post_process::DKGPostProcess,
@@ -13,19 +13,19 @@ use std::sync::Arc;
 
 pub const DEFAULT_DKG_TIMEOUT_DURATION: usize = 10 * 4;
 
-pub struct MockPostGroupingListener<G: GroupInfoFetcher + GroupInfoUpdater + Sync + Send> {
-    block_cache: Arc<RwLock<InMemoryBlockInfoCache>>,
+pub struct PostGroupingListener<B: BlockInfoFetcher, G: GroupInfoFetcher + GroupInfoUpdater> {
+    block_cache: Arc<RwLock<B>>,
     group_cache: Arc<RwLock<G>>,
     eq: Arc<RwLock<EventQueue>>,
 }
 
-impl<G: GroupInfoFetcher + GroupInfoUpdater + Sync + Send> MockPostGroupingListener<G> {
+impl<B: BlockInfoFetcher, G: GroupInfoFetcher + GroupInfoUpdater> PostGroupingListener<B, G> {
     pub fn new(
-        block_cache: Arc<RwLock<InMemoryBlockInfoCache>>,
+        block_cache: Arc<RwLock<B>>,
         group_cache: Arc<RwLock<G>>,
         eq: Arc<RwLock<EventQueue>>,
     ) -> Self {
-        MockPostGroupingListener {
+        PostGroupingListener {
             block_cache,
             group_cache,
             eq,
@@ -33,8 +33,8 @@ impl<G: GroupInfoFetcher + GroupInfoUpdater + Sync + Send> MockPostGroupingListe
     }
 }
 
-impl<G: GroupInfoFetcher + GroupInfoUpdater + Sync + Send> EventPublisher<DKGPostProcess>
-    for MockPostGroupingListener<G>
+impl<B: BlockInfoFetcher, G: GroupInfoFetcher + GroupInfoUpdater> EventPublisher<DKGPostProcess>
+    for PostGroupingListener<B, G>
 {
     fn publish(&self, event: DKGPostProcess) {
         self.eq.read().publish(event);
@@ -42,8 +42,8 @@ impl<G: GroupInfoFetcher + GroupInfoUpdater + Sync + Send> EventPublisher<DKGPos
 }
 
 #[async_trait]
-impl<G: GroupInfoFetcher + GroupInfoUpdater + Sync + Send> Listener
-    for MockPostGroupingListener<G>
+impl<B: BlockInfoFetcher + Sync + Send, G: GroupInfoFetcher + GroupInfoUpdater + Sync + Send>
+    Listener for PostGroupingListener<B, G>
 {
     async fn start(mut self) -> NodeResult<()> {
         loop {

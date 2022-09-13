@@ -5,7 +5,7 @@ use threshold_bls::{
     sig::{G1Scheme, Share, SignatureScheme, ThresholdScheme},
 };
 
-pub(crate) struct MockBLSCore {}
+pub(crate) struct SimpleBLSCore {}
 
 pub(crate) trait BLSCore {
     /// Partially signs a message with a share of the private key
@@ -24,7 +24,7 @@ pub(crate) trait BLSCore {
     fn verify(&self, public: &G1, msg: &[u8], sig: &[u8]) -> NodeResult<()>;
 }
 
-impl BLSCore for MockBLSCore {
+impl BLSCore for SimpleBLSCore {
     fn partial_sign(&self, private: &Share<Scalar>, msg: &[u8]) -> NodeResult<Vec<u8>> {
         let partial_signature = G1Scheme::<BLS12_381>::partial_sign(private, msg)?;
         Ok(partial_signature)

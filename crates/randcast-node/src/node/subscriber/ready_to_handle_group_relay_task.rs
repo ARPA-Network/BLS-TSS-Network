@@ -1,14 +1,15 @@
 use super::Subscriber;
 use crate::node::{
-    algorithm::bls::{BLSCore, MockBLSCore},
+    algorithm::bls::{BLSCore, SimpleBLSCore},
     committer::{
         client::MockCommitterClient, CommitterClient, CommitterClientHandler, CommitterService,
     },
+    contract_client::adapter::{AdapterClientBuilder, AdapterViews},
     contract_client::types::Group as ContractGroup,
-    contract_client::{controller::ControllerViews, rpc_mock::controller::MockControllerClient},
-    dal::cache::{GroupRelayResultCache, InMemorySignatureResultCache},
+    dal::cache::GroupRelayResultCache,
     dal::{
-        types::{ChainIdentity, GroupRelayTask, TaskType},
+        types::{GroupRelayTask, TaskType},
+        ChainIdentity,
         {GroupInfoFetcher, SignatureResultCacheFetcher, SignatureResultCacheUpdater},
     },
     error::{NodeError, NodeResult},
@@ -17,26 +18,36 @@ use crate::node::{
     scheduler::{dynamic::SimpleDynamicTaskScheduler, TaskScheduler},
 };
 use async_trait::async_trait;
+use ethers::types::Address;
 use log::{error, info};
 use parking_lot::RwLock;
 use std::sync::Arc;
 use tokio_retry::{strategy::FixedInterval, RetryIf};
 
-pub struct ReadyToHandleGroupRelayTaskSubscriber<G: GroupInfoFetcher + Sync + Send> {
-    main_chain_identity: Arc<RwLock<ChainIdentity>>,
+pub struct ReadyToHandleGroupRelayTaskSubscriber<
+    G: GroupInfoFetcher,
+    I: ChainIdentity + AdapterClientBuilder,
+    C: SignatureResultCacheUpdater<GroupRelayResultCache>
+        + SignatureResultCacheFetcher<GroupRelayResultCache>,
+> {
+    main_chain_identity: Arc<RwLock<I>>,
     group_cache: Arc<RwLock<G>>,
-    group_relay_signature_cache: Arc<RwLock<InMemorySignatureResultCache<GroupRelayResultCache>>>,
+    group_relay_signature_cache: Arc<RwLock<C>>,
     eq: Arc<RwLock<EventQueue>>,
     ts: Arc<RwLock<SimpleDynamicTaskScheduler>>,
 }
 
-impl<G: GroupInfoFetcher + Sync + Send> ReadyToHandleGroupRelayTaskSubscriber<G> {
+impl<
+        G: GroupInfoFetcher,
+        I: ChainIdentity + AdapterClientBuilder,
+        C: SignatureResultCacheUpdater<GroupRelayResultCache>
+            + SignatureResultCacheFetcher<GroupRelayResultCache>,
+    > ReadyToHandleGroupRelayTaskSubscriber<G, I, C>
+{
     pub fn new(
-        main_chain_identity: Arc<RwLock<ChainIdentity>>,
+        main_chain_identity: Arc<RwLock<I>>,
         group_cache: Arc<RwLock<G>>,
-        group_relay_signature_cache: Arc<
-            RwLock<InMemorySignatureResultCache<GroupRelayResultCache>>,
-        >,
+        group_relay_signature_cache: Arc<RwLock<C>>,
         eq: Arc<RwLock<EventQueue>>,
         ts: Arc<RwLock<SimpleDynamicTaskScheduler>>,
     ) -> Self {
@@ -55,19 +66,27 @@ pub trait GroupRelayHandler {
     async fn handle(self) -> NodeResult<()>;
 }
 
-pub struct MockGroupRelayHandler<G: GroupInfoFetcher + Sync + Send> {
-    controller_address: String,
-    id_address: String,
+pub struct GeneralGroupRelayHandler<
+    G: GroupInfoFetcher,
+    I: ChainIdentity + AdapterClientBuilder,
+    C: SignatureResultCacheUpdater<GroupRelayResultCache>
+        + SignatureResultCacheFetcher<GroupRelayResultCache>,
+> {
+    main_chain_identity: Arc<RwLock<I>>,
     tasks: Vec<GroupRelayTask>,
     group_cache: Arc<RwLock<G>>,
-    group_relay_signature_cache: Arc<RwLock<InMemorySignatureResultCache<GroupRelayResultCache>>>,
+    group_relay_signature_cache: Arc<RwLock<C>>,
 }
 
-impl<G: GroupInfoFetcher + Sync + Send> CommitterClientHandler<MockCommitterClient, G>
-    for MockGroupRelayHandler<G>
+impl<
+        G: GroupInfoFetcher,
+        I: ChainIdentity + AdapterClientBuilder,
+        C: SignatureResultCacheUpdater<GroupRelayResultCache>
+            + SignatureResultCacheFetcher<GroupRelayResultCache>,
+    > CommitterClientHandler<MockCommitterClient, G> for GeneralGroupRelayHandler<G, I, C>
 {
-    fn get_id_address(&self) -> &str {
-        &self.id_address
+    fn get_id_address(&self) -> Address {
+        self.main_chain_identity.read().get_id_address()
     }
 
     fn get_group_cache(&self) -> Arc<RwLock<G>> {
@@ -76,10 +95,21 @@ impl<G: GroupInfoFetcher + Sync + Send> CommitterClientHandler<MockCommitterClie
 }
 
 #[async_trait]
-impl<G: GroupInfoFetcher + Sync + Send> GroupRelayHandler for MockGroupRelayHandler<G> {
+impl<
+        G: GroupInfoFetcher + Sync + Send,
+        I: ChainIdentity + AdapterClientBuilder + Sync + Send,
+        C: SignatureResultCacheUpdater<GroupRelayResultCache>
+            + SignatureResultCacheFetcher<GroupRelayResultCache>
+            + Sync
+            + Send,
+    > GroupRelayHandler for GeneralGroupRelayHandler<G, I, C>
+{
     async fn handle(self) -> NodeResult<()> {
-        let client =
-            MockControllerClient::new(self.controller_address.clone(), self.id_address.clone());
+        let main_id_address = self.main_chain_identity.read().get_id_address();
+        let client = self
+            .main_chain_identity
+            .read()
+            .build_adapter_client(main_id_address);
 
         let committers = self.prepare_committer_clients()?;
 
@@ -94,7 +124,7 @@ impl<G: GroupInfoFetcher + Sync + Send> GroupRelayHandler for MockGroupRelayHand
 
             let relayed_group_as_bytes = bincode::serialize(&relayed_group)?;
 
-            let bls_core = MockBLSCore {};
+            let bls_core = SimpleBLSCore {};
 
             let partial_signature = bls_core.partial_sign(
                 self.group_cache.read().get_secret_share()?,
@@ -105,7 +135,7 @@ impl<G: GroupInfoFetcher + Sync + Send> GroupRelayHandler for MockGroupRelayHand
 
             let current_group_index = self.group_cache.read().get_index()?;
 
-            if self.group_cache.read().is_committer(&self.id_address)? {
+            if self.group_cache.read().is_committer(main_id_address)? {
                 if !self
                     .group_relay_signature_cache
                     .read()
@@ -123,7 +153,7 @@ impl<G: GroupInfoFetcher + Sync + Send> GroupRelayHandler for MockGroupRelayHand
                     .write()
                     .add_partial_signature(
                         task.controller_global_epoch,
-                        self.id_address.clone(),
+                        main_id_address,
                         partial_signature.clone(),
                     )?;
             }
@@ -162,8 +192,15 @@ impl<G: GroupInfoFetcher + Sync + Send> GroupRelayHandler for MockGroupRelayHand
     }
 }
 
-impl<G: GroupInfoFetcher + Sync + Send + 'static> Subscriber
-    for ReadyToHandleGroupRelayTaskSubscriber<G>
+impl<
+        G: GroupInfoFetcher + Sync + Send + 'static,
+        I: ChainIdentity + AdapterClientBuilder + Sync + Send + 'static,
+        C: SignatureResultCacheUpdater<GroupRelayResultCache>
+            + SignatureResultCacheFetcher<GroupRelayResultCache>
+            + Sync
+            + Send
+            + 'static,
+    > Subscriber for ReadyToHandleGroupRelayTaskSubscriber<G, I, C>
 {
     fn notify(&self, topic: Topic, payload: Box<dyn Event>) -> NodeResult<()> {
         info!("{:?}", topic);
@@ -175,22 +212,15 @@ impl<G: GroupInfoFetcher + Sync + Send + 'static> Subscriber
 
             let ReadyToHandleGroupRelayTask { tasks } = *Box::from_raw(struct_ptr);
 
-            let controller_address = self
-                .main_chain_identity
-                .read()
-                .get_provider_rpc_endpoint()
-                .to_string();
-
-            let id_address = self.main_chain_identity.read().get_id_address().to_string();
+            let main_chain_identity = self.main_chain_identity.clone();
 
             let group_cache_for_handler = self.group_cache.clone();
 
             let group_relay_signature_cache_for_handler = self.group_relay_signature_cache.clone();
 
             self.ts.write().add_task(async move {
-                let handler = MockGroupRelayHandler {
-                    controller_address,
-                    id_address,
+                let handler = GeneralGroupRelayHandler {
+                    main_chain_identity,
                     tasks,
                     group_cache: group_cache_for_handler,
                     group_relay_signature_cache: group_relay_signature_cache_for_handler,

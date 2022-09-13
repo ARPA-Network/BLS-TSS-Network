@@ -1,7 +1,7 @@
 use super::Listener;
 use crate::node::{
     dal::{
-        cache::{InMemorySignatureResultCache, RandomnessResultCache},
+        cache::RandomnessResultCache,
         {GroupInfoFetcher, SignatureResultCacheUpdater},
     },
     error::NodeResult,
@@ -9,28 +9,32 @@ use crate::node::{
     queue::{event_queue::EventQueue, EventPublisher},
 };
 use async_trait::async_trait;
+use ethers::types::Address;
 use parking_lot::RwLock;
 use std::sync::Arc;
 
-pub struct MockRandomnessSignatureAggregationListener<G: GroupInfoFetcher + Sync + Send> {
+pub struct RandomnessSignatureAggregationListener<
+    G: GroupInfoFetcher,
+    C: SignatureResultCacheUpdater<RandomnessResultCache>,
+> {
     chain_id: usize,
-    id_address: String,
+    id_address: Address,
     group_cache: Arc<RwLock<G>>,
-    randomness_signature_cache: Arc<RwLock<InMemorySignatureResultCache<RandomnessResultCache>>>,
+    randomness_signature_cache: Arc<RwLock<C>>,
     eq: Arc<RwLock<EventQueue>>,
 }
 
-impl<G: GroupInfoFetcher + Sync + Send> MockRandomnessSignatureAggregationListener<G> {
+impl<G: GroupInfoFetcher, C: SignatureResultCacheUpdater<RandomnessResultCache>>
+    RandomnessSignatureAggregationListener<G, C>
+{
     pub fn new(
         chain_id: usize,
-        id_address: String,
+        id_address: Address,
         group_cache: Arc<RwLock<G>>,
-        randomness_signature_cache: Arc<
-            RwLock<InMemorySignatureResultCache<RandomnessResultCache>>,
-        >,
+        randomness_signature_cache: Arc<RwLock<C>>,
         eq: Arc<RwLock<EventQueue>>,
     ) -> Self {
-        MockRandomnessSignatureAggregationListener {
+        RandomnessSignatureAggregationListener {
             chain_id,
             id_address,
             group_cache,
@@ -40,8 +44,8 @@ impl<G: GroupInfoFetcher + Sync + Send> MockRandomnessSignatureAggregationListen
     }
 }
 
-impl<G: GroupInfoFetcher + Sync + Send> EventPublisher<ReadyToFulfillRandomnessTask>
-    for MockRandomnessSignatureAggregationListener<G>
+impl<G: GroupInfoFetcher, C: SignatureResultCacheUpdater<RandomnessResultCache>>
+    EventPublisher<ReadyToFulfillRandomnessTask> for RandomnessSignatureAggregationListener<G, C>
 {
     fn publish(&self, event: ReadyToFulfillRandomnessTask) {
         self.eq.read().publish(event);
@@ -49,10 +53,14 @@ impl<G: GroupInfoFetcher + Sync + Send> EventPublisher<ReadyToFulfillRandomnessT
 }
 
 #[async_trait]
-impl<G: GroupInfoFetcher + Sync + Send> Listener for MockRandomnessSignatureAggregationListener<G> {
+impl<
+        G: GroupInfoFetcher + Sync + Send,
+        C: SignatureResultCacheUpdater<RandomnessResultCache> + Sync + Send,
+    > Listener for RandomnessSignatureAggregationListener<G, C>
+{
     async fn start(mut self) -> NodeResult<()> {
         loop {
-            let is_committer = self.group_cache.read().is_committer(&self.id_address);
+            let is_committer = self.group_cache.read().is_committer(self.id_address);
 
             if let Ok(true) = is_committer {
                 let ready_signatures = self

@@ -1,15 +1,15 @@
 use super::Subscriber;
 use crate::node::{
-    algorithm::dkg::{DKGCore, MockDKGCore},
+    algorithm::dkg::{AllPhasesDKGCore, DKGCore},
     contract_client::{
-        controller::ControllerTransactions,
-        rpc_mock::{controller::MockControllerClient, coordinator::MockCoordinatorClient},
+        controller::{ControllerClientBuilder, ControllerTransactions},
+        coordinator::CoordinatorClientBuilder,
     },
-    dal::GroupInfoUpdater,
     dal::{
-        types::{ChainIdentity, DKGStatus, DKGTask},
+        types::{DKGStatus, DKGTask},
         {GroupInfoFetcher, NodeInfoFetcher},
     },
+    dal::{ChainIdentity, GroupInfoUpdater},
     error::NodeResult,
     event::{run_dkg::RunDKG, types::Topic, Event},
     queue::{event_queue::EventQueue, EventSubscriber},
@@ -22,21 +22,25 @@ use rand::{prelude::ThreadRng, RngCore};
 use std::sync::Arc;
 
 pub struct InGroupingSubscriber<
-    N: NodeInfoFetcher + Sync + Send,
-    G: GroupInfoFetcher + GroupInfoUpdater + Sync + Send,
+    N: NodeInfoFetcher,
+    G: GroupInfoFetcher + GroupInfoUpdater,
+    I: ChainIdentity + ControllerClientBuilder + CoordinatorClientBuilder,
 > {
-    main_chain_identity: Arc<RwLock<ChainIdentity>>,
+    main_chain_identity: Arc<RwLock<I>>,
     node_cache: Arc<RwLock<N>>,
     group_cache: Arc<RwLock<G>>,
     eq: Arc<RwLock<EventQueue>>,
     ts: Arc<RwLock<SimpleDynamicTaskScheduler>>,
 }
 
-impl<N: NodeInfoFetcher + Sync + Send, G: GroupInfoFetcher + GroupInfoUpdater + Sync + Send>
-    InGroupingSubscriber<N, G>
+impl<
+        N: NodeInfoFetcher,
+        G: GroupInfoFetcher + GroupInfoUpdater,
+        I: ChainIdentity + ControllerClientBuilder + CoordinatorClientBuilder,
+    > InGroupingSubscriber<N, G, I>
 {
     pub fn new(
-        main_chain_identity: Arc<RwLock<ChainIdentity>>,
+        main_chain_identity: Arc<RwLock<I>>,
         node_cache: Arc<RwLock<N>>,
         group_cache: Arc<RwLock<G>>,
         eq: Arc<RwLock<EventQueue>>,
@@ -55,13 +59,12 @@ impl<N: NodeInfoFetcher + Sync + Send, G: GroupInfoFetcher + GroupInfoUpdater + 
 pub struct AllInOneDKGHandler<
     F: Fn() -> R,
     R: RngCore,
-    N: NodeInfoFetcher + Sync + Send,
-    G: GroupInfoFetcher + GroupInfoUpdater + Sync + Send,
+    I: ChainIdentity + ControllerClientBuilder + CoordinatorClientBuilder,
+    N: NodeInfoFetcher,
+    G: GroupInfoFetcher + GroupInfoUpdater,
 > {
-    id_address: String,
-    controller_address: String,
-    coordinator_rpc_endpoint: String,
     rng: F,
+    main_chain_identity: Arc<RwLock<I>>,
     node_cache: Arc<RwLock<N>>,
     group_cache: Arc<RwLock<G>>,
 }
@@ -69,23 +72,20 @@ pub struct AllInOneDKGHandler<
 impl<
         F: Fn() -> R,
         R: RngCore,
-        N: NodeInfoFetcher + Sync + Send,
-        G: GroupInfoFetcher + GroupInfoUpdater + Sync + Send,
-    > AllInOneDKGHandler<F, R, N, G>
+        I: ChainIdentity + ControllerClientBuilder + CoordinatorClientBuilder,
+        N: NodeInfoFetcher,
+        G: GroupInfoFetcher + GroupInfoUpdater,
+    > AllInOneDKGHandler<F, R, I, N, G>
 {
     pub fn new(
-        id_address: String,
-        controller_address: String,
-        coordinator_rpc_endpoint: String,
         rng: F,
+        main_chain_identity: Arc<RwLock<I>>,
         node_cache: Arc<RwLock<N>>,
         group_cache: Arc<RwLock<G>>,
     ) -> Self {
         AllInOneDKGHandler {
-            id_address,
-            controller_address,
-            coordinator_rpc_endpoint,
             rng,
+            main_chain_identity,
             node_cache,
             group_cache,
         }
@@ -94,7 +94,7 @@ impl<
 
 #[async_trait]
 pub trait DKGHandler<F, R> {
-    async fn handle(&self, task: DKGTask) -> NodeResult<()>
+    async fn handle(&mut self, task: DKGTask) -> NodeResult<()>
     where
         R: RngCore,
         F: Fn() -> R + 'static;
@@ -104,44 +104,35 @@ pub trait DKGHandler<F, R> {
 impl<
         F: Fn() -> R + Send + Sync + Copy + 'static,
         R: RngCore + 'static,
+        I: ChainIdentity + ControllerClientBuilder + CoordinatorClientBuilder + Sync + Send,
         N: NodeInfoFetcher + Sync + Send,
         G: GroupInfoFetcher + GroupInfoUpdater + Sync + Send,
-    > DKGHandler<F, R> for AllInOneDKGHandler<F, R, N, G>
+    > DKGHandler<F, R> for AllInOneDKGHandler<F, R, I, N, G>
 {
-    async fn handle(&self, task: DKGTask) -> NodeResult<()>
+    async fn handle(&mut self, task: DKGTask) -> NodeResult<()>
     where
         R: RngCore,
         F: Fn() -> R + Send + 'async_trait,
     {
         let node_rpc_endpoint = self.node_cache.read().get_node_rpc_endpoint()?.to_string();
 
-        let controller_client =
-            MockControllerClient::new(self.controller_address.clone(), self.id_address.clone());
-
-        let dkg_core = MockDKGCore {};
+        let controller_client = self.main_chain_identity.read().build_controller_client();
 
         let dkg_private_key = *self.node_cache.read().get_dkg_private_key()?;
-
-        let id_address = self.node_cache.read().get_id_address().to_string();
 
         let task_group_index = task.group_index;
 
         let task_epoch = task.epoch;
 
-        let coordinator_client = MockCoordinatorClient::new(
-            self.coordinator_rpc_endpoint.clone(),
-            id_address,
-            task.group_index,
-            task.epoch,
-        );
+        let coordinator_client = self
+            .main_chain_identity
+            .read()
+            .build_coordinator_client(task.coordinator_address);
+
+        let mut dkg_core = AllPhasesDKGCore::new(coordinator_client);
 
         let output = dkg_core
-            .run_dkg(
-                dkg_private_key,
-                node_rpc_endpoint,
-                self.rng,
-                coordinator_client,
-            )
+            .run_dkg(dkg_private_key, node_rpc_endpoint, self.rng)
             .await?;
 
         let (public_key, partial_public_key, disqualified_nodes) = self
@@ -166,7 +157,8 @@ impl<
 impl<
         N: NodeInfoFetcher + Sync + Send + 'static,
         G: GroupInfoFetcher + GroupInfoUpdater + Sync + Send + 'static,
-    > Subscriber for InGroupingSubscriber<N, G>
+        I: ChainIdentity + ControllerClientBuilder + CoordinatorClientBuilder + Sync + Send + 'static,
+    > Subscriber for InGroupingSubscriber<N, G, I>
 {
     fn notify(&self, topic: Topic, payload: Box<dyn Event>) -> NodeResult<()> {
         info!("{:?}", topic);
@@ -180,25 +172,11 @@ impl<
 
             static RNG_FN: fn() -> ThreadRng = rand::thread_rng;
 
-            let controller_address = self
-                .main_chain_identity
-                .read()
-                .get_provider_rpc_endpoint()
-                .to_string();
+            let chain_identity = self.main_chain_identity.clone();
 
-            let coordinator_address = self
-                .main_chain_identity
-                .read()
-                .get_provider_rpc_endpoint()
-                .to_string();
-
-            let id_address = self.main_chain_identity.read().get_id_address().to_string();
-
-            let handler = AllInOneDKGHandler::new(
-                id_address,
-                controller_address,
-                coordinator_address,
+            let mut handler = AllInOneDKGHandler::new(
                 RNG_FN,
+                chain_identity,
                 self.node_cache.clone(),
                 self.group_cache.clone(),
             );

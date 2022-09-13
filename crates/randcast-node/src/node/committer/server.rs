@@ -3,15 +3,19 @@ use self::committer_stub::{
     CommitPartialSignatureReply, CommitPartialSignatureRequest,
 };
 use crate::node::{
-    algorithm::bls::{BLSCore, MockBLSCore},
+    algorithm::bls::{BLSCore, SimpleBLSCore},
     context::{
         chain::{AdapterChainFetcher, ChainFetcher},
         types::GeneralContext,
         ContextFetcher,
     },
+    contract_client::{
+        adapter::AdapterClientBuilder, controller::ControllerClientBuilder,
+        coordinator::CoordinatorClientBuilder, provider::ChainProviderBuilder,
+    },
     dal::{
         types::RandomnessTask,
-        {BLSTasksFetcher, BLSTasksUpdater, GroupInfoUpdater, NodeInfoFetcher},
+        ChainIdentity, {BLSTasksFetcher, BLSTasksUpdater, GroupInfoUpdater, NodeInfoFetcher},
     },
     error::{GroupError, NodeError},
 };
@@ -22,35 +26,46 @@ use crate::node::{
         {GroupInfoFetcher, SignatureResultCacheFetcher, SignatureResultCacheUpdater},
     },
 };
+use ethers::types::Address;
 use futures::Future;
 use parking_lot::RwLock;
 use std::sync::Arc;
 use tonic::{transport::Server, Request, Response, Status};
 
 pub mod committer_stub {
-    include!("../../../stub/committer.rs");
+    include!("../../../rpc_stub/committer.rs");
 }
 
 pub(crate) struct BLSCommitterServiceServer<
     N: NodeInfoFetcher,
     G: GroupInfoFetcher + GroupInfoUpdater,
     T: BLSTasksFetcher<RandomnessTask> + BLSTasksUpdater<RandomnessTask>,
+    I: ChainIdentity
+        + ControllerClientBuilder
+        + CoordinatorClientBuilder
+        + AdapterClientBuilder
+        + ChainProviderBuilder,
 > {
-    id_address: String,
+    id_address: Address,
     group_cache: Arc<RwLock<G>>,
-    context: Arc<RwLock<GeneralContext<N, G, T>>>,
+    context: Arc<RwLock<GeneralContext<N, G, T, I>>>,
 }
 
 impl<
         N: NodeInfoFetcher,
         G: GroupInfoFetcher + GroupInfoUpdater,
         T: BLSTasksFetcher<RandomnessTask> + BLSTasksUpdater<RandomnessTask>,
-    > BLSCommitterServiceServer<N, G, T>
+        I: ChainIdentity
+            + ControllerClientBuilder
+            + CoordinatorClientBuilder
+            + AdapterClientBuilder
+            + ChainProviderBuilder,
+    > BLSCommitterServiceServer<N, G, T, I>
 {
     pub fn new(
-        id_address: String,
+        id_address: Address,
         group_cache: Arc<RwLock<G>>,
-        context: Arc<RwLock<GeneralContext<N, G, T>>>,
+        context: Arc<RwLock<GeneralContext<N, G, T, I>>>,
     ) -> Self {
         BLSCommitterServiceServer {
             id_address,
@@ -65,7 +80,15 @@ impl<
         N: NodeInfoFetcher + Sync + Send + 'static,
         G: GroupInfoFetcher + GroupInfoUpdater + Sync + Send + 'static,
         T: BLSTasksFetcher<RandomnessTask> + BLSTasksUpdater<RandomnessTask> + Sync + Send + 'static,
-    > CommitterService for BLSCommitterServiceServer<N, G, T>
+        I: ChainIdentity
+            + ControllerClientBuilder
+            + CoordinatorClientBuilder
+            + AdapterClientBuilder
+            + ChainProviderBuilder
+            + Sync
+            + Send
+            + 'static,
+    > CommitterService for BLSCommitterServiceServer<N, G, T, I>
 {
     async fn commit_partial_signature(
         &self,
@@ -77,14 +100,19 @@ impl<
             return Err(Status::not_found(GroupError::GroupNotReady.to_string()));
         }
 
-        if let Err(_) | Ok(false) = self.group_cache.read().is_committer(&self.id_address) {
+        if let Err(_) | Ok(false) = self.group_cache.read().is_committer(self.id_address) {
             return Err(Status::not_found(NodeError::NotCommitter.to_string()));
         }
 
-        if let Ok(member) = self.group_cache.read().get_member(&req.id_address) {
+        let req_id_address: Address = req
+            .id_address
+            .parse()
+            .map_err(|_| Status::invalid_argument(NodeError::AddressFormatError.to_string()))?;
+
+        if let Ok(member) = self.group_cache.read().get_member(req_id_address) {
             let partial_public_key = member.partial_public_key.unwrap();
 
-            let bls_core = MockBLSCore {};
+            let bls_core = SimpleBLSCore {};
 
             bls_core
                 .partial_verify(&partial_public_key, &req.message, &req.partial_signature)
@@ -146,10 +174,12 @@ impl<
                         .write()
                         .add_partial_signature(
                             req.signature_index as usize,
-                            req.id_address,
+                            req_id_address,
                             req.partial_signature,
                         )
-                        .unwrap();
+                        .map_err(|_| {
+                            Status::internal(NodeError::CommitterCacheNotExisted.to_string())
+                        })?;
                 }
 
                 TaskType::GroupRelay => {
@@ -190,10 +220,12 @@ impl<
                         .write()
                         .add_partial_signature(
                             req.signature_index as usize,
-                            req.id_address,
+                            req_id_address,
                             req.partial_signature,
                         )
-                        .unwrap();
+                        .map_err(|_| {
+                            Status::internal(NodeError::CommitterCacheNotExisted.to_string())
+                        })?;
                 }
                 TaskType::GroupRelayConfirmation => {
                     if chain_id == 0 || !self.context.read().contains_chain(chain_id) {
@@ -241,10 +273,12 @@ impl<
                         .write()
                         .add_partial_signature(
                             req.signature_index as usize,
-                            req.id_address,
+                            req_id_address,
                             req.partial_signature,
                         )
-                        .unwrap();
+                        .map_err(|_| {
+                            Status::internal(NodeError::CommitterCacheNotExisted.to_string())
+                        })?;
                 }
             }
 
@@ -260,9 +294,17 @@ pub async fn start_committer_server_with_shutdown<
     N: NodeInfoFetcher + Sync + Send + 'static,
     G: GroupInfoFetcher + GroupInfoUpdater + Sync + Send + 'static,
     T: BLSTasksFetcher<RandomnessTask> + BLSTasksUpdater<RandomnessTask> + Sync + Send + 'static,
+    I: ChainIdentity
+        + ControllerClientBuilder
+        + CoordinatorClientBuilder
+        + AdapterClientBuilder
+        + ChainProviderBuilder
+        + Sync
+        + Send
+        + 'static,
 >(
     endpoint: String,
-    context: Arc<RwLock<GeneralContext<N, G, T>>>,
+    context: Arc<RwLock<GeneralContext<N, G, T, I>>>,
     shutdown_signal: F,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let addr = endpoint.parse()?;
@@ -272,8 +314,7 @@ pub async fn start_committer_server_with_shutdown<
         .get_main_chain()
         .get_chain_identity()
         .read()
-        .get_id_address()
-        .to_string();
+        .get_id_address();
 
     let group_cache = context.read().get_main_chain().get_group_cache();
 
@@ -291,9 +332,17 @@ pub async fn start_committer_server<
     N: NodeInfoFetcher + Sync + Send + 'static,
     G: GroupInfoFetcher + GroupInfoUpdater + Sync + Send + 'static,
     T: BLSTasksFetcher<RandomnessTask> + BLSTasksUpdater<RandomnessTask> + Sync + Send + 'static,
+    I: ChainIdentity
+        + ControllerClientBuilder
+        + CoordinatorClientBuilder
+        + AdapterClientBuilder
+        + ChainProviderBuilder
+        + Sync
+        + Send
+        + 'static,
 >(
     endpoint: String,
-    context: Arc<RwLock<GeneralContext<N, G, T>>>,
+    context: Arc<RwLock<GeneralContext<N, G, T, I>>>,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let addr = endpoint.parse()?;
 
@@ -302,8 +351,7 @@ pub async fn start_committer_server<
         .get_main_chain()
         .get_chain_identity()
         .read()
-        .get_id_address()
-        .to_string();
+        .get_id_address();
 
     let group_cache = context.read().get_main_chain().get_group_cache();
 

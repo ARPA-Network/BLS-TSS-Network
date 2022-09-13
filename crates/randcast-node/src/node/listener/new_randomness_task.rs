@@ -1,39 +1,43 @@
 use super::Listener;
 use crate::node::{
-    contract_client::rpc_mock::adapter::{AdapterMockHelper, MockAdapterClient},
-    dal::{types::ChainIdentity, BLSTasksFetcher},
+    contract_client::adapter::{AdapterClientBuilder, AdapterLogs},
     dal::{types::RandomnessTask, BLSTasksUpdater},
+    dal::{BLSTasksFetcher, ChainIdentity},
     error::{NodeError, NodeResult},
     event::new_randomness_task::NewRandomnessTask,
     queue::{event_queue::EventQueue, EventPublisher},
 };
 use async_trait::async_trait;
+use ethers::types::Address;
 use log::{error, info};
 use parking_lot::RwLock;
 use std::sync::Arc;
 use tokio_retry::{strategy::FixedInterval, RetryIf};
 
-pub struct MockNewRandomnessTaskListener<
+pub struct NewRandomnessTaskListener<
     T: BLSTasksFetcher<RandomnessTask> + BLSTasksUpdater<RandomnessTask>,
+    I: ChainIdentity + AdapterClientBuilder,
 > {
     chain_id: usize,
-    id_address: String,
-    chain_identity: Arc<RwLock<ChainIdentity>>,
+    id_address: Address,
+    chain_identity: Arc<RwLock<I>>,
     randomness_tasks_cache: Arc<RwLock<T>>,
     eq: Arc<RwLock<EventQueue>>,
 }
 
-impl<T: BLSTasksFetcher<RandomnessTask> + BLSTasksUpdater<RandomnessTask>>
-    MockNewRandomnessTaskListener<T>
+impl<
+        T: BLSTasksFetcher<RandomnessTask> + BLSTasksUpdater<RandomnessTask>,
+        I: ChainIdentity + AdapterClientBuilder,
+    > NewRandomnessTaskListener<T, I>
 {
     pub fn new(
         chain_id: usize,
-        id_address: String,
-        chain_identity: Arc<RwLock<ChainIdentity>>,
+        id_address: Address,
+        chain_identity: Arc<RwLock<I>>,
         randomness_tasks_cache: Arc<RwLock<T>>,
         eq: Arc<RwLock<EventQueue>>,
     ) -> Self {
-        MockNewRandomnessTaskListener {
+        NewRandomnessTaskListener {
             chain_id,
             id_address,
             chain_identity,
@@ -43,8 +47,10 @@ impl<T: BLSTasksFetcher<RandomnessTask> + BLSTasksUpdater<RandomnessTask>>
     }
 }
 
-impl<T: BLSTasksFetcher<RandomnessTask> + BLSTasksUpdater<RandomnessTask>>
-    EventPublisher<NewRandomnessTask> for MockNewRandomnessTaskListener<T>
+impl<
+        T: BLSTasksFetcher<RandomnessTask> + BLSTasksUpdater<RandomnessTask>,
+        I: ChainIdentity + AdapterClientBuilder,
+    > EventPublisher<NewRandomnessTask> for NewRandomnessTaskListener<T, I>
 {
     fn publish(&self, event: NewRandomnessTask) {
         self.eq.read().publish(event);
@@ -52,55 +58,57 @@ impl<T: BLSTasksFetcher<RandomnessTask> + BLSTasksUpdater<RandomnessTask>>
 }
 
 #[async_trait]
-impl<T: BLSTasksFetcher<RandomnessTask> + BLSTasksUpdater<RandomnessTask> + Sync + Send> Listener
-    for MockNewRandomnessTaskListener<T>
+impl<
+        T: BLSTasksFetcher<RandomnessTask> + BLSTasksUpdater<RandomnessTask> + Sync + Send + 'static,
+        I: ChainIdentity + AdapterClientBuilder + Sync + Send,
+    > Listener for NewRandomnessTaskListener<T, I>
 {
     async fn start(mut self) -> NodeResult<()> {
-        let rpc_endpoint = self
+        let client = self
             .chain_identity
             .read()
-            .get_provider_rpc_endpoint()
-            .to_string();
-
-        let client = MockAdapterClient::new(rpc_endpoint, self.id_address.to_string());
+            .build_adapter_client(self.id_address);
 
         let retry_strategy = FixedInterval::from_millis(2000);
 
-        loop {
-            if let Err(err) = RetryIf::spawn(
-                retry_strategy.clone(),
-                || async {
-                    let task_reply = client.emit_signature_task().await;
+        if let Err(err) = RetryIf::spawn(
+            retry_strategy.clone(),
+            || async {
+                let chain_id = self.chain_id;
+                let randomness_tasks_cache = self.randomness_tasks_cache.clone();
+                let eq = self.eq.clone();
 
-                    if let Ok(randomness_task) = task_reply {
-                        if let Ok(false) = self
-                            .randomness_tasks_cache
+                client
+                    .subscribe_randomness_task(Box::new(move |randomness_task| {
+                        if let Ok(false) = randomness_tasks_cache
                             .read()
                             .contains(randomness_task.index)
                         {
                             info!("received new randomness task. {:?}", randomness_task);
 
-                            self.randomness_tasks_cache
+                            randomness_tasks_cache
                                 .write()
                                 .add(randomness_task.clone())?;
 
-                            self.publish(NewRandomnessTask::new(self.chain_id, randomness_task));
+                            eq.read()
+                                .publish(NewRandomnessTask::new(chain_id, randomness_task));
                         }
-                    }
+                        Ok(())
+                    }))
+                    .await?;
 
-                    NodeResult::Ok(())
-                },
-                |e: &NodeError| {
-                    error!("listener is interrupted. Retry... Error: {:?}, ", e);
-                    true
-                },
-            )
-            .await
-            {
-                error!("{:?}", err);
-            }
-
-            tokio::time::sleep(std::time::Duration::from_millis(2000)).await;
+                Ok(())
+            },
+            |e: &NodeError| {
+                error!("listener is interrupted. Retry... Error: {:?}, ", e);
+                true
+            },
+        )
+        .await
+        {
+            error!("{:?}", err);
         }
+
+        Ok(())
     }
 }

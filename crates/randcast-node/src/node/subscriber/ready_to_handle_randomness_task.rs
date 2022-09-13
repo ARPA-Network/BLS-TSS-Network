@@ -1,10 +1,10 @@
 use crate::node::{
-    algorithm::bls::{BLSCore, MockBLSCore},
+    algorithm::bls::{BLSCore, SimpleBLSCore},
     committer::{
         client::MockCommitterClient, CommitterClient, CommitterClientHandler, CommitterService,
     },
     dal::{
-        cache::{InMemorySignatureResultCache, RandomnessResultCache},
+        cache::RandomnessResultCache,
         {GroupInfoFetcher, SignatureResultCacheUpdater},
     },
     dal::{
@@ -17,6 +17,7 @@ use crate::node::{
     scheduler::{dynamic::SimpleDynamicTaskScheduler, TaskScheduler},
 };
 use async_trait::async_trait;
+use ethers::types::Address;
 use log::{error, info};
 use parking_lot::RwLock;
 use std::sync::Arc;
@@ -24,23 +25,30 @@ use tokio_retry::{strategy::FixedInterval, RetryIf};
 
 use super::Subscriber;
 
-pub struct ReadyToHandleRandomnessTaskSubscriber<G: GroupInfoFetcher + Sync + Send> {
+pub struct ReadyToHandleRandomnessTaskSubscriber<
+    G: GroupInfoFetcher,
+    C: SignatureResultCacheUpdater<RandomnessResultCache>
+        + SignatureResultCacheFetcher<RandomnessResultCache>,
+> {
     pub chain_id: usize,
-    id_address: String,
+    id_address: Address,
     group_cache: Arc<RwLock<G>>,
-    randomness_signature_cache: Arc<RwLock<InMemorySignatureResultCache<RandomnessResultCache>>>,
+    randomness_signature_cache: Arc<RwLock<C>>,
     eq: Arc<RwLock<EventQueue>>,
     ts: Arc<RwLock<SimpleDynamicTaskScheduler>>,
 }
 
-impl<G: GroupInfoFetcher + Sync + Send> ReadyToHandleRandomnessTaskSubscriber<G> {
+impl<
+        G: GroupInfoFetcher,
+        C: SignatureResultCacheUpdater<RandomnessResultCache>
+            + SignatureResultCacheFetcher<RandomnessResultCache>,
+    > ReadyToHandleRandomnessTaskSubscriber<G, C>
+{
     pub fn new(
         chain_id: usize,
-        id_address: String,
+        id_address: Address,
         group_cache: Arc<RwLock<G>>,
-        randomness_signature_cache: Arc<
-            RwLock<InMemorySignatureResultCache<RandomnessResultCache>>,
-        >,
+        randomness_signature_cache: Arc<RwLock<C>>,
         eq: Arc<RwLock<EventQueue>>,
         ts: Arc<RwLock<SimpleDynamicTaskScheduler>>,
     ) -> Self {
@@ -60,19 +68,26 @@ pub trait RandomnessHandler {
     async fn handle(self) -> NodeResult<()>;
 }
 
-pub struct MockRandomnessHandler<G: GroupInfoFetcher + Sync + Send> {
+pub struct GeneralRandomnessHandler<
+    G: GroupInfoFetcher,
+    C: SignatureResultCacheUpdater<RandomnessResultCache>
+        + SignatureResultCacheFetcher<RandomnessResultCache>,
+> {
     chain_id: usize,
-    id_address: String,
+    id_address: Address,
     tasks: Vec<RandomnessTask>,
     group_cache: Arc<RwLock<G>>,
-    randomness_signature_cache: Arc<RwLock<InMemorySignatureResultCache<RandomnessResultCache>>>,
+    randomness_signature_cache: Arc<RwLock<C>>,
 }
 
-impl<G: GroupInfoFetcher + Sync + Send> CommitterClientHandler<MockCommitterClient, G>
-    for MockRandomnessHandler<G>
+impl<
+        G: GroupInfoFetcher,
+        C: SignatureResultCacheUpdater<RandomnessResultCache>
+            + SignatureResultCacheFetcher<RandomnessResultCache>,
+    > CommitterClientHandler<MockCommitterClient, G> for GeneralRandomnessHandler<G, C>
 {
-    fn get_id_address(&self) -> &str {
-        &self.id_address
+    fn get_id_address(&self) -> Address {
+        self.id_address
     }
 
     fn get_group_cache(&self) -> Arc<RwLock<G>> {
@@ -81,12 +96,19 @@ impl<G: GroupInfoFetcher + Sync + Send> CommitterClientHandler<MockCommitterClie
 }
 
 #[async_trait]
-impl<G: GroupInfoFetcher + Sync + Send> RandomnessHandler for MockRandomnessHandler<G> {
+impl<
+        G: GroupInfoFetcher + Sync + Send,
+        C: SignatureResultCacheUpdater<RandomnessResultCache>
+            + SignatureResultCacheFetcher<RandomnessResultCache>
+            + Sync
+            + Send,
+    > RandomnessHandler for GeneralRandomnessHandler<G, C>
+{
     async fn handle(self) -> NodeResult<()> {
         let committers = self.prepare_committer_clients()?;
 
         for task in self.tasks {
-            let bls_core = MockBLSCore {};
+            let bls_core = SimpleBLSCore {};
 
             let partial_signature = bls_core.partial_sign(
                 self.group_cache.read().get_secret_share()?,
@@ -97,7 +119,7 @@ impl<G: GroupInfoFetcher + Sync + Send> RandomnessHandler for MockRandomnessHand
 
             let current_group_index = self.group_cache.read().get_index()?;
 
-            if self.group_cache.read().is_committer(&self.id_address)? {
+            if self.group_cache.read().is_committer(self.id_address)? {
                 if !self.randomness_signature_cache.read().contains(task.index) {
                     self.randomness_signature_cache.write().add(
                         current_group_index,
@@ -111,7 +133,7 @@ impl<G: GroupInfoFetcher + Sync + Send> RandomnessHandler for MockRandomnessHand
                     .write()
                     .add_partial_signature(
                         task.index,
-                        self.id_address.clone(),
+                        self.id_address,
                         partial_signature.clone(),
                     )?;
             }
@@ -152,8 +174,14 @@ impl<G: GroupInfoFetcher + Sync + Send> RandomnessHandler for MockRandomnessHand
     }
 }
 
-impl<G: GroupInfoFetcher + Sync + Send + 'static> Subscriber
-    for ReadyToHandleRandomnessTaskSubscriber<G>
+impl<
+        G: GroupInfoFetcher + Sync + Send + 'static,
+        C: SignatureResultCacheUpdater<RandomnessResultCache>
+            + SignatureResultCacheFetcher<RandomnessResultCache>
+            + Sync
+            + Send
+            + 'static,
+    > Subscriber for ReadyToHandleRandomnessTaskSubscriber<G, C>
 {
     fn notify(&self, topic: Topic, payload: Box<dyn Event>) -> NodeResult<()> {
         info!("{:?}", topic);
@@ -167,14 +195,14 @@ impl<G: GroupInfoFetcher + Sync + Send + 'static> Subscriber
 
             let chain_id = self.chain_id;
 
-            let id_address = self.id_address.clone();
+            let id_address = self.id_address;
 
             let group_cache_for_handler = self.group_cache.clone();
 
             let randomness_signature_cache_for_handler = self.randomness_signature_cache.clone();
 
             self.ts.write().add_task(async move {
-                let handler = MockRandomnessHandler {
+                let handler = GeneralRandomnessHandler {
                     chain_id,
                     id_address,
                     tasks,

@@ -1,7 +1,7 @@
 use super::Listener;
 use crate::node::{
-    contract_client::rpc_mock::adapter::{AdapterMockHelper, MockAdapterClient},
-    dal::types::ChainIdentity,
+    contract_client::provider::{BlockFetcher, ChainProviderBuilder},
+    dal::ChainIdentity,
     error::{NodeError, NodeResult},
     event::new_block::NewBlock,
     queue::{event_queue::EventQueue, EventPublisher},
@@ -12,72 +12,70 @@ use parking_lot::RwLock;
 use std::sync::Arc;
 use tokio_retry::{strategy::FixedInterval, RetryIf};
 
-pub struct MockBlockListener {
+pub struct BlockListener<I: ChainIdentity + ChainProviderBuilder> {
     chain_id: usize,
-    id_address: String,
-    chain_identity: Arc<RwLock<ChainIdentity>>,
+    chain_identity: Arc<RwLock<I>>,
     eq: Arc<RwLock<EventQueue>>,
 }
 
-impl MockBlockListener {
+impl<I: ChainIdentity + ChainProviderBuilder> BlockListener<I> {
     pub fn new(
         chain_id: usize,
-        id_address: String,
-        chain_identity: Arc<RwLock<ChainIdentity>>,
+        chain_identity: Arc<RwLock<I>>,
         eq: Arc<RwLock<EventQueue>>,
     ) -> Self {
-        MockBlockListener {
+        BlockListener {
             chain_id,
-            id_address,
             chain_identity,
             eq,
         }
     }
 }
 
-impl EventPublisher<NewBlock> for MockBlockListener {
+impl<I: ChainIdentity + ChainProviderBuilder> EventPublisher<NewBlock> for BlockListener<I> {
     fn publish(&self, event: NewBlock) {
         self.eq.read().publish(event);
     }
 }
 
 #[async_trait]
-impl Listener for MockBlockListener {
+impl<I: ChainIdentity + ChainProviderBuilder + Sync + Send + 'static> Listener
+    for BlockListener<I>
+{
     async fn start(mut self) -> NodeResult<()> {
-        let rpc_endpoint = self
-            .chain_identity
-            .read()
-            .get_provider_rpc_endpoint()
-            .to_string();
-
-        let client = MockAdapterClient::new(rpc_endpoint.clone(), self.id_address.to_string());
+        let client = self.chain_identity.read().build_chain_provider();
 
         let retry_strategy = FixedInterval::from_millis(1000);
 
-        loop {
-            if let Err(err) = RetryIf::spawn(
-                retry_strategy.clone(),
-                || async {
-                    let block_height = client.mine(1).await?;
+        if let Err(err) = RetryIf::spawn(
+            retry_strategy.clone(),
+            || async {
+                let chain_id = self.chain_id;
+                let eq = self.eq.clone();
 
-                    self.publish(NewBlock {
-                        chain_id: self.chain_id,
-                        block_height,
-                    });
+                client
+                    .subscribe_new_block_height(Box::new(move |block_height: usize| {
+                        eq.read().publish(NewBlock {
+                            chain_id,
+                            block_height,
+                        });
 
-                    NodeResult::Ok(())
-                },
-                |e: &NodeError| {
-                    error!("listener is interrupted. Retry... Error: {:?}, ", e);
-                    true
-                },
-            )
-            .await
-            {
-                error!("{:?}", err);
-            }
+                        Ok(())
+                    }))
+                    .await?;
 
-            tokio::time::sleep(std::time::Duration::from_millis(1000)).await;
+                Ok(())
+            },
+            |e: &NodeError| {
+                error!("listener is interrupted. Retry... Error: {:?}, ", e);
+                true
+            },
+        )
+        .await
+        {
+            error!("{:?}", err);
         }
+
+        Ok(())
     }
 }

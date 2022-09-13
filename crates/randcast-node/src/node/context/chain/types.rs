@@ -1,5 +1,9 @@
 use crate::node::{
     context::types::GeneralContext,
+    contract_client::{
+        adapter::AdapterClientBuilder, controller::ControllerClientBuilder,
+        coordinator::CoordinatorClientBuilder, provider::ChainProviderBuilder,
+    },
     dal::{
         cache::{
             GroupRelayConfirmationResultCache, GroupRelayResultCache, InMemoryBLSTasksQueue,
@@ -7,22 +11,26 @@ use crate::node::{
             InMemorySignatureResultCache, RandomnessResultCache,
         },
         sqlite::{BLSTasksDBClient, GroupInfoDBClient, NodeInfoDBClient},
-        types::{ChainIdentity, GroupRelayConfirmationTask, GroupRelayTask, RandomnessTask},
+        types::{
+            GeneralChainIdentity, GroupRelayConfirmationTask, GroupRelayTask, MockChainIdentity,
+            RandomnessTask,
+        },
+        ChainIdentity,
         {BLSTasksFetcher, BLSTasksUpdater, GroupInfoFetcher, GroupInfoUpdater, NodeInfoFetcher},
     },
     listener::{
-        block::MockBlockListener,
-        group_relay_confirmation_signature_aggregation::MockGroupRelayConfirmationSignatureAggregationListener,
-        group_relay_signature_aggregation::MockGroupRelaySignatureAggregationListener,
-        new_group_relay_confirmation_task::MockNewGroupRelayConfirmationTaskListener,
-        new_group_relay_task::MockNewGroupRelayTaskListener,
-        new_randomness_task::MockNewRandomnessTaskListener,
-        post_commit_grouping::MockPostCommitGroupingListener,
-        post_grouping::MockPostGroupingListener, pre_grouping::MockPreGroupingListener,
-        randomness_signature_aggregation::MockRandomnessSignatureAggregationListener,
-        ready_to_handle_group_relay_confirmation_task::MockReadyToHandleGroupRelayConfirmationTaskListener,
-        ready_to_handle_group_relay_task::MockReadyToHandleGroupRelayTaskListener,
-        ready_to_handle_randomness_task::MockReadyToHandleRandomnessTaskListener, Listener,
+        block::BlockListener,
+        group_relay_confirmation_signature_aggregation::GroupRelayConfirmationSignatureAggregationListener,
+        group_relay_signature_aggregation::GroupRelaySignatureAggregationListener,
+        new_group_relay_confirmation_task::NewGroupRelayConfirmationTaskListener,
+        new_group_relay_task::NewGroupRelayTaskListener,
+        new_randomness_task::NewRandomnessTaskListener,
+        post_commit_grouping::PostCommitGroupingListener, post_grouping::PostGroupingListener,
+        pre_grouping::PreGroupingListener,
+        randomness_signature_aggregation::RandomnessSignatureAggregationListener,
+        ready_to_handle_group_relay_confirmation_task::ReadyToHandleGroupRelayConfirmationTaskListener,
+        ready_to_handle_group_relay_task::ReadyToHandleGroupRelayTaskListener,
+        ready_to_handle_randomness_task::ReadyToHandleRandomnessTaskListener, Listener,
     },
     scheduler::TaskScheduler,
     subscriber::{
@@ -50,10 +58,11 @@ pub struct GeneralAdapterChain<
     N: NodeInfoFetcher,
     G: GroupInfoFetcher + GroupInfoUpdater,
     T: BLSTasksFetcher<RandomnessTask> + BLSTasksUpdater<RandomnessTask>,
+    I: ChainIdentity + ControllerClientBuilder + CoordinatorClientBuilder + AdapterClientBuilder,
 > {
     id: usize,
     description: String,
-    chain_identity: Arc<RwLock<ChainIdentity>>,
+    chain_identity: Arc<RwLock<I>>,
     block_cache: Arc<RwLock<InMemoryBlockInfoCache>>,
     randomness_tasks_cache: Arc<RwLock<T>>,
     group_relay_confirmation_tasks_cache:
@@ -70,7 +79,18 @@ impl<
         N: NodeInfoFetcher + Sync + Send + 'static,
         G: GroupInfoFetcher + GroupInfoUpdater + Sync + Send + 'static,
         T: BLSTasksFetcher<RandomnessTask> + BLSTasksUpdater<RandomnessTask> + Sync + Send + 'static,
-    > Chain for GeneralAdapterChain<N, G, T>
+        I: ChainIdentity
+            + ControllerClientBuilder
+            + CoordinatorClientBuilder
+            + AdapterClientBuilder
+            + ControllerClientBuilder
+            + CoordinatorClientBuilder
+            + AdapterClientBuilder
+            + ChainProviderBuilder
+            + Sync
+            + Send
+            + 'static,
+    > Chain for GeneralAdapterChain<N, G, T, I>
 {
     type BlockInfoCache = InMemoryBlockInfoCache;
 
@@ -78,18 +98,51 @@ impl<
 
     type RandomnessResultCaches = InMemorySignatureResultCache<RandomnessResultCache>;
 
-    type Context = GeneralContext<N, G, T>;
+    type Context = GeneralContext<N, G, T, I>;
 
-    fn init_listeners(&self, context: &GeneralContext<N, G, T>) {
-        // block
-        let p_block = MockBlockListener::new(
+    type ChainIdentity = I;
+
+    fn init_listeners(&self, context: &GeneralContext<N, G, T, I>) {
+        self.init_block_listeners(context);
+
+        self.init_randomness_listeners(context);
+
+        self.init_group_relay_confirmation_listeners(context);
+    }
+
+    fn init_subscribers(&self, context: &GeneralContext<N, G, T, I>) {
+        self.init_block_subscribers(context);
+
+        self.init_randomness_subscribers(context);
+
+        self.init_group_relay_subscribers(context);
+
+        self.init_group_relay_confirmation_subscribers(context);
+    }
+}
+
+impl<
+        N: NodeInfoFetcher + Sync + Send + 'static,
+        G: GroupInfoFetcher + GroupInfoUpdater + Sync + Send + 'static,
+        T: BLSTasksFetcher<RandomnessTask> + BLSTasksUpdater<RandomnessTask> + Sync + Send + 'static,
+        I: ChainIdentity
+            + ControllerClientBuilder
+            + CoordinatorClientBuilder
+            + AdapterClientBuilder
+            + ChainProviderBuilder
+            + Sync
+            + Send
+            + 'static,
+    > AdapterChain for GeneralAdapterChain<N, G, T, I>
+{
+    type GroupRelayConfirmationTasksQueue = InMemoryBLSTasksQueue<GroupRelayConfirmationTask>;
+
+    type GroupRelayConfirmationResultCaches =
+        InMemorySignatureResultCache<GroupRelayConfirmationResultCache>;
+
+    fn init_block_listeners(&self, context: &Self::Context) {
+        let p_block = BlockListener::new(
             self.id(),
-            context
-                .get_main_chain()
-                .get_node_cache()
-                .read()
-                .get_id_address()
-                .to_string(),
             self.get_chain_identity(),
             context.get_event_queue(),
         );
@@ -102,16 +155,16 @@ impl<
                     error!("{:?}", e);
                 };
             });
+    }
 
-        // randomness
-        let p_new_randomness_task = MockNewRandomnessTaskListener::new(
+    fn init_randomness_listeners(&self, context: &Self::Context) {
+        let p_new_randomness_task = NewRandomnessTaskListener::new(
             self.id(),
             context
                 .get_main_chain()
                 .get_node_cache()
                 .read()
-                .get_id_address()
-                .to_string(),
+                .get_id_address(),
             self.get_chain_identity(),
             self.get_randomness_tasks_cache(),
             context.get_event_queue(),
@@ -126,14 +179,13 @@ impl<
                 };
             });
 
-        let p_ready_to_handle_randomness_task = MockReadyToHandleRandomnessTaskListener::new(
+        let p_ready_to_handle_randomness_task = ReadyToHandleRandomnessTaskListener::new(
             self.id(),
             context
                 .get_main_chain()
                 .get_node_cache()
                 .read()
-                .get_id_address()
-                .to_string(),
+                .get_id_address(),
             self.get_chain_identity(),
             self.get_block_cache(),
             context.get_main_chain().get_group_cache(),
@@ -150,14 +202,13 @@ impl<
                 };
             });
 
-        let p_randomness_signature_aggregation = MockRandomnessSignatureAggregationListener::new(
+        let p_randomness_signature_aggregation = RandomnessSignatureAggregationListener::new(
             self.id(),
             context
                 .get_main_chain()
                 .get_node_cache()
                 .read()
-                .get_id_address()
-                .to_string(),
+                .get_id_address(),
             context.get_main_chain().get_group_cache(),
             self.get_randomness_result_cache(),
             context.get_event_queue(),
@@ -171,16 +222,16 @@ impl<
                     error!("{:?}", e);
                 };
             });
+    }
 
-        // group_relay_confirmation
-        let p_new_group_relay_confirmation_task = MockNewGroupRelayConfirmationTaskListener::new(
+    fn init_group_relay_confirmation_listeners(&self, context: &Self::Context) {
+        let p_new_group_relay_confirmation_task = NewGroupRelayConfirmationTaskListener::new(
             self.id(),
             context
                 .get_main_chain()
                 .get_node_cache()
                 .read()
-                .get_id_address()
-                .to_string(),
+                .get_id_address(),
             self.get_chain_identity(),
             self.get_group_relay_confirmation_tasks_cache(),
             context.get_event_queue(),
@@ -196,7 +247,7 @@ impl<
             });
 
         let p_ready_to_handle_group_relay_confirmation_task =
-            MockReadyToHandleGroupRelayConfirmationTaskListener::new(
+            ReadyToHandleGroupRelayConfirmationTaskListener::new(
                 self.id(),
                 self.get_block_cache(),
                 context.get_main_chain().get_group_cache(),
@@ -217,14 +268,13 @@ impl<
             });
 
         let p_group_relay_confirmation_signature_aggregation =
-            MockGroupRelayConfirmationSignatureAggregationListener::new(
+            GroupRelayConfirmationSignatureAggregationListener::new(
                 self.id(),
                 context
                     .get_main_chain()
                     .get_node_cache()
                     .read()
-                    .get_id_address()
-                    .to_string(),
+                    .get_id_address(),
                 context.get_main_chain().get_group_cache(),
                 self.get_group_relay_confirmation_result_cache(),
                 context.get_event_queue(),
@@ -243,22 +293,21 @@ impl<
             });
     }
 
-    fn init_subscribers(&self, context: &GeneralContext<N, G, T>) {
-        // block
+    fn init_block_subscribers(&self, context: &Self::Context) {
         let s_block =
             BlockSubscriber::new(self.id(), self.get_block_cache(), context.get_event_queue());
 
         s_block.subscribe();
+    }
 
-        // randomness
+    fn init_randomness_subscribers(&self, context: &Self::Context) {
         let s_ready_to_handle_randomness_task = ReadyToHandleRandomnessTaskSubscriber::new(
             self.id(),
             context
                 .get_main_chain()
                 .get_node_cache()
                 .read()
-                .get_id_address()
-                .to_string(),
+                .get_id_address(),
             context.get_main_chain().get_group_cache(),
             self.get_randomness_result_cache(),
             context.get_event_queue(),
@@ -273,32 +322,32 @@ impl<
                 .get_main_chain()
                 .get_node_cache()
                 .read()
-                .get_id_address()
-                .to_string(),
+                .get_id_address(),
             self.get_chain_identity(),
             context.get_event_queue(),
             context.get_dynamic_task_handler(),
         );
 
         s_randomness_signature_aggregation.subscribe();
+    }
 
-        // group_relay
+    fn init_group_relay_subscribers(&self, context: &Self::Context) {
         let s_group_relay_signature_aggregation = GroupRelaySignatureAggregationSubscriber::new(
             self.id(),
             context
                 .get_main_chain()
                 .get_node_cache()
                 .read()
-                .get_id_address()
-                .to_string(),
+                .get_id_address(),
             self.get_chain_identity(),
             context.get_event_queue(),
             context.get_dynamic_task_handler(),
         );
 
         s_group_relay_signature_aggregation.subscribe();
+    }
 
-        // group_relay_confirmation
+    fn init_group_relay_confirmation_subscribers(&self, context: &Self::Context) {
         let s_ready_to_handle_group_relay_confirmation_task =
             ReadyToHandleGroupRelayConfirmationTaskSubscriber::new(
                 self.id(),
@@ -319,8 +368,7 @@ impl<
                     .get_main_chain()
                     .get_node_cache()
                     .read()
-                    .get_id_address()
-                    .to_string(),
+                    .get_id_address(),
                 self.get_chain_identity(),
                 context.get_event_queue(),
                 context.get_dynamic_task_handler(),
@@ -331,27 +379,16 @@ impl<
 }
 
 impl<
-        N: NodeInfoFetcher + Sync + Send + 'static,
-        G: GroupInfoFetcher + GroupInfoUpdater + Sync + Send + 'static,
-        T: BLSTasksFetcher<RandomnessTask> + BLSTasksUpdater<RandomnessTask> + Sync + Send + 'static,
-    > AdapterChain for GeneralAdapterChain<N, G, T>
-{
-    type GroupRelayConfirmationTasksQueue = InMemoryBLSTasksQueue<GroupRelayConfirmationTask>;
-
-    type GroupRelayConfirmationResultCaches =
-        InMemorySignatureResultCache<GroupRelayConfirmationResultCache>;
-}
-
-impl<
         N: NodeInfoFetcher,
         G: GroupInfoFetcher + GroupInfoUpdater,
         T: BLSTasksFetcher<RandomnessTask> + BLSTasksUpdater<RandomnessTask>,
-    > GeneralAdapterChain<N, G, T>
+        I: ChainIdentity + ControllerClientBuilder + CoordinatorClientBuilder + AdapterClientBuilder,
+    > GeneralAdapterChain<N, G, T, I>
 {
     pub fn new(
         id: usize,
         description: String,
-        chain_identity: ChainIdentity,
+        chain_identity: I,
         randomness_tasks_cache: T,
     ) -> Self {
         let chain_identity = Arc::new(RwLock::new(chain_identity));
@@ -376,15 +413,15 @@ impl<
         }
     }
 }
-
 pub struct GeneralMainChain<
     N: NodeInfoFetcher,
     G: GroupInfoFetcher + GroupInfoUpdater,
     T: BLSTasksFetcher<RandomnessTask> + BLSTasksUpdater<RandomnessTask>,
+    I: ChainIdentity + ControllerClientBuilder + CoordinatorClientBuilder + AdapterClientBuilder,
 > {
     id: usize,
     description: String,
-    chain_identity: Arc<RwLock<ChainIdentity>>,
+    chain_identity: Arc<RwLock<I>>,
     node_cache: Arc<RwLock<N>>,
     group_cache: Arc<RwLock<G>>,
     group_relay_tasks_cache: Arc<RwLock<InMemoryBLSTasksQueue<GroupRelayTask>>>,
@@ -401,12 +438,13 @@ impl
         InMemoryNodeInfoCache,
         InMemoryGroupInfoCache,
         InMemoryBLSTasksQueue<RandomnessTask>,
+        MockChainIdentity,
     >
 {
     pub fn new(
         id: usize,
         description: String,
-        chain_identity: ChainIdentity,
+        chain_identity: MockChainIdentity,
         node_cache: InMemoryNodeInfoCache,
         group_cache: InMemoryGroupInfoCache,
         randomness_tasks_cache: InMemoryBLSTasksQueue<RandomnessTask>,
@@ -432,11 +470,18 @@ impl
     }
 }
 
-impl GeneralMainChain<NodeInfoDBClient, GroupInfoDBClient, BLSTasksDBClient<RandomnessTask>> {
+impl
+    GeneralMainChain<
+        NodeInfoDBClient,
+        GroupInfoDBClient,
+        BLSTasksDBClient<RandomnessTask>,
+        GeneralChainIdentity,
+    >
+{
     pub fn new(
         id: usize,
         description: String,
-        chain_identity: ChainIdentity,
+        chain_identity: GeneralChainIdentity,
         node_cache: NodeInfoDBClient,
         group_cache: GroupInfoDBClient,
         randomness_tasks_cache: BLSTasksDBClient<RandomnessTask>,
@@ -466,7 +511,15 @@ impl<
         N: NodeInfoFetcher + Sync + Send + 'static,
         G: GroupInfoFetcher + GroupInfoUpdater + Sync + Send + 'static,
         T: BLSTasksFetcher<RandomnessTask> + BLSTasksUpdater<RandomnessTask> + Sync + Send + 'static,
-    > Chain for GeneralMainChain<N, G, T>
+        I: ChainIdentity
+            + ControllerClientBuilder
+            + CoordinatorClientBuilder
+            + AdapterClientBuilder
+            + ChainProviderBuilder
+            + Sync
+            + Send
+            + 'static,
+    > Chain for GeneralMainChain<N, G, T, I>
 {
     type BlockInfoCache = InMemoryBlockInfoCache;
 
@@ -474,13 +527,56 @@ impl<
 
     type RandomnessResultCaches = InMemorySignatureResultCache<RandomnessResultCache>;
 
-    type Context = GeneralContext<N, G, T>;
+    type Context = GeneralContext<N, G, T, I>;
 
-    fn init_listeners(&self, context: &GeneralContext<N, G, T>) {
-        // block
-        let p_block = MockBlockListener::new(
+    type ChainIdentity = I;
+
+    fn init_listeners(&self, context: &GeneralContext<N, G, T, I>) {
+        self.init_block_listeners(context);
+
+        self.init_dkg_listeners(context);
+
+        self.init_randomness_listeners(context);
+
+        self.init_group_relay_listeners(context);
+    }
+
+    fn init_subscribers(&self, context: &GeneralContext<N, G, T, I>) {
+        self.init_block_subscribers(context);
+
+        self.init_dkg_subscribers(context);
+
+        self.init_randomness_subscribers(context);
+
+        self.init_group_relay_subscribers(context);
+    }
+}
+
+impl<
+        N: NodeInfoFetcher + Sync + Send + 'static,
+        G: GroupInfoFetcher + GroupInfoUpdater + Sync + Send + 'static,
+        T: BLSTasksFetcher<RandomnessTask> + BLSTasksUpdater<RandomnessTask> + Sync + Send + 'static,
+        I: ChainIdentity
+            + ControllerClientBuilder
+            + CoordinatorClientBuilder
+            + AdapterClientBuilder
+            + ChainProviderBuilder
+            + Sync
+            + Send
+            + 'static,
+    > MainChain for GeneralMainChain<N, G, T, I>
+{
+    type NodeInfoCache = N;
+
+    type GroupInfoCache = G;
+
+    type GroupRelayTasksQueue = InMemoryBLSTasksQueue<GroupRelayTask>;
+
+    type GroupRelayResultCaches = InMemorySignatureResultCache<GroupRelayResultCache>;
+
+    fn init_block_listeners(&self, context: &Self::Context) {
+        let p_block = BlockListener::new(
             self.id(),
-            self.get_node_cache().read().get_id_address().to_string(),
             self.get_chain_identity(),
             context.get_event_queue(),
         );
@@ -493,9 +589,10 @@ impl<
                     error!("{:?}", e);
                 };
             });
+    }
 
-        // dkg
-        let p_pre_grouping = MockPreGroupingListener::new(
+    fn init_dkg_listeners(&self, context: &Self::Context) {
+        let p_pre_grouping = PreGroupingListener::new(
             self.get_chain_identity(),
             self.get_group_cache(),
             context.get_event_queue(),
@@ -510,7 +607,7 @@ impl<
                 };
             });
 
-        let p_post_commit_grouping = MockPostCommitGroupingListener::new(
+        let p_post_commit_grouping = PostCommitGroupingListener::new(
             self.get_chain_identity(),
             self.get_group_cache(),
             context.get_event_queue(),
@@ -525,7 +622,7 @@ impl<
                 };
             });
 
-        let p_post_grouping = MockPostGroupingListener::new(
+        let p_post_grouping = PostGroupingListener::new(
             self.get_block_cache(),
             self.get_group_cache(),
             context.get_event_queue(),
@@ -539,11 +636,12 @@ impl<
                     error!("{:?}", e);
                 };
             });
+    }
 
-        // randomness
-        let p_new_randomness_task = MockNewRandomnessTaskListener::new(
+    fn init_randomness_listeners(&self, context: &Self::Context) {
+        let p_new_randomness_task = NewRandomnessTaskListener::new(
             self.id(),
-            self.get_node_cache().read().get_id_address().to_string(),
+            self.get_node_cache().read().get_id_address(),
             self.get_chain_identity(),
             self.get_randomness_tasks_cache(),
             context.get_event_queue(),
@@ -558,9 +656,9 @@ impl<
                 };
             });
 
-        let p_ready_to_handle_randomness_task = MockReadyToHandleRandomnessTaskListener::new(
+        let p_ready_to_handle_randomness_task = ReadyToHandleRandomnessTaskListener::new(
             self.id(),
-            self.get_node_cache().read().get_id_address().to_string(),
+            self.get_node_cache().read().get_id_address(),
             self.get_chain_identity(),
             self.get_block_cache(),
             self.get_group_cache(),
@@ -577,9 +675,9 @@ impl<
                 };
             });
 
-        let p_randomness_signature_aggregation = MockRandomnessSignatureAggregationListener::new(
+        let p_randomness_signature_aggregation = RandomnessSignatureAggregationListener::new(
             self.id(),
-            self.get_node_cache().read().get_id_address().to_string(),
+            self.get_node_cache().read().get_id_address(),
             self.get_group_cache(),
             self.get_randomness_result_cache(),
             context.get_event_queue(),
@@ -593,9 +691,10 @@ impl<
                     error!("{:?}", e);
                 };
             });
+    }
 
-        // group_relay
-        let p_new_group_relay_task = MockNewGroupRelayTaskListener::new(
+    fn init_group_relay_listeners(&self, context: &Self::Context) {
+        let p_new_group_relay_task = NewGroupRelayTaskListener::new(
             self.get_chain_identity(),
             self.get_group_relay_tasks_cache(),
             context.get_event_queue(),
@@ -610,7 +709,7 @@ impl<
                 };
             });
 
-        let p_ready_to_handle_group_relay_task = MockReadyToHandleGroupRelayTaskListener::new(
+        let p_ready_to_handle_group_relay_task = ReadyToHandleGroupRelayTaskListener::new(
             self.get_block_cache(),
             self.get_group_cache(),
             self.get_group_relay_tasks_cache(),
@@ -626,8 +725,8 @@ impl<
                 };
             });
 
-        let p_group_relay_signature_aggregation = MockGroupRelaySignatureAggregationListener::new(
-            self.get_node_cache().read().get_id_address().to_string(),
+        let p_group_relay_signature_aggregation = GroupRelaySignatureAggregationListener::new(
+            self.get_node_cache().read().get_id_address(),
             self.get_group_cache(),
             self.get_group_relay_result_cache(),
             context.get_event_queue(),
@@ -643,14 +742,14 @@ impl<
             });
     }
 
-    fn init_subscribers(&self, context: &GeneralContext<N, G, T>) {
-        // block
+    fn init_block_subscribers(&self, context: &Self::Context) {
         let s_block =
             BlockSubscriber::new(self.id(), self.get_block_cache(), context.get_event_queue());
 
         s_block.subscribe();
+    }
 
-        // dkg
+    fn init_dkg_subscribers(&self, context: &Self::Context) {
         let s_pre_grouping =
             PreGroupingSubscriber::new(self.get_group_cache(), context.get_event_queue());
 
@@ -678,11 +777,12 @@ impl<
         );
 
         s_post_grouping.subscribe();
+    }
 
-        // randomness
+    fn init_randomness_subscribers(&self, context: &Self::Context) {
         let s_ready_to_handle_randomness_task = ReadyToHandleRandomnessTaskSubscriber::new(
             self.id(),
-            self.get_node_cache().read().get_id_address().to_string(),
+            self.get_node_cache().read().get_id_address(),
             self.get_group_cache(),
             self.get_randomness_result_cache(),
             context.get_event_queue(),
@@ -693,15 +793,16 @@ impl<
 
         let s_randomness_signature_aggregation = RandomnessSignatureAggregationSubscriber::new(
             self.id(),
-            self.get_node_cache().read().get_id_address().to_string(),
+            self.get_node_cache().read().get_id_address(),
             self.get_chain_identity(),
             context.get_event_queue(),
             context.get_dynamic_task_handler(),
         );
 
         s_randomness_signature_aggregation.subscribe();
+    }
 
-        // group_relay
+    fn init_group_relay_subscribers(&self, context: &Self::Context) {
         let s_ready_to_handle_group_relay_task = ReadyToHandleGroupRelayTaskSubscriber::new(
             self.get_chain_identity(),
             self.get_group_cache(),
@@ -718,22 +819,15 @@ impl<
         N: NodeInfoFetcher + Sync + Send + 'static,
         G: GroupInfoFetcher + GroupInfoUpdater + Sync + Send + 'static,
         T: BLSTasksFetcher<RandomnessTask> + BLSTasksUpdater<RandomnessTask> + Sync + Send + 'static,
-    > MainChain for GeneralMainChain<N, G, T>
-{
-    type NodeInfoCache = N;
-
-    type GroupInfoCache = G;
-
-    type GroupRelayTasksQueue = InMemoryBLSTasksQueue<GroupRelayTask>;
-
-    type GroupRelayResultCaches = InMemorySignatureResultCache<GroupRelayResultCache>;
-}
-
-impl<
-        N: NodeInfoFetcher + Sync + Send + 'static,
-        G: GroupInfoFetcher + GroupInfoUpdater + Sync + Send + 'static,
-        T: BLSTasksFetcher<RandomnessTask> + BLSTasksUpdater<RandomnessTask> + Sync + Send + 'static,
-    > ChainFetcher<GeneralAdapterChain<N, G, T>> for GeneralAdapterChain<N, G, T>
+        I: ChainIdentity
+            + ControllerClientBuilder
+            + CoordinatorClientBuilder
+            + AdapterClientBuilder
+            + ChainProviderBuilder
+            + Sync
+            + Send
+            + 'static,
+    > ChainFetcher<GeneralAdapterChain<N, G, T, I>> for GeneralAdapterChain<N, G, T, I>
 {
     fn id(&self) -> usize {
         self.id
@@ -743,25 +837,25 @@ impl<
         &self.description
     }
 
-    fn get_chain_identity(&self) -> Arc<RwLock<ChainIdentity>> {
+    fn get_chain_identity(&self) -> Arc<RwLock<I>> {
         self.chain_identity.clone()
     }
 
     fn get_block_cache(
         &self,
-    ) -> Arc<RwLock<<GeneralAdapterChain<N, G, T> as Chain>::BlockInfoCache>> {
+    ) -> Arc<RwLock<<GeneralAdapterChain<N, G, T, I> as Chain>::BlockInfoCache>> {
         self.block_cache.clone()
     }
 
     fn get_randomness_tasks_cache(
         &self,
-    ) -> Arc<RwLock<<GeneralAdapterChain<N, G, T> as Chain>::RandomnessTasksQueue>> {
+    ) -> Arc<RwLock<<GeneralAdapterChain<N, G, T, I> as Chain>::RandomnessTasksQueue>> {
         self.randomness_tasks_cache.clone()
     }
 
     fn get_randomness_result_cache(
         &self,
-    ) -> Arc<RwLock<<GeneralAdapterChain<N, G, T> as Chain>::RandomnessResultCaches>> {
+    ) -> Arc<RwLock<<GeneralAdapterChain<N, G, T, I> as Chain>::RandomnessResultCaches>> {
         self.committer_randomness_result_cache.clone()
     }
 }
@@ -770,19 +864,30 @@ impl<
         N: NodeInfoFetcher + Sync + Send + 'static,
         G: GroupInfoFetcher + GroupInfoUpdater + Sync + Send + 'static,
         T: BLSTasksFetcher<RandomnessTask> + BLSTasksUpdater<RandomnessTask> + Sync + Send + 'static,
-    > AdapterChainFetcher<GeneralAdapterChain<N, G, T>> for GeneralAdapterChain<N, G, T>
+        I: ChainIdentity
+            + ControllerClientBuilder
+            + CoordinatorClientBuilder
+            + AdapterClientBuilder
+            + ChainProviderBuilder
+            + Sync
+            + Send
+            + 'static,
+    > AdapterChainFetcher<GeneralAdapterChain<N, G, T, I>> for GeneralAdapterChain<N, G, T, I>
 {
     fn get_group_relay_confirmation_tasks_cache(
         &self,
-    ) -> Arc<RwLock<<GeneralAdapterChain<N, G, T> as AdapterChain>::GroupRelayConfirmationTasksQueue>>
-    {
+    ) -> Arc<
+        RwLock<<GeneralAdapterChain<N, G, T, I> as AdapterChain>::GroupRelayConfirmationTasksQueue>,
+    > {
         self.group_relay_confirmation_tasks_cache.clone()
     }
 
     fn get_group_relay_confirmation_result_cache(
         &self,
     ) -> Arc<
-        RwLock<<GeneralAdapterChain<N, G, T> as AdapterChain>::GroupRelayConfirmationResultCaches>,
+        RwLock<
+            <GeneralAdapterChain<N, G, T, I> as AdapterChain>::GroupRelayConfirmationResultCaches,
+        >,
     > {
         self.committer_group_relay_confirmation_result_cache.clone()
     }
@@ -792,7 +897,15 @@ impl<
         N: NodeInfoFetcher + Sync + Send + 'static,
         G: GroupInfoFetcher + GroupInfoUpdater + Sync + Send + 'static,
         T: BLSTasksFetcher<RandomnessTask> + BLSTasksUpdater<RandomnessTask> + Sync + Send + 'static,
-    > ChainFetcher<GeneralMainChain<N, G, T>> for GeneralMainChain<N, G, T>
+        I: ChainIdentity
+            + ControllerClientBuilder
+            + CoordinatorClientBuilder
+            + AdapterClientBuilder
+            + ChainProviderBuilder
+            + Sync
+            + Send
+            + 'static,
+    > ChainFetcher<GeneralMainChain<N, G, T, I>> for GeneralMainChain<N, G, T, I>
 {
     fn id(&self) -> usize {
         self.id
@@ -802,23 +915,27 @@ impl<
         &self.description
     }
 
-    fn get_chain_identity(&self) -> Arc<RwLock<ChainIdentity>> {
+    fn get_chain_identity(
+        &self,
+    ) -> Arc<RwLock<<GeneralMainChain<N, G, T, I> as Chain>::ChainIdentity>> {
         self.chain_identity.clone()
     }
 
-    fn get_block_cache(&self) -> Arc<RwLock<<GeneralMainChain<N, G, T> as Chain>::BlockInfoCache>> {
+    fn get_block_cache(
+        &self,
+    ) -> Arc<RwLock<<GeneralMainChain<N, G, T, I> as Chain>::BlockInfoCache>> {
         self.block_cache.clone()
     }
 
     fn get_randomness_tasks_cache(
         &self,
-    ) -> Arc<RwLock<<GeneralMainChain<N, G, T> as Chain>::RandomnessTasksQueue>> {
+    ) -> Arc<RwLock<<GeneralMainChain<N, G, T, I> as Chain>::RandomnessTasksQueue>> {
         self.randomness_tasks_cache.clone()
     }
 
     fn get_randomness_result_cache(
         &self,
-    ) -> Arc<RwLock<<GeneralMainChain<N, G, T> as Chain>::RandomnessResultCaches>> {
+    ) -> Arc<RwLock<<GeneralMainChain<N, G, T, I> as Chain>::RandomnessResultCaches>> {
         self.committer_randomness_result_cache.clone()
     }
 }
@@ -827,29 +944,37 @@ impl<
         N: NodeInfoFetcher + Sync + Send + 'static,
         G: GroupInfoFetcher + GroupInfoUpdater + Sync + Send + 'static,
         T: BLSTasksFetcher<RandomnessTask> + BLSTasksUpdater<RandomnessTask> + Sync + Send + 'static,
-    > MainChainFetcher<GeneralMainChain<N, G, T>> for GeneralMainChain<N, G, T>
+        I: ChainIdentity
+            + ControllerClientBuilder
+            + CoordinatorClientBuilder
+            + AdapterClientBuilder
+            + ChainProviderBuilder
+            + Sync
+            + Send
+            + 'static,
+    > MainChainFetcher<GeneralMainChain<N, G, T, I>> for GeneralMainChain<N, G, T, I>
 {
     fn get_node_cache(
         &self,
-    ) -> Arc<RwLock<<GeneralMainChain<N, G, T> as MainChain>::NodeInfoCache>> {
+    ) -> Arc<RwLock<<GeneralMainChain<N, G, T, I> as MainChain>::NodeInfoCache>> {
         self.node_cache.clone()
     }
 
     fn get_group_cache(
         &self,
-    ) -> Arc<RwLock<<GeneralMainChain<N, G, T> as MainChain>::GroupInfoCache>> {
+    ) -> Arc<RwLock<<GeneralMainChain<N, G, T, I> as MainChain>::GroupInfoCache>> {
         self.group_cache.clone()
     }
 
     fn get_group_relay_tasks_cache(
         &self,
-    ) -> Arc<RwLock<<GeneralMainChain<N, G, T> as MainChain>::GroupRelayTasksQueue>> {
+    ) -> Arc<RwLock<<GeneralMainChain<N, G, T, I> as MainChain>::GroupRelayTasksQueue>> {
         self.group_relay_tasks_cache.clone()
     }
 
     fn get_group_relay_result_cache(
         &self,
-    ) -> Arc<RwLock<<GeneralMainChain<N, G, T> as MainChain>::GroupRelayResultCaches>> {
+    ) -> Arc<RwLock<<GeneralMainChain<N, G, T, I> as MainChain>::GroupRelayResultCaches>> {
         self.committer_group_relay_result_cache.clone()
     }
 }

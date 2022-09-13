@@ -1,6 +1,5 @@
 use super::Listener;
 use crate::node::{
-    dal::cache::{InMemoryBLSTasksQueue, InMemoryBlockInfoCache},
     dal::{
         types::GroupRelayTask,
         {BLSTasksUpdater, BlockInfoFetcher, GroupInfoFetcher},
@@ -13,21 +12,27 @@ use async_trait::async_trait;
 use parking_lot::RwLock;
 use std::sync::Arc;
 
-pub struct MockReadyToHandleGroupRelayTaskListener<G: GroupInfoFetcher + Sync + Send> {
-    block_cache: Arc<RwLock<InMemoryBlockInfoCache>>,
+pub struct ReadyToHandleGroupRelayTaskListener<
+    B: BlockInfoFetcher,
+    G: GroupInfoFetcher,
+    T: BLSTasksUpdater<GroupRelayTask>,
+> {
+    block_cache: Arc<RwLock<B>>,
     group_cache: Arc<RwLock<G>>,
-    group_relay_tasks_cache: Arc<RwLock<InMemoryBLSTasksQueue<GroupRelayTask>>>,
+    group_relay_tasks_cache: Arc<RwLock<T>>,
     eq: Arc<RwLock<EventQueue>>,
 }
 
-impl<G: GroupInfoFetcher + Sync + Send> MockReadyToHandleGroupRelayTaskListener<G> {
+impl<B: BlockInfoFetcher, G: GroupInfoFetcher, T: BLSTasksUpdater<GroupRelayTask>>
+    ReadyToHandleGroupRelayTaskListener<B, G, T>
+{
     pub fn new(
-        block_cache: Arc<RwLock<InMemoryBlockInfoCache>>,
+        block_cache: Arc<RwLock<B>>,
         group_cache: Arc<RwLock<G>>,
-        group_relay_tasks_cache: Arc<RwLock<InMemoryBLSTasksQueue<GroupRelayTask>>>,
+        group_relay_tasks_cache: Arc<RwLock<T>>,
         eq: Arc<RwLock<EventQueue>>,
     ) -> Self {
-        MockReadyToHandleGroupRelayTaskListener {
+        ReadyToHandleGroupRelayTaskListener {
             block_cache,
             group_cache,
             group_relay_tasks_cache,
@@ -36,8 +41,8 @@ impl<G: GroupInfoFetcher + Sync + Send> MockReadyToHandleGroupRelayTaskListener<
     }
 }
 
-impl<G: GroupInfoFetcher + Sync + Send> EventPublisher<ReadyToHandleGroupRelayTask>
-    for MockReadyToHandleGroupRelayTaskListener<G>
+impl<B: BlockInfoFetcher, G: GroupInfoFetcher, T: BLSTasksUpdater<GroupRelayTask>>
+    EventPublisher<ReadyToHandleGroupRelayTask> for ReadyToHandleGroupRelayTaskListener<B, G, T>
 {
     fn publish(&self, event: ReadyToHandleGroupRelayTask) {
         self.eq.read().publish(event);
@@ -45,7 +50,12 @@ impl<G: GroupInfoFetcher + Sync + Send> EventPublisher<ReadyToHandleGroupRelayTa
 }
 
 #[async_trait]
-impl<G: GroupInfoFetcher + Sync + Send> Listener for MockReadyToHandleGroupRelayTaskListener<G> {
+impl<
+        B: BlockInfoFetcher + Sync + Send,
+        G: GroupInfoFetcher + Sync + Send,
+        T: BLSTasksUpdater<GroupRelayTask> + Sync + Send,
+    > Listener for ReadyToHandleGroupRelayTaskListener<B, G, T>
+{
     async fn start(mut self) -> NodeResult<()> {
         loop {
             let is_bls_ready = self.group_cache.read().get_state();

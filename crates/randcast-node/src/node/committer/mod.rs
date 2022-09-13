@@ -5,6 +5,7 @@ use crate::node::dal::types::TaskType;
 use crate::node::dal::GroupInfoFetcher;
 use crate::node::error::NodeResult;
 use async_trait::async_trait;
+use ethers::types::Address;
 use parking_lot::RwLock;
 use std::sync::Arc;
 
@@ -21,26 +22,20 @@ pub(crate) trait CommitterService {
 }
 
 pub(crate) trait CommitterClient {
-    fn get_id_address(&self) -> &str;
+    fn get_id_address(&self) -> Address;
 
     fn get_committer_endpoint(&self) -> &str;
 
-    fn build(id_address: String, committer_endpoint: String) -> Self;
+    fn build(id_address: Address, committer_endpoint: String) -> Self;
 }
 
 pub(crate) trait CommitterClientHandler<C: CommitterClient, G: GroupInfoFetcher> {
-    fn get_id_address(&self) -> &str;
+    fn get_id_address(&self) -> Address;
 
     fn get_group_cache(&self) -> Arc<RwLock<G>>;
 
     fn prepare_committer_clients(&self) -> NodeResult<Vec<C>> {
-        let mut committers = self
-            .get_group_cache()
-            .read()
-            .get_committers()?
-            .iter()
-            .map(|c| c.to_string())
-            .collect::<Vec<_>>();
+        let mut committers = self.get_group_cache().read().get_committers()?;
 
         committers.retain(|c| *c != self.get_id_address());
 
@@ -50,13 +45,13 @@ pub(crate) trait CommitterClientHandler<C: CommitterClient, G: GroupInfoFetcher>
             let endpoint = self
                 .get_group_cache()
                 .read()
-                .get_member(&committer)?
+                .get_member(committer)?
                 .rpc_endpint
                 .as_ref()
                 .unwrap()
                 .to_string();
 
-            let committer_client = C::build(self.get_id_address().to_string(), endpoint.clone());
+            let committer_client = C::build(self.get_id_address(), endpoint.clone());
 
             committer_clients.push(committer_client);
         }

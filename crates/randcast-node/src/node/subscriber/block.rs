@@ -1,6 +1,6 @@
 use super::Subscriber;
 use crate::node::{
-    dal::{cache::InMemoryBlockInfoCache, BlockInfoUpdater},
+    dal::BlockInfoUpdater,
     error::NodeResult,
     event::{new_block::NewBlock, types::Topic, Event},
     queue::{event_queue::EventQueue, EventSubscriber},
@@ -9,18 +9,14 @@ use log::info;
 use parking_lot::RwLock;
 use std::sync::Arc;
 
-pub struct BlockSubscriber {
+pub struct BlockSubscriber<B: BlockInfoUpdater> {
     pub chain_id: usize,
-    block_cache: Arc<RwLock<InMemoryBlockInfoCache>>,
+    block_cache: Arc<RwLock<B>>,
     eq: Arc<RwLock<EventQueue>>,
 }
 
-impl BlockSubscriber {
-    pub fn new(
-        chain_id: usize,
-        block_cache: Arc<RwLock<InMemoryBlockInfoCache>>,
-        eq: Arc<RwLock<EventQueue>>,
-    ) -> Self {
+impl<B: BlockInfoUpdater> BlockSubscriber<B> {
+    pub fn new(chain_id: usize, block_cache: Arc<RwLock<B>>, eq: Arc<RwLock<EventQueue>>) -> Self {
         BlockSubscriber {
             chain_id,
             block_cache,
@@ -29,7 +25,7 @@ impl BlockSubscriber {
     }
 }
 
-impl Subscriber for BlockSubscriber {
+impl<B: BlockInfoUpdater + Sync + Send + 'static> Subscriber for BlockSubscriber<B> {
     fn notify(&self, topic: Topic, payload: Box<dyn Event>) -> NodeResult<()> {
         info!("{:?}", topic);
 

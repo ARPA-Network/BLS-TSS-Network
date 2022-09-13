@@ -1,8 +1,8 @@
 use super::Subscriber;
 use crate::node::{
-    algorithm::bls::{BLSCore, MockBLSCore},
-    contract_client::{adapter::AdapterTransactions, rpc_mock::adapter::MockAdapterClient},
-    dal::{cache::GroupRelayConfirmationResultCache, types::ChainIdentity},
+    algorithm::bls::{BLSCore, SimpleBLSCore},
+    contract_client::adapter::{AdapterClientBuilder, AdapterTransactions},
+    dal::{cache::GroupRelayConfirmationResultCache, ChainIdentity},
     error::NodeResult,
     event::{
         ready_to_fulfill_group_relay_confirmation_task::ReadyToFulfillGroupRelayConfirmationTask,
@@ -12,23 +12,28 @@ use crate::node::{
     scheduler::{dynamic::SimpleDynamicTaskScheduler, TaskScheduler},
 };
 use async_trait::async_trait;
+use ethers::types::Address;
 use log::{error, info};
 use parking_lot::RwLock;
 use std::sync::Arc;
 
-pub struct GroupRelayConfirmationSignatureAggregationSubscriber {
+pub struct GroupRelayConfirmationSignatureAggregationSubscriber<
+    I: ChainIdentity + AdapterClientBuilder,
+> {
     pub chain_id: usize,
-    id_address: String,
-    chain_identity: Arc<RwLock<ChainIdentity>>,
+    id_address: Address,
+    chain_identity: Arc<RwLock<I>>,
     eq: Arc<RwLock<EventQueue>>,
     ts: Arc<RwLock<SimpleDynamicTaskScheduler>>,
 }
 
-impl GroupRelayConfirmationSignatureAggregationSubscriber {
+impl<I: ChainIdentity + AdapterClientBuilder>
+    GroupRelayConfirmationSignatureAggregationSubscriber<I>
+{
     pub fn new(
         chain_id: usize,
-        id_address: String,
-        chain_identity: Arc<RwLock<ChainIdentity>>,
+        id_address: Address,
+        chain_identity: Arc<RwLock<I>>,
         eq: Arc<RwLock<EventQueue>>,
         ts: Arc<RwLock<SimpleDynamicTaskScheduler>>,
     ) -> Self {
@@ -53,13 +58,15 @@ pub trait FulfillGroupRelayConfirmationHandler {
     ) -> NodeResult<()>;
 }
 
-pub struct MockFulfillGroupRelayConfirmationHandler {
-    adapter_address: String,
-    id_address: String,
+pub struct GeneralFulfillGroupRelayConfirmationHandler<I: ChainIdentity + AdapterClientBuilder> {
+    id_address: Address,
+    chain_identity: Arc<RwLock<I>>,
 }
 
 #[async_trait]
-impl FulfillGroupRelayConfirmationHandler for MockFulfillGroupRelayConfirmationHandler {
+impl<I: ChainIdentity + AdapterClientBuilder + Sync + Send> FulfillGroupRelayConfirmationHandler
+    for GeneralFulfillGroupRelayConfirmationHandler<I>
+{
     async fn handle(
         &self,
         group_index: usize,
@@ -67,7 +74,10 @@ impl FulfillGroupRelayConfirmationHandler for MockFulfillGroupRelayConfirmationH
         signature: Vec<u8>,
         group_relay_confirmation_as_bytes: Vec<u8>,
     ) -> NodeResult<()> {
-        let client = MockAdapterClient::new(self.adapter_address.clone(), self.id_address.clone());
+        let client = self
+            .chain_identity
+            .read()
+            .build_adapter_client(self.id_address);
 
         match client
             .confirm_relay(
@@ -90,7 +100,9 @@ impl FulfillGroupRelayConfirmationHandler for MockFulfillGroupRelayConfirmationH
     }
 }
 
-impl Subscriber for GroupRelayConfirmationSignatureAggregationSubscriber {
+impl<I: ChainIdentity + AdapterClientBuilder + Sync + Send + 'static> Subscriber
+    for GroupRelayConfirmationSignatureAggregationSubscriber<I>
+{
     fn notify(&self, topic: Topic, payload: Box<dyn Event>) -> NodeResult<()> {
         info!("{:?}", topic);
 
@@ -113,28 +125,24 @@ impl Subscriber for GroupRelayConfirmationSignatureAggregationSubscriber {
                     partial_signatures,
                 } = signature;
 
-                let bls_core = MockBLSCore {};
+                let bls_core = SimpleBLSCore {};
 
                 let signature = bls_core.aggregate(
                     threshold,
                     &partial_signatures.values().cloned().collect::<Vec<_>>(),
                 )?;
 
-                let adapter_address = self
-                    .chain_identity
-                    .read()
-                    .get_provider_rpc_endpoint()
-                    .to_string();
+                let id_address = self.id_address;
 
-                let id_address = self.id_address.clone();
+                let chain_identity = self.chain_identity.clone();
 
                 let group_relay_confirmation_as_bytes =
                     bincode::serialize(&group_relay_confirmation)?;
 
                 self.ts.write().add_task(async move {
-                    let handler = MockFulfillGroupRelayConfirmationHandler {
-                        adapter_address,
+                    let handler = GeneralFulfillGroupRelayConfirmationHandler {
                         id_address,
+                        chain_identity,
                     };
 
                     if let Err(e) = handler

@@ -1,9 +1,7 @@
 use super::Subscriber;
 use crate::node::{
-    contract_client::{
-        controller::ControllerTransactions, rpc_mock::controller::MockControllerClient,
-    },
-    dal::types::ChainIdentity,
+    contract_client::controller::{ControllerClientBuilder, ControllerTransactions},
+    dal::ChainIdentity,
     error::NodeResult,
     event::{dkg_post_process::DKGPostProcess, types::Topic, Event},
     queue::{event_queue::EventQueue, EventSubscriber},
@@ -14,15 +12,15 @@ use log::{error, info};
 use parking_lot::RwLock;
 use std::sync::Arc;
 
-pub struct PostGroupingSubscriber {
-    main_chain_identity: Arc<RwLock<ChainIdentity>>,
+pub struct PostGroupingSubscriber<I: ChainIdentity + ControllerClientBuilder> {
+    main_chain_identity: Arc<RwLock<I>>,
     eq: Arc<RwLock<EventQueue>>,
     ts: Arc<RwLock<SimpleDynamicTaskScheduler>>,
 }
 
-impl PostGroupingSubscriber {
+impl<I: ChainIdentity + ControllerClientBuilder> PostGroupingSubscriber<I> {
     pub fn new(
-        main_chain_identity: Arc<RwLock<ChainIdentity>>,
+        main_chain_identity: Arc<RwLock<I>>,
         eq: Arc<RwLock<EventQueue>>,
         ts: Arc<RwLock<SimpleDynamicTaskScheduler>>,
     ) -> Self {
@@ -39,16 +37,16 @@ pub trait DKGPostProcessHandler {
     async fn handle(&self, group_index: usize, group_epoch: usize) -> NodeResult<()>;
 }
 
-pub struct MockDKGPostProcessHandler {
-    controller_address: String,
-    id_address: String,
+pub struct GeneralDKGPostProcessHandler<I: ChainIdentity + ControllerClientBuilder> {
+    main_chain_identity: Arc<RwLock<I>>,
 }
 
 #[async_trait]
-impl DKGPostProcessHandler for MockDKGPostProcessHandler {
+impl<I: ChainIdentity + ControllerClientBuilder + Sync + Send> DKGPostProcessHandler
+    for GeneralDKGPostProcessHandler<I>
+{
     async fn handle(&self, group_index: usize, group_epoch: usize) -> NodeResult<()> {
-        let client =
-            MockControllerClient::new(self.controller_address.clone(), self.id_address.clone());
+        let client = self.main_chain_identity.read().build_controller_client();
 
         client.post_process_dkg(group_index, group_epoch).await?;
 
@@ -56,7 +54,9 @@ impl DKGPostProcessHandler for MockDKGPostProcessHandler {
     }
 }
 
-impl Subscriber for PostGroupingSubscriber {
+impl<I: ChainIdentity + ControllerClientBuilder + Sync + Send + 'static> Subscriber
+    for PostGroupingSubscriber<I>
+{
     fn notify(&self, topic: Topic, payload: Box<dyn Event>) -> NodeResult<()> {
         info!("{:?}", topic);
 
@@ -70,18 +70,11 @@ impl Subscriber for PostGroupingSubscriber {
                 group_epoch,
             } = *Box::from_raw(struct_ptr);
 
-            let controller_address = self
-                .main_chain_identity
-                .read()
-                .get_provider_rpc_endpoint()
-                .to_string();
-
-            let id_address = self.main_chain_identity.read().get_id_address().to_string();
+            let main_chain_identity = self.main_chain_identity.clone();
 
             self.ts.write().add_task(async move {
-                let handler = MockDKGPostProcessHandler {
-                    controller_address,
-                    id_address,
+                let handler = GeneralDKGPostProcessHandler {
+                    main_chain_identity
                 };
 
                 if let Err(e) = handler.handle(group_index, group_epoch).await {

@@ -1,9 +1,9 @@
 use super::Listener;
 use crate::node::{
-    contract_client::{adapter::AdapterViews, rpc_mock::adapter::MockAdapterClient},
-    dal::cache::InMemoryBlockInfoCache,
+    contract_client::adapter::{AdapterClientBuilder, AdapterViews},
+    dal::ChainIdentity,
     dal::{
-        types::{ChainIdentity, RandomnessTask},
+        types::RandomnessTask,
         {BLSTasksUpdater, BlockInfoFetcher, GroupInfoFetcher},
     },
     error::{NodeError, NodeResult},
@@ -11,37 +11,44 @@ use crate::node::{
     queue::{event_queue::EventQueue, EventPublisher},
 };
 use async_trait::async_trait;
+use ethers::types::Address;
 use log::error;
 use parking_lot::RwLock;
 use std::sync::Arc;
 use tokio_retry::{strategy::FixedInterval, RetryIf};
 
-pub struct MockReadyToHandleRandomnessTaskListener<
+pub struct ReadyToHandleRandomnessTaskListener<
+    B: BlockInfoFetcher,
     G: GroupInfoFetcher,
     T: BLSTasksUpdater<RandomnessTask>,
+    I: ChainIdentity + AdapterClientBuilder,
 > {
     chain_id: usize,
-    id_address: String,
-    chain_identity: Arc<RwLock<ChainIdentity>>,
-    block_cache: Arc<RwLock<InMemoryBlockInfoCache>>,
+    id_address: Address,
+    chain_identity: Arc<RwLock<I>>,
+    block_cache: Arc<RwLock<B>>,
     group_cache: Arc<RwLock<G>>,
     randomness_tasks_cache: Arc<RwLock<T>>,
     eq: Arc<RwLock<EventQueue>>,
 }
 
-impl<G: GroupInfoFetcher, T: BLSTasksUpdater<RandomnessTask>>
-    MockReadyToHandleRandomnessTaskListener<G, T>
+impl<
+        B: BlockInfoFetcher,
+        G: GroupInfoFetcher,
+        T: BLSTasksUpdater<RandomnessTask>,
+        I: ChainIdentity + AdapterClientBuilder,
+    > ReadyToHandleRandomnessTaskListener<B, G, T, I>
 {
     pub fn new(
         chain_id: usize,
-        id_address: String,
-        chain_identity: Arc<RwLock<ChainIdentity>>,
-        block_cache: Arc<RwLock<InMemoryBlockInfoCache>>,
+        id_address: Address,
+        chain_identity: Arc<RwLock<I>>,
+        block_cache: Arc<RwLock<B>>,
         group_cache: Arc<RwLock<G>>,
         randomness_tasks_cache: Arc<RwLock<T>>,
         eq: Arc<RwLock<EventQueue>>,
     ) -> Self {
-        MockReadyToHandleRandomnessTaskListener {
+        ReadyToHandleRandomnessTaskListener {
             chain_id,
             id_address,
             chain_identity,
@@ -53,8 +60,13 @@ impl<G: GroupInfoFetcher, T: BLSTasksUpdater<RandomnessTask>>
     }
 }
 
-impl<G: GroupInfoFetcher, T: BLSTasksUpdater<RandomnessTask>>
-    EventPublisher<ReadyToHandleRandomnessTask> for MockReadyToHandleRandomnessTaskListener<G, T>
+impl<
+        B: BlockInfoFetcher,
+        G: GroupInfoFetcher,
+        T: BLSTasksUpdater<RandomnessTask>,
+        I: ChainIdentity + AdapterClientBuilder,
+    > EventPublisher<ReadyToHandleRandomnessTask>
+    for ReadyToHandleRandomnessTaskListener<B, G, T, I>
 {
     fn publish(&self, event: ReadyToHandleRandomnessTask) {
         self.eq.read().publish(event);
@@ -62,17 +74,18 @@ impl<G: GroupInfoFetcher, T: BLSTasksUpdater<RandomnessTask>>
 }
 
 #[async_trait]
-impl<G: GroupInfoFetcher + Sync + Send, T: BLSTasksUpdater<RandomnessTask> + Sync + Send> Listener
-    for MockReadyToHandleRandomnessTaskListener<G, T>
+impl<
+        B: BlockInfoFetcher + Sync + Send,
+        G: GroupInfoFetcher + Sync + Send,
+        T: BLSTasksUpdater<RandomnessTask> + Sync + Send,
+        I: ChainIdentity + AdapterClientBuilder + Sync + Send,
+    > Listener for ReadyToHandleRandomnessTaskListener<B, G, T, I>
 {
     async fn start(mut self) -> NodeResult<()> {
-        let rpc_endpoint = self
+        let client = self
             .chain_identity
             .read()
-            .get_provider_rpc_endpoint()
-            .to_string();
-
-        let client = MockAdapterClient::new(rpc_endpoint, self.id_address.clone());
+            .build_adapter_client(self.id_address);
 
         let retry_strategy = FixedInterval::from_millis(1000);
 

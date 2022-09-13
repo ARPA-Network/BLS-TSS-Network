@@ -1,16 +1,14 @@
 pub mod types;
-
-use crate::node::dal::types::ChainIdentity;
+use super::ContextFetcher;
 use parking_lot::RwLock;
 use std::sync::Arc;
-
-use super::ContextFetcher;
 
 pub(crate) trait Chain {
     type BlockInfoCache;
     type RandomnessTasksQueue;
     type RandomnessResultCaches;
     type Context;
+    type ChainIdentity;
 
     fn init_components(&self, context: &Self::Context) {
         self.init_listeners(context);
@@ -26,6 +24,20 @@ pub(crate) trait Chain {
 pub(crate) trait AdapterChain: Chain {
     type GroupRelayConfirmationTasksQueue;
     type GroupRelayConfirmationResultCaches;
+
+    fn init_block_listeners(&self, context: &Self::Context);
+
+    fn init_randomness_listeners(&self, context: &Self::Context);
+
+    fn init_group_relay_confirmation_listeners(&self, context: &Self::Context);
+
+    fn init_block_subscribers(&self, context: &Self::Context);
+
+    fn init_randomness_subscribers(&self, context: &Self::Context);
+
+    fn init_group_relay_subscribers(&self, context: &Self::Context);
+
+    fn init_group_relay_confirmation_subscribers(&self, context: &Self::Context);
 }
 
 pub(crate) trait MainChain: Chain {
@@ -33,6 +45,22 @@ pub(crate) trait MainChain: Chain {
     type GroupInfoCache;
     type GroupRelayTasksQueue;
     type GroupRelayResultCaches;
+
+    fn init_block_listeners(&self, context: &Self::Context);
+
+    fn init_dkg_listeners(&self, context: &Self::Context);
+
+    fn init_randomness_listeners(&self, context: &Self::Context);
+
+    fn init_group_relay_listeners(&self, context: &Self::Context);
+
+    fn init_block_subscribers(&self, context: &Self::Context);
+
+    fn init_dkg_subscribers(&self, context: &Self::Context);
+
+    fn init_randomness_subscribers(&self, context: &Self::Context);
+
+    fn init_group_relay_subscribers(&self, context: &Self::Context);
 }
 
 pub(crate) trait ChainFetcher<T: Chain> {
@@ -40,7 +68,7 @@ pub(crate) trait ChainFetcher<T: Chain> {
 
     fn description(&self) -> &str;
 
-    fn get_chain_identity(&self) -> Arc<RwLock<ChainIdentity>>;
+    fn get_chain_identity(&self) -> Arc<RwLock<T::ChainIdentity>>;
 
     fn get_block_cache(&self) -> Arc<RwLock<T::BlockInfoCache>>;
 

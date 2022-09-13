@@ -1,25 +1,26 @@
 use self::committer_stub::committer_service_client::CommitterServiceClient;
 use self::committer_stub::CommitPartialSignatureRequest;
+use super::{CommitterClient, CommitterService};
 use crate::node::dal::types::TaskType;
 use crate::node::error::NodeResult;
+use crate::node::utils::address_to_string;
 use crate::node::ServiceClient;
 use async_trait::async_trait;
+use ethers::types::Address;
 use tonic::Request;
 
-use super::{CommitterClient, CommitterService};
-
 pub mod committer_stub {
-    include!("../../../stub/committer.rs");
+    include!("../../../rpc_stub/committer.rs");
 }
 
 #[derive(Clone, Debug)]
 pub(crate) struct MockCommitterClient {
-    id_address: String,
+    id_address: Address,
     committer_endpoint: String,
 }
 
 impl MockCommitterClient {
-    pub fn new(id_address: String, committer_endpoint: String) -> Self {
+    pub fn new(id_address: Address, committer_endpoint: String) -> Self {
         MockCommitterClient {
             id_address,
             committer_endpoint,
@@ -28,15 +29,15 @@ impl MockCommitterClient {
 }
 
 impl CommitterClient for MockCommitterClient {
-    fn get_id_address(&self) -> &str {
-        &self.id_address
+    fn get_id_address(&self) -> Address {
+        self.id_address
     }
 
     fn get_committer_endpoint(&self) -> &str {
         &self.committer_endpoint
     }
 
-    fn build(id_address: String, committer_endpoint: String) -> Self {
+    fn build(id_address: Address, committer_endpoint: String) -> Self {
         Self::new(id_address, committer_endpoint)
     }
 }
@@ -63,7 +64,7 @@ impl CommitterService for MockCommitterClient {
         partial_signature: Vec<u8>,
     ) -> NodeResult<bool> {
         let request = Request::new(CommitPartialSignatureRequest {
-            id_address: self.id_address.to_string(),
+            id_address: address_to_string(self.id_address),
             chain_id: chain_id as u32,
             signature_index: signature_index as u32,
             partial_signature,

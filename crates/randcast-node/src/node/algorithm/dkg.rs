@@ -1,13 +1,11 @@
 use crate::node::{
-    contract_client::{
-        coordinator::CoordinatorViews, rpc_mock::coordinator::MockCoordinatorClient,
-    },
+    contract_client::coordinator::{CoordinatorTransactions, CoordinatorViews},
     error::NodeResult,
 };
 use async_trait::async_trait;
 use dkg_core::{
     primitives::{joint_feldman::*, *},
-    DKGPhase, Phase2Result,
+    BoardPublisher, DKGPhase, Phase2Result,
 };
 use log::info;
 use rand::RngCore;
@@ -21,31 +19,40 @@ use threshold_bls::{
 #[async_trait]
 pub(crate) trait DKGCore<F, R> {
     async fn run_dkg(
-        &self,
+        &mut self,
         dkg_private_key: Scalar,
         node_rpc_endpoint: String,
         rng: F,
-        coordinator_client: MockCoordinatorClient,
     ) -> NodeResult<DKGOutput<Curve>>
     where
         R: RngCore,
         F: Fn() -> R + Send + 'async_trait;
 }
 
-pub(crate) struct MockDKGCore {}
+pub(crate) struct AllPhasesDKGCore<
+    P: CoordinatorTransactions + CoordinatorViews + BoardPublisher<Curve>,
+> {
+    coordinator_client: P,
+}
+
+impl<P: CoordinatorTransactions + CoordinatorViews + BoardPublisher<Curve>> AllPhasesDKGCore<P> {
+    pub fn new(coordinator_client: P) -> Self {
+        AllPhasesDKGCore { coordinator_client }
+    }
+}
 
 #[async_trait]
-impl<F, R> DKGCore<F, R> for MockDKGCore
+impl<F, R, P> DKGCore<F, R> for AllPhasesDKGCore<P>
 where
     R: RngCore,
     F: Fn() -> R,
+    P: CoordinatorTransactions + CoordinatorViews + BoardPublisher<Curve> + Sync + Send,
 {
     async fn run_dkg(
-        &self,
+        &mut self,
         dkg_private_key: Scalar,
         node_rpc_endpoint: String,
         rng: F,
-        mut coordinator_client: MockCoordinatorClient,
     ) -> NodeResult<DKGOutput<Curve>>
     where
         F: Send + 'async_trait,
@@ -53,18 +60,18 @@ where
         // TODO error handling and retry
 
         // Wait for Phase 0
-        wait_for_phase(&coordinator_client, 0).await?;
+        wait_for_phase(&self.coordinator_client, 0).await?;
 
         // Get the group info
-        let group = coordinator_client.get_bls_keys().await?;
-        let participants = coordinator_client.get_participants().await?;
+        let group = self.coordinator_client.get_bls_keys().await?;
+        let participants = self.coordinator_client.get_participants().await?;
 
         // print some debug info
         info!(
             "Will run DKG with the group listed below and threshold {}",
             group.0
         );
-        for (bls_pubkey, address) in group.1.iter().zip(&participants) {
+        for (bls_pubkey, address) in group.1.iter().zip(participants) {
             let key = bls_pubkey.to_hex::<String>();
             info!("{:?} -> {}", address, key)
         }
@@ -90,43 +97,45 @@ where
         let phase0 = DKG::new(dkg_private_key, node_rpc_endpoint, group)?;
 
         // Run Phase 0 and publish to the chain
-        let phase1 = phase0.run(&mut coordinator_client, rng).await?;
+        let phase1 = phase0.run(&mut self.coordinator_client, rng).await?;
 
         // Wait for Phase 1
-        wait_for_phase(&coordinator_client, 1).await?;
+        wait_for_phase(&self.coordinator_client, 1).await?;
 
         // Get the shares
-        let shares = coordinator_client.get_shares().await?;
+        let shares = self.coordinator_client.get_shares().await?;
         info!("Got {} shares...", shares.len());
         let shares = parse_bundle(&shares)?;
         info!("Parsed {} shares. Running Phase 1.", shares.len());
 
         // Run Phase 1
-        let phase2 = phase1.run(&mut coordinator_client, &shares).await?;
+        let phase2 = phase1.run(&mut self.coordinator_client, &shares).await?;
 
         // Wait for Phase 2
-        wait_for_phase(&coordinator_client, 2).await?;
+        wait_for_phase(&self.coordinator_client, 2).await?;
 
         // Get the responses
-        let responses = coordinator_client.get_responses().await?;
+        let responses = self.coordinator_client.get_responses().await?;
         info!("Got {} responses...", responses.len());
         let responses = parse_bundle(&responses)?;
         info!("Parsed {} responses. Running Phase 2.", responses.len());
 
         // Run Phase 2
-        let result = match phase2.run(&mut coordinator_client, &responses).await? {
+        let result = match phase2.run(&mut self.coordinator_client, &responses).await? {
             Phase2Result::Output(out) => Ok(out),
             // Run Phase 3 if Phase 2 errored
             Phase2Result::GoToPhase3(phase3) => {
                 info!("There were complaints. Running Phase 3.");
                 // Wait for Phase 3
-                wait_for_phase(&coordinator_client, 3).await?;
+                wait_for_phase(&self.coordinator_client, 3).await?;
 
-                let justifications = coordinator_client.get_justifications().await?;
+                let justifications = self.coordinator_client.get_justifications().await?;
                 let justifications = parse_bundle(&justifications)?;
 
                 // Run Phase 3
-                phase3.run(&mut coordinator_client, &justifications).await
+                phase3
+                    .run(&mut self.coordinator_client, &justifications)
+                    .await
             }
         };
 

@@ -1,34 +1,34 @@
 use super::Subscriber;
 use crate::node::{
-    algorithm::bls::{BLSCore, MockBLSCore},
-    contract_client::{
-        adapter::{AdapterTransactions, AdapterViews},
-        rpc_mock::adapter::MockAdapterClient,
-    },
-    dal::{cache::RandomnessResultCache, types::ChainIdentity},
+    algorithm::bls::{BLSCore, SimpleBLSCore},
+    contract_client::adapter::{AdapterClientBuilder, AdapterTransactions, AdapterViews},
+    dal::{cache::RandomnessResultCache, ChainIdentity},
     error::NodeResult,
     event::{ready_to_fulfill_randomness_task::ReadyToFulfillRandomnessTask, types::Topic, Event},
     queue::{event_queue::EventQueue, EventSubscriber},
     scheduler::{dynamic::SimpleDynamicTaskScheduler, TaskScheduler},
 };
 use async_trait::async_trait;
+use ethers::types::Address;
 use log::{error, info};
 use parking_lot::RwLock;
 use std::{collections::HashMap, sync::Arc};
 
-pub struct RandomnessSignatureAggregationSubscriber {
+pub struct RandomnessSignatureAggregationSubscriber<
+    I: ChainIdentity + AdapterClientBuilder + AdapterClientBuilder,
+> {
     pub chain_id: usize,
-    id_address: String,
-    chain_identity: Arc<RwLock<ChainIdentity>>,
+    id_address: Address,
+    chain_identity: Arc<RwLock<I>>,
     eq: Arc<RwLock<EventQueue>>,
     ts: Arc<RwLock<SimpleDynamicTaskScheduler>>,
 }
 
-impl RandomnessSignatureAggregationSubscriber {
+impl<I: ChainIdentity + AdapterClientBuilder> RandomnessSignatureAggregationSubscriber<I> {
     pub fn new(
         chain_id: usize,
-        id_address: String,
-        chain_identity: Arc<RwLock<ChainIdentity>>,
+        id_address: Address,
+        chain_identity: Arc<RwLock<I>>,
         eq: Arc<RwLock<EventQueue>>,
         ts: Arc<RwLock<SimpleDynamicTaskScheduler>>,
     ) -> Self {
@@ -49,25 +49,30 @@ pub trait FulfillRandomnessHandler {
         group_index: usize,
         randomness_task_index: usize,
         signature: Vec<u8>,
-        partial_signatures: HashMap<String, Vec<u8>>,
+        partial_signatures: HashMap<Address, Vec<u8>>,
     ) -> NodeResult<()>;
 }
 
-pub struct MockFulfillRandomnessHandler {
-    adapter_address: String,
-    id_address: String,
+pub struct GeneralFulfillRandomnessHandler<I: ChainIdentity + AdapterClientBuilder> {
+    id_address: Address,
+    chain_identity: Arc<RwLock<I>>,
 }
 
 #[async_trait]
-impl FulfillRandomnessHandler for MockFulfillRandomnessHandler {
+impl<I: ChainIdentity + AdapterClientBuilder + Sync + Send> FulfillRandomnessHandler
+    for GeneralFulfillRandomnessHandler<I>
+{
     async fn handle(
         &self,
         group_index: usize,
         randomness_task_index: usize,
         signature: Vec<u8>,
-        partial_signatures: HashMap<String, Vec<u8>>,
+        partial_signatures: HashMap<Address, Vec<u8>>,
     ) -> NodeResult<()> {
-        let client = MockAdapterClient::new(self.adapter_address.clone(), self.id_address.clone());
+        let client = self
+            .chain_identity
+            .read()
+            .build_adapter_client(self.id_address);
 
         if !client
             .get_signature_task_completion_state(randomness_task_index)
@@ -96,7 +101,9 @@ impl FulfillRandomnessHandler for MockFulfillRandomnessHandler {
     }
 }
 
-impl Subscriber for RandomnessSignatureAggregationSubscriber {
+impl<I: ChainIdentity + AdapterClientBuilder + Sync + Send + 'static> Subscriber
+    for RandomnessSignatureAggregationSubscriber<I>
+{
     fn notify(&self, topic: Topic, payload: Box<dyn Event>) -> NodeResult<()> {
         info!("{:?}", topic);
 
@@ -119,25 +126,21 @@ impl Subscriber for RandomnessSignatureAggregationSubscriber {
                     partial_signatures,
                 } = signature;
 
-                let bls_core = MockBLSCore {};
+                let bls_core = SimpleBLSCore {};
 
                 let signature = bls_core.aggregate(
                     threshold,
                     &partial_signatures.values().cloned().collect::<Vec<_>>(),
                 )?;
 
-                let adapter_address = self
-                    .chain_identity
-                    .read()
-                    .get_provider_rpc_endpoint()
-                    .to_string();
+                let id_address = self.id_address;
 
-                let id_address = self.id_address.clone();
+                let chain_identity = self.chain_identity.clone();
 
                 self.ts.write().add_task(async move {
-                    let handler = MockFulfillRandomnessHandler {
-                        adapter_address,
+                    let handler = GeneralFulfillRandomnessHandler {
                         id_address,
+                        chain_identity,
                     };
 
                     if let Err(e) = handler
