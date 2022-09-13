@@ -13,6 +13,10 @@ name = "node-cmd-client"
 path = "src/node_cmd_client.rs"
 
 [[bin]]
+name = "node-account-client"
+path = "src/node_account_client.rs"
+
+[[bin]]
 name = "user-client"
 path = "src/user_client.rs"
 
@@ -21,7 +25,7 @@ dkg-core = { path = "../dkg-core" }
 threshold-bls = { path = "../threshold-bls", default-features = false, features = ["bls12_381"] }
 
 gumdrop = "0.7.0"
-rand = "0.7.3"
+rand = "0.7"
 bincode = "1.2.1"
 glob = "0.3.0"
 serde = "1.0.106"
@@ -31,11 +35,11 @@ hex = "0.4.2"
 anyhow = "1.0.31"
 futures = "0.3.5"
 async-trait = "0.1.35"
-tokio = { version = "1.17.0", features = ["full"] }
+tokio = { version = "1.20.1", features = ["full"] }
 rustc-hex = "2.1.0"
 clt = "0.0.6"
-tonic = "0.6"
-prost = "0.9"
+tonic = "0.8"
+prost = "0.11"
 parking_lot = "0.12.0"
 serde_yaml = "0.8"
 tokio-retry = "0.3"
@@ -44,7 +48,10 @@ log4rs = "1.1.1"
 rusqlite = { version = "0.28.0", features = ["bundled"] }
 chrono = "0.4"
 structopt = "0.3"
+ethers = { git = "https://github.com/gakonst/ethers-rs", features = ["abigen"] }
+rand_chacha = "0.3.1"
 
 [build-dependencies]
-tonic-build = "0.6"
-prost-build = "0.9"
+tonic-build = "0.8"
+prost-build = "0.11"
+ethers-contract-abigen = { git = "https://github.com/gakonst/ethers-rs" }
