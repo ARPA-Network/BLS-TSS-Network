@@ -19,6 +19,8 @@ jobs:
           version: "3.x"
       - name: Install Anvil
         uses: foundry-rs/foundry-toolchain@v1
+        with:
+          version: nightly
       - name: Checkout
         uses: actions/checkout@v3
         with:

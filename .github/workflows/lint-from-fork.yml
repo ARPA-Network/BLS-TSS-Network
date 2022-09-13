@@ -18,6 +18,8 @@ jobs:
           version: "3.x"
       - name: Install Anvil
         uses: foundry-rs/foundry-toolchain@v1
+        with:
+          version: nightly
       - uses: actions/checkout@v3
         with:
           lfs: "true"
