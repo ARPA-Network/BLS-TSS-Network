@@ -12,10 +12,11 @@ use super::{
 };
 use crate::node::error::{GroupError, NodeInfoError, NodeResult};
 use crate::node::{
-    contract_client::types::{Group as ContractGroup, SIGNATURE_TASK_EXCLUSIVE_WINDOW},
+    contract_client::types::{Group as ContractGroup, RANDOMNESS_TASK_EXCLUSIVE_WINDOW},
     error::NodeError,
 };
 use dkg_core::primitives::DKGOutput;
+use ethers::types::Address;
 use log::info;
 use std::collections::HashMap;
 use threshold_bls::group::Element;
@@ -49,14 +50,14 @@ impl BlockInfoUpdater for InMemoryBlockInfoCache {
 
 #[derive(Debug)]
 pub struct InMemoryNodeInfoCache {
-    pub(crate) id_address: String,
+    pub(crate) id_address: Address,
     pub(crate) node_rpc_endpoint: Option<String>,
     pub(crate) dkg_private_key: Option<Scalar>,
     pub(crate) dkg_public_key: Option<G1>,
 }
 
 impl InMemoryNodeInfoCache {
-    pub fn new(id_address: String) -> Self {
+    pub fn new(id_address: Address) -> Self {
         InMemoryNodeInfoCache {
             id_address,
             node_rpc_endpoint: None,
@@ -80,8 +81,8 @@ impl NodeInfoUpdater for InMemoryNodeInfoCache {
 }
 
 impl NodeInfoFetcher for InMemoryNodeInfoCache {
-    fn get_id_address(&self) -> &str {
-        &self.id_address
+    fn get_id_address(&self) -> Address {
+        self.id_address
     }
 
     fn get_node_rpc_endpoint(&self) -> NodeResult<&str> {
@@ -185,11 +186,11 @@ impl GroupInfoUpdater for InMemoryGroupInfoCache {
         task.members.iter().for_each(|(address, index)| {
             let member = Member {
                 index: *index,
-                id_address: address.to_string(),
+                id_address: *address,
                 rpc_endpint: None,
                 partial_public_key: None,
             };
-            self.group.members.insert(address.to_string(), member);
+            self.group.members.insert(*address, member);
         });
 
         Ok(())
@@ -200,7 +201,7 @@ impl GroupInfoUpdater for InMemoryGroupInfoCache {
         index: usize,
         epoch: usize,
         output: DKGOutput<Curve>,
-    ) -> NodeResult<(G1, G1, Vec<String>)> {
+    ) -> NodeResult<(G1, G1, Vec<Address>)> {
         self.only_has_group_task()?;
 
         if self.group.index != index {
@@ -228,7 +229,7 @@ impl GroupInfoUpdater for InMemoryGroupInfoCache {
             .members
             .iter()
             .filter(|(_, member)| !qualified_node_indices.contains(&member.index))
-            .map(|(id_address, _)| id_address.to_string())
+            .map(|(id_address, _)| *id_address)
             .collect::<Vec<_>>();
 
         let public_key = *output.public.public_key();
@@ -268,7 +269,7 @@ impl GroupInfoUpdater for InMemoryGroupInfoCache {
         &mut self,
         index: usize,
         epoch: usize,
-        committer_indices: Vec<String>,
+        committer_indices: Vec<Address>,
     ) -> NodeResult<()> {
         self.only_has_group_task()?;
 
@@ -342,25 +343,20 @@ impl GroupInfoFetcher for InMemoryGroupInfoCache {
             .map_err(|e| e.into())
     }
 
-    fn get_member(&self, id_address: &str) -> NodeResult<&Member> {
+    fn get_member(&self, id_address: Address) -> NodeResult<&Member> {
         self.only_has_group_task()?;
 
         self.group
             .members
-            .get(id_address)
+            .get(&id_address)
             .ok_or(GroupError::GroupNotExisted)
             .map_err(|e| e.into())
     }
 
-    fn get_committers(&self) -> NodeResult<Vec<&str>> {
+    fn get_committers(&self) -> NodeResult<Vec<Address>> {
         self.only_has_group_task()?;
 
-        Ok(self
-            .group
-            .committers
-            .iter()
-            .map(String::as_str)
-            .collect::<Vec<_>>())
+        Ok(self.group.committers.clone())
     }
 
     fn get_dkg_start_block_height(&self) -> NodeResult<usize> {
@@ -375,10 +371,10 @@ impl GroupInfoFetcher for InMemoryGroupInfoCache {
         Ok(self.dkg_status)
     }
 
-    fn is_committer(&self, id_address: &str) -> NodeResult<bool> {
+    fn is_committer(&self, id_address: Address) -> NodeResult<bool> {
         self.only_has_group_task()?;
 
-        Ok(self.group.committers.contains(&id_address.to_string()))
+        Ok(self.group.committers.contains(&id_address))
     }
 }
 
@@ -415,8 +411,7 @@ impl<T: Task + Clone> BLSTasksFetcher<T> for InMemoryBLSTasksQueue<T> {
             .bls_tasks
             .get(task_index)
             .map(|task| &task.state)
-            .or(Some(&false))
-            .unwrap())
+            .unwrap_or(&false))
     }
 }
 
@@ -439,7 +434,7 @@ impl BLSTasksUpdater<RandomnessTask> for InMemoryBLSTasksQueue<RandomnessTask> {
             .filter(|task| {
                 task.task.group_index == current_group_index
                     || current_block_height
-                        > task.task.assignment_block_height + SIGNATURE_TASK_EXCLUSIVE_WINDOW
+                        > task.task.assignment_block_height + RANDOMNESS_TASK_EXCLUSIVE_WINDOW
             })
             .map(|task| {
                 task.state = true;
@@ -536,9 +531,15 @@ impl Task for GroupRelayConfirmationResultCache {
     }
 }
 
-impl ResultCache for RandomnessResultCache {}
-impl ResultCache for GroupRelayResultCache {}
-impl ResultCache for GroupRelayConfirmationResultCache {}
+impl ResultCache for RandomnessResultCache {
+    type M = String;
+}
+impl ResultCache for GroupRelayResultCache {
+    type M = ContractGroup;
+}
+impl ResultCache for GroupRelayConfirmationResultCache {
+    type M = GroupRelayConfirmation;
+}
 
 pub struct BLSResultCache<T: ResultCache> {
     pub result_cache: T,
@@ -551,7 +552,7 @@ pub struct RandomnessResultCache {
     pub randomness_task_index: usize,
     pub message: String,
     pub threshold: usize,
-    pub partial_signatures: HashMap<String, Vec<u8>>,
+    pub partial_signatures: HashMap<Address, Vec<u8>>,
 }
 
 #[derive(Clone)]
@@ -560,7 +561,7 @@ pub struct GroupRelayResultCache {
     pub group_relay_task_index: usize,
     pub relayed_group: ContractGroup,
     pub threshold: usize,
-    pub partial_signatures: HashMap<String, Vec<u8>>,
+    pub partial_signatures: HashMap<Address, Vec<u8>>,
 }
 
 #[derive(Clone)]
@@ -569,7 +570,7 @@ pub struct GroupRelayConfirmationResultCache {
     pub group_relay_confirmation_task_index: usize,
     pub group_relay_confirmation: GroupRelayConfirmation,
     pub threshold: usize,
-    pub partial_signatures: HashMap<String, Vec<u8>>,
+    pub partial_signatures: HashMap<Address, Vec<u8>>,
 }
 
 impl<T: ResultCache> SignatureResultCacheFetcher<T> for InMemorySignatureResultCache<T> {
@@ -582,7 +583,7 @@ impl<T: ResultCache> SignatureResultCacheFetcher<T> for InMemorySignatureResultC
     }
 }
 
-impl SignatureResultCacheUpdater<RandomnessResultCache, String>
+impl SignatureResultCacheUpdater<RandomnessResultCache>
     for InMemorySignatureResultCache<RandomnessResultCache>
 {
     fn add(
@@ -614,7 +615,7 @@ impl SignatureResultCacheUpdater<RandomnessResultCache, String>
     fn add_partial_signature(
         &mut self,
         signature_index: usize,
-        member_address: String,
+        member_address: Address,
         partial_signature: Vec<u8>,
     ) -> NodeResult<bool> {
         let signature_result_cache = self
@@ -644,7 +645,7 @@ impl SignatureResultCacheUpdater<RandomnessResultCache, String>
     }
 }
 
-impl SignatureResultCacheUpdater<GroupRelayResultCache, ContractGroup>
+impl SignatureResultCacheUpdater<GroupRelayResultCache>
     for InMemorySignatureResultCache<GroupRelayResultCache>
 {
     fn add(
@@ -676,7 +677,7 @@ impl SignatureResultCacheUpdater<GroupRelayResultCache, ContractGroup>
     fn add_partial_signature(
         &mut self,
         signature_index: usize,
-        member_address: String,
+        member_address: Address,
         partial_signature: Vec<u8>,
     ) -> NodeResult<bool> {
         let signature_result_cache = self
@@ -706,7 +707,7 @@ impl SignatureResultCacheUpdater<GroupRelayResultCache, ContractGroup>
     }
 }
 
-impl SignatureResultCacheUpdater<GroupRelayConfirmationResultCache, GroupRelayConfirmation>
+impl SignatureResultCacheUpdater<GroupRelayConfirmationResultCache>
     for InMemorySignatureResultCache<GroupRelayConfirmationResultCache>
 {
     fn add(
@@ -738,7 +739,7 @@ impl SignatureResultCacheUpdater<GroupRelayConfirmationResultCache, GroupRelayCo
     fn add_partial_signature(
         &mut self,
         signature_index: usize,
-        member_address: String,
+        member_address: Address,
         partial_signature: Vec<u8>,
     ) -> NodeResult<bool> {
         let signature_result_cache = self

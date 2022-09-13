@@ -1,5 +1,9 @@
-use super::Task;
+use super::{ChainIdentity, Task};
 use crate::node::contract_client::types::Group as ContractGroup;
+use ethers::{
+    signers::{LocalWallet, Signer},
+    types::Address,
+};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use threshold_bls::curve::bls12381::G1;
@@ -42,9 +46,9 @@ pub struct DKGTask {
     pub epoch: usize,
     pub size: usize,
     pub threshold: usize,
-    pub members: BTreeMap<String, usize>,
+    pub members: BTreeMap<Address, usize>,
     pub assignment_block_height: usize,
-    pub coordinator_address: String,
+    pub coordinator_address: Address,
 }
 
 #[derive(Debug, Clone)]
@@ -73,8 +77,8 @@ pub struct Group {
     pub threshold: usize,
     pub state: bool,
     pub public_key: Option<G1>,
-    pub members: BTreeMap<String, Member>,
-    pub committers: Vec<String>,
+    pub members: BTreeMap<Address, Member>,
+    pub committers: Vec<Address>,
 }
 
 impl Group {
@@ -95,7 +99,7 @@ impl Group {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Member {
     pub index: usize,
-    pub id_address: String,
+    pub id_address: Address,
     pub rpc_endpint: Option<String>,
     pub partial_public_key: Option<G1>,
 }
@@ -184,42 +188,97 @@ impl From<i32> for TaskType {
 }
 
 #[derive(Clone)]
-pub struct ChainIdentity {
+pub struct MockChainIdentity {
     id: usize,
-    private_key: Vec<u8>,
-    id_address: String,
+    chain_id: usize,
+    id_address: Address,
     provider_rpc_endpoint: String,
 }
 
-impl ChainIdentity {
+impl MockChainIdentity {
     pub fn new(
         id: usize,
-        private_key: Vec<u8>,
-        id_address: String,
+        chain_id: usize,
+        id_address: Address,
         provider_rpc_endpoint: String,
     ) -> Self {
-        ChainIdentity {
+        MockChainIdentity {
             id,
-            private_key,
+            chain_id,
             id_address,
             provider_rpc_endpoint,
         }
     }
+}
 
-    pub fn get_id(&self) -> usize {
+impl ChainIdentity for MockChainIdentity {
+    fn get_id(&self) -> usize {
         self.id
     }
 
-    pub fn get_private_key(&self) -> &[u8] {
-        &self.private_key
+    fn get_chain_id(&self) -> usize {
+        self.chain_id
     }
 
-    pub fn get_id_address(&self) -> &str {
-        &self.id_address
+    fn get_id_address(&self) -> Address {
+        self.id_address
     }
 
-    pub fn get_provider_rpc_endpoint(&self) -> &str {
+    fn get_provider_rpc_endpoint(&self) -> &str {
         &self.provider_rpc_endpoint
+    }
+
+    fn get_contract_address(&self) -> Address {
+        Address::random()
+    }
+}
+
+#[derive(Clone)]
+pub struct GeneralChainIdentity {
+    id: usize,
+    chain_id: usize,
+    pub(crate) wallet: LocalWallet,
+    provider_rpc_endpoint: String,
+    contract_address: Address,
+}
+
+impl GeneralChainIdentity {
+    pub fn new(
+        id: usize,
+        chain_id: usize,
+        wallet: LocalWallet,
+        provider_rpc_endpoint: String,
+        contract_address: Address,
+    ) -> Self {
+        GeneralChainIdentity {
+            id,
+            chain_id,
+            wallet,
+            provider_rpc_endpoint,
+            contract_address,
+        }
+    }
+}
+
+impl ChainIdentity for GeneralChainIdentity {
+    fn get_id(&self) -> usize {
+        self.id
+    }
+
+    fn get_chain_id(&self) -> usize {
+        self.chain_id
+    }
+
+    fn get_id_address(&self) -> Address {
+        self.wallet.address()
+    }
+
+    fn get_provider_rpc_endpoint(&self) -> &str {
+        &self.provider_rpc_endpoint
+    }
+
+    fn get_contract_address(&self) -> Address {
+        self.contract_address
     }
 }
 

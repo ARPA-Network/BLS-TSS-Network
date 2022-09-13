@@ -48,12 +48,13 @@ impl<E: Event + Clone + Send + Sync + 'static> EventPublisher<E> for EventQueue 
 pub mod tests {
     use std::sync::Arc;
 
+    use ethers::types::Address;
     use parking_lot::RwLock;
 
     use crate::node::{
-        dal::{cache::InMemoryBlockInfoCache, types::ChainIdentity, BlockInfoFetcher},
+        dal::{cache::InMemoryBlockInfoCache, types::GeneralChainIdentity, BlockInfoFetcher},
         event::new_block::NewBlock,
-        listener::block::MockBlockListener,
+        listener::block::BlockListener,
         queue::event_queue::EventQueue,
         subscriber::{block::BlockSubscriber, Subscriber},
     };
@@ -74,11 +75,16 @@ pub mod tests {
 
         s.subscribe();
 
-        let chain_identity = ChainIdentity::new(0, vec![], "".to_string(), "".to_string());
+        let fake_wallet = "4c0883a69102937d6231471b5dbb6204fe5129617082792ae468d01a3f362318"
+            .parse()
+            .unwrap();
+
+        let chain_identity =
+            GeneralChainIdentity::new(0, 0, fake_wallet, "".to_string(), Address::random());
 
         let chain_identity = Arc::new(RwLock::new(chain_identity));
 
-        let p = MockBlockListener::new(chain_id, "".to_string(), chain_identity, eq);
+        let p = BlockListener::new(chain_id, chain_identity, eq);
 
         p.publish(NewBlock {
             chain_id,

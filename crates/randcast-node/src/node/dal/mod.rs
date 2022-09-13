@@ -2,10 +2,10 @@ pub mod cache;
 pub mod sqlite;
 pub mod test_helper;
 pub mod types;
-pub mod utils;
 
 use crate::node::error::NodeResult;
 use dkg_core::primitives::DKGOutput;
+use ethers::types::Address;
 use threshold_bls::{
     curve::bls12381::{Curve, Scalar, G1},
     sig::Share,
@@ -30,7 +30,7 @@ pub trait NodeInfoUpdater {
 }
 
 pub trait NodeInfoFetcher {
-    fn get_id_address(&self) -> &str;
+    fn get_id_address(&self) -> Address;
 
     fn get_node_rpc_endpoint(&self) -> NodeResult<&str>;
 
@@ -54,13 +54,13 @@ pub trait GroupInfoUpdater {
         index: usize,
         epoch: usize,
         output: DKGOutput<Curve>,
-    ) -> NodeResult<(G1, G1, Vec<String>)>;
+    ) -> NodeResult<(G1, G1, Vec<Address>)>;
 
     fn save_committers(
         &mut self,
         index: usize,
         epoch: usize,
-        committer_indices: Vec<String>,
+        committer_indices: Vec<Address>,
     ) -> NodeResult<()>;
 }
 
@@ -79,15 +79,15 @@ pub trait GroupInfoFetcher {
 
     fn get_secret_share(&self) -> NodeResult<&Share<Scalar>>;
 
-    fn get_member(&self, id_address: &str) -> NodeResult<&Member>;
+    fn get_member(&self, id_address: Address) -> NodeResult<&Member>;
 
-    fn get_committers(&self) -> NodeResult<Vec<&str>>;
+    fn get_committers(&self) -> NodeResult<Vec<Address>>;
 
     fn get_dkg_start_block_height(&self) -> NodeResult<usize>;
 
     fn get_dkg_status(&self) -> NodeResult<DKGStatus>;
 
-    fn is_committer(&self, id_address: &str) -> NodeResult<bool>;
+    fn is_committer(&self, id_address: Address) -> NodeResult<bool>;
 }
 
 pub trait BLSTasksFetcher<T> {
@@ -114,21 +114,21 @@ pub trait SignatureResultCacheFetcher<T: ResultCache> {
     fn get(&self, signature_index: usize) -> Option<&BLSResultCache<T>>;
 }
 
-pub trait SignatureResultCacheUpdater<T: ResultCache, M> {
+pub trait SignatureResultCacheUpdater<T: ResultCache> {
     fn get_ready_to_commit_signatures(&mut self) -> Vec<T>;
 
     fn add(
         &mut self,
         group_index: usize,
         signature_index: usize,
-        message: M,
+        message: T::M,
         threshold: usize,
     ) -> NodeResult<bool>;
 
     fn add_partial_signature(
         &mut self,
         signature_index: usize,
-        member_address: String,
+        member_address: Address,
         partial_signature: Vec<u8>,
     ) -> NodeResult<bool>;
 }
@@ -137,4 +137,18 @@ pub trait Task {
     fn index(&self) -> usize;
 }
 
-pub trait ResultCache: Task {}
+pub trait ResultCache: Task {
+    type M;
+}
+
+pub trait ChainIdentity {
+    fn get_id(&self) -> usize;
+
+    fn get_chain_id(&self) -> usize;
+
+    fn get_id_address(&self) -> Address;
+
+    fn get_provider_rpc_endpoint(&self) -> &str;
+
+    fn get_contract_address(&self) -> Address;
+}

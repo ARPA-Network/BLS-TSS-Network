@@ -1,9 +1,7 @@
+use ethers::types::Address;
 use randcast_node::node::contract_client::adapter::{AdapterTransactions, AdapterViews};
-use randcast_node::node::contract_client::controller::ControllerViews;
+use randcast_node::node::contract_client::rpc_mock::adapter::MockAdapterClient;
 use randcast_node::node::contract_client::types::Group as ContractGroup;
-use randcast_node::node::contract_client::{
-    rpc_mock::adapter::MockAdapterClient, rpc_mock::controller::MockControllerClient,
-};
 use std::env;
 
 #[tokio::main]
@@ -32,9 +30,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         None => panic!("Didn't get an instruction string"),
     };
 
+    let id_address: Address = id_address.parse().unwrap();
+
     if contract_type == "1" {
         // Controller
-        let client = MockControllerClient::new(contract_rpc_endpoint, id_address.clone());
+        let client = MockAdapterClient::new(contract_rpc_endpoint, id_address);
 
         if instruction == "set_initial_group" {
             let group = client.get_group(1).await?;

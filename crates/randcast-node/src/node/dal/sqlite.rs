@@ -2,17 +2,18 @@ use std::collections::BTreeMap;
 use std::marker::PhantomData;
 use std::path::PathBuf;
 
-use crate::node::contract_client::types::SIGNATURE_TASK_EXCLUSIVE_WINDOW;
+use crate::node::contract_client::types::RANDOMNESS_TASK_EXCLUSIVE_WINDOW;
 use crate::node::error::{GroupError, NodeInfoError, NodeResult};
+use crate::node::utils::{address_to_string, format_now_date};
 
 use super::cache::InMemoryNodeInfoCache;
 use super::types::{DKGStatus, Member, RandomnessTask};
-use super::utils::format_now_date;
 use super::{cache::InMemoryGroupInfoCache, types::Group};
 use super::{
     BLSTasksFetcher, BLSTasksUpdater, GroupInfoFetcher, GroupInfoUpdater, NodeInfoFetcher,
     NodeInfoUpdater, Task,
 };
+use ethers::types::Address;
 use log::info;
 use rusqlite::Connection;
 use thiserror::Error;
@@ -64,7 +65,7 @@ impl NodeInfoRecord {
 impl From<NodeInfoRecord> for InMemoryNodeInfoCache {
     fn from(node_info: NodeInfoRecord) -> Self {
         InMemoryNodeInfoCache {
-            id_address: node_info.id_address,
+            id_address: node_info.id_address.parse().unwrap(),
             node_rpc_endpoint: Some(node_info.node_rpc_endpoint),
             dkg_private_key: node_info
                 .dkg_private_key
@@ -268,7 +269,7 @@ impl NodeInfoDBClient {
 
     pub fn save_node_info(
         &mut self,
-        id_address: String,
+        id_address: Address,
         node_rpc_endpoint: String,
     ) -> DBResult<()> {
         let mut conn = self.db_client.get_connection()?;
@@ -283,7 +284,7 @@ impl NodeInfoDBClient {
         tx.execute(
             "insert into t_node_info(id_address, node_rpc_endpoint, dkg_private_key, dkg_public_key, date) 
             values(?1, ?2, ?3, ?4, ?5)",
-            (id_address, node_rpc_endpoint, dkg_private_key, dkg_public_key, format_now_date()),
+            (address_to_string(id_address), node_rpc_endpoint, dkg_private_key, dkg_public_key, format_now_date()),
         )
         .map_err(|e| {
             let e: DBError = e.into();
@@ -391,9 +392,9 @@ impl NodeInfoUpdater for NodeInfoDBClient {
 }
 
 impl NodeInfoFetcher for NodeInfoDBClient {
-    fn get_id_address(&self) -> &str {
+    fn get_id_address(&self) -> Address {
         let node_info = &self.node_info_cache.as_ref().unwrap().cache;
-        &node_info.id_address
+        node_info.id_address
     }
 
     fn get_node_rpc_endpoint(&self) -> NodeResult<&str> {
@@ -560,7 +561,7 @@ impl GroupInfoFetcher for GroupInfoDBClient {
             .map_err(|e| e.into())
     }
 
-    fn get_member(&self, id_address: &str) -> NodeResult<&Member> {
+    fn get_member(&self, id_address: Address) -> NodeResult<&Member> {
         self.only_has_group_task()?;
 
         let group_info = self.group_info_cache.as_ref().unwrap();
@@ -568,22 +569,18 @@ impl GroupInfoFetcher for GroupInfoDBClient {
 
         group
             .members
-            .get(id_address)
+            .get(&id_address)
             .ok_or(GroupError::GroupNotExisted)
             .map_err(|e| e.into())
     }
 
-    fn get_committers(&self) -> NodeResult<Vec<&str>> {
+    fn get_committers(&self) -> NodeResult<Vec<Address>> {
         self.only_has_group_task()?;
 
         let group_info = self.group_info_cache.as_ref().unwrap();
         let group = &group_info.cache.group;
 
-        Ok(group
-            .committers
-            .iter()
-            .map(String::as_str)
-            .collect::<Vec<_>>())
+        Ok(group.committers.clone())
     }
 
     fn get_dkg_start_block_height(&self) -> NodeResult<usize> {
@@ -602,13 +599,13 @@ impl GroupInfoFetcher for GroupInfoDBClient {
         Ok(group_info.cache.dkg_status)
     }
 
-    fn is_committer(&self, id_address: &str) -> NodeResult<bool> {
+    fn is_committer(&self, id_address: Address) -> NodeResult<bool> {
         self.only_has_group_task()?;
 
         let group_info = self.group_info_cache.as_ref().unwrap();
         let group = &group_info.cache.group;
 
-        Ok(group.committers.contains(&id_address.to_string()))
+        Ok(group.committers.contains(&id_address))
     }
 }
 
@@ -671,7 +668,7 @@ impl GroupInfoUpdater for GroupInfoDBClient {
             .map(|(address, index)| {
                 let member = Member {
                     index: *index,
-                    id_address: address.to_string(),
+                    id_address: *address,
                     rpc_endpint: None,
                     partial_public_key: None,
                 };
@@ -724,7 +721,7 @@ impl GroupInfoUpdater for GroupInfoDBClient {
     ) -> NodeResult<(
         threshold_bls::curve::bls12381::G1,
         threshold_bls::curve::bls12381::G1,
-        Vec<String>,
+        Vec<Address>,
     )> {
         self.only_has_group_task()?;
 
@@ -767,7 +764,7 @@ impl GroupInfoUpdater for GroupInfoDBClient {
             .members
             .iter()
             .filter(|(_, member)| !qualified_node_indices.contains(&member.index))
-            .map(|(id_address, _)| id_address.to_string())
+            .map(|(id_address, _)| *id_address)
             .collect::<Vec<_>>();
 
         group
@@ -836,7 +833,7 @@ impl GroupInfoUpdater for GroupInfoDBClient {
         &mut self,
         index: usize,
         epoch: usize,
-        committer_indices: Vec<String>,
+        committer_indices: Vec<Address>,
     ) -> NodeResult<()> {
         self.only_has_group_task()?;
 
@@ -999,7 +996,7 @@ impl BLSTasksUpdater<RandomnessTask> for BLSTasksDBClient<RandomnessTask> {
             .query_map(
                 (
                     current_group_index,
-                    current_block_height - SIGNATURE_TASK_EXCLUSIVE_WINDOW,
+                    current_block_height - RANDOMNESS_TASK_EXCLUSIVE_WINDOW,
                 ),
                 |row| {
                     Ok(RandomnessTask {
@@ -1042,6 +1039,7 @@ pub mod sqlite_tests {
         },
         error::GroupError,
     };
+    use ethers::types::Address;
     use std::{collections::BTreeMap, fs, path::PathBuf};
     use threshold_bls::{
         curve::bls12381::{self},
@@ -1102,10 +1100,19 @@ pub mod sqlite_tests {
     fn test_save_task_info() {
         setup();
         let mut db = build_group_info_db_client();
-        let mut members: BTreeMap<String, usize> = BTreeMap::new();
-        members.insert("0x1".to_string(), 0);
-        members.insert("0x2".to_string(), 1);
-        members.insert("0x3".to_string(), 2);
+        let mut members: BTreeMap<Address, usize> = BTreeMap::new();
+        let member_1 = "0x0000000000000000000000000000000000000001"
+            .parse()
+            .unwrap();
+        let member_2 = "0x0000000000000000000000000000000000000002"
+            .parse()
+            .unwrap();
+        let member_3 = "0x0000000000000000000000000000000000000003"
+            .parse()
+            .unwrap();
+        members.insert(member_1, 0);
+        members.insert(member_2, 1);
+        members.insert(member_3, 2);
 
         let task = DKGTask {
             group_index: 1,
@@ -1114,7 +1121,9 @@ pub mod sqlite_tests {
             threshold: 3,
             members,
             assignment_block_height: 100,
-            coordinator_address: "0xcoordinator".to_string(),
+            coordinator_address: "0x00000000000000000000000000000000000000c1"
+                .parse()
+                .unwrap(),
         };
 
         if let Err(e) = db.save_task_info(1, task) {
@@ -1130,9 +1139,9 @@ pub mod sqlite_tests {
 
         assert_eq!(3, res.cache.get_size().unwrap());
         assert_eq!(3, res.cache.get_threshold().unwrap());
-        assert_eq!(0, res.cache.get_member("0x1").unwrap().index);
-        assert_eq!(1, res.cache.get_member("0x2").unwrap().index);
-        assert_eq!(2, res.cache.get_member("0x3").unwrap().index);
+        assert_eq!(0, res.cache.get_member(member_1).unwrap().index);
+        assert_eq!(1, res.cache.get_member(member_2).unwrap().index);
+        assert_eq!(2, res.cache.get_member(member_3).unwrap().index);
 
         teardown();
     }
@@ -1141,10 +1150,19 @@ pub mod sqlite_tests {
     fn test_update_dkg_status() {
         setup();
         let mut db = build_group_info_db_client();
-        let mut members: BTreeMap<String, usize> = BTreeMap::new();
-        members.insert("0x1".to_string(), 0);
-        members.insert("0x2".to_string(), 1);
-        members.insert("0x3".to_string(), 2);
+        let mut members: BTreeMap<Address, usize> = BTreeMap::new();
+        let member_1 = "0x0000000000000000000000000000000000000001"
+            .parse()
+            .unwrap();
+        let member_2 = "0x0000000000000000000000000000000000000002"
+            .parse()
+            .unwrap();
+        let member_3 = "0x0000000000000000000000000000000000000003"
+            .parse()
+            .unwrap();
+        members.insert(member_1, 0);
+        members.insert(member_2, 1);
+        members.insert(member_3, 2);
 
         let task = DKGTask {
             group_index: 1,
@@ -1153,7 +1171,9 @@ pub mod sqlite_tests {
             threshold: 3,
             members,
             assignment_block_height: 100,
-            coordinator_address: "0xcoordinator".to_string(),
+            coordinator_address: "0x00000000000000000000000000000000000000c1"
+                .parse()
+                .unwrap(),
         };
 
         if let Err(e) = db.save_task_info(1, task) {
@@ -1180,10 +1200,19 @@ pub mod sqlite_tests {
     async fn test_save_output() {
         setup();
         let mut db = build_group_info_db_client();
-        let mut members: BTreeMap<String, usize> = BTreeMap::new();
-        members.insert("0x1".to_string(), 0);
-        members.insert("0x2".to_string(), 1);
-        members.insert("0x3".to_string(), 2);
+        let mut members: BTreeMap<Address, usize> = BTreeMap::new();
+        let member_1 = "0x0000000000000000000000000000000000000001"
+            .parse()
+            .unwrap();
+        let member_2 = "0x0000000000000000000000000000000000000002"
+            .parse()
+            .unwrap();
+        let member_3 = "0x0000000000000000000000000000000000000003"
+            .parse()
+            .unwrap();
+        members.insert(member_1, 0);
+        members.insert(member_2, 1);
+        members.insert(member_3, 2);
 
         let task = DKGTask {
             group_index: 1,
@@ -1192,7 +1221,9 @@ pub mod sqlite_tests {
             threshold: 3,
             members,
             assignment_block_height: 100,
-            coordinator_address: "0xcoordinator".to_string(),
+            coordinator_address: "0x00000000000000000000000000000000000000c1"
+                .parse()
+                .unwrap(),
         };
 
         if let Err(e) = db.save_task_info(0, task) {
@@ -1231,15 +1262,15 @@ pub mod sqlite_tests {
         );
         assert_eq!(
             Some(output.public.eval(0).value),
-            res.cache.get_member("0x1").unwrap().partial_public_key
+            res.cache.get_member(member_1).unwrap().partial_public_key
         );
         assert_eq!(
             Some(output.public.eval(1).value),
-            res.cache.get_member("0x2").unwrap().partial_public_key
+            res.cache.get_member(member_2).unwrap().partial_public_key
         );
         assert_eq!(
             Some(output.public.eval(2).value),
-            res.cache.get_member("0x3").unwrap().partial_public_key
+            res.cache.get_member(member_3).unwrap().partial_public_key
         );
 
         teardown();
@@ -1331,14 +1362,16 @@ pub mod sqlite_tests {
 
         let mut db = build_node_info_db_client();
 
-        let id_address = String::from("0x1");
+        let id_address = "0x0000000000000000000000000000000000000001"
+            .parse()
+            .unwrap();
         let node_rpc_endpoint = String::from("127.0.0.1");
 
         if let Err(e) = db.save_node_info(id_address, node_rpc_endpoint) {
             println!("{:?}", e);
         }
 
-        assert_eq!("0x1", db.get_id_address());
+        assert_eq!(id_address, db.get_id_address());
         assert_eq!("127.0.0.1", db.get_node_rpc_endpoint().unwrap());
 
         teardown();
@@ -1350,7 +1383,9 @@ pub mod sqlite_tests {
 
         let mut db = build_node_info_db_client();
 
-        let id_address = String::from("0x1");
+        let id_address = "0x0000000000000000000000000000000000000001"
+            .parse()
+            .unwrap();
         let node_rpc_endpoint = String::from("127.0.0.1");
 
         if let Err(e) = db.save_node_info(id_address, node_rpc_endpoint) {
@@ -1374,7 +1409,9 @@ pub mod sqlite_tests {
 
         let mut db = build_node_info_db_client();
 
-        let id_address = String::from("0x1");
+        let id_address = "0x0000000000000000000000000000000000000001"
+            .parse()
+            .unwrap();
         let node_rpc_endpoint = String::from("127.0.0.1");
 
         if let Err(e) = db.save_node_info(id_address, node_rpc_endpoint) {

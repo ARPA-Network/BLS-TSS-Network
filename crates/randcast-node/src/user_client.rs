@@ -1,5 +1,6 @@
 use std::env;
 
+use ethers::types::Address;
 use randcast_node::node::contract_client::{
     adapter::{AdapterTransactions, AdapterViews},
     rpc_mock::adapter::MockAdapterClient,
@@ -25,6 +26,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         Some(arg) => arg,
         None => panic!("Didn't get an instruction string"),
     };
+
+    let id_address: Address = id_address.parse().unwrap();
 
     let client = MockAdapterClient::new(adapter_rpc_endpoint, id_address);
 
