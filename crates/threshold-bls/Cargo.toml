@@ -8,7 +8,7 @@ edition = "2018"
 crate-type = ["lib"]
 
 [dependencies]
-rand_core = { version = "0.5.1", default-features = false }
+rand_core = { version = "0.5", default-features = false }
 rand = "0.7"
 serde = {version = "1.0.106", features = ["derive"] }
 

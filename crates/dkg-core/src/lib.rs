@@ -14,9 +14,22 @@ pub use board::BoardPublisher;
 /// Higher level objects for running a JF-DKG
 pub mod node;
 pub use node::{DKGPhase, NodeError, Phase2Result};
+use threshold_bls::group::Element;
+use threshold_bls::sig::Scheme;
 
 /// Low level primitives and datatypes for implementing DKGs
 pub mod primitives;
 
 #[cfg(test)]
 pub mod test_helpers;
+
+pub fn generate_keypair<S: Scheme>() -> (S::Private, S::Public) {
+    let rng = &mut rand::thread_rng();
+
+    let private = S::Private::rand(rng);
+
+    let mut public = S::Public::one();
+    public.mul(&private);
+
+    (private, public)
+}

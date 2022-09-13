@@ -7,8 +7,13 @@ use super::{
 };
 use crate::node::{
     committer::server,
+    contract_client::{
+        adapter::AdapterClientBuilder, controller::ControllerClientBuilder,
+        coordinator::CoordinatorClientBuilder, provider::ChainProviderBuilder,
+    },
     dal::{
         types::RandomnessTask,
+        ChainIdentity,
         {BLSTasksFetcher, BLSTasksUpdater, GroupInfoFetcher, GroupInfoUpdater, NodeInfoFetcher},
     },
     error::{NodeError, NodeResult},
@@ -25,27 +30,53 @@ use std::{collections::HashMap, sync::Arc};
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Config {
-    pub id_address: String,
     pub node_rpc_endpoint: String,
-    pub controller_endpoint: String,
+    pub provider_endpoint: String,
+    pub controller_address: String,
+    // Data file for persistence
+    pub data_path: Option<String>,
+    pub account: Account,
     pub adapters: Vec<Adapter>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Adapter {
     pub id: usize,
-    pub id_address: String,
     pub name: String,
     pub endpoint: String,
+    pub account: Account,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct Account {
+    pub hdwallet: Option<HDWallet>,
+    pub keystore: Option<Keystore>,
+    // not recommended
+    pub private_key: Option<String>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct Keystore {
+    pub path: String,
+    pub password: String,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct HDWallet {
+    pub mnemonic: String,
+    pub path: Option<String>,
+    pub index: u32,
+    pub passphrase: Option<String>,
 }
 
 pub struct GeneralContext<
     N: NodeInfoFetcher,
     G: GroupInfoFetcher + GroupInfoUpdater,
     T: BLSTasksFetcher<RandomnessTask> + BLSTasksUpdater<RandomnessTask>,
+    I: ChainIdentity + ControllerClientBuilder + CoordinatorClientBuilder + AdapterClientBuilder,
 > {
-    main_chain: GeneralMainChain<N, G, T>,
-    adapter_chains: HashMap<usize, GeneralAdapterChain<N, G, T>>,
+    main_chain: GeneralMainChain<N, G, T, I>,
+    adapter_chains: HashMap<usize, GeneralAdapterChain<N, G, T, I>>,
     eq: Arc<RwLock<EventQueue>>,
     ts: Arc<RwLock<SimpleDynamicTaskScheduler>>,
     f_ts: Arc<RwLock<SimpleFixedTaskScheduler>>,
@@ -55,9 +86,17 @@ impl<
         N: NodeInfoFetcher + Sync + Send + 'static,
         G: GroupInfoFetcher + GroupInfoUpdater + Sync + Send + 'static,
         T: BLSTasksFetcher<RandomnessTask> + BLSTasksUpdater<RandomnessTask> + Sync + Send + 'static,
-    > GeneralContext<N, G, T>
+        I: ChainIdentity
+            + ControllerClientBuilder
+            + CoordinatorClientBuilder
+            + AdapterClientBuilder
+            + ChainProviderBuilder
+            + Sync
+            + Send
+            + 'static,
+    > GeneralContext<N, G, T, I>
 {
-    pub fn new(main_chain: GeneralMainChain<N, G, T>) -> Self {
+    pub fn new(main_chain: GeneralMainChain<N, G, T, I>) -> Self {
         GeneralContext {
             main_chain,
             adapter_chains: HashMap::new(),
@@ -69,7 +108,7 @@ impl<
 
     pub fn add_adapter_chain(
         &mut self,
-        adapter_chain: GeneralAdapterChain<N, G, T>,
+        adapter_chain: GeneralAdapterChain<N, G, T, I>,
     ) -> NodeResult<()> {
         if self.adapter_chains.contains_key(&adapter_chain.id()) {
             return Err(NodeError::RepeatedChainId);
@@ -86,11 +125,19 @@ impl<
         N: NodeInfoFetcher + Sync + Send + 'static,
         G: GroupInfoFetcher + GroupInfoUpdater + Sync + Send + 'static,
         T: BLSTasksFetcher<RandomnessTask> + BLSTasksUpdater<RandomnessTask> + Sync + Send + 'static,
-    > Context for GeneralContext<N, G, T>
+        I: ChainIdentity
+            + ControllerClientBuilder
+            + CoordinatorClientBuilder
+            + AdapterClientBuilder
+            + ChainProviderBuilder
+            + Sync
+            + Send
+            + 'static,
+    > Context for GeneralContext<N, G, T, I>
 {
-    type MainChain = GeneralMainChain<N, G, T>;
+    type MainChain = GeneralMainChain<N, G, T, I>;
 
-    type AdapterChain = GeneralAdapterChain<N, G, T>;
+    type AdapterChain = GeneralAdapterChain<N, G, T, I>;
 
     fn deploy(self) -> ContextHandle {
         self.get_main_chain().init_components(&self);
@@ -124,7 +171,15 @@ impl<
         N: NodeInfoFetcher + Sync + Send + 'static,
         G: GroupInfoFetcher + GroupInfoUpdater + Sync + Send + 'static,
         T: BLSTasksFetcher<RandomnessTask> + BLSTasksUpdater<RandomnessTask> + Sync + Send + 'static,
-    > ContextFetcher<GeneralContext<N, G, T>> for GeneralContext<N, G, T>
+        I: ChainIdentity
+            + ControllerClientBuilder
+            + CoordinatorClientBuilder
+            + AdapterClientBuilder
+            + ChainProviderBuilder
+            + Sync
+            + Send
+            + 'static,
+    > ContextFetcher<GeneralContext<N, G, T, I>> for GeneralContext<N, G, T, I>
 {
     fn contains_chain(&self, index: usize) -> bool {
         self.adapter_chains.contains_key(&index)
@@ -133,11 +188,11 @@ impl<
     fn get_adapter_chain(
         &self,
         index: usize,
-    ) -> Option<&<GeneralContext<N, G, T> as Context>::AdapterChain> {
+    ) -> Option<&<GeneralContext<N, G, T, I> as Context>::AdapterChain> {
         self.adapter_chains.get(&index)
     }
 
-    fn get_main_chain(&self) -> &<GeneralContext<N, G, T> as Context>::MainChain {
+    fn get_main_chain(&self) -> &<GeneralContext<N, G, T, I> as Context>::MainChain {
         &self.main_chain
     }
 
@@ -181,12 +236,20 @@ impl<
         N: NodeInfoFetcher + Sync + Send + 'static,
         G: GroupInfoFetcher + GroupInfoUpdater + Sync + Send + 'static,
         T: BLSTasksFetcher<RandomnessTask> + BLSTasksUpdater<RandomnessTask> + Sync + Send + 'static,
-    > CommitterServerStarter<GeneralContext<N, G, T>> for SimpleFixedTaskScheduler
+        I: ChainIdentity
+            + ControllerClientBuilder
+            + CoordinatorClientBuilder
+            + AdapterClientBuilder
+            + ChainProviderBuilder
+            + Sync
+            + Send
+            + 'static,
+    > CommitterServerStarter<GeneralContext<N, G, T, I>> for SimpleFixedTaskScheduler
 {
     fn start_committer_server(
         &mut self,
         rpc_endpoint: String,
-        context: Arc<RwLock<GeneralContext<N, G, T>>>,
+        context: Arc<RwLock<GeneralContext<N, G, T, I>>>,
     ) {
         self.add_task(async move {
             if let Err(e) = server::start_committer_server(rpc_endpoint, context).await {

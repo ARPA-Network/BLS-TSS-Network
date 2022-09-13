@@ -1,11 +1,18 @@
-id_address: "0x1"
-
 node_rpc_endpoint: "[::1]:50060"
 
-controller_endpoint: "[::1]:50052"
+provider_endpoint: "[::1]:50052"
+
+controller_address: "0x0000000000000000000000000000000000000001"
+
+account:
+  #private_key: "4c0883a69102937d6231471b5dbb6204fe5129617082792ae468d01a3f362318"
+  keystore:
+    password: env
+    path: test.keystore
 
 adapters:
   - id: 1
-    id_address: "0x1_1"
     name: eth
     endpoint: "[::1]:50053"
+    account:
+      private_key: "4c0883a69102937d6231471b5dbb6204fe5129617082792ae468d01a3f362318"

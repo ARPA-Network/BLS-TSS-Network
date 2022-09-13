@@ -1,5 +1,4 @@
-use std::path::PathBuf;
-
+use ethers::signers::Signer;
 use log::{info, LevelFilter};
 use log4rs::append::console::ConsoleAppender;
 use log4rs::append::file::FileAppender;
@@ -10,7 +9,9 @@ use log4rs::Config as LogConfig;
 use randcast_node::node::context::chain::types::GeneralMainChain;
 use randcast_node::node::context::types::{Config, GeneralContext};
 use randcast_node::node::context::{Context, TaskWaiter};
-use randcast_node::node::contract_client::controller::ControllerTransactions;
+use randcast_node::node::contract_client::controller::{
+    ControllerClientBuilder, ControllerTransactions,
+};
 use randcast_node::node::contract_client::rpc_mock::controller::MockControllerClient;
 use randcast_node::node::dal::cache::{
     InMemoryBLSTasksQueue, InMemoryGroupInfoCache, InMemoryNodeInfoCache,
@@ -18,16 +19,17 @@ use randcast_node::node::dal::cache::{
 use randcast_node::node::dal::sqlite::{
     init_tables, BLSTasksDBClient, GroupInfoDBClient, NodeInfoDBClient,
 };
-use randcast_node::node::dal::types::{ChainIdentity, RandomnessTask};
-use randcast_node::node::dal::utils::format_now_date;
+use randcast_node::node::dal::types::{GeneralChainIdentity, MockChainIdentity, RandomnessTask};
 use randcast_node::node::dal::{NodeInfoFetcher, NodeInfoUpdater};
+use randcast_node::node::utils::{build_wallet_from_config, format_now_date};
 use std::fs::{self, read_to_string};
+use std::path::PathBuf;
 use structopt::StructOpt;
 use threshold_bls::schemes::bls12_381::G1Scheme;
 use threshold_bls::sig::Scheme;
 
 #[derive(StructOpt, Debug)]
-#[structopt(name = "Randcast Node")]
+#[structopt(name = "Arpa Node")]
 pub struct Opt {
     /// Mode to run.
     /// 1) new-run: First run on Randcast client. Loading data from config.yml settings.
@@ -43,10 +45,6 @@ pub struct Opt {
     /// Set the config path
     #[structopt(short = "c", long, parse(from_os_str), default_value = "config.yml")]
     config_path: PathBuf,
-
-    /// Data file for persistence
-    #[structopt(short, long, parse(from_os_str), default_value = "data.sqlite")]
-    data_path: PathBuf,
 }
 
 #[tokio::main]
@@ -117,23 +115,32 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         _ => config_str,
     };
 
-    let config: Config = serde_yaml::from_str(yaml_str).expect("Error loading configuration file");
-
+    let mut config: Config =
+        serde_yaml::from_str(yaml_str).expect("Error loading configuration file");
+    if config.data_path.is_none() {
+        config.data_path = Some(String::from("data.sqlite"));
+    }
     info!("{:?}", config);
+
+    let data_path = PathBuf::from(config.data_path.unwrap());
 
     match opt.mode.as_str() {
         "new-run" => {
-            if opt.data_path.exists() {
+            let wallet = build_wallet_from_config(config.account)?;
+
+            let id_address = wallet.address();
+
+            if data_path.exists() {
                 fs::rename(
-                    opt.data_path.clone(),
-                    opt.data_path
+                    data_path.clone(),
+                    data_path
                         .parent()
                         .unwrap()
                         .join(format!("bak_{}.sqlite", format_now_date())),
                 )?;
                 info!("Existing data file found. Renamed to the directory of data_path.",);
             }
-            init_tables(opt.data_path.clone())?;
+            init_tables(data_path.clone())?;
 
             let rng = &mut rand::thread_rng();
 
@@ -143,34 +150,38 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             info!("dkg public_key: {}", dkg_public_key);
             info!("-------------------------------------------------------");
 
-            let mut node_cache = NodeInfoDBClient::new(opt.data_path.clone());
+            let mut node_cache = NodeInfoDBClient::new(data_path.clone());
 
-            node_cache
-                .save_node_info(config.id_address.clone(), config.node_rpc_endpoint.clone())?;
+            node_cache.save_node_info(id_address, config.node_rpc_endpoint.clone())?;
 
             node_cache
                 .set_dkg_key_pair(dkg_private_key, dkg_public_key)
                 .unwrap();
 
-            let group_cache = GroupInfoDBClient::new(opt.data_path.clone());
+            let group_cache = GroupInfoDBClient::new(data_path.clone());
 
-            let randomness_tasks_cache = BLSTasksDBClient::<RandomnessTask>::new(opt.data_path);
+            let randomness_tasks_cache = BLSTasksDBClient::<RandomnessTask>::new(data_path);
 
-            let main_chain_identity = ChainIdentity::new(
+            let main_chain_identity = GeneralChainIdentity::new(
                 0,
-                vec![],
-                config.id_address.clone(),
-                config.controller_endpoint.clone(),
+                0,
+                wallet,
+                config.provider_endpoint.clone(),
+                config
+                    .controller_address
+                    .parse()
+                    .expect("bad format of controller_address"),
             );
 
             let main_chain = GeneralMainChain::<
                 NodeInfoDBClient,
                 GroupInfoDBClient,
                 BLSTasksDBClient<RandomnessTask>,
+                GeneralChainIdentity,
             >::new(
                 0,
                 "main chain".to_string(),
-                main_chain_identity,
+                main_chain_identity.clone(),
                 node_cache,
                 group_cache,
                 randomness_tasks_cache,
@@ -181,7 +192,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             let handle = context.deploy();
 
             // TODO register node to randcast network, this should be moved to node_cmd_client(triggering manully to avoid accidental operation) in prod
-            let client = MockControllerClient::new(config.controller_endpoint, config.id_address);
+            let client = main_chain_identity.build_controller_client();
 
             client
                 .node_register(bincode::serialize(&dkg_public_key).unwrap())
@@ -190,34 +201,45 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             handle.wait_task().await;
         }
         "re-run" => {
-            let mut node_cache = NodeInfoDBClient::new(opt.data_path.clone());
+            let wallet = build_wallet_from_config(config.account)?;
+
+            let id_address = wallet.address();
+
+            let mut node_cache = NodeInfoDBClient::new(data_path.clone());
 
             node_cache.refresh_current_node_info().expect(
                 "It seems there is no existing node record. Please execute in new-run mode.",
             );
 
+            assert_eq!(node_cache.get_id_address(), id_address,"Node identity is different from the database, please check or execute in new-run mode.");
+
             node_cache.get_node_rpc_endpoint()?;
             node_cache.get_dkg_public_key()?;
 
-            let mut group_cache = GroupInfoDBClient::new(opt.data_path.clone());
+            let mut group_cache = GroupInfoDBClient::new(data_path.clone());
 
             group_cache.refresh_current_group_info().expect(
                 "It seems there is no existing group record. Please execute in new-run mode.",
             );
 
-            let randomness_tasks_cache = BLSTasksDBClient::<RandomnessTask>::new(opt.data_path);
+            let randomness_tasks_cache = BLSTasksDBClient::<RandomnessTask>::new(data_path);
 
-            let main_chain_identity = ChainIdentity::new(
+            let main_chain_identity = GeneralChainIdentity::new(
                 0,
-                vec![],
-                config.id_address.clone(),
-                config.controller_endpoint.clone(),
+                0,
+                wallet,
+                config.provider_endpoint.clone(),
+                config
+                    .controller_address
+                    .parse()
+                    .expect("bad format of controller_address"),
             );
 
             let main_chain = GeneralMainChain::<
                 NodeInfoDBClient,
                 GroupInfoDBClient,
                 BLSTasksDBClient<RandomnessTask>,
+                GeneralChainIdentity,
             >::new(
                 0,
                 "main chain".to_string(),
@@ -234,6 +256,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             handle.wait_task().await;
         }
         "demo" => {
+            let id_address = format!("0x000000000000000000000000000000000000000{}", node_id)
+                .parse()
+                .unwrap();
+
             let rng = &mut rand::thread_rng();
 
             let (dkg_private_key, dkg_public_key) = G1Scheme::keypair(rng);
@@ -242,7 +268,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             info!("dkg public_key: {}", dkg_public_key);
             info!("-------------------------------------------------------");
 
-            let mut node_cache = InMemoryNodeInfoCache::new(config.id_address.clone());
+            let mut node_cache = InMemoryNodeInfoCache::new(id_address);
 
             node_cache
                 .set_node_rpc_endpoint(config.node_rpc_endpoint.clone())
@@ -254,12 +280,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
             let group_cache = InMemoryGroupInfoCache::new();
 
-            let main_chain_identity = ChainIdentity::new(
-                0,
-                vec![],
-                config.id_address.clone(),
-                config.controller_endpoint.clone(),
-            );
+            let main_chain_identity =
+                MockChainIdentity::new(0, 0, id_address, config.provider_endpoint.clone());
 
             let randomness_tasks_cache = InMemoryBLSTasksQueue::<RandomnessTask>::new();
 
@@ -267,6 +289,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 InMemoryNodeInfoCache,
                 InMemoryGroupInfoCache,
                 InMemoryBLSTasksQueue<RandomnessTask>,
+                MockChainIdentity,
             >::new(
                 0,
                 "main chain".to_string(),
@@ -302,7 +325,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             let handle = context.deploy();
 
             // register node to randcast network
-            let client = MockControllerClient::new(config.controller_endpoint, config.id_address);
+            let client = MockControllerClient::new(config.provider_endpoint, id_address);
 
             client
                 .node_register(bincode::serialize(&dkg_public_key).unwrap())

@@ -1,8 +1,6 @@
-id_address: "0x5"
-
 node_rpc_endpoint: "[::1]:50065"
 
-controller_endpoint: "[::1]:50052"
+provider_endpoint: "[::1]:50052"
 
 adapters:
   - id: 1
