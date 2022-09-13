@@ -18,4 +18,4 @@ jobs:
       - name: Format
         run: cargo fmt
       - name: Lint
-        run: cargo clippy
+        run: cargo clippy -- -A clippy::derive_partial_eq_without_eq
