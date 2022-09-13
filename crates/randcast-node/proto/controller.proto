@@ -43,27 +43,23 @@ message MineReply {
 }
 
 service Views {
-  rpc GetGroup(GetGroupRequest) returns (GroupReply);
+  rpc GetNode(GetNodeRequest) returns (NodeReply);
 
   rpc EmitDkgTask(google.protobuf.Empty) returns (DkgTaskReply);
 
   rpc EmitGroupRelayTask(google.protobuf.Empty) returns (GroupRelayTaskReply);
 }
 
-message GetGroupRequest {
-  uint32 index = 1;
+message GetNodeRequest {
+  string id_address = 1;
 }
 
-message GroupReply {
-  uint32 index = 1;
-  uint32 epoch = 2;
-  uint32 capacity = 3;
-  uint32 size = 4;
-  uint32 threshold = 5;
-  bool state = 6;
-  bytes public_key = 7;
-  map<string, Member> members = 8;
-  repeated string committers = 9;
+message NodeReply {
+  string id_address = 1;
+  bytes id_public_key = 2;
+  bool state = 3;
+  uint32 pending_until_block = 4;
+  uint32 staking = 5;
 }
 
 message Member {

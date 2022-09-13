@@ -3,7 +3,7 @@ use self::controller::{
         Transactions as ControllerTransactions, TransactionsServer as ControllerTransactionsServer,
     },
     views_server::{Views as ControllerViews, ViewsServer as ControllerViewsServer},
-    CommitDkgRequest, GetGroupRequest, GroupReply, Member, NodeRegisterRequest,
+    CommitDkgRequest, GetNodeRequest, Member, NodeRegisterRequest, NodeReply,
     PostProcessDkgRequest,
 };
 use self::coordinator::{
@@ -23,15 +23,17 @@ use super::adapter_server::{
     MockAdapter,
 };
 use crate::contract::{
-    adapter::AdapterViews,
-    controller::{Controller, ControllerMockHelper, ControllerTransactions as ModelControllerTrxs},
+    controller::{
+        Controller, ControllerMockHelper, ControllerTransactions as ModelControllerTrxs,
+        ControllerViews as ModelControllerViews, COORDINATOR_ADDRESS_PREFIX,
+    },
     coordinator::{Transactions, Views},
     errors::ControllerError,
-    types::{DKGTask, Group, GroupRelayTask, Member as ModelMember},
+    types::{DKGTask, GroupRelayTask, Member as ModelMember, Node},
 };
 use controller::{DkgTaskReply, GroupRelayTaskReply, MineReply, MineRequest};
 use parking_lot::RwLock;
-use std::{collections::BTreeMap, sync::Arc};
+use std::sync::Arc;
 use tonic::{transport::Server, Request, Response, Status};
 
 pub mod controller {
@@ -61,39 +63,29 @@ impl MockCoordinator {
         MockCoordinator { controller }
     }
 
-    fn check_coordinator_index_and_epoch<T>(
+    fn check_and_fetch_coordinator_group_index_from_request<T>(
         &self,
         req: &Request<T>,
-    ) -> Result<(usize, usize), Status> {
-        let req_index = req
+    ) -> Result<usize, Status> {
+        let address = req
             .metadata()
-            .get("index")
-            .ok_or_else(|| Status::invalid_argument("group index is empty"))?
+            .get("address")
+            .ok_or_else(|| Status::invalid_argument("coordinator address is empty"))?
             .to_str()
-            .map(|i| i.parse::<usize>().unwrap())
-            .map_err(|_| Status::invalid_argument("group index is invalid"))?;
+            .map(|i| i.to_string())
+            .map_err(|_| Status::invalid_argument("coordinator address is invalid"))?;
 
-        let req_epoch = req
-            .metadata()
-            .get("epoch")
-            .ok_or_else(|| Status::invalid_argument("group epoch is empty"))?
-            .to_str()
-            .map(|i| i.parse::<usize>().unwrap())
-            .map_err(|_| Status::invalid_argument("group epoch is invalid"))?;
+        let req_index = address[COORDINATOR_ADDRESS_PREFIX.len()..]
+            .parse()
+            .map_err(|_| Status::invalid_argument("invalid coordinator address format"))?;
 
         let controller = self.controller.read();
 
-        let (_, coordinator) = controller.coordinators.get(&req_index).ok_or_else(|| {
+        controller.coordinators.get(&req_index).ok_or_else(|| {
             Status::not_found(ControllerError::CoordinatorNotExisted(req_index).to_string())
         })?;
 
-        if coordinator.epoch != req_epoch {
-            return Err(Status::internal(
-                ControllerError::CoordinatorEpochObsolete(controller.epoch).to_string(),
-            ));
-        }
-
-        Ok((req_index, req_epoch))
+        Ok(req_index)
     }
 }
 
@@ -163,46 +155,16 @@ impl ControllerTransactions for MockController {
 
 #[tonic::async_trait]
 impl ControllerViews for MockController {
-    async fn get_group(
+    async fn get_node(
         &self,
-        request: Request<GetGroupRequest>,
-    ) -> Result<Response<GroupReply>, Status> {
+        request: Request<GetNodeRequest>,
+    ) -> Result<Response<NodeReply>, Status> {
         let req = request.into_inner();
 
-        match self.controller.read().get_group(req.index as usize) {
-            Some(group) => {
-                let Group {
-                    index,
-                    epoch,
-                    capacity,
-                    size,
-                    threshold,
-                    is_strictly_majority_consensus_reached,
-                    public_key,
-                    members,
-                    committers,
-                    ..
-                } = group.clone();
-
-                let members: BTreeMap<String, Member> = members
-                    .into_iter()
-                    .map(|(id_address, m)| (id_address, m.into()))
-                    .collect();
-
-                Ok(Response::new(GroupReply {
-                    index: index as u32,
-                    epoch: epoch as u32,
-                    capacity: capacity as u32,
-                    size: size as u32,
-                    threshold: threshold as u32,
-                    state: is_strictly_majority_consensus_reached,
-                    public_key,
-                    members,
-                    committers,
-                }))
-            }
+        match self.controller.read().get_node(&req.id_address) {
+            Some(node) => Ok(Response::new(node.clone().into())),
             None => Err(Status::not_found(
-                ControllerError::GroupNotExisted.to_string(),
+                ControllerError::NodeNotExisted.to_string(),
             )),
         }
     }
@@ -269,7 +231,7 @@ impl ControllerViews for MockController {
 #[tonic::async_trait]
 impl CoordinatorTransactions for MockCoordinator {
     async fn publish(&self, request: Request<PublishRequest>) -> Result<Response<()>, Status> {
-        let (req_index, _) = self.check_coordinator_index_and_epoch(&request)?;
+        let req_index = self.check_and_fetch_coordinator_group_index_from_request(&request)?;
 
         let req = request.into_inner();
 
@@ -288,7 +250,7 @@ impl CoordinatorTransactions for MockCoordinator {
 #[tonic::async_trait]
 impl CoordinatorViews for MockCoordinator {
     async fn get_shares(&self, request: Request<()>) -> Result<Response<SharesReply>, Status> {
-        let (req_index, _) = self.check_coordinator_index_and_epoch(&request)?;
+        let req_index = self.check_and_fetch_coordinator_group_index_from_request(&request)?;
 
         self.controller
             .read()
@@ -305,7 +267,7 @@ impl CoordinatorViews for MockCoordinator {
         &self,
         request: Request<()>,
     ) -> Result<Response<ResponsesReply>, Status> {
-        let (req_index, _) = self.check_coordinator_index_and_epoch(&request)?;
+        let req_index = self.check_and_fetch_coordinator_group_index_from_request(&request)?;
 
         self.controller
             .read()
@@ -322,7 +284,7 @@ impl CoordinatorViews for MockCoordinator {
         &self,
         request: Request<()>,
     ) -> Result<Response<JustificationsReply>, Status> {
-        let (req_index, _) = self.check_coordinator_index_and_epoch(&request)?;
+        let req_index = self.check_and_fetch_coordinator_group_index_from_request(&request)?;
 
         self.controller
             .read()
@@ -339,7 +301,7 @@ impl CoordinatorViews for MockCoordinator {
         &self,
         request: Request<()>,
     ) -> Result<Response<ParticipantsReply>, Status> {
-        let (req_index, _) = self.check_coordinator_index_and_epoch(&request)?;
+        let req_index = self.check_and_fetch_coordinator_group_index_from_request(&request)?;
 
         self.controller
             .read()
@@ -356,7 +318,7 @@ impl CoordinatorViews for MockCoordinator {
         &self,
         request: Request<()>,
     ) -> Result<Response<BlsKeysReply>, tonic::Status> {
-        let (req_index, _) = self.check_coordinator_index_and_epoch(&request)?;
+        let req_index = self.check_and_fetch_coordinator_group_index_from_request(&request)?;
 
         self.controller
             .read()
@@ -375,7 +337,7 @@ impl CoordinatorViews for MockCoordinator {
     }
 
     async fn in_phase(&self, request: Request<()>) -> Result<Response<InPhaseReply>, Status> {
-        let (req_index, _) = self.check_coordinator_index_and_epoch(&request)?;
+        let req_index = self.check_and_fetch_coordinator_group_index_from_request(&request)?;
 
         self.controller
             .read()
@@ -390,6 +352,18 @@ impl CoordinatorViews for MockCoordinator {
                 })
             })
             .map_err(|e| Status::internal(e.to_string()))
+    }
+}
+
+impl From<Node> for NodeReply {
+    fn from(n: Node) -> Self {
+        NodeReply {
+            id_address: n.id_address,
+            id_public_key: n.id_public_key,
+            state: n.state,
+            pending_until_block: n.pending_until_block as u32,
+            staking: n.staking as u32,
+        }
     }
 }
 

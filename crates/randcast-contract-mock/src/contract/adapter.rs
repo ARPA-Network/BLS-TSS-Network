@@ -39,7 +39,7 @@ pub struct Adapter {
     pub(crate) signature_task: Option<SignatureTask>,
     group_relay_confirmation_task: Option<GroupRelayConfirmationTask>,
     unresponsive_group_task: Option<UnresponsiveGroupEvent>,
-    pub(crate) deployed_address: String,
+    pub(crate) _deployed_address: String,
 }
 
 impl Adapter {
@@ -59,7 +59,7 @@ impl Adapter {
             signature_task: None,
             group_relay_confirmation_task: None,
             unresponsive_group_task: None,
-            deployed_address,
+            _deployed_address: deployed_address,
         }
     }
 }
@@ -576,7 +576,7 @@ impl AdapterTransactions for Adapter {
     }
 
     fn set_initial_group(&mut self, id_address: &str, group: Vec<u8>) -> ControllerResult<()> {
-        if id_address != "0xadmin" {
+        if id_address != "0x00000000000000000000000000000000000000ad" {
             return Err(ControllerError::AuthenticationFailed);
         }
 

@@ -40,30 +40,22 @@ pub struct MineReply {
     pub block_number: u32,
 }
 #[derive(Clone, PartialEq, ::prost::Message)]
-pub struct GetGroupRequest {
-    #[prost(uint32, tag = "1")]
-    pub index: u32,
+pub struct GetNodeRequest {
+    #[prost(string, tag = "1")]
+    pub id_address: ::prost::alloc::string::String,
 }
 #[derive(Clone, PartialEq, ::prost::Message)]
-pub struct GroupReply {
-    #[prost(uint32, tag = "1")]
-    pub index: u32,
-    #[prost(uint32, tag = "2")]
-    pub epoch: u32,
-    #[prost(uint32, tag = "3")]
-    pub capacity: u32,
-    #[prost(uint32, tag = "4")]
-    pub size: u32,
-    #[prost(uint32, tag = "5")]
-    pub threshold: u32,
-    #[prost(bool, tag = "6")]
+pub struct NodeReply {
+    #[prost(string, tag = "1")]
+    pub id_address: ::prost::alloc::string::String,
+    #[prost(bytes = "vec", tag = "2")]
+    pub id_public_key: ::prost::alloc::vec::Vec<u8>,
+    #[prost(bool, tag = "3")]
     pub state: bool,
-    #[prost(bytes = "vec", tag = "7")]
-    pub public_key: ::prost::alloc::vec::Vec<u8>,
-    #[prost(btree_map = "string, message", tag = "8")]
-    pub members: ::prost::alloc::collections::BTreeMap<::prost::alloc::string::String, Member>,
-    #[prost(string, repeated, tag = "9")]
-    pub committers: ::prost::alloc::vec::Vec<::prost::alloc::string::String>,
+    #[prost(uint32, tag = "4")]
+    pub pending_until_block: u32,
+    #[prost(uint32, tag = "5")]
+    pub staking: u32,
 }
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct Member {
@@ -335,10 +327,10 @@ pub mod views_server {
     #[doc = "Generated trait containing gRPC methods that should be implemented for use with ViewsServer."]
     #[async_trait]
     pub trait Views: Send + Sync + 'static {
-        async fn get_group(
+        async fn get_node(
             &self,
-            request: tonic::Request<super::GetGroupRequest>,
-        ) -> Result<tonic::Response<super::GroupReply>, tonic::Status>;
+            request: tonic::Request<super::GetNodeRequest>,
+        ) -> Result<tonic::Response<super::NodeReply>, tonic::Status>;
         async fn emit_dkg_task(
             &self,
             request: tonic::Request<()>,
@@ -387,18 +379,18 @@ pub mod views_server {
         fn call(&mut self, req: http::Request<B>) -> Self::Future {
             let inner = self.inner.clone();
             match req.uri().path() {
-                "/controller.Views/GetGroup" => {
+                "/controller.Views/GetNode" => {
                     #[allow(non_camel_case_types)]
-                    struct GetGroupSvc<T: Views>(pub Arc<T>);
-                    impl<T: Views> tonic::server::UnaryService<super::GetGroupRequest> for GetGroupSvc<T> {
-                        type Response = super::GroupReply;
+                    struct GetNodeSvc<T: Views>(pub Arc<T>);
+                    impl<T: Views> tonic::server::UnaryService<super::GetNodeRequest> for GetNodeSvc<T> {
+                        type Response = super::NodeReply;
                         type Future = BoxFuture<tonic::Response<Self::Response>, tonic::Status>;
                         fn call(
                             &mut self,
-                            request: tonic::Request<super::GetGroupRequest>,
+                            request: tonic::Request<super::GetNodeRequest>,
                         ) -> Self::Future {
                             let inner = self.0.clone();
-                            let fut = async move { (*inner).get_group(request).await };
+                            let fut = async move { (*inner).get_node(request).await };
                             Box::pin(fut)
                         }
                     }
@@ -407,7 +399,7 @@ pub mod views_server {
                     let inner = self.inner.clone();
                     let fut = async move {
                         let inner = inner.0;
-                        let method = GetGroupSvc(inner);
+                        let method = GetNodeSvc(inner);
                         let codec = tonic::codec::ProstCodec::default();
                         let mut grpc = tonic::server::Grpc::new(codec).apply_compression_config(
                             accept_compression_encodings,

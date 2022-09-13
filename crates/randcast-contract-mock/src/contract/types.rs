@@ -3,6 +3,7 @@ use std::hash::{Hash, Hasher};
 
 use serde::{Deserialize, Serialize};
 
+#[derive(Clone, PartialEq, Serialize, Deserialize)]
 pub struct Node {
     pub id_address: String,
     pub id_public_key: Vec<u8>,
