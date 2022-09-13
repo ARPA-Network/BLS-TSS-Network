@@ -3,8 +3,14 @@ pub mod rpc_mock;
 pub mod types;
 
 pub mod controller {
-    use crate::node::{dal::types::Group, error::NodeResult};
+    use crate::node::{
+        dal::types::{DKGTask, GroupRelayTask},
+        error::NodeResult,
+    };
     use async_trait::async_trait;
+    use ethers::types::Address;
+
+    use super::types::Node;
 
     #[async_trait]
     pub trait ControllerTransactions {
@@ -16,7 +22,7 @@ pub mod controller {
             group_epoch: usize,
             public_key: Vec<u8>,
             partial_public_key: Vec<u8>,
-            disqualified_nodes: Vec<String>,
+            disqualified_nodes: Vec<Address>,
         ) -> NodeResult<()>;
 
         async fn post_process_dkg(&self, group_index: usize, group_epoch: usize) -> NodeResult<()>;
@@ -24,13 +30,44 @@ pub mod controller {
 
     #[async_trait]
     pub trait ControllerViews {
-        async fn get_group(&self, group_index: usize) -> NodeResult<Group>;
+        async fn get_node(&self, id_address: Address) -> NodeResult<Node>;
+    }
+
+    #[async_trait]
+    pub trait ControllerLogs {
+        async fn subscribe_dkg_task(
+            &self,
+            cb: Box<dyn Fn(DKGTask) -> NodeResult<()> + Sync + Send>,
+        ) -> NodeResult<()>;
+
+        async fn subscribe_group_relay_task(
+            &self,
+            cb: Box<dyn Fn(GroupRelayTask) -> NodeResult<()> + Sync + Send>,
+        ) -> NodeResult<()>;
+    }
+
+    pub trait ControllerClientBuilder {
+        type Service: ControllerTransactions + ControllerViews + ControllerLogs + Sync + Send;
+
+        fn build_controller_client(&self) -> Self::Service;
     }
 }
 
 pub mod coordinator {
-    use crate::node::error::NodeResult;
+    use crate::node::error::{NodeError, NodeResult};
     use async_trait::async_trait;
+    use dkg_core::BoardPublisher;
+    use ethers::types::Address;
+    use thiserror::Error;
+    use threshold_bls::curve::bls12381::Curve;
+
+    #[derive(Debug, Error)]
+    pub enum DKGContractError {
+        #[error(transparent)]
+        SerializationError(#[from] bincode::Error),
+        #[error(transparent)]
+        PublishingError(#[from] NodeError),
+    }
 
     #[async_trait]
     pub trait CoordinatorTransactions {
@@ -55,7 +92,7 @@ pub mod coordinator {
         async fn get_justifications(&self) -> NodeResult<Vec<Vec<u8>>>;
 
         /// Gets the participants' ethereum addresses
-        async fn get_participants(&self) -> NodeResult<Vec<String>>;
+        async fn get_participants(&self) -> NodeResult<Vec<Address>>;
 
         /// Gets the participants' BLS keys along with the thershold of the DKG
         async fn get_bls_keys(&self) -> NodeResult<(usize, Vec<Vec<u8>>)>;
@@ -63,14 +100,27 @@ pub mod coordinator {
         /// Returns the current phase of the DKG.
         async fn in_phase(&self) -> NodeResult<usize>;
     }
+
+    pub trait CoordinatorClientBuilder {
+        type Service: CoordinatorTransactions
+            + CoordinatorViews
+            + BoardPublisher<Curve>
+            + Sync
+            + Send;
+
+        fn build_coordinator_client(&self, contract_address: Address) -> Self::Service;
+    }
 }
 
 pub mod adapter {
     use crate::node::{
-        dal::types::{Group, GroupRelayConfirmationTaskState},
+        dal::types::{
+            Group, GroupRelayConfirmationTask, GroupRelayConfirmationTaskState, RandomnessTask,
+        },
         error::NodeResult,
     };
     use async_trait::async_trait;
+    use ethers::types::Address;
     use std::collections::HashMap;
 
     #[async_trait]
@@ -82,7 +132,7 @@ pub mod adapter {
             group_index: usize,
             signature_index: usize,
             signature: Vec<u8>,
-            partial_signatures: HashMap<String, Vec<u8>>,
+            partial_signatures: HashMap<Address, Vec<u8>>,
         ) -> NodeResult<()>;
 
         async fn fulfill_relay(
@@ -120,5 +170,45 @@ pub mod adapter {
             &self,
             task_index: usize,
         ) -> NodeResult<GroupRelayConfirmationTaskState>;
+    }
+
+    #[async_trait]
+    pub trait AdapterLogs {
+        async fn subscribe_randomness_task(
+            &self,
+            cb: Box<dyn Fn(RandomnessTask) -> NodeResult<()> + Sync + Send>,
+        ) -> NodeResult<()>;
+
+        async fn subscribe_group_relay_confirmation_task(
+            &self,
+            cb: Box<dyn Fn(GroupRelayConfirmationTask) -> NodeResult<()> + Sync + Send>,
+        ) -> NodeResult<()>;
+    }
+
+    pub trait AdapterClientBuilder {
+        type Service: AdapterTransactions + AdapterViews + AdapterLogs + Sync + Send;
+
+        fn build_adapter_client(&self, main_id_address: Address) -> Self::Service;
+    }
+}
+
+pub mod provider {
+
+    use async_trait::async_trait;
+
+    use crate::node::error::NodeResult;
+
+    #[async_trait]
+    pub trait BlockFetcher {
+        async fn subscribe_new_block_height(
+            &self,
+            cb: Box<dyn Fn(usize) -> NodeResult<()> + Sync + Send>,
+        ) -> NodeResult<()>;
+    }
+
+    pub trait ChainProviderBuilder {
+        type Service: BlockFetcher + Sync + Send;
+
+        fn build_chain_provider(&self) -> Self::Service;
     }
 }

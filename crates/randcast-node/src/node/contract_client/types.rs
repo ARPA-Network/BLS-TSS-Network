@@ -1,11 +1,21 @@
 use crate::node::dal::types::{Group as NodeGroup, Member as NodeMember};
+use crate::node::utils::address_to_string;
+use ethers::types::Address;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use std::hash::{Hash, Hasher};
 
 pub const GROUP_MAX_CAPACITY: usize = 10;
 
-pub const SIGNATURE_TASK_EXCLUSIVE_WINDOW: usize = 30;
+pub const RANDOMNESS_TASK_EXCLUSIVE_WINDOW: usize = 30;
+
+pub struct Node {
+    pub id_address: String,
+    pub id_public_key: Vec<u8>,
+    pub state: bool,
+    pub pending_until_block: usize,
+    pub staking: usize,
+}
 
 impl From<NodeGroup> for Group {
     fn from(g: NodeGroup) -> Self {
@@ -18,8 +28,10 @@ impl From<NodeGroup> for Group {
         let members: BTreeMap<String, Member> = g
             .members
             .into_iter()
-            .map(|(id_address, m)| (id_address, m.into()))
+            .map(|(id_address, m)| (address_to_string(id_address), m.into()))
             .collect();
+
+        let committers = g.committers.into_iter().map(address_to_string).collect();
 
         Group {
             index: g.index,
@@ -31,7 +43,7 @@ impl From<NodeGroup> for Group {
             public_key,
             fail_randomness_task_count: 0,
             members,
-            committers: g.committers,
+            committers,
             commit_cache: BTreeMap::new(),
         }
     }
@@ -70,7 +82,7 @@ pub struct Group {
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Member {
-    pub id_address: String,
+    pub id_address: Address,
     pub index: usize,
     pub partial_public_key: Vec<u8>,
 }
