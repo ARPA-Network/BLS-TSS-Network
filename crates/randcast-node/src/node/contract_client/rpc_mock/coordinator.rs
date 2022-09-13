@@ -1,56 +1,58 @@
 use self::coordinator_stub::transactions_client::TransactionsClient as CoordinatorTransactionsClient;
 use self::coordinator_stub::views_client::ViewsClient as CoordinatorViewsClient;
 use self::coordinator_stub::{BlsKeysReply, PublishRequest};
-use crate::node::contract_client::coordinator::{CoordinatorTransactions, CoordinatorViews};
-use crate::node::error::{NodeError, NodeResult};
+use crate::node::contract_client::coordinator::{
+    CoordinatorClientBuilder, CoordinatorTransactions, CoordinatorViews, DKGContractError,
+};
+use crate::node::dal::types::MockChainIdentity;
+use crate::node::dal::ChainIdentity;
+use crate::node::error::NodeResult;
+use crate::node::utils::address_to_string;
 use crate::node::ServiceClient;
 use async_trait::async_trait;
 use dkg_core::{
     primitives::{BundledJustification, BundledResponses, BundledShares},
     BoardPublisher,
 };
+use ethers::types::Address;
 use log::info;
-use thiserror::Error;
 use threshold_bls::curve::bls12381::Curve;
-use tonic::metadata::MetadataValue;
 use tonic::Request;
 
 pub mod coordinator_stub {
-    include!("../../../../stub/coordinator.rs");
+    include!("../../../../rpc_stub/coordinator.rs");
 }
 
 pub struct MockCoordinatorClient {
-    id_address: String,
+    id_address: Address,
+    rpc_endpoint: String,
     coordinator_address: String,
-    index: usize,
-    epoch: usize,
 }
 
 impl MockCoordinatorClient {
-    pub fn new(
-        coordinator_address: String,
-        id_address: String,
-        index: usize,
-        epoch: usize,
-    ) -> Self {
+    pub fn new(rpc_endpoint: String, coordinator_address: String, id_address: Address) -> Self {
         MockCoordinatorClient {
             id_address,
+            rpc_endpoint,
             coordinator_address,
-            index,
-            epoch,
         }
     }
 
     fn set_metadata<T>(&self, req: &mut Request<T>) {
-        req.metadata_mut().insert(
-            "index",
-            MetadataValue::from_str(&self.index.to_string()).unwrap(),
-        );
+        req.metadata_mut()
+            .insert("address", self.coordinator_address.parse().unwrap());
+    }
+}
 
-        req.metadata_mut().insert(
-            "epoch",
-            MetadataValue::from_str(&self.epoch.to_string()).unwrap(),
-        );
+impl CoordinatorClientBuilder for MockChainIdentity {
+    type Service = MockCoordinatorClient;
+
+    fn build_coordinator_client(&self, contract_address: Address) -> MockCoordinatorClient {
+        MockCoordinatorClient::new(
+            self.get_provider_rpc_endpoint().to_string(),
+            address_to_string(contract_address),
+            self.get_id_address(),
+        )
     }
 }
 
@@ -59,7 +61,7 @@ type TransactionsClient = CoordinatorTransactionsClient<tonic::transport::Channe
 #[async_trait]
 impl ServiceClient<TransactionsClient> for MockCoordinatorClient {
     async fn prepare_service_client(&self) -> NodeResult<TransactionsClient> {
-        TransactionsClient::connect(format!("{}{}", "http://", self.coordinator_address.clone()))
+        TransactionsClient::connect(format!("{}{}", "http://", self.rpc_endpoint.clone()))
             .await
             .map_err(|err| err.into())
     }
@@ -70,7 +72,7 @@ type ViewsClient = CoordinatorViewsClient<tonic::transport::Channel>;
 #[async_trait]
 impl ServiceClient<ViewsClient> for MockCoordinatorClient {
     async fn prepare_service_client(&self) -> NodeResult<ViewsClient> {
-        ViewsClient::connect(format!("{}{}", "http://", self.coordinator_address.clone()))
+        ViewsClient::connect(format!("{}{}", "http://", self.rpc_endpoint.clone()))
             .await
             .map_err(|err| err.into())
     }
@@ -80,7 +82,7 @@ impl ServiceClient<ViewsClient> for MockCoordinatorClient {
 impl CoordinatorTransactions for MockCoordinatorClient {
     async fn publish(&self, value: Vec<u8>) -> NodeResult<()> {
         let mut request = Request::new(PublishRequest {
-            id_address: self.id_address.to_string(),
+            id_address: address_to_string(self.id_address),
             value,
         });
 
@@ -141,7 +143,7 @@ impl CoordinatorViews for MockCoordinatorClient {
             .map_err(|status| status.into())
     }
 
-    async fn get_participants(&self) -> NodeResult<Vec<String>> {
+    async fn get_participants(&self) -> NodeResult<Vec<Address>> {
         let mut request: Request<()> = Request::new(());
 
         self.set_metadata(&mut request);
@@ -151,7 +153,13 @@ impl CoordinatorViews for MockCoordinatorClient {
         views_client
             .get_participants(request)
             .await
-            .map(|r| r.into_inner().participants)
+            .map(|r| {
+                r.into_inner()
+                    .participants
+                    .iter()
+                    .map(|p| p.parse().unwrap())
+                    .collect::<Vec<Address>>()
+            })
             .map_err(|status| status.into())
     }
 
@@ -188,14 +196,6 @@ impl CoordinatorViews for MockCoordinatorClient {
             .map(|r| r.into_inner().phase as usize)
             .map_err(|status| status.into())
     }
-}
-
-#[derive(Debug, Error)]
-pub enum DKGContractError {
-    #[error(transparent)]
-    SerializationError(#[from] bincode::Error),
-    #[error(transparent)]
-    PublishingError(#[from] NodeError),
 }
 
 #[async_trait]

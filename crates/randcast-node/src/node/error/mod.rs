@@ -1,9 +1,18 @@
+use std::env::VarError;
+
+use super::contract_client::ethers::WalletSigner;
+use crate::node::dal::sqlite::DBError;
+use dkg_core::{primitives::DKGError, NodeError as DKGNodeError};
+use ethers::providers::Http as HttpProvider;
+use ethers::signers::WalletError;
+use ethers::{
+    prelude::{signer::SignerMiddlewareError, ContractError, ProviderError},
+    providers::Provider,
+    signers::LocalWallet,
+};
+use rustc_hex::FromHexError;
 use thiserror::Error;
 use threshold_bls::sig::{BLSError, G1Scheme, ThresholdError};
-
-use dkg_core::{primitives::DKGError, NodeError as DKGNodeError};
-
-use crate::node::dal::sqlite::DBError;
 
 pub type NodeResult<A> = Result<A, NodeError>;
 
@@ -62,6 +71,18 @@ pub enum NodeError {
 
     #[error(transparent)]
     DBError(#[from] DBError),
+
+    #[error(transparent)]
+    ContractClientError(#[from] ContractClientError),
+
+    #[error(transparent)]
+    FromHexError(#[from] FromHexError),
+
+    #[error(transparent)]
+    ProviderError(#[from] ProviderError),
+
+    #[error("can't parse address format")]
+    AddressFormatError,
 }
 
 #[derive(Debug, Error, PartialEq)]
@@ -101,4 +122,38 @@ pub enum NodeInfoError {
 
     #[error("there is no dkg key pair yet")]
     NoDKGKeyPair,
+}
+
+#[derive(Debug, Error)]
+pub enum ContractClientError {
+    #[error(transparent)]
+    ChainProviderError(#[from] ProviderError),
+    #[error(transparent)]
+    ContractError(#[from] ContractError<WalletSigner>),
+    #[error(transparent)]
+    SignerError(#[from] SignerMiddlewareError<Provider<HttpProvider>, LocalWallet>),
+    #[error(transparent)]
+    AddressParseError(#[from] FromHexError),
+    #[error("can't fetch new block, please check provider")]
+    FetchingBlockError,
+    #[error("can't fetch dkg task, please check provider")]
+    FetchingDkgTaskError,
+    #[error("can't fetch randomness task, please check provider")]
+    FetchingRandomnessTaskError,
+    #[error("can't fetch group relay task, please check provider")]
+    FetchingGroupRelayTaskError,
+    #[error("can't fetch group relay confirmation task, please check provider")]
+    FetchingGroupRelayConfirmationTaskError,
+}
+
+#[derive(Debug, Error)]
+pub enum ConfigError {
+    #[error("please provide at least a hdwallet, keystore or plain private key(not recommended)")]
+    LackOfAccount,
+    #[error("bad format")]
+    BadFormat,
+    #[error(transparent)]
+    EnvVarNotExisted(#[from] VarError),
+    #[error(transparent)]
+    BuildingAccountError(#[from] WalletError),
 }

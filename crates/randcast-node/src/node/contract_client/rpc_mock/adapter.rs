@@ -11,18 +11,23 @@ use self::adapter_stub::{
     RequestRandomnessRequest, SetInitialGroupRequest, SignatureTaskReply,
 };
 use async_trait::async_trait;
+use ethers::types::Address;
 use tonic::{Code, Request, Response};
 
-use crate::node::contract_client::adapter::{AdapterTransactions, AdapterViews};
+use crate::node::contract_client::adapter::{
+    AdapterClientBuilder, AdapterLogs, AdapterTransactions, AdapterViews,
+};
 use crate::node::dal::types::{
     Group, GroupRelayConfirmationTask, GroupRelayConfirmationTaskState, Member as ModelMember,
-    RandomnessTask,
+    MockChainIdentity, RandomnessTask,
 };
+use crate::node::dal::ChainIdentity;
 use crate::node::error::{NodeError, NodeResult};
+use crate::node::utils::address_to_string;
 use crate::node::ServiceClient;
 
 pub mod adapter_stub {
-    include!("../../../../stub/adapter.rs");
+    include!("../../../../rpc_stub/adapter.rs");
 }
 
 #[async_trait]
@@ -35,16 +40,27 @@ pub trait AdapterMockHelper {
 }
 
 pub struct MockAdapterClient {
-    id_address: String,
+    id_address: Address,
     adapter_rpc_endpoint: String,
 }
 
 impl MockAdapterClient {
-    pub fn new(adapter_rpc_endpoint: String, id_address: String) -> Self {
+    pub fn new(adapter_rpc_endpoint: String, id_address: Address) -> Self {
         MockAdapterClient {
             id_address,
             adapter_rpc_endpoint,
         }
+    }
+}
+
+impl AdapterClientBuilder for MockChainIdentity {
+    type Service = MockAdapterClient;
+
+    fn build_adapter_client(&self, main_id_address: Address) -> MockAdapterClient {
+        MockAdapterClient::new(
+            self.get_provider_rpc_endpoint().to_string(),
+            main_id_address,
+        )
     }
 }
 
@@ -79,6 +95,31 @@ impl ServiceClient<ViewsClient> for MockAdapterClient {
 }
 
 #[async_trait]
+impl AdapterLogs for MockAdapterClient {
+    async fn subscribe_randomness_task(
+        &self,
+        cb: Box<dyn Fn(RandomnessTask) -> NodeResult<()> + Sync + Send>,
+    ) -> NodeResult<()> {
+        loop {
+            let task = self.emit_signature_task().await?;
+            cb(task)?;
+            tokio::time::sleep(std::time::Duration::from_millis(1000)).await;
+        }
+    }
+
+    async fn subscribe_group_relay_confirmation_task(
+        &self,
+        cb: Box<dyn Fn(GroupRelayConfirmationTask) -> NodeResult<()> + Sync + Send>,
+    ) -> NodeResult<()> {
+        loop {
+            let task = self.emit_group_relay_confirmation_task().await?;
+            cb(task)?;
+            tokio::time::sleep(std::time::Duration::from_millis(1000)).await;
+        }
+    }
+}
+
+#[async_trait]
 impl AdapterTransactions for MockAdapterClient {
     async fn request_randomness(&self, message: &str) -> NodeResult<()> {
         let request = Request::new(RequestRandomnessRequest {
@@ -100,10 +141,15 @@ impl AdapterTransactions for MockAdapterClient {
         group_index: usize,
         signature_index: usize,
         signature: Vec<u8>,
-        partial_signatures: HashMap<String, Vec<u8>>,
+        partial_signatures: HashMap<Address, Vec<u8>>,
     ) -> NodeResult<()> {
+        let partial_signatures: HashMap<String, Vec<u8>> = partial_signatures
+            .into_iter()
+            .map(|(id_address, sig)| (address_to_string(id_address), sig))
+            .collect();
+
         let request = Request::new(FulfillRandomnessRequest {
-            id_address: self.id_address.to_string(),
+            id_address: address_to_string(self.id_address),
             group_index: group_index as u32,
             signature_index: signature_index as u32,
             signature,
@@ -128,7 +174,7 @@ impl AdapterTransactions for MockAdapterClient {
         group_as_bytes: Vec<u8>,
     ) -> NodeResult<()> {
         let request = Request::new(FulfillRelayRequest {
-            id_address: self.id_address.to_string(),
+            id_address: address_to_string(self.id_address),
             relayer_group_index: relayer_group_index as u32,
             task_index: task_index as u32,
             signature,
@@ -147,7 +193,7 @@ impl AdapterTransactions for MockAdapterClient {
 
     async fn cancel_invalid_relay_confirmation_task(&self, task_index: usize) -> NodeResult<()> {
         let request = Request::new(CancelInvalidRelayConfirmationTaskRequest {
-            id_address: self.id_address.to_string(),
+            id_address: address_to_string(self.id_address),
             task_index: task_index as u32,
         });
 
@@ -168,7 +214,7 @@ impl AdapterTransactions for MockAdapterClient {
         signature: Vec<u8>,
     ) -> NodeResult<()> {
         let request = Request::new(ConfirmRelayRequest {
-            id_address: self.id_address.to_string(),
+            id_address: address_to_string(self.id_address),
             task_index: task_index as u32,
             signature,
             group_relay_confirmation_as_bytes,
@@ -186,7 +232,7 @@ impl AdapterTransactions for MockAdapterClient {
 
     async fn set_initial_group(&self, group: Vec<u8>) -> NodeResult<()> {
         let request = Request::new(SetInitialGroupRequest {
-            id_address: self.id_address.to_string(),
+            id_address: address_to_string(self.id_address),
             group,
         });
 
@@ -376,7 +422,7 @@ impl From<Member> for ModelMember {
 
         ModelMember {
             index: member.index as usize,
-            id_address: member.id_address,
+            id_address: member.id_address.parse().unwrap(),
             rpc_endpint: None,
             partial_public_key,
         }
@@ -396,10 +442,12 @@ fn parse_group_reply(reply: Response<GroupReply>) -> Group {
         ..
     } = reply.into_inner();
 
-    let members: BTreeMap<String, ModelMember> = members
+    let members: BTreeMap<Address, ModelMember> = members
         .into_iter()
-        .map(|(id_address, m)| (id_address, m.into()))
+        .map(|(id_address, m)| (id_address.parse().unwrap(), m.into()))
         .collect();
+
+    let committers = committers.into_iter().map(|c| c.parse().unwrap()).collect();
 
     let public_key = if public_key.is_empty() {
         None
