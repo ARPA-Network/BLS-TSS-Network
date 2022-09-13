@@ -1,0 +1,11 @@
+id_address: "0x6"
+
+node_rpc_endpoint: "[::1]:50066"
+
+controller_endpoint: "[::1]:50052"
+
+adapters:
+  - id: 1
+    id_address: "0x1_6"
+    name: eth
+    endpoint: "[::1]:50053"
