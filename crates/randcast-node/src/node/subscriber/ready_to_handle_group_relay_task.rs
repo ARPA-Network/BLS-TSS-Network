@@ -2,7 +2,7 @@ use super::Subscriber;
 use crate::node::{
     algorithm::bls::{BLSCore, SimpleBLSCore},
     committer::{
-        client::MockCommitterClient, CommitterClient, CommitterClientHandler, CommitterService,
+        client::GeneralCommitterClient, CommitterClient, CommitterClientHandler, CommitterService,
     },
     contract_client::adapter::{AdapterClientBuilder, AdapterViews},
     contract_client::types::Group as ContractGroup,
@@ -83,7 +83,7 @@ impl<
         I: ChainIdentity + AdapterClientBuilder,
         C: SignatureResultCacheUpdater<GroupRelayResultCache>
             + SignatureResultCacheFetcher<GroupRelayResultCache>,
-    > CommitterClientHandler<MockCommitterClient, G> for GeneralGroupRelayHandler<G, I, C>
+    > CommitterClientHandler<GeneralCommitterClient, G> for GeneralGroupRelayHandler<G, I, C>
 {
     fn get_id_address(&self) -> Address {
         self.main_chain_identity.read().get_id_address()

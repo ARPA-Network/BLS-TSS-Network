@@ -1,7 +1,7 @@
 use crate::node::{
     algorithm::bls::{BLSCore, SimpleBLSCore},
     committer::{
-        client::MockCommitterClient, CommitterClient, CommitterClientHandler, CommitterService,
+        client::GeneralCommitterClient, CommitterClient, CommitterClientHandler, CommitterService,
     },
     dal::{
         cache::RandomnessResultCache,
@@ -84,7 +84,7 @@ impl<
         G: GroupInfoFetcher,
         C: SignatureResultCacheUpdater<RandomnessResultCache>
             + SignatureResultCacheFetcher<RandomnessResultCache>,
-    > CommitterClientHandler<MockCommitterClient, G> for GeneralRandomnessHandler<G, C>
+    > CommitterClientHandler<GeneralCommitterClient, G> for GeneralRandomnessHandler<G, C>
 {
     fn get_id_address(&self) -> Address {
         self.id_address

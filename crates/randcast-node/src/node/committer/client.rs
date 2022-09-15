@@ -14,21 +14,21 @@ pub mod committer_stub {
 }
 
 #[derive(Clone, Debug)]
-pub(crate) struct MockCommitterClient {
+pub(crate) struct GeneralCommitterClient {
     id_address: Address,
     committer_endpoint: String,
 }
 
-impl MockCommitterClient {
+impl GeneralCommitterClient {
     pub fn new(id_address: Address, committer_endpoint: String) -> Self {
-        MockCommitterClient {
+        GeneralCommitterClient {
             id_address,
             committer_endpoint,
         }
     }
 }
 
-impl CommitterClient for MockCommitterClient {
+impl CommitterClient for GeneralCommitterClient {
     fn get_id_address(&self) -> Address {
         self.id_address
     }
@@ -43,7 +43,7 @@ impl CommitterClient for MockCommitterClient {
 }
 
 #[async_trait]
-impl ServiceClient<CommitterServiceClient<tonic::transport::Channel>> for MockCommitterClient {
+impl ServiceClient<CommitterServiceClient<tonic::transport::Channel>> for GeneralCommitterClient {
     async fn prepare_service_client(
         &self,
     ) -> NodeResult<CommitterServiceClient<tonic::transport::Channel>> {
@@ -54,7 +54,7 @@ impl ServiceClient<CommitterServiceClient<tonic::transport::Channel>> for MockCo
 }
 
 #[async_trait]
-impl CommitterService for MockCommitterClient {
+impl CommitterService for GeneralCommitterClient {
     async fn commit_partial_signature(
         self,
         chain_id: usize,
