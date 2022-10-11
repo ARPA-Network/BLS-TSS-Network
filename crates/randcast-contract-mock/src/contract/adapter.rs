@@ -120,9 +120,9 @@ pub trait AdapterTransactions {
 pub trait AdapterViews {
     fn get_last_output(&self) -> u64;
 
-    fn get_group(&self, index: usize) -> Option<&Group>;  // ! 
+    fn get_group(&self, index: usize) -> Option<&Group>;
 
-    fn get_group_state(&self, index: usize) -> bool; // !
+    fn get_group_state(&self, index: usize) -> bool;
 
     fn get_group_relay_cache(&self, index: usize) -> Option<&Group>;
 

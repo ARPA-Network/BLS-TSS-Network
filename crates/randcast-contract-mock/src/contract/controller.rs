@@ -821,18 +821,18 @@ impl ControllerTransactions for Controller {
             return Err(ControllerError::CommitCacheExisted);
         }
 
-        let commit_result = CommitResult { // ! property of commit cache: confirm commit results are identical
+        let commit_result = CommitResult {
             group_epoch,
             public_key,
             disqualified_nodes,
         };
 
-        let commit_cache = CommitCache {  // ! build struct
+        let commit_cache = CommitCache {
             commit_result,
             partial_public_key: partial_public_key.clone(),
         };
 
-        group.commit_cache.insert(id_address.clone(), commit_cache); // ! Cache results
+        group.commit_cache.insert(id_address.clone(), commit_cache);
 
         if group.is_strictly_majority_consensus_reached {
             // it's no good for a qualified node to miscommits here. So far we don't verify this commitment.
@@ -840,7 +840,7 @@ impl ControllerTransactions for Controller {
 
             member.partial_public_key = partial_public_key;
         } else {
-            match self.get_strictly_majority_identical_commitment_result(group_index) { 
+            match self.get_strictly_majority_identical_commitment_result(group_index) {
                 (None, _) => {}
 
                 (Some(identical_commit), mut majority_members) => {
@@ -849,9 +849,9 @@ impl ControllerTransactions for Controller {
                     let group = self.groups.get_mut(&group_index).unwrap();
 
                     // every majority_member should't be contained in disqualified_nodes
-                    majority_members.retain(|m| !identical_commit.disqualified_nodes.contains(m)); 
+                    majority_members.retain(|m| !identical_commit.disqualified_nodes.contains(m));
 
-                    if majority_members.len() >= group.threshold {  // ! happy path
+                    if majority_members.len() >= group.threshold {
                         group.is_strictly_majority_consensus_reached = true;
 
                         group.size -= identical_commit.disqualified_nodes.len();
@@ -900,7 +900,7 @@ impl ControllerTransactions for Controller {
                             .retain(|node, _| !disqualified_nodes.contains(node));
 
                         for disqualified_node in disqualified_nodes {
-                            self.slash_node(  // ! Slash the bad nodes.
+                            self.slash_node(
                                 &disqualified_node,
                                 DISQUALIFIED_NODE_PENALTY_AMOUNT,
                                 0,
