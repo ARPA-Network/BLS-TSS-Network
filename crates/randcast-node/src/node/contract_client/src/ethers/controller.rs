@@ -1,20 +1,15 @@
-use crate::node::{
-    contract_client::{
-        controller::{
-            ControllerClientBuilder, ControllerLogs, ControllerTransactions, ControllerViews,
-        },
-        types::Node,
-    },
-    dal::{
-        types::{DKGTask, GeneralChainIdentity, GroupRelayTask},
-        ChainIdentity,
-    },
-    error::{ContractClientError, NodeResult},
-    ServiceClient,
-};
+use arpa_node_core::{ChainIdentity, DKGTask, GeneralChainIdentity, GroupRelayTask, Node};
 use async_trait::async_trait;
 use ethers::{prelude::*, utils::keccak256};
-use std::{convert::TryFrom, sync::Arc, time::Duration};
+use std::{convert::TryFrom, future::Future, sync::Arc, time::Duration};
+
+use crate::{
+    controller::{
+        ControllerClientBuilder, ControllerLogs, ControllerTransactions, ControllerViews,
+    },
+    error::{ContractClientError, ContractClientResult},
+    ServiceClient,
+};
 
 use self::controller_stub::Controller;
 
@@ -22,7 +17,7 @@ use super::WalletSigner;
 
 #[allow(clippy::useless_conversion)]
 pub mod controller_stub {
-    include!("../../../../contract_stub/controller.rs");
+    include!("../../../../../contract_stub/controller.rs");
 }
 
 pub struct ControllerClient {
@@ -40,7 +35,7 @@ impl ControllerClient {
         let signer = Arc::new(SignerMiddleware::new(
             provider,
             identity
-                .wallet
+                .get_signer()
                 .clone()
                 .with_chain_id(identity.get_chain_id() as u32),
         ));
@@ -64,7 +59,7 @@ type ControllerContract = Controller<WalletSigner>;
 
 #[async_trait]
 impl ServiceClient<ControllerContract> for ControllerClient {
-    async fn prepare_service_client(&self) -> NodeResult<ControllerContract> {
+    async fn prepare_service_client(&self) -> ContractClientResult<ControllerContract> {
         let controller_contract = Controller::new(self.controller_address, self.signer.clone());
 
         Ok(controller_contract)
@@ -74,7 +69,7 @@ impl ServiceClient<ControllerContract> for ControllerClient {
 #[allow(unused_variables)]
 #[async_trait]
 impl ControllerTransactions for ControllerClient {
-    async fn node_register(&self, id_public_key: Vec<u8>) -> NodeResult<()> {
+    async fn node_register(&self, id_public_key: Vec<u8>) -> ContractClientResult<()> {
         Ok(())
     }
 
@@ -85,11 +80,15 @@ impl ControllerTransactions for ControllerClient {
         public_key: Vec<u8>,
         partial_public_key: Vec<u8>,
         disqualified_nodes: Vec<Address>,
-    ) -> NodeResult<()> {
+    ) -> ContractClientResult<()> {
         Ok(())
     }
 
-    async fn post_process_dkg(&self, group_index: usize, group_epoch: usize) -> NodeResult<()> {
+    async fn post_process_dkg(
+        &self,
+        group_index: usize,
+        group_epoch: usize,
+    ) -> ContractClientResult<()> {
         Ok(())
     }
 }
@@ -97,17 +96,20 @@ impl ControllerTransactions for ControllerClient {
 #[allow(unused_variables)]
 #[async_trait]
 impl ControllerViews for ControllerClient {
-    async fn get_node(&self, id_address: Address) -> NodeResult<Node> {
+    async fn get_node(&self, id_address: Address) -> ContractClientResult<Node> {
         todo!()
     }
 }
 
 #[async_trait]
 impl ControllerLogs for ControllerClient {
-    async fn subscribe_dkg_task(
+    async fn subscribe_dkg_task<
+        C: FnMut(DKGTask) -> F + Send,
+        F: Future<Output = ContractClientResult<()>> + Send,
+    >(
         &self,
-        cb: Box<dyn Fn(DKGTask) -> NodeResult<()> + Sync + Send>,
-    ) -> NodeResult<()> {
+        mut cb: C,
+    ) -> ContractClientResult<()> {
         let dkg_task_filter =
             Filter::new()
                 .from_block(BlockNumber::Latest)
@@ -119,15 +121,18 @@ impl ControllerLogs for ControllerClient {
             e
         })?;
         while let Some(log) = stream.next().await {
-            cb(log.into())?;
+            cb(log.into()).await?;
         }
-        Err(ContractClientError::FetchingDkgTaskError.into())
+        Err(ContractClientError::FetchingDkgTaskError)
     }
 
-    async fn subscribe_group_relay_task(
+    async fn subscribe_group_relay_task<
+        C: FnMut(GroupRelayTask) -> F + Send,
+        F: Future<Output = ContractClientResult<()>> + Send,
+    >(
         &self,
-        cb: Box<dyn Fn(GroupRelayTask) -> NodeResult<()> + Sync + Send>,
-    ) -> NodeResult<()> {
+        mut cb: C,
+    ) -> ContractClientResult<()> {
         let group_relay_task_filter =
             Filter::new()
                 .from_block(BlockNumber::Latest)
@@ -143,20 +148,8 @@ impl ControllerLogs for ControllerClient {
                 e
             })?;
         while let Some(log) = stream.next().await {
-            cb(log.into())?;
+            cb(log.into()).await?;
         }
-        Err(ContractClientError::FetchingGroupRelayTaskError.into())
-    }
-}
-
-impl From<Log> for DKGTask {
-    fn from(_: Log) -> Self {
-        todo!()
-    }
-}
-
-impl From<Log> for GroupRelayTask {
-    fn from(_: Log) -> Self {
-        todo!()
+        Err(ContractClientError::FetchingGroupRelayTaskError)
     }
 }

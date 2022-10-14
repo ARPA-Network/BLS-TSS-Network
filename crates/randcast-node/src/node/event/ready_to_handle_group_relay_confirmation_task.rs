@@ -1,4 +1,4 @@
-use crate::node::dal::types::GroupRelayConfirmationTask;
+use arpa_node_core::GroupRelayConfirmationTask;
 
 use super::{types::Topic, Event};
 
@@ -17,5 +17,9 @@ impl ReadyToHandleGroupRelayConfirmationTask {
 impl Event for ReadyToHandleGroupRelayConfirmationTask {
     fn topic(&self) -> Topic {
         Topic::ReadyToHandleGroupRelayConfirmationTask(self.chain_id)
+    }
+
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
     }
 }

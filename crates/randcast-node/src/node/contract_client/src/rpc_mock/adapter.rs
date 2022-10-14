@@ -1,4 +1,6 @@
-use std::collections::{BTreeMap, HashMap};
+use crate::adapter::{AdapterClientBuilder, AdapterLogs, AdapterTransactions, AdapterViews};
+use crate::error::{ContractClientError, ContractClientResult};
+use crate::ServiceClient;
 
 use self::adapter_stub::{
     transactions_client::TransactionsClient as AdapterTransactionsClient,
@@ -10,33 +12,29 @@ use self::adapter_stub::{
     GetSignatureTaskCompletionStateRequest, GroupRelayConfirmationTaskReply, MineRequest,
     RequestRandomnessRequest, SetInitialGroupRequest, SignatureTaskReply,
 };
+use arpa_node_core::{
+    address_to_string, ChainIdentity, Group, GroupRelayConfirmationTask,
+    GroupRelayConfirmationTaskState, Member as ModelMember, MockChainIdentity, RandomnessTask,
+};
 use async_trait::async_trait;
 use ethers::types::Address;
+use std::collections::{BTreeMap, HashMap};
+use std::future::Future;
 use tonic::{Code, Request, Response};
 
-use crate::node::contract_client::adapter::{
-    AdapterClientBuilder, AdapterLogs, AdapterTransactions, AdapterViews,
-};
-use crate::node::dal::types::{
-    Group, GroupRelayConfirmationTask, GroupRelayConfirmationTaskState, Member as ModelMember,
-    MockChainIdentity, RandomnessTask,
-};
-use crate::node::dal::ChainIdentity;
-use crate::node::error::{NodeError, NodeResult};
-use crate::node::utils::address_to_string;
-use crate::node::ServiceClient;
-
 pub mod adapter_stub {
-    include!("../../../../rpc_stub/adapter.rs");
+    include!("../../../../../rpc_stub/adapter.rs");
 }
 
 #[async_trait]
 pub trait AdapterMockHelper {
-    async fn mine(&self, block_number_increment: usize) -> NodeResult<usize>;
+    async fn mine(&self, block_number_increment: usize) -> ContractClientResult<usize>;
 
-    async fn emit_signature_task(&self) -> NodeResult<RandomnessTask>;
+    async fn emit_signature_task(&self) -> ContractClientResult<RandomnessTask>;
 
-    async fn emit_group_relay_confirmation_task(&self) -> NodeResult<GroupRelayConfirmationTask>;
+    async fn emit_group_relay_confirmation_task(
+        &self,
+    ) -> ContractClientResult<GroupRelayConfirmationTask>;
 }
 
 pub struct MockAdapterClient {
@@ -68,7 +66,7 @@ type TransactionsClient = AdapterTransactionsClient<tonic::transport::Channel>;
 
 #[async_trait]
 impl ServiceClient<TransactionsClient> for MockAdapterClient {
-    async fn prepare_service_client(&self) -> NodeResult<TransactionsClient> {
+    async fn prepare_service_client(&self) -> ContractClientResult<TransactionsClient> {
         TransactionsClient::connect(format!(
             "{}{}",
             "http://",
@@ -83,7 +81,7 @@ type ViewsClient = AdapterViewsClient<tonic::transport::Channel>;
 
 #[async_trait]
 impl ServiceClient<ViewsClient> for MockAdapterClient {
-    async fn prepare_service_client(&self) -> NodeResult<ViewsClient> {
+    async fn prepare_service_client(&self) -> ContractClientResult<ViewsClient> {
         ViewsClient::connect(format!(
             "{}{}",
             "http://",
@@ -96,24 +94,30 @@ impl ServiceClient<ViewsClient> for MockAdapterClient {
 
 #[async_trait]
 impl AdapterLogs for MockAdapterClient {
-    async fn subscribe_randomness_task(
+    async fn subscribe_randomness_task<
+        C: FnMut(RandomnessTask) -> F + Send,
+        F: Future<Output = ContractClientResult<()>> + Send,
+    >(
         &self,
-        cb: Box<dyn Fn(RandomnessTask) -> NodeResult<()> + Sync + Send>,
-    ) -> NodeResult<()> {
+        mut cb: C,
+    ) -> ContractClientResult<()> {
         loop {
             let task = self.emit_signature_task().await?;
-            cb(task)?;
+            cb(task).await?;
             tokio::time::sleep(std::time::Duration::from_millis(1000)).await;
         }
     }
 
-    async fn subscribe_group_relay_confirmation_task(
+    async fn subscribe_group_relay_confirmation_task<
+        C: FnMut(GroupRelayConfirmationTask) -> F + Send,
+        F: Future<Output = ContractClientResult<()>> + Send,
+    >(
         &self,
-        cb: Box<dyn Fn(GroupRelayConfirmationTask) -> NodeResult<()> + Sync + Send>,
-    ) -> NodeResult<()> {
+        mut cb: C,
+    ) -> ContractClientResult<()> {
         loop {
             let task = self.emit_group_relay_confirmation_task().await?;
-            cb(task)?;
+            cb(task).await?;
             tokio::time::sleep(std::time::Duration::from_millis(1000)).await;
         }
     }
@@ -121,7 +125,7 @@ impl AdapterLogs for MockAdapterClient {
 
 #[async_trait]
 impl AdapterTransactions for MockAdapterClient {
-    async fn request_randomness(&self, message: &str) -> NodeResult<()> {
+    async fn request_randomness(&self, message: &str) -> ContractClientResult<()> {
         let request = Request::new(RequestRandomnessRequest {
             message: message.to_string(),
         });
@@ -142,7 +146,7 @@ impl AdapterTransactions for MockAdapterClient {
         signature_index: usize,
         signature: Vec<u8>,
         partial_signatures: HashMap<Address, Vec<u8>>,
-    ) -> NodeResult<()> {
+    ) -> ContractClientResult<()> {
         let partial_signatures: HashMap<String, Vec<u8>> = partial_signatures
             .into_iter()
             .map(|(id_address, sig)| (address_to_string(id_address), sig))
@@ -172,7 +176,7 @@ impl AdapterTransactions for MockAdapterClient {
         task_index: usize,
         signature: Vec<u8>,
         group_as_bytes: Vec<u8>,
-    ) -> NodeResult<()> {
+    ) -> ContractClientResult<()> {
         let request = Request::new(FulfillRelayRequest {
             id_address: address_to_string(self.id_address),
             relayer_group_index: relayer_group_index as u32,
@@ -191,7 +195,10 @@ impl AdapterTransactions for MockAdapterClient {
             .map_err(|status| status.into())
     }
 
-    async fn cancel_invalid_relay_confirmation_task(&self, task_index: usize) -> NodeResult<()> {
+    async fn cancel_invalid_relay_confirmation_task(
+        &self,
+        task_index: usize,
+    ) -> ContractClientResult<()> {
         let request = Request::new(CancelInvalidRelayConfirmationTaskRequest {
             id_address: address_to_string(self.id_address),
             task_index: task_index as u32,
@@ -212,7 +219,7 @@ impl AdapterTransactions for MockAdapterClient {
         task_index: usize,
         group_relay_confirmation_as_bytes: Vec<u8>,
         signature: Vec<u8>,
-    ) -> NodeResult<()> {
+    ) -> ContractClientResult<()> {
         let request = Request::new(ConfirmRelayRequest {
             id_address: address_to_string(self.id_address),
             task_index: task_index as u32,
@@ -230,7 +237,7 @@ impl AdapterTransactions for MockAdapterClient {
             .map_err(|status| status.into())
     }
 
-    async fn set_initial_group(&self, group: Vec<u8>) -> NodeResult<()> {
+    async fn set_initial_group(&self, group: Vec<u8>) -> ContractClientResult<()> {
         let request = Request::new(SetInitialGroupRequest {
             id_address: address_to_string(self.id_address),
             group,
@@ -249,7 +256,7 @@ impl AdapterTransactions for MockAdapterClient {
 
 #[async_trait]
 impl AdapterMockHelper for MockAdapterClient {
-    async fn mine(&self, block_number_increment: usize) -> NodeResult<usize> {
+    async fn mine(&self, block_number_increment: usize) -> ContractClientResult<usize> {
         let request = Request::new(MineRequest {
             block_number_increment: block_number_increment as u32,
         });
@@ -264,7 +271,7 @@ impl AdapterMockHelper for MockAdapterClient {
             .map_err(|status| status.into())
     }
 
-    async fn emit_signature_task(&self) -> NodeResult<RandomnessTask> {
+    async fn emit_signature_task(&self) -> ContractClientResult<RandomnessTask> {
         let request = Request::new(());
 
         let mut views_client = ServiceClient::<ViewsClient>::prepare_service_client(self).await?;
@@ -288,12 +295,14 @@ impl AdapterMockHelper for MockAdapterClient {
                 }
             })
             .map_err(|status| match status.code() {
-                Code::NotFound => NodeError::NoTaskAvailable,
+                Code::NotFound => ContractClientError::NoTaskAvailable,
                 _ => status.into(),
             })
     }
 
-    async fn emit_group_relay_confirmation_task(&self) -> NodeResult<GroupRelayConfirmationTask> {
+    async fn emit_group_relay_confirmation_task(
+        &self,
+    ) -> ContractClientResult<GroupRelayConfirmationTask> {
         let request = Request::new(());
 
         let mut views_client = ServiceClient::<ViewsClient>::prepare_service_client(self).await?;
@@ -321,7 +330,7 @@ impl AdapterMockHelper for MockAdapterClient {
                 }
             })
             .map_err(|status| match status.code() {
-                Code::NotFound => NodeError::NoTaskAvailable,
+                Code::NotFound => ContractClientError::NoTaskAvailable,
                 _ => status.into(),
             })
     }
@@ -329,7 +338,7 @@ impl AdapterMockHelper for MockAdapterClient {
 
 #[async_trait]
 impl AdapterViews for MockAdapterClient {
-    async fn get_group(&self, group_index: usize) -> NodeResult<Group> {
+    async fn get_group(&self, group_index: usize) -> ContractClientResult<Group> {
         let request = Request::new(GetGroupRequest {
             index: group_index as u32,
         });
@@ -343,7 +352,7 @@ impl AdapterViews for MockAdapterClient {
             .map_err(|status| status.into())
     }
 
-    async fn get_last_output(&self) -> NodeResult<u64> {
+    async fn get_last_output(&self) -> ContractClientResult<u64> {
         let request = Request::new(());
 
         let mut views_client = ServiceClient::<ViewsClient>::prepare_service_client(self).await?;
@@ -359,7 +368,10 @@ impl AdapterViews for MockAdapterClient {
             .map_err(|status| status.into())
     }
 
-    async fn get_signature_task_completion_state(&self, index: usize) -> NodeResult<bool> {
+    async fn get_signature_task_completion_state(
+        &self,
+        index: usize,
+    ) -> ContractClientResult<bool> {
         let request = Request::new(GetSignatureTaskCompletionStateRequest {
             index: index as u32,
         });
@@ -377,7 +389,7 @@ impl AdapterViews for MockAdapterClient {
             .map_err(|status| status.into())
     }
 
-    async fn get_group_relay_cache(&self, group_index: usize) -> NodeResult<Group> {
+    async fn get_group_relay_cache(&self, group_index: usize) -> ContractClientResult<Group> {
         let request = Request::new(GetGroupRelayCacheRequest {
             index: group_index as u32,
         });
@@ -394,7 +406,7 @@ impl AdapterViews for MockAdapterClient {
     async fn get_group_relay_confirmation_task_state(
         &self,
         task_index: usize,
-    ) -> NodeResult<GroupRelayConfirmationTaskState> {
+    ) -> ContractClientResult<GroupRelayConfirmationTaskState> {
         let request = Request::new(GetGroupRelayConfirmationTaskStateRequest {
             index: task_index as u32,
         });

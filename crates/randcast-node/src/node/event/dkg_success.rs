@@ -1,4 +1,4 @@
-use crate::node::dal::types::Group;
+use arpa_node_core::Group;
 
 use super::{types::Topic, Event};
 
@@ -16,5 +16,9 @@ impl DKGSuccess {
 impl Event for DKGSuccess {
     fn topic(&self) -> Topic {
         Topic::DKGSuccess
+    }
+
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
     }
 }

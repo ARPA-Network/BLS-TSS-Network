@@ -1,14 +1,13 @@
+use crate::coordinator::{
+    CoordinatorClientBuilder, CoordinatorTransactions, CoordinatorViews, DKGContractError,
+};
+use crate::error::ContractClientResult;
+use crate::ServiceClient;
+
 use self::coordinator_stub::transactions_client::TransactionsClient as CoordinatorTransactionsClient;
 use self::coordinator_stub::views_client::ViewsClient as CoordinatorViewsClient;
 use self::coordinator_stub::{BlsKeysReply, PublishRequest};
-use crate::node::contract_client::coordinator::{
-    CoordinatorClientBuilder, CoordinatorTransactions, CoordinatorViews, DKGContractError,
-};
-use crate::node::dal::types::MockChainIdentity;
-use crate::node::dal::ChainIdentity;
-use crate::node::error::NodeResult;
-use crate::node::utils::address_to_string;
-use crate::node::ServiceClient;
+use arpa_node_core::{address_to_string, ChainIdentity, MockChainIdentity};
 use async_trait::async_trait;
 use dkg_core::{
     primitives::{BundledJustification, BundledResponses, BundledShares},
@@ -20,7 +19,7 @@ use threshold_bls::curve::bls12381::Curve;
 use tonic::Request;
 
 pub mod coordinator_stub {
-    include!("../../../../rpc_stub/coordinator.rs");
+    include!("../../../../../rpc_stub/coordinator.rs");
 }
 
 pub struct MockCoordinatorClient {
@@ -60,7 +59,7 @@ type TransactionsClient = CoordinatorTransactionsClient<tonic::transport::Channe
 
 #[async_trait]
 impl ServiceClient<TransactionsClient> for MockCoordinatorClient {
-    async fn prepare_service_client(&self) -> NodeResult<TransactionsClient> {
+    async fn prepare_service_client(&self) -> ContractClientResult<TransactionsClient> {
         TransactionsClient::connect(format!("{}{}", "http://", self.rpc_endpoint.clone()))
             .await
             .map_err(|err| err.into())
@@ -71,7 +70,7 @@ type ViewsClient = CoordinatorViewsClient<tonic::transport::Channel>;
 
 #[async_trait]
 impl ServiceClient<ViewsClient> for MockCoordinatorClient {
-    async fn prepare_service_client(&self) -> NodeResult<ViewsClient> {
+    async fn prepare_service_client(&self) -> ContractClientResult<ViewsClient> {
         ViewsClient::connect(format!("{}{}", "http://", self.rpc_endpoint.clone()))
             .await
             .map_err(|err| err.into())
@@ -80,7 +79,7 @@ impl ServiceClient<ViewsClient> for MockCoordinatorClient {
 
 #[async_trait]
 impl CoordinatorTransactions for MockCoordinatorClient {
-    async fn publish(&self, value: Vec<u8>) -> NodeResult<()> {
+    async fn publish(&self, value: Vec<u8>) -> ContractClientResult<()> {
         let mut request = Request::new(PublishRequest {
             id_address: address_to_string(self.id_address),
             value,
@@ -101,7 +100,7 @@ impl CoordinatorTransactions for MockCoordinatorClient {
 
 #[async_trait]
 impl CoordinatorViews for MockCoordinatorClient {
-    async fn get_shares(&self) -> NodeResult<Vec<Vec<u8>>> {
+    async fn get_shares(&self) -> ContractClientResult<Vec<Vec<u8>>> {
         let mut request: Request<()> = Request::new(());
 
         self.set_metadata(&mut request);
@@ -115,7 +114,7 @@ impl CoordinatorViews for MockCoordinatorClient {
             .map_err(|status| status.into())
     }
 
-    async fn get_responses(&self) -> NodeResult<Vec<Vec<u8>>> {
+    async fn get_responses(&self) -> ContractClientResult<Vec<Vec<u8>>> {
         let mut request: Request<()> = Request::new(());
 
         self.set_metadata(&mut request);
@@ -129,7 +128,7 @@ impl CoordinatorViews for MockCoordinatorClient {
             .map_err(|status| status.into())
     }
 
-    async fn get_justifications(&self) -> NodeResult<Vec<Vec<u8>>> {
+    async fn get_justifications(&self) -> ContractClientResult<Vec<Vec<u8>>> {
         let mut request: Request<()> = Request::new(());
 
         self.set_metadata(&mut request);
@@ -143,7 +142,7 @@ impl CoordinatorViews for MockCoordinatorClient {
             .map_err(|status| status.into())
     }
 
-    async fn get_participants(&self) -> NodeResult<Vec<Address>> {
+    async fn get_participants(&self) -> ContractClientResult<Vec<Address>> {
         let mut request: Request<()> = Request::new(());
 
         self.set_metadata(&mut request);
@@ -163,7 +162,7 @@ impl CoordinatorViews for MockCoordinatorClient {
             .map_err(|status| status.into())
     }
 
-    async fn get_bls_keys(&self) -> NodeResult<(usize, Vec<Vec<u8>>)> {
+    async fn get_bls_keys(&self) -> ContractClientResult<(usize, Vec<Vec<u8>>)> {
         let mut request: Request<()> = Request::new(());
 
         self.set_metadata(&mut request);
@@ -183,7 +182,7 @@ impl CoordinatorViews for MockCoordinatorClient {
             .map_err(|status| status.into())
     }
 
-    async fn in_phase(&self) -> NodeResult<usize> {
+    async fn in_phase(&self) -> ContractClientResult<usize> {
         let mut request: Request<()> = Request::new(());
 
         self.set_metadata(&mut request);

@@ -1,4 +1,4 @@
-use crate::node::dal::cache::RandomnessResultCache;
+use arpa_node_dal::cache::RandomnessResultCache;
 
 use super::{types::Topic, Event};
 
@@ -17,5 +17,9 @@ impl ReadyToFulfillRandomnessTask {
 impl Event for ReadyToFulfillRandomnessTask {
     fn topic(&self) -> Topic {
         Topic::ReadyToFulfillRandomnessTask(self.chain_id)
+    }
+
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
     }
 }

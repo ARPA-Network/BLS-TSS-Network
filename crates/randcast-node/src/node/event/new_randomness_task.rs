@@ -1,4 +1,4 @@
-use crate::node::dal::types::RandomnessTask;
+use arpa_node_core::RandomnessTask;
 
 use super::{types::Topic, Event};
 
@@ -20,5 +20,9 @@ impl NewRandomnessTask {
 impl Event for NewRandomnessTask {
     fn topic(&self) -> Topic {
         Topic::NewRandomnessTask(self.chain_id)
+    }
+
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
     }
 }

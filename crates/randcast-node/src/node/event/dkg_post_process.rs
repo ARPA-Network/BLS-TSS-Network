@@ -19,4 +19,8 @@ impl Event for DKGPostProcess {
     fn topic(&self) -> Topic {
         Topic::DKGPostProcess
     }
+
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
 }

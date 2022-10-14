@@ -1,12 +1,13 @@
-use crate::node::{
-    contract_client::provider::{BlockFetcher, ChainProviderBuilder},
-    dal::{types::GeneralChainIdentity, ChainIdentity},
-    error::{ContractClientError, NodeResult},
-};
+use arpa_node_core::{ChainIdentity, GeneralChainIdentity};
 use async_trait::async_trait;
 use ethers::prelude::*;
 use ethers::providers::Http as HttpProvider;
-use std::{convert::TryFrom, time::Duration};
+use std::{convert::TryFrom, future::Future, time::Duration};
+
+use crate::{
+    error::{ContractClientError, ContractClientResult},
+    provider::{BlockFetcher, ChainProviderBuilder},
+};
 
 pub struct ChainProvider {
     provider: Provider<HttpProvider>,
@@ -32,10 +33,13 @@ impl ChainProviderBuilder for GeneralChainIdentity {
 
 #[async_trait]
 impl BlockFetcher for ChainProvider {
-    async fn subscribe_new_block_height(
+    async fn subscribe_new_block_height<
+        C: FnMut(usize) -> F + Send,
+        F: Future<Output = ContractClientResult<()>> + Send,
+    >(
         &self,
-        cb: Box<dyn Fn(usize) -> NodeResult<()> + Sync + Send>,
-    ) -> NodeResult<()> {
+        mut cb: C,
+    ) -> ContractClientResult<()> {
         let mut stream = self.provider.watch_blocks().await?;
         while let Some(block_hash) = stream.next().await {
             let block = self
@@ -46,8 +50,9 @@ impl BlockFetcher for ChainProvider {
             cb(block
                 .number
                 .ok_or(ContractClientError::FetchingBlockError)?
-                .as_usize())?;
+                .as_usize())
+            .await?;
         }
-        Err(ContractClientError::FetchingBlockError.into())
+        Err(ContractClientError::FetchingBlockError)
     }
 }

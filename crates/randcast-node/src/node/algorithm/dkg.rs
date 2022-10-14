@@ -1,7 +1,5 @@
-use crate::node::{
-    contract_client::coordinator::{CoordinatorTransactions, CoordinatorViews},
-    error::NodeResult,
-};
+use crate::node::error::NodeResult;
+use arpa_node_contract_client::coordinator::{CoordinatorTransactions, CoordinatorViews};
 use async_trait::async_trait;
 use dkg_core::{
     primitives::{joint_feldman::*, *},

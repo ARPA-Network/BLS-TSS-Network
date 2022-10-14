@@ -1,10 +1,9 @@
-use std::env;
-
-use ethers::types::Address;
-use randcast_node::node::contract_client::{
+use arpa_node_contract_client::{
     adapter::{AdapterTransactions, AdapterViews},
     rpc_mock::adapter::MockAdapterClient,
 };
+use ethers::types::Address;
+use std::env;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {

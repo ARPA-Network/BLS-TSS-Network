@@ -1,4 +1,4 @@
-use crate::node::dal::cache::GroupRelayConfirmationResultCache;
+use arpa_node_dal::cache::GroupRelayConfirmationResultCache;
 
 use super::{types::Topic, Event};
 
@@ -17,5 +17,9 @@ impl ReadyToFulfillGroupRelayConfirmationTask {
 impl Event for ReadyToFulfillGroupRelayConfirmationTask {
     fn topic(&self) -> Topic {
         Topic::ReadyToFulfillGroupRelayConfirmationTask(self.chain_id)
+    }
+
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
     }
 }

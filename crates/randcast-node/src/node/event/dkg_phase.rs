@@ -15,4 +15,8 @@ impl Event for DKGPhase {
     fn topic(&self) -> Topic {
         Topic::DKGPhase
     }
+
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
 }

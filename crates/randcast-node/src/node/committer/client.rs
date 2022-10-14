@@ -1,10 +1,8 @@
 use self::committer_stub::committer_service_client::CommitterServiceClient;
 use self::committer_stub::CommitPartialSignatureRequest;
-use super::{CommitterClient, CommitterService};
-use crate::node::dal::types::TaskType;
+use super::{CommitterClient, CommitterService, ServiceClient};
 use crate::node::error::NodeResult;
-use crate::node::utils::address_to_string;
-use crate::node::ServiceClient;
+use arpa_node_core::{address_to_string, TaskType};
 use async_trait::async_trait;
 use ethers::types::Address;
 use tonic::Request;

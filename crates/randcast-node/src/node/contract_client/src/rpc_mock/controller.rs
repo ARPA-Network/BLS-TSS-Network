@@ -1,33 +1,36 @@
+use std::future::Future;
+
+use crate::controller::{
+    ControllerClientBuilder, ControllerLogs, ControllerTransactions, ControllerViews,
+};
+use crate::error::{ContractClientError, ContractClientResult};
+use crate::ServiceClient;
+
 use self::controller_stub::{
     transactions_client::TransactionsClient as ControllerTransactionsClient,
     views_client::ViewsClient as ControllerViewsClient, CommitDkgRequest, GetNodeRequest, Member,
     NodeRegisterRequest, NodeReply, PostProcessDkgRequest,
 };
 use self::controller_stub::{DkgTaskReply, GroupRelayTaskReply, MineRequest};
-use crate::node::contract_client::controller::{
-    ControllerClientBuilder, ControllerLogs, ControllerTransactions, ControllerViews,
+use arpa_node_core::{
+    address_to_string, ChainIdentity, DKGTask, GroupRelayTask, Member as ModelMember,
+    MockChainIdentity, Node,
 };
-use crate::node::contract_client::types::Node;
-use crate::node::dal::types::{DKGTask, GroupRelayTask, Member as ModelMember, MockChainIdentity};
-use crate::node::dal::ChainIdentity;
-use crate::node::error::{NodeError, NodeResult};
-use crate::node::utils::address_to_string;
-use crate::node::ServiceClient;
 use async_trait::async_trait;
 use ethers::types::Address;
 use tonic::{Code, Request};
 
 pub mod controller_stub {
-    include!("../../../../rpc_stub/controller.rs");
+    include!("../../../../../rpc_stub/controller.rs");
 }
 
 #[async_trait]
 pub trait ControllerMockHelper {
-    async fn mine(&self, block_number_increment: usize) -> NodeResult<usize>;
+    async fn mine(&self, block_number_increment: usize) -> ContractClientResult<usize>;
 
-    async fn emit_dkg_task(&self) -> NodeResult<DKGTask>;
+    async fn emit_dkg_task(&self) -> ContractClientResult<DKGTask>;
 
-    async fn emit_group_relay_task(&self) -> NodeResult<GroupRelayTask>;
+    async fn emit_group_relay_task(&self) -> ContractClientResult<GroupRelayTask>;
 }
 
 pub struct MockControllerClient {
@@ -59,7 +62,7 @@ type TransactionsClient = ControllerTransactionsClient<tonic::transport::Channel
 
 #[async_trait]
 impl ServiceClient<TransactionsClient> for MockControllerClient {
-    async fn prepare_service_client(&self) -> NodeResult<TransactionsClient> {
+    async fn prepare_service_client(&self) -> ContractClientResult<TransactionsClient> {
         TransactionsClient::connect(format!(
             "{}{}",
             "http://",
@@ -74,7 +77,7 @@ type ViewsClient = ControllerViewsClient<tonic::transport::Channel>;
 
 #[async_trait]
 impl ServiceClient<ViewsClient> for MockControllerClient {
-    async fn prepare_service_client(&self) -> NodeResult<ViewsClient> {
+    async fn prepare_service_client(&self) -> ContractClientResult<ViewsClient> {
         ViewsClient::connect(format!(
             "{}{}",
             "http://",
@@ -87,23 +90,29 @@ impl ServiceClient<ViewsClient> for MockControllerClient {
 
 #[async_trait]
 impl ControllerLogs for MockControllerClient {
-    async fn subscribe_dkg_task(
+    async fn subscribe_dkg_task<
+        C: FnMut(DKGTask) -> F + Send,
+        F: Future<Output = ContractClientResult<()>> + Send,
+    >(
         &self,
-        cb: Box<dyn Fn(DKGTask) -> NodeResult<()> + Sync + Send>,
-    ) -> NodeResult<()> {
+        mut cb: C,
+    ) -> ContractClientResult<()> {
         loop {
             let task = self.emit_dkg_task().await?;
-            cb(task)?;
+            cb(task).await?;
             tokio::time::sleep(std::time::Duration::from_millis(1000)).await;
         }
     }
-    async fn subscribe_group_relay_task(
+    async fn subscribe_group_relay_task<
+        C: FnMut(GroupRelayTask) -> F + Send,
+        F: Future<Output = ContractClientResult<()>> + Send,
+    >(
         &self,
-        cb: Box<dyn Fn(GroupRelayTask) -> NodeResult<()> + Sync + Send>,
-    ) -> NodeResult<()> {
+        mut cb: C,
+    ) -> ContractClientResult<()> {
         loop {
             let task = self.emit_group_relay_task().await?;
-            cb(task)?;
+            cb(task).await?;
             tokio::time::sleep(std::time::Duration::from_millis(1000)).await;
         }
     }
@@ -111,7 +120,7 @@ impl ControllerLogs for MockControllerClient {
 
 #[async_trait]
 impl ControllerTransactions for MockControllerClient {
-    async fn node_register(&self, id_public_key: Vec<u8>) -> NodeResult<()> {
+    async fn node_register(&self, id_public_key: Vec<u8>) -> ContractClientResult<()> {
         let request = Request::new(NodeRegisterRequest {
             id_address: address_to_string(self.id_address),
             id_public_key,
@@ -134,7 +143,7 @@ impl ControllerTransactions for MockControllerClient {
         public_key: Vec<u8>,
         partial_public_key: Vec<u8>,
         disqualified_nodes: Vec<Address>,
-    ) -> NodeResult<()> {
+    ) -> ContractClientResult<()> {
         let disqualified_nodes = disqualified_nodes
             .into_iter()
             .map(address_to_string)
@@ -159,7 +168,11 @@ impl ControllerTransactions for MockControllerClient {
             .map_err(|status| status.into())
     }
 
-    async fn post_process_dkg(&self, group_index: usize, group_epoch: usize) -> NodeResult<()> {
+    async fn post_process_dkg(
+        &self,
+        group_index: usize,
+        group_epoch: usize,
+    ) -> ContractClientResult<()> {
         let request = Request::new(PostProcessDkgRequest {
             id_address: address_to_string(self.id_address),
             group_index: group_index as u32,
@@ -179,7 +192,7 @@ impl ControllerTransactions for MockControllerClient {
 
 #[async_trait]
 impl ControllerMockHelper for MockControllerClient {
-    async fn mine(&self, block_number_increment: usize) -> NodeResult<usize> {
+    async fn mine(&self, block_number_increment: usize) -> ContractClientResult<usize> {
         let request = Request::new(MineRequest {
             block_number_increment: block_number_increment as u32,
         });
@@ -194,7 +207,7 @@ impl ControllerMockHelper for MockControllerClient {
             .map_err(|status| status.into())
     }
 
-    async fn emit_dkg_task(&self) -> NodeResult<DKGTask> {
+    async fn emit_dkg_task(&self) -> ContractClientResult<DKGTask> {
         let request = Request::new(());
 
         let mut views_client = ServiceClient::<ViewsClient>::prepare_service_client(self).await?;
@@ -231,7 +244,7 @@ impl ControllerMockHelper for MockControllerClient {
             .map_err(|status| status.into())
     }
 
-    async fn emit_group_relay_task(&self) -> NodeResult<GroupRelayTask> {
+    async fn emit_group_relay_task(&self) -> ContractClientResult<GroupRelayTask> {
         let request = Request::new(());
 
         let mut views_client = ServiceClient::<ViewsClient>::prepare_service_client(self).await?;
@@ -255,7 +268,7 @@ impl ControllerMockHelper for MockControllerClient {
                 }
             })
             .map_err(|status| match status.code() {
-                Code::NotFound => NodeError::NoTaskAvailable,
+                Code::NotFound => ContractClientError::NoTaskAvailable,
                 _ => status.into(),
             })
     }
@@ -263,7 +276,7 @@ impl ControllerMockHelper for MockControllerClient {
 
 #[async_trait]
 impl ControllerViews for MockControllerClient {
-    async fn get_node(&self, id_address: Address) -> NodeResult<Node> {
+    async fn get_node(&self, id_address: Address) -> ContractClientResult<Node> {
         let request = Request::new(GetNodeRequest {
             id_address: address_to_string(id_address),
         });

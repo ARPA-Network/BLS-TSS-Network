@@ -19,4 +19,8 @@ impl Event for NewBlock {
     fn topic(&self) -> Topic {
         Topic::NewBlock(self.chain_id)
     }
+
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
 }

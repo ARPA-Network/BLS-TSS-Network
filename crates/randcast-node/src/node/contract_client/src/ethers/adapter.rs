@@ -1,27 +1,23 @@
+use crate::{
+    adapter::{AdapterClientBuilder, AdapterLogs, AdapterTransactions, AdapterViews},
+    error::{ContractClientError, ContractClientResult},
+    ServiceClient,
+};
+
 use self::adapter_stub::Adapter;
 use super::WalletSigner;
-use crate::node::{
-    contract_client::adapter::{
-        AdapterClientBuilder, AdapterLogs, AdapterTransactions, AdapterViews,
-    },
-    dal::{
-        types::{
-            GeneralChainIdentity, Group, GroupRelayConfirmationTask,
-            GroupRelayConfirmationTaskState, RandomnessTask,
-        },
-        ChainIdentity,
-    },
-    error::{ContractClientError, NodeResult},
-    ServiceClient,
+use arpa_node_core::{
+    ChainIdentity, GeneralChainIdentity, Group, GroupRelayConfirmationTask,
+    GroupRelayConfirmationTaskState, RandomnessTask,
 };
 use async_trait::async_trait;
 use ethers::prelude::*;
 use ethers::utils::keccak256;
-use std::{collections::HashMap, convert::TryFrom, sync::Arc, time::Duration};
+use std::{collections::HashMap, convert::TryFrom, future::Future, sync::Arc, time::Duration};
 
 #[allow(clippy::useless_conversion)]
 pub mod adapter_stub {
-    include!("../../../../contract_stub/adapter.rs");
+    include!("../../../../../contract_stub/adapter.rs");
 }
 
 #[allow(dead_code)]
@@ -45,7 +41,7 @@ impl AdapterClient {
         let signer = Arc::new(SignerMiddleware::new(
             provider,
             identity
-                .wallet
+                .get_signer()
                 .clone()
                 .with_chain_id(identity.get_chain_id() as u32),
         ));
@@ -70,7 +66,7 @@ type AdapterContract = Adapter<WalletSigner>;
 
 #[async_trait]
 impl ServiceClient<AdapterContract> for AdapterClient {
-    async fn prepare_service_client(&self) -> NodeResult<AdapterContract> {
+    async fn prepare_service_client(&self) -> ContractClientResult<AdapterContract> {
         let adapter_contract = Adapter::new(self.adapter_address, self.signer.clone());
 
         Ok(adapter_contract)
@@ -80,7 +76,7 @@ impl ServiceClient<AdapterContract> for AdapterClient {
 #[allow(unused_variables)]
 #[async_trait]
 impl AdapterTransactions for AdapterClient {
-    async fn request_randomness(&self, message: &str) -> NodeResult<()> {
+    async fn request_randomness(&self, message: &str) -> ContractClientResult<()> {
         Ok(())
     }
 
@@ -90,7 +86,7 @@ impl AdapterTransactions for AdapterClient {
         signature_index: usize,
         signature: Vec<u8>,
         partial_signatures: HashMap<Address, Vec<u8>>,
-    ) -> NodeResult<()> {
+    ) -> ContractClientResult<()> {
         Ok(())
     }
 
@@ -100,11 +96,14 @@ impl AdapterTransactions for AdapterClient {
         task_index: usize,
         signature: Vec<u8>,
         group_as_bytes: Vec<u8>,
-    ) -> NodeResult<()> {
+    ) -> ContractClientResult<()> {
         Ok(())
     }
 
-    async fn cancel_invalid_relay_confirmation_task(&self, task_index: usize) -> NodeResult<()> {
+    async fn cancel_invalid_relay_confirmation_task(
+        &self,
+        task_index: usize,
+    ) -> ContractClientResult<()> {
         Ok(())
     }
 
@@ -113,11 +112,11 @@ impl AdapterTransactions for AdapterClient {
         task_index: usize,
         group_relay_confirmation_as_bytes: Vec<u8>,
         signature: Vec<u8>,
-    ) -> NodeResult<()> {
+    ) -> ContractClientResult<()> {
         Ok(())
     }
 
-    async fn set_initial_group(&self, group: Vec<u8>) -> NodeResult<()> {
+    async fn set_initial_group(&self, group: Vec<u8>) -> ContractClientResult<()> {
         Ok(())
     }
 }
@@ -125,36 +124,42 @@ impl AdapterTransactions for AdapterClient {
 #[allow(unused_variables)]
 #[async_trait]
 impl AdapterViews for AdapterClient {
-    async fn get_group(&self, group_index: usize) -> NodeResult<Group> {
+    async fn get_group(&self, group_index: usize) -> ContractClientResult<Group> {
         todo!()
     }
 
-    async fn get_last_output(&self) -> NodeResult<u64> {
+    async fn get_last_output(&self) -> ContractClientResult<u64> {
         todo!()
     }
 
-    async fn get_signature_task_completion_state(&self, index: usize) -> NodeResult<bool> {
+    async fn get_signature_task_completion_state(
+        &self,
+        index: usize,
+    ) -> ContractClientResult<bool> {
         todo!()
     }
 
-    async fn get_group_relay_cache(&self, group_index: usize) -> NodeResult<Group> {
+    async fn get_group_relay_cache(&self, group_index: usize) -> ContractClientResult<Group> {
         todo!()
     }
 
     async fn get_group_relay_confirmation_task_state(
         &self,
         task_index: usize,
-    ) -> NodeResult<GroupRelayConfirmationTaskState> {
+    ) -> ContractClientResult<GroupRelayConfirmationTaskState> {
         todo!()
     }
 }
 
 #[async_trait]
 impl AdapterLogs for AdapterClient {
-    async fn subscribe_randomness_task(
+    async fn subscribe_randomness_task<
+        C: FnMut(RandomnessTask) -> F + Send,
+        F: Future<Output = ContractClientResult<()>> + Send,
+    >(
         &self,
-        cb: Box<dyn Fn(RandomnessTask) -> NodeResult<()> + Sync + Send>,
-    ) -> NodeResult<()> {
+        mut cb: C,
+    ) -> ContractClientResult<()> {
         let randomness_task_filter =
             Filter::new()
                 .from_block(BlockNumber::Latest)
@@ -170,15 +175,18 @@ impl AdapterLogs for AdapterClient {
                 e
             })?;
         while let Some(log) = stream.next().await {
-            cb(log.into())?;
+            cb(log.into()).await?;
         }
-        Err(ContractClientError::FetchingRandomnessTaskError.into())
+        Err(ContractClientError::FetchingRandomnessTaskError)
     }
 
-    async fn subscribe_group_relay_confirmation_task(
+    async fn subscribe_group_relay_confirmation_task<
+        C: FnMut(GroupRelayConfirmationTask) -> F + Send,
+        F: Future<Output = ContractClientResult<()>> + Send,
+    >(
         &self,
-        cb: Box<dyn Fn(GroupRelayConfirmationTask) -> NodeResult<()> + Sync + Send>,
-    ) -> NodeResult<()> {
+        mut cb: C,
+    ) -> ContractClientResult<()> {
         let group_relay_confirmation_task_filter = Filter::new()
             .from_block(BlockNumber::Latest)
             .topic0(ValueOrArray::Value(H256::from(keccak256(
@@ -193,20 +201,8 @@ impl AdapterLogs for AdapterClient {
                 e
             })?;
         while let Some(log) = stream.next().await {
-            cb(log.into())?;
+            cb(log.into()).await?;
         }
-        Err(ContractClientError::FetchingGroupRelayConfirmationTaskError.into())
-    }
-}
-
-impl From<Log> for RandomnessTask {
-    fn from(_: Log) -> Self {
-        todo!()
-    }
-}
-
-impl From<Log> for GroupRelayConfirmationTask {
-    fn from(_: Log) -> Self {
-        todo!()
+        Err(ContractClientError::FetchingGroupRelayConfirmationTaskError)
     }
 }

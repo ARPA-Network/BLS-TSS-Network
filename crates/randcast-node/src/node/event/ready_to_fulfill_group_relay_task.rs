@@ -1,4 +1,4 @@
-use crate::node::dal::cache::GroupRelayResultCache;
+use arpa_node_dal::cache::GroupRelayResultCache;
 
 use super::{types::Topic, Event};
 
@@ -16,5 +16,9 @@ impl ReadyToFulfillGroupRelayTask {
 impl Event for ReadyToFulfillGroupRelayTask {
     fn topic(&self) -> Topic {
         Topic::ReadyToFulfillGroupRelayTask
+    }
+
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
     }
 }

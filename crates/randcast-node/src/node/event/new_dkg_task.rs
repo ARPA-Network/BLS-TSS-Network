@@ -1,5 +1,5 @@
 use super::{types::Topic, Event};
-use crate::node::dal::types::DKGTask;
+use arpa_node_core::DKGTask;
 
 #[derive(Clone)]
 pub struct NewDKGTask {
@@ -19,5 +19,9 @@ impl NewDKGTask {
 impl Event for NewDKGTask {
     fn topic(&self) -> Topic {
         Topic::NewDKGTask
+    }
+
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
     }
 }

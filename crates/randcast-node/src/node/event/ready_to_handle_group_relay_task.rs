@@ -1,4 +1,4 @@
-use crate::node::dal::types::GroupRelayTask;
+use arpa_node_core::GroupRelayTask;
 
 use super::{types::Topic, Event};
 
@@ -16,5 +16,9 @@ impl ReadyToHandleGroupRelayTask {
 impl Event for ReadyToHandleGroupRelayTask {
     fn topic(&self) -> Topic {
         Topic::ReadyToHandleGroupRelayTask
+    }
+
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
     }
 }

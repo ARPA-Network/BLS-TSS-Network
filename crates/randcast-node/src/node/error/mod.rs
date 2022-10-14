@@ -1,16 +1,10 @@
-use std::env::VarError;
-
-use super::contract_client::ethers::WalletSigner;
-use crate::node::dal::sqlite::DBError;
+use arpa_node_contract_client::error::ContractClientError;
+use arpa_node_dal::error::DataAccessError;
+use arpa_node_sqlite_db::DBError;
 use dkg_core::{primitives::DKGError, NodeError as DKGNodeError};
-use ethers::providers::Http as HttpProvider;
-use ethers::signers::WalletError;
-use ethers::{
-    prelude::{signer::SignerMiddlewareError, ContractError, ProviderError},
-    providers::Provider,
-    signers::LocalWallet,
-};
+use ethers::{providers::ProviderError, signers::WalletError};
 use rustc_hex::FromHexError;
+use std::env::VarError;
 use thiserror::Error;
 use threshold_bls::sig::{BLSError, G1Scheme, ThresholdError};
 
@@ -36,23 +30,8 @@ pub enum NodeError {
     #[error(transparent)]
     ThresholdError(#[from] ThresholdError<G1Scheme<threshold_bls::curve::bls12381::PairingCurve>>),
 
-    #[error(transparent)]
-    RpcClientError(#[from] tonic::transport::Error),
-
-    #[error(transparent)]
-    RpcResponseError(#[from] tonic::Status),
-
-    #[error("there is no signature cache yet")]
-    CommitterCacheNotExisted,
-
     #[error("the node is not the committer of the group")]
     NotCommitter,
-
-    #[error("there is no task yet")]
-    NoTaskAvailable,
-
-    #[error("randomness task not found")]
-    TaskNotFound,
 
     #[error("the chain id: {0} is not supported in the group")]
     InvalidChainId(usize),
@@ -64,16 +43,22 @@ pub enum NodeError {
     RepeatedChainId,
 
     #[error(transparent)]
-    NodeInfoError(#[from] NodeInfoError),
+    DataAccessError(#[from] DataAccessError),
 
     #[error(transparent)]
-    GroupError(#[from] GroupError),
+    ContractClientError(#[from] ContractClientError),
+
+    #[error(transparent)]
+    RpcClientError(#[from] tonic::transport::Error),
+
+    #[error(transparent)]
+    RpcResponseError(#[from] tonic::Status),
 
     #[error(transparent)]
     DBError(#[from] DBError),
 
     #[error(transparent)]
-    ContractClientError(#[from] ContractClientError),
+    ClientBuildError(#[from] anyhow::Error),
 
     #[error(transparent)]
     FromHexError(#[from] FromHexError),
@@ -83,67 +68,12 @@ pub enum NodeError {
 
     #[error("can't parse address format")]
     AddressFormatError,
-}
-
-#[derive(Debug, Error, PartialEq)]
-pub enum GroupError {
-    #[error("there is no group task yet")]
-    NoGroupTask,
-
-    #[error("the group is not exist")]
-    GroupNotExisted,
-
-    #[error("you are not contained in the group")]
-    MemberNotExisted,
 
     #[error("there is not an available DKG output")]
     GroupNotReady,
 
-    #[error("there is already an available DKG setup")]
-    GroupAlreadyReady,
-
-    #[error("the group index is different from the latest: {0}")]
-    GroupIndexObsolete(usize),
-
-    #[error("the group epoch is different from the latest: {0}")]
-    GroupEpochObsolete(usize),
-
-    #[error("the group is still waiting for other's DKGOutput to commit")]
-    GroupWaitingForConsensus,
-}
-
-#[derive(Debug, Error, PartialEq)]
-pub enum NodeInfoError {
-    #[error("there is no node record yet, please run node with new-run mode")]
-    NoNodeRecord,
-
-    #[error("there is no rpc endpoint yet")]
-    NoRpcEndpoint,
-
-    #[error("there is no dkg key pair yet")]
-    NoDKGKeyPair,
-}
-
-#[derive(Debug, Error)]
-pub enum ContractClientError {
-    #[error(transparent)]
-    ChainProviderError(#[from] ProviderError),
-    #[error(transparent)]
-    ContractError(#[from] ContractError<WalletSigner>),
-    #[error(transparent)]
-    SignerError(#[from] SignerMiddlewareError<Provider<HttpProvider>, LocalWallet>),
-    #[error(transparent)]
-    AddressParseError(#[from] FromHexError),
-    #[error("can't fetch new block, please check provider")]
-    FetchingBlockError,
-    #[error("can't fetch dkg task, please check provider")]
-    FetchingDkgTaskError,
-    #[error("can't fetch randomness task, please check provider")]
-    FetchingRandomnessTaskError,
-    #[error("can't fetch group relay task, please check provider")]
-    FetchingGroupRelayTaskError,
-    #[error("can't fetch group relay confirmation task, please check provider")]
-    FetchingGroupRelayConfirmationTaskError,
+    #[error("you are not contained in the group")]
+    MemberNotExisted,
 }
 
 #[derive(Debug, Error)]

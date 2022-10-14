@@ -1,0 +1,27 @@
+[package]
+name = "arpa-node-contract-client"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[dependencies]
+dkg-core = { path = "../../../../dkg-core" }
+threshold-bls = { path = "../../../../threshold-bls", default-features = false, features = ["bls12_381"] }
+arpa-node-core = { path = "../../node/core" }
+
+tokio = { version = "1.20.1", features = ["full"] }
+ethers-core = { git = "https://github.com/gakonst/ethers-rs"}
+thiserror = "1.0.15"
+anyhow = "1.0.31"
+serde = "1.0.106"
+log = "0.4"
+async-trait = "0.1.35"
+bincode = "1.2.1"
+tonic = "0.8"
+prost = "0.11"
+ethers = { git = "https://github.com/gakonst/ethers-rs", features = ["abigen"] }
+rustc-hex = "2.1.0"
+
+[lib]
+name = "arpa_node_contract_client"
+path = "src/lib.rs"

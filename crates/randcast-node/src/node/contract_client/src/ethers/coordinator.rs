@@ -1,13 +1,14 @@
-use self::coordinator_stub::Coordinator;
-use super::WalletSigner;
-use crate::node::{
-    contract_client::coordinator::{
+use crate::{
+    coordinator::{
         CoordinatorClientBuilder, CoordinatorTransactions, CoordinatorViews, DKGContractError,
     },
-    dal::{types::GeneralChainIdentity, ChainIdentity},
-    error::{ContractClientError, NodeResult},
+    error::{ContractClientError, ContractClientResult},
     ServiceClient,
 };
+
+use self::coordinator_stub::Coordinator;
+use super::WalletSigner;
+use arpa_node_core::{ChainIdentity, GeneralChainIdentity};
 use async_trait::async_trait;
 use dkg_core::{
     primitives::{BundledJustification, BundledResponses, BundledShares},
@@ -20,7 +21,7 @@ use threshold_bls::curve::bls12381::Curve;
 
 #[allow(clippy::useless_conversion)]
 pub mod coordinator_stub {
-    include!("../../../../contract_stub/coordinator.rs");
+    include!("../../../../../contract_stub/coordinator.rs");
 }
 
 pub struct CoordinatorClient {
@@ -38,7 +39,7 @@ impl CoordinatorClient {
         let signer = Arc::new(SignerMiddleware::new(
             provider,
             identity
-                .wallet
+                .get_signer()
                 .clone()
                 .with_chain_id(identity.get_chain_id() as u32),
         ));
@@ -62,7 +63,7 @@ type CoordinatorContract = Coordinator<WalletSigner>;
 
 #[async_trait]
 impl ServiceClient<CoordinatorContract> for CoordinatorClient {
-    async fn prepare_service_client(&self) -> NodeResult<CoordinatorContract> {
+    async fn prepare_service_client(&self) -> ContractClientResult<CoordinatorContract> {
         let coordinator_contract = Coordinator::new(self.coordinator_address, self.signer.clone());
 
         Ok(coordinator_contract)
@@ -71,7 +72,7 @@ impl ServiceClient<CoordinatorContract> for CoordinatorClient {
 
 #[async_trait]
 impl CoordinatorTransactions for CoordinatorClient {
-    async fn publish(&self, value: Vec<u8>) -> NodeResult<()> {
+    async fn publish(&self, value: Vec<u8>) -> ContractClientResult<()> {
         let coordinator_contract =
             ServiceClient::<CoordinatorContract>::prepare_service_client(self).await?;
 
@@ -95,7 +96,7 @@ impl CoordinatorTransactions for CoordinatorClient {
 
 #[async_trait]
 impl CoordinatorViews for CoordinatorClient {
-    async fn get_shares(&self) -> NodeResult<Vec<Vec<u8>>> {
+    async fn get_shares(&self) -> ContractClientResult<Vec<Vec<u8>>> {
         let coordinator_contract =
             ServiceClient::<CoordinatorContract>::prepare_service_client(self).await?;
 
@@ -112,7 +113,7 @@ impl CoordinatorViews for CoordinatorClient {
         Ok(res)
     }
 
-    async fn get_responses(&self) -> NodeResult<Vec<Vec<u8>>> {
+    async fn get_responses(&self) -> ContractClientResult<Vec<Vec<u8>>> {
         let coordinator_contract =
             ServiceClient::<CoordinatorContract>::prepare_service_client(self).await?;
 
@@ -129,7 +130,7 @@ impl CoordinatorViews for CoordinatorClient {
         Ok(res)
     }
 
-    async fn get_justifications(&self) -> NodeResult<Vec<Vec<u8>>> {
+    async fn get_justifications(&self) -> ContractClientResult<Vec<Vec<u8>>> {
         let coordinator_contract =
             ServiceClient::<CoordinatorContract>::prepare_service_client(self).await?;
 
@@ -146,7 +147,7 @@ impl CoordinatorViews for CoordinatorClient {
         Ok(res)
     }
 
-    async fn get_participants(&self) -> NodeResult<Vec<Address>> {
+    async fn get_participants(&self) -> ContractClientResult<Vec<Address>> {
         let coordinator_contract =
             ServiceClient::<CoordinatorContract>::prepare_service_client(self).await?;
 
@@ -162,7 +163,7 @@ impl CoordinatorViews for CoordinatorClient {
         Ok(res)
     }
 
-    async fn get_bls_keys(&self) -> NodeResult<(usize, Vec<Vec<u8>>)> {
+    async fn get_bls_keys(&self) -> ContractClientResult<(usize, Vec<Vec<u8>>)> {
         let coordinator_contract =
             ServiceClient::<CoordinatorContract>::prepare_service_client(self).await?;
 
@@ -184,7 +185,7 @@ impl CoordinatorViews for CoordinatorClient {
         Ok(res)
     }
 
-    async fn in_phase(&self) -> NodeResult<usize> {
+    async fn in_phase(&self) -> ContractClientResult<usize> {
         let coordinator_contract =
             ServiceClient::<CoordinatorContract>::prepare_service_client(self).await?;
 
@@ -224,9 +225,10 @@ impl BoardPublisher<Curve> for CoordinatorClient {
 
 #[cfg(test)]
 pub mod coordinator_tests {
+    use crate::coordinator::CoordinatorTransactions;
+
     use super::{CoordinatorClient, WalletSigner};
-    use crate::node::contract_client::coordinator::CoordinatorTransactions;
-    use crate::node::dal::types::GeneralChainIdentity;
+    use arpa_node_core::GeneralChainIdentity;
     use ethers::abi::Tokenize;
     use ethers::prelude::*;
     use ethers::signers::coins_bip39::English;
@@ -237,7 +239,7 @@ pub mod coordinator_tests {
     use std::{convert::TryFrom, sync::Arc, time::Duration};
     use threshold_bls::schemes::bls12_381::G1Scheme;
 
-    include!("../../../../contract_stub/coordinator.rs");
+    include!("../../../../../contract_stub/coordinator.rs");
 
     #[test]
     fn test_cargo_manifest_parent_dir() {

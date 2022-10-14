@@ -1,4 +1,4 @@
-use crate::node::dal::types::DKGTask;
+use arpa_node_core::DKGTask;
 
 use super::{types::Topic, Event};
 
@@ -16,5 +16,9 @@ impl RunDKG {
 impl Event for RunDKG {
     fn topic(&self) -> Topic {
         Topic::RunDKG
+    }
+
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
     }
 }

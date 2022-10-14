@@ -1,10 +1,11 @@
+use std::future::Future;
+
 use super::adapter::{AdapterMockHelper, MockAdapterClient};
-use crate::node::{
-    contract_client::provider::{BlockFetcher, ChainProviderBuilder},
-    dal::{types::MockChainIdentity, ChainIdentity},
-    error::NodeResult,
-    PALCEHOLDER_ADDRESS,
+use crate::{
+    error::ContractClientResult,
+    provider::{BlockFetcher, ChainProviderBuilder},
 };
+use arpa_node_core::{ChainIdentity, MockChainIdentity, PALCEHOLDER_ADDRESS};
 use async_trait::async_trait;
 
 impl ChainProviderBuilder for MockChainIdentity {
@@ -20,13 +21,16 @@ impl ChainProviderBuilder for MockChainIdentity {
 
 #[async_trait]
 impl BlockFetcher for MockAdapterClient {
-    async fn subscribe_new_block_height(
+    async fn subscribe_new_block_height<
+        C: FnMut(usize) -> F + Send,
+        F: Future<Output = ContractClientResult<()>> + Send,
+    >(
         &self,
-        cb: Box<dyn Fn(usize) -> NodeResult<()> + Sync + Send>,
-    ) -> NodeResult<()> {
+        mut cb: C,
+    ) -> ContractClientResult<()> {
         loop {
             let block_height = self.mine(1).await?;
-            cb(block_height)?;
+            cb(block_height).await?;
             tokio::time::sleep(std::time::Duration::from_millis(1000)).await;
         }
     }

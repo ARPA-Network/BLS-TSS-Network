@@ -1,7 +1,9 @@
+use arpa_node_contract_client::{
+    adapter::{AdapterTransactions, AdapterViews},
+    rpc_mock::adapter::MockAdapterClient,
+};
+use arpa_node_core::ContractGroup;
 use ethers::types::Address;
-use randcast_node::node::contract_client::adapter::{AdapterTransactions, AdapterViews};
-use randcast_node::node::contract_client::rpc_mock::adapter::MockAdapterClient;
-use randcast_node::node::contract_client::types::Group as ContractGroup;
 use std::env;
 
 #[tokio::main]
