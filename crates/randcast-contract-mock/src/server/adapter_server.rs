@@ -77,16 +77,15 @@ impl AdapterTransactions for MockAdapter {
     async fn mine(&self, request: Request<MineRequest>) -> Result<Response<MineReply>, Status> {
         let req = request.into_inner();
 
-        <Controller as ControllerMockHelper>::mine(
-            &mut self.adapter.write(),
-            req.block_number_increment as usize,
-        )
-        .map(|block_number| {
-            Response::new(MineReply {
-                block_number: block_number as u32,
+        self.adapter
+            .write()
+            .mine(req.block_number_increment as usize)
+            .map(|block_number| {
+                Response::new(MineReply {
+                    block_number: block_number as u32,
+                })
             })
-        })
-        .map_err(|e| Status::internal(e.to_string()))
+            .map_err(|e| Status::internal(e.to_string()))
     }
 
     async fn fulfill_relay(

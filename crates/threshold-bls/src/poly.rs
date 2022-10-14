@@ -435,7 +435,7 @@ pub mod tests {
 
 
     #[test]
-    fn interpolation(degree in 0..100usize, num_evals in 0..100usize) {
+    fn interpolation(degree in 0..10usize, num_evals in 0..10usize) {
         let poly = Poly::<Sc>::new(degree);
         let expected = poly.0[0];
 
