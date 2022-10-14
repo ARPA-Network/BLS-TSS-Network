@@ -1,3 +1,18 @@
+use arpa_node::node::context::chain::types::GeneralMainChain;
+use arpa_node::node::context::types::{build_wallet_from_config, Config, GeneralContext};
+use arpa_node::node::context::{Context, TaskWaiter};
+use arpa_node_contract_client::controller::{ControllerClientBuilder, ControllerTransactions};
+use arpa_node_contract_client::rpc_mock::controller::MockControllerClient;
+use arpa_node_core::format_now_date;
+use arpa_node_core::GeneralChainIdentity;
+use arpa_node_core::MockChainIdentity;
+use arpa_node_core::RandomnessTask;
+use arpa_node_dal::cache::{InMemoryBLSTasksQueue, InMemoryGroupInfoCache, InMemoryNodeInfoCache};
+use arpa_node_dal::{NodeInfoFetcher, NodeInfoUpdater};
+use arpa_node_sqlite_db::BLSTasksDBClient;
+use arpa_node_sqlite_db::GroupInfoDBClient;
+use arpa_node_sqlite_db::NodeInfoDBClient;
+use arpa_node_sqlite_db::SqliteDB;
 use ethers::signers::Signer;
 use log::{info, LevelFilter};
 use log4rs::append::console::ConsoleAppender;
@@ -6,22 +21,6 @@ use log4rs::config::{Appender, Root};
 use log4rs::encode::pattern::PatternEncoder;
 use log4rs::filter::threshold::ThresholdFilter;
 use log4rs::Config as LogConfig;
-use randcast_node::node::context::chain::types::GeneralMainChain;
-use randcast_node::node::context::types::{Config, GeneralContext};
-use randcast_node::node::context::{Context, TaskWaiter};
-use randcast_node::node::contract_client::controller::{
-    ControllerClientBuilder, ControllerTransactions,
-};
-use randcast_node::node::contract_client::rpc_mock::controller::MockControllerClient;
-use randcast_node::node::dal::cache::{
-    InMemoryBLSTasksQueue, InMemoryGroupInfoCache, InMemoryNodeInfoCache,
-};
-use randcast_node::node::dal::sqlite::{
-    init_tables, BLSTasksDBClient, GroupInfoDBClient, NodeInfoDBClient,
-};
-use randcast_node::node::dal::types::{GeneralChainIdentity, MockChainIdentity, RandomnessTask};
-use randcast_node::node::dal::{NodeInfoFetcher, NodeInfoUpdater};
-use randcast_node::node::utils::{build_wallet_from_config, format_now_date};
 use std::fs::{self, read_to_string};
 use std::path::PathBuf;
 use structopt::StructOpt;
@@ -140,7 +139,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 )?;
                 info!("Existing data file found. Renamed to the directory of data_path.",);
             }
-            init_tables(data_path.clone())?;
+
+            let db = SqliteDB::build(
+                data_path.as_os_str().to_str().unwrap(),
+                &wallet.signer().to_bytes(),
+            )
+            .await?;
 
             let rng = &mut rand::thread_rng();
 
@@ -150,17 +154,20 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             info!("dkg public_key: {}", dkg_public_key);
             info!("-------------------------------------------------------");
 
-            let mut node_cache = NodeInfoDBClient::new(data_path.clone());
-
-            node_cache.save_node_info(id_address, config.node_rpc_endpoint.clone())?;
+            let mut node_cache = db.get_node_info_client();
 
             node_cache
-                .set_dkg_key_pair(dkg_private_key, dkg_public_key)
-                .unwrap();
+                .save_node_info(
+                    id_address,
+                    config.node_rpc_endpoint.clone(),
+                    dkg_private_key,
+                    dkg_public_key,
+                )
+                .await?;
 
-            let group_cache = GroupInfoDBClient::new(data_path.clone());
+            let group_cache = db.get_group_info_client();
 
-            let randomness_tasks_cache = BLSTasksDBClient::<RandomnessTask>::new(data_path);
+            let randomness_tasks_cache = db.get_bls_tasks_client::<RandomnessTask>();
 
             let main_chain_identity = GeneralChainIdentity::new(
                 0,
@@ -189,7 +196,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
             let context = GeneralContext::new(main_chain);
 
-            let handle = context.deploy();
+            let handle = context.deploy().await;
 
             // TODO register node to randcast network, this should be moved to node_cmd_client(triggering manully to avoid accidental operation) in prod
             let client = main_chain_identity.build_controller_client();
@@ -205,24 +212,30 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
             let id_address = wallet.address();
 
-            let mut node_cache = NodeInfoDBClient::new(data_path.clone());
+            let db = SqliteDB::build(
+                data_path.as_os_str().to_str().unwrap(),
+                &wallet.signer().to_bytes(),
+            )
+            .await?;
 
-            node_cache.refresh_current_node_info().expect(
+            let mut node_cache = db.get_node_info_client();
+
+            node_cache.refresh_current_node_info().await.expect(
                 "It seems there is no existing node record. Please execute in new-run mode.",
             );
 
-            assert_eq!(node_cache.get_id_address(), id_address,"Node identity is different from the database, please check or execute in new-run mode.");
+            assert_eq!(node_cache.get_id_address()?, id_address,"Node identity is different from the database, please check or execute in new-run mode.");
 
             node_cache.get_node_rpc_endpoint()?;
             node_cache.get_dkg_public_key()?;
 
-            let mut group_cache = GroupInfoDBClient::new(data_path.clone());
+            let mut group_cache = db.get_group_info_client();
 
-            group_cache.refresh_current_group_info().expect(
+            group_cache.refresh_current_group_info().await.expect(
                 "It seems there is no existing group record. Please execute in new-run mode.",
             );
 
-            let randomness_tasks_cache = BLSTasksDBClient::<RandomnessTask>::new(data_path);
+            let randomness_tasks_cache = db.get_bls_tasks_client::<RandomnessTask>();
 
             let main_chain_identity = GeneralChainIdentity::new(
                 0,
@@ -251,7 +264,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
             let context = GeneralContext::new(main_chain);
 
-            let handle = context.deploy();
+            let handle = context.deploy().await;
 
             handle.wait_task().await;
         }
@@ -272,10 +285,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
             node_cache
                 .set_node_rpc_endpoint(config.node_rpc_endpoint.clone())
+                .await
                 .unwrap();
 
             node_cache
                 .set_dkg_key_pair(dkg_private_key, dkg_public_key)
+                .await
                 .unwrap();
 
             let group_cache = InMemoryGroupInfoCache::new();
@@ -322,7 +337,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             //     context.add_adapter_chain(chain)?;
             // }
 
-            let handle = context.deploy();
+            let handle = context.deploy().await;
 
             // register node to randcast network
             let client = MockControllerClient::new(config.provider_endpoint, id_address);

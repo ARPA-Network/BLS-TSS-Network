@@ -61,6 +61,7 @@ impl<C: Curve> BoardPublisher<C> for InMemoryBoard<C> {
     }
 }
 
+#[allow(unused)]
 pub async fn run_dkg<C, S>(
     board: &mut InMemoryBoard<C>,
     phase0s: Vec<joint_feldman::DKG<C>>,
@@ -109,6 +110,7 @@ where
     outputs
 }
 
+#[allow(unused)]
 pub fn setup<C, S, R: rand::RngCore>(
     n: usize,
     t: usize,
