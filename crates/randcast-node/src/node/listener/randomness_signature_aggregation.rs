@@ -1,17 +1,14 @@
 use super::Listener;
 use crate::node::{
-    dal::{
-        cache::RandomnessResultCache,
-        {GroupInfoFetcher, SignatureResultCacheUpdater},
-    },
     error::NodeResult,
     event::ready_to_fulfill_randomness_task::ReadyToFulfillRandomnessTask,
     queue::{event_queue::EventQueue, EventPublisher},
 };
+use arpa_node_dal::{cache::RandomnessResultCache, GroupInfoFetcher, SignatureResultCacheUpdater};
 use async_trait::async_trait;
 use ethers::types::Address;
-use parking_lot::RwLock;
 use std::sync::Arc;
+use tokio::sync::RwLock;
 
 pub struct RandomnessSignatureAggregationListener<
     G: GroupInfoFetcher,
@@ -44,11 +41,15 @@ impl<G: GroupInfoFetcher, C: SignatureResultCacheUpdater<RandomnessResultCache>>
     }
 }
 
-impl<G: GroupInfoFetcher, C: SignatureResultCacheUpdater<RandomnessResultCache>>
-    EventPublisher<ReadyToFulfillRandomnessTask> for RandomnessSignatureAggregationListener<G, C>
+#[async_trait]
+impl<
+        G: GroupInfoFetcher + Sync + Send,
+        C: SignatureResultCacheUpdater<RandomnessResultCache> + Sync + Send,
+    > EventPublisher<ReadyToFulfillRandomnessTask>
+    for RandomnessSignatureAggregationListener<G, C>
 {
-    fn publish(&self, event: ReadyToFulfillRandomnessTask) {
-        self.eq.read().publish(event);
+    async fn publish(&self, event: ReadyToFulfillRandomnessTask) {
+        self.eq.read().await.publish(event).await;
     }
 }
 
@@ -60,19 +61,21 @@ impl<
 {
     async fn start(mut self) -> NodeResult<()> {
         loop {
-            let is_committer = self.group_cache.read().is_committer(self.id_address);
+            let is_committer = self.group_cache.read().await.is_committer(self.id_address);
 
             if let Ok(true) = is_committer {
                 let ready_signatures = self
                     .randomness_signature_cache
                     .write()
+                    .await
                     .get_ready_to_commit_signatures();
 
                 if !ready_signatures.is_empty() {
                     self.publish(ReadyToFulfillRandomnessTask {
                         chain_id: self.chain_id,
                         tasks: ready_signatures,
-                    });
+                    })
+                    .await;
                 }
             }
 

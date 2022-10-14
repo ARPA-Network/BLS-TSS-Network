@@ -1,23 +1,5 @@
 use crate::node::{
     context::types::GeneralContext,
-    contract_client::{
-        adapter::AdapterClientBuilder, controller::ControllerClientBuilder,
-        coordinator::CoordinatorClientBuilder, provider::ChainProviderBuilder,
-    },
-    dal::{
-        cache::{
-            GroupRelayConfirmationResultCache, GroupRelayResultCache, InMemoryBLSTasksQueue,
-            InMemoryBlockInfoCache, InMemoryGroupInfoCache, InMemoryNodeInfoCache,
-            InMemorySignatureResultCache, RandomnessResultCache,
-        },
-        sqlite::{BLSTasksDBClient, GroupInfoDBClient, NodeInfoDBClient},
-        types::{
-            GeneralChainIdentity, GroupRelayConfirmationTask, GroupRelayTask, MockChainIdentity,
-            RandomnessTask,
-        },
-        ChainIdentity,
-        {BLSTasksFetcher, BLSTasksUpdater, GroupInfoFetcher, GroupInfoUpdater, NodeInfoFetcher},
-    },
     listener::{
         block::BlockListener,
         group_relay_confirmation_signature_aggregation::GroupRelayConfirmationSignatureAggregationListener,
@@ -45,9 +27,27 @@ use crate::node::{
         ready_to_handle_randomness_task::ReadyToHandleRandomnessTaskSubscriber, Subscriber,
     },
 };
+use arpa_node_contract_client::{
+    adapter::AdapterClientBuilder, controller::ControllerClientBuilder,
+    coordinator::CoordinatorClientBuilder, provider::ChainProviderBuilder,
+};
+use arpa_node_core::{
+    ChainIdentity, GeneralChainIdentity, GroupRelayConfirmationTask, GroupRelayTask,
+    MockChainIdentity, RandomnessTask,
+};
+use arpa_node_dal::{
+    cache::{
+        GroupRelayConfirmationResultCache, GroupRelayResultCache, InMemoryBLSTasksQueue,
+        InMemoryBlockInfoCache, InMemoryGroupInfoCache, InMemoryNodeInfoCache,
+        InMemorySignatureResultCache, RandomnessResultCache,
+    },
+    {BLSTasksFetcher, BLSTasksUpdater, GroupInfoFetcher, GroupInfoUpdater, NodeInfoFetcher},
+};
+use arpa_node_sqlite_db::{BLSTasksDBClient, GroupInfoDBClient, NodeInfoDBClient};
+use async_trait::async_trait;
 use log::error;
-use parking_lot::RwLock;
 use std::{marker::PhantomData, sync::Arc};
+use tokio::sync::RwLock;
 
 use super::{
     AdapterChain, AdapterChainFetcher, Chain, ChainFetcher, ContextFetcher, MainChain,
@@ -75,6 +75,7 @@ pub struct GeneralAdapterChain<
     g: PhantomData<G>,
 }
 
+#[async_trait]
 impl<
         N: NodeInfoFetcher + Sync + Send + 'static,
         G: GroupInfoFetcher + GroupInfoUpdater + Sync + Send + 'static,
@@ -102,25 +103,27 @@ impl<
 
     type ChainIdentity = I;
 
-    fn init_listeners(&self, context: &GeneralContext<N, G, T, I>) {
-        self.init_block_listeners(context);
+    async fn init_listeners(&self, context: &GeneralContext<N, G, T, I>) {
+        self.init_block_listeners(context).await;
 
-        self.init_randomness_listeners(context);
+        self.init_randomness_listeners(context).await;
 
-        self.init_group_relay_confirmation_listeners(context);
+        self.init_group_relay_confirmation_listeners(context).await;
     }
 
-    fn init_subscribers(&self, context: &GeneralContext<N, G, T, I>) {
-        self.init_block_subscribers(context);
+    async fn init_subscribers(&self, context: &GeneralContext<N, G, T, I>) {
+        self.init_block_subscribers(context).await;
 
-        self.init_randomness_subscribers(context);
+        self.init_randomness_subscribers(context).await;
 
-        self.init_group_relay_subscribers(context);
+        self.init_group_relay_subscribers(context).await;
 
-        self.init_group_relay_confirmation_subscribers(context);
+        self.init_group_relay_confirmation_subscribers(context)
+            .await;
     }
 }
 
+#[async_trait]
 impl<
         N: NodeInfoFetcher + Sync + Send + 'static,
         G: GroupInfoFetcher + GroupInfoUpdater + Sync + Send + 'static,
@@ -140,7 +143,7 @@ impl<
     type GroupRelayConfirmationResultCaches =
         InMemorySignatureResultCache<GroupRelayConfirmationResultCache>;
 
-    fn init_block_listeners(&self, context: &Self::Context) {
+    async fn init_block_listeners(&self, context: &Self::Context) {
         let p_block = BlockListener::new(
             self.id(),
             self.get_chain_identity(),
@@ -150,6 +153,7 @@ impl<
         context
             .get_fixed_task_handler()
             .write()
+            .await
             .add_task(async move {
                 if let Err(e) = p_block.start().await {
                     error!("{:?}", e);
@@ -157,14 +161,18 @@ impl<
             });
     }
 
-    fn init_randomness_listeners(&self, context: &Self::Context) {
+    async fn init_randomness_listeners(&self, context: &Self::Context) {
+        let id_address = context
+            .get_main_chain()
+            .get_node_cache()
+            .read()
+            .await
+            .get_id_address()
+            .unwrap();
+
         let p_new_randomness_task = NewRandomnessTaskListener::new(
             self.id(),
-            context
-                .get_main_chain()
-                .get_node_cache()
-                .read()
-                .get_id_address(),
+            id_address,
             self.get_chain_identity(),
             self.get_randomness_tasks_cache(),
             context.get_event_queue(),
@@ -173,6 +181,7 @@ impl<
         context
             .get_fixed_task_handler()
             .write()
+            .await
             .add_task(async move {
                 if let Err(e) = p_new_randomness_task.start().await {
                     error!("{:?}", e);
@@ -181,11 +190,7 @@ impl<
 
         let p_ready_to_handle_randomness_task = ReadyToHandleRandomnessTaskListener::new(
             self.id(),
-            context
-                .get_main_chain()
-                .get_node_cache()
-                .read()
-                .get_id_address(),
+            id_address,
             self.get_chain_identity(),
             self.get_block_cache(),
             context.get_main_chain().get_group_cache(),
@@ -196,6 +201,7 @@ impl<
         context
             .get_fixed_task_handler()
             .write()
+            .await
             .add_task(async move {
                 if let Err(e) = p_ready_to_handle_randomness_task.start().await {
                     error!("{:?}", e);
@@ -204,11 +210,7 @@ impl<
 
         let p_randomness_signature_aggregation = RandomnessSignatureAggregationListener::new(
             self.id(),
-            context
-                .get_main_chain()
-                .get_node_cache()
-                .read()
-                .get_id_address(),
+            id_address,
             context.get_main_chain().get_group_cache(),
             self.get_randomness_result_cache(),
             context.get_event_queue(),
@@ -217,6 +219,7 @@ impl<
         context
             .get_fixed_task_handler()
             .write()
+            .await
             .add_task(async move {
                 if let Err(e) = p_randomness_signature_aggregation.start().await {
                     error!("{:?}", e);
@@ -224,14 +227,18 @@ impl<
             });
     }
 
-    fn init_group_relay_confirmation_listeners(&self, context: &Self::Context) {
+    async fn init_group_relay_confirmation_listeners(&self, context: &Self::Context) {
+        let id_address = context
+            .get_main_chain()
+            .get_node_cache()
+            .read()
+            .await
+            .get_id_address()
+            .unwrap();
+
         let p_new_group_relay_confirmation_task = NewGroupRelayConfirmationTaskListener::new(
             self.id(),
-            context
-                .get_main_chain()
-                .get_node_cache()
-                .read()
-                .get_id_address(),
+            id_address,
             self.get_chain_identity(),
             self.get_group_relay_confirmation_tasks_cache(),
             context.get_event_queue(),
@@ -240,6 +247,7 @@ impl<
         context
             .get_fixed_task_handler()
             .write()
+            .await
             .add_task(async move {
                 if let Err(e) = p_new_group_relay_confirmation_task.start().await {
                     error!("{:?}", e);
@@ -258,6 +266,7 @@ impl<
         context
             .get_fixed_task_handler()
             .write()
+            .await
             .add_task(async move {
                 if let Err(e) = p_ready_to_handle_group_relay_confirmation_task
                     .start()
@@ -270,11 +279,7 @@ impl<
         let p_group_relay_confirmation_signature_aggregation =
             GroupRelayConfirmationSignatureAggregationListener::new(
                 self.id(),
-                context
-                    .get_main_chain()
-                    .get_node_cache()
-                    .read()
-                    .get_id_address(),
+                id_address,
                 context.get_main_chain().get_group_cache(),
                 self.get_group_relay_confirmation_result_cache(),
                 context.get_event_queue(),
@@ -283,6 +288,7 @@ impl<
         context
             .get_fixed_task_handler()
             .write()
+            .await
             .add_task(async move {
                 if let Err(e) = p_group_relay_confirmation_signature_aggregation
                     .start()
@@ -293,61 +299,73 @@ impl<
             });
     }
 
-    fn init_block_subscribers(&self, context: &Self::Context) {
+    async fn init_block_subscribers(&self, context: &Self::Context) {
         let s_block =
             BlockSubscriber::new(self.id(), self.get_block_cache(), context.get_event_queue());
 
-        s_block.subscribe();
+        s_block.subscribe().await;
     }
 
-    fn init_randomness_subscribers(&self, context: &Self::Context) {
+    async fn init_randomness_subscribers(&self, context: &Self::Context) {
+        let id_address = context
+            .get_main_chain()
+            .get_node_cache()
+            .read()
+            .await
+            .get_id_address()
+            .unwrap();
+
         let s_ready_to_handle_randomness_task = ReadyToHandleRandomnessTaskSubscriber::new(
             self.id(),
-            context
-                .get_main_chain()
-                .get_node_cache()
-                .read()
-                .get_id_address(),
+            id_address,
             context.get_main_chain().get_group_cache(),
             self.get_randomness_result_cache(),
             context.get_event_queue(),
             context.get_dynamic_task_handler(),
         );
 
-        s_ready_to_handle_randomness_task.subscribe();
+        s_ready_to_handle_randomness_task.subscribe().await;
 
         let s_randomness_signature_aggregation = RandomnessSignatureAggregationSubscriber::new(
             self.id(),
-            context
-                .get_main_chain()
-                .get_node_cache()
-                .read()
-                .get_id_address(),
+            id_address,
             self.get_chain_identity(),
             context.get_event_queue(),
             context.get_dynamic_task_handler(),
         );
 
-        s_randomness_signature_aggregation.subscribe();
+        s_randomness_signature_aggregation.subscribe().await;
     }
 
-    fn init_group_relay_subscribers(&self, context: &Self::Context) {
+    async fn init_group_relay_subscribers(&self, context: &Self::Context) {
+        let id_address = context
+            .get_main_chain()
+            .get_node_cache()
+            .read()
+            .await
+            .get_id_address()
+            .unwrap();
+
         let s_group_relay_signature_aggregation = GroupRelaySignatureAggregationSubscriber::new(
             self.id(),
-            context
-                .get_main_chain()
-                .get_node_cache()
-                .read()
-                .get_id_address(),
+            id_address,
             self.get_chain_identity(),
             context.get_event_queue(),
             context.get_dynamic_task_handler(),
         );
 
-        s_group_relay_signature_aggregation.subscribe();
+        s_group_relay_signature_aggregation.subscribe().await;
     }
 
-    fn init_group_relay_confirmation_subscribers(&self, context: &Self::Context) {
+    async fn init_group_relay_confirmation_subscribers(&self, context: &Self::Context) {
+        let id_address = context
+            .get_main_chain()
+            .get_node_cache()
+            .read()
+            .await
+            .get_id_address()
+            .unwrap();
+
         let s_ready_to_handle_group_relay_confirmation_task =
             ReadyToHandleGroupRelayConfirmationTaskSubscriber::new(
                 self.id(),
@@ -359,22 +377,22 @@ impl<
                 context.get_dynamic_task_handler(),
             );
 
-        s_ready_to_handle_group_relay_confirmation_task.subscribe();
+        s_ready_to_handle_group_relay_confirmation_task
+            .subscribe()
+            .await;
 
         let s_group_relay_confirmation_signature_aggregation =
             GroupRelayConfirmationSignatureAggregationSubscriber::new(
                 self.id(),
-                context
-                    .get_main_chain()
-                    .get_node_cache()
-                    .read()
-                    .get_id_address(),
+                id_address,
                 self.get_chain_identity(),
                 context.get_event_queue(),
                 context.get_dynamic_task_handler(),
             );
 
-        s_group_relay_confirmation_signature_aggregation.subscribe();
+        s_group_relay_confirmation_signature_aggregation
+            .subscribe()
+            .await;
     }
 }
 
@@ -507,6 +525,7 @@ impl
     }
 }
 
+#[async_trait]
 impl<
         N: NodeInfoFetcher + Sync + Send + 'static,
         G: GroupInfoFetcher + GroupInfoUpdater + Sync + Send + 'static,
@@ -531,27 +550,28 @@ impl<
 
     type ChainIdentity = I;
 
-    fn init_listeners(&self, context: &GeneralContext<N, G, T, I>) {
-        self.init_block_listeners(context);
+    async fn init_listeners(&self, context: &GeneralContext<N, G, T, I>) {
+        self.init_block_listeners(context).await;
 
-        self.init_dkg_listeners(context);
+        self.init_dkg_listeners(context).await;
 
-        self.init_randomness_listeners(context);
+        self.init_randomness_listeners(context).await;
 
-        self.init_group_relay_listeners(context);
+        self.init_group_relay_listeners(context).await;
     }
 
-    fn init_subscribers(&self, context: &GeneralContext<N, G, T, I>) {
-        self.init_block_subscribers(context);
+    async fn init_subscribers(&self, context: &GeneralContext<N, G, T, I>) {
+        self.init_block_subscribers(context).await;
 
-        self.init_dkg_subscribers(context);
+        self.init_dkg_subscribers(context).await;
 
-        self.init_randomness_subscribers(context);
+        self.init_randomness_subscribers(context).await;
 
-        self.init_group_relay_subscribers(context);
+        self.init_group_relay_subscribers(context).await;
     }
 }
 
+#[async_trait]
 impl<
         N: NodeInfoFetcher + Sync + Send + 'static,
         G: GroupInfoFetcher + GroupInfoUpdater + Sync + Send + 'static,
@@ -574,7 +594,7 @@ impl<
 
     type GroupRelayResultCaches = InMemorySignatureResultCache<GroupRelayResultCache>;
 
-    fn init_block_listeners(&self, context: &Self::Context) {
+    async fn init_block_listeners(&self, context: &Self::Context) {
         let p_block = BlockListener::new(
             self.id(),
             self.get_chain_identity(),
@@ -584,6 +604,7 @@ impl<
         context
             .get_fixed_task_handler()
             .write()
+            .await
             .add_task(async move {
                 if let Err(e) = p_block.start().await {
                     error!("{:?}", e);
@@ -591,7 +612,7 @@ impl<
             });
     }
 
-    fn init_dkg_listeners(&self, context: &Self::Context) {
+    async fn init_dkg_listeners(&self, context: &Self::Context) {
         let p_pre_grouping = PreGroupingListener::new(
             self.get_chain_identity(),
             self.get_group_cache(),
@@ -601,6 +622,7 @@ impl<
         context
             .get_fixed_task_handler()
             .write()
+            .await
             .add_task(async move {
                 if let Err(e) = p_pre_grouping.start().await {
                     error!("{:?}", e);
@@ -616,6 +638,7 @@ impl<
         context
             .get_fixed_task_handler()
             .write()
+            .await
             .add_task(async move {
                 if let Err(e) = p_post_commit_grouping.start().await {
                     error!("{:?}", e);
@@ -631,6 +654,7 @@ impl<
         context
             .get_fixed_task_handler()
             .write()
+            .await
             .add_task(async move {
                 if let Err(e) = p_post_grouping.start().await {
                     error!("{:?}", e);
@@ -638,10 +662,12 @@ impl<
             });
     }
 
-    fn init_randomness_listeners(&self, context: &Self::Context) {
+    async fn init_randomness_listeners(&self, context: &Self::Context) {
+        let id_address = self.get_node_cache().read().await.get_id_address().unwrap();
+
         let p_new_randomness_task = NewRandomnessTaskListener::new(
             self.id(),
-            self.get_node_cache().read().get_id_address(),
+            id_address,
             self.get_chain_identity(),
             self.get_randomness_tasks_cache(),
             context.get_event_queue(),
@@ -650,6 +676,7 @@ impl<
         context
             .get_fixed_task_handler()
             .write()
+            .await
             .add_task(async move {
                 if let Err(e) = p_new_randomness_task.start().await {
                     error!("{:?}", e);
@@ -658,7 +685,7 @@ impl<
 
         let p_ready_to_handle_randomness_task = ReadyToHandleRandomnessTaskListener::new(
             self.id(),
-            self.get_node_cache().read().get_id_address(),
+            id_address,
             self.get_chain_identity(),
             self.get_block_cache(),
             self.get_group_cache(),
@@ -669,6 +696,7 @@ impl<
         context
             .get_fixed_task_handler()
             .write()
+            .await
             .add_task(async move {
                 if let Err(e) = p_ready_to_handle_randomness_task.start().await {
                     error!("{:?}", e);
@@ -677,7 +705,7 @@ impl<
 
         let p_randomness_signature_aggregation = RandomnessSignatureAggregationListener::new(
             self.id(),
-            self.get_node_cache().read().get_id_address(),
+            id_address,
             self.get_group_cache(),
             self.get_randomness_result_cache(),
             context.get_event_queue(),
@@ -686,6 +714,7 @@ impl<
         context
             .get_fixed_task_handler()
             .write()
+            .await
             .add_task(async move {
                 if let Err(e) = p_randomness_signature_aggregation.start().await {
                     error!("{:?}", e);
@@ -693,7 +722,9 @@ impl<
             });
     }
 
-    fn init_group_relay_listeners(&self, context: &Self::Context) {
+    async fn init_group_relay_listeners(&self, context: &Self::Context) {
+        let id_address = self.get_node_cache().read().await.get_id_address().unwrap();
+
         let p_new_group_relay_task = NewGroupRelayTaskListener::new(
             self.get_chain_identity(),
             self.get_group_relay_tasks_cache(),
@@ -703,6 +734,7 @@ impl<
         context
             .get_fixed_task_handler()
             .write()
+            .await
             .add_task(async move {
                 if let Err(e) = p_new_group_relay_task.start().await {
                     error!("{:?}", e);
@@ -719,6 +751,7 @@ impl<
         context
             .get_fixed_task_handler()
             .write()
+            .await
             .add_task(async move {
                 if let Err(e) = p_ready_to_handle_group_relay_task.start().await {
                     error!("{:?}", e);
@@ -726,7 +759,7 @@ impl<
             });
 
         let p_group_relay_signature_aggregation = GroupRelaySignatureAggregationListener::new(
-            self.get_node_cache().read().get_id_address(),
+            id_address,
             self.get_group_cache(),
             self.get_group_relay_result_cache(),
             context.get_event_queue(),
@@ -735,6 +768,7 @@ impl<
         context
             .get_fixed_task_handler()
             .write()
+            .await
             .add_task(async move {
                 if let Err(e) = p_group_relay_signature_aggregation.start().await {
                     error!("{:?}", e);
@@ -742,18 +776,18 @@ impl<
             });
     }
 
-    fn init_block_subscribers(&self, context: &Self::Context) {
+    async fn init_block_subscribers(&self, context: &Self::Context) {
         let s_block =
             BlockSubscriber::new(self.id(), self.get_block_cache(), context.get_event_queue());
 
-        s_block.subscribe();
+        s_block.subscribe().await;
     }
 
-    fn init_dkg_subscribers(&self, context: &Self::Context) {
+    async fn init_dkg_subscribers(&self, context: &Self::Context) {
         let s_pre_grouping =
             PreGroupingSubscriber::new(self.get_group_cache(), context.get_event_queue());
 
-        s_pre_grouping.subscribe();
+        s_pre_grouping.subscribe().await;
 
         let s_in_grouping = InGroupingSubscriber::new(
             self.get_chain_identity(),
@@ -763,12 +797,12 @@ impl<
             context.get_dynamic_task_handler(),
         );
 
-        s_in_grouping.subscribe();
+        s_in_grouping.subscribe().await;
 
         let s_post_success_grouping =
             PostSuccessGroupingSubscriber::new(self.get_group_cache(), context.get_event_queue());
 
-        s_post_success_grouping.subscribe();
+        s_post_success_grouping.subscribe().await;
 
         let s_post_grouping = PostGroupingSubscriber::new(
             self.get_chain_identity(),
@@ -776,33 +810,35 @@ impl<
             context.get_dynamic_task_handler(),
         );
 
-        s_post_grouping.subscribe();
+        s_post_grouping.subscribe().await;
     }
 
-    fn init_randomness_subscribers(&self, context: &Self::Context) {
+    async fn init_randomness_subscribers(&self, context: &Self::Context) {
+        let id_address = self.get_node_cache().read().await.get_id_address().unwrap();
+
         let s_ready_to_handle_randomness_task = ReadyToHandleRandomnessTaskSubscriber::new(
             self.id(),
-            self.get_node_cache().read().get_id_address(),
+            id_address,
             self.get_group_cache(),
             self.get_randomness_result_cache(),
             context.get_event_queue(),
             context.get_dynamic_task_handler(),
         );
 
-        s_ready_to_handle_randomness_task.subscribe();
+        s_ready_to_handle_randomness_task.subscribe().await;
 
         let s_randomness_signature_aggregation = RandomnessSignatureAggregationSubscriber::new(
             self.id(),
-            self.get_node_cache().read().get_id_address(),
+            id_address,
             self.get_chain_identity(),
             context.get_event_queue(),
             context.get_dynamic_task_handler(),
         );
 
-        s_randomness_signature_aggregation.subscribe();
+        s_randomness_signature_aggregation.subscribe().await;
     }
 
-    fn init_group_relay_subscribers(&self, context: &Self::Context) {
+    async fn init_group_relay_subscribers(&self, context: &Self::Context) {
         let s_ready_to_handle_group_relay_task = ReadyToHandleGroupRelayTaskSubscriber::new(
             self.get_chain_identity(),
             self.get_group_cache(),
@@ -811,7 +847,7 @@ impl<
             context.get_dynamic_task_handler(),
         );
 
-        s_ready_to_handle_group_relay_task.subscribe();
+        s_ready_to_handle_group_relay_task.subscribe().await;
     }
 }
 

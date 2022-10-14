@@ -1,18 +1,16 @@
 use super::Listener;
 use crate::node::{
-    contract_client::adapter::{AdapterClientBuilder, AdapterViews},
-    dal::{
-        types::DKGStatus,
-        ChainIdentity, {GroupInfoFetcher, GroupInfoUpdater},
-    },
     error::{NodeError, NodeResult},
     event::dkg_success::DKGSuccess,
     queue::{event_queue::EventQueue, EventPublisher},
 };
+use arpa_node_contract_client::adapter::{AdapterClientBuilder, AdapterViews};
+use arpa_node_core::{ChainIdentity, DKGStatus};
+use arpa_node_dal::{GroupInfoFetcher, GroupInfoUpdater};
 use async_trait::async_trait;
 use log::error;
-use parking_lot::RwLock;
 use std::sync::Arc;
+use tokio::sync::RwLock;
 use tokio_retry::{strategy::FixedInterval, RetryIf};
 
 pub struct PostCommitGroupingListener<
@@ -40,11 +38,14 @@ impl<G: GroupInfoFetcher + GroupInfoUpdater, I: ChainIdentity + AdapterClientBui
     }
 }
 
-impl<G: GroupInfoFetcher + GroupInfoUpdater, I: ChainIdentity + AdapterClientBuilder>
-    EventPublisher<DKGSuccess> for PostCommitGroupingListener<G, I>
+#[async_trait]
+impl<
+        G: GroupInfoFetcher + GroupInfoUpdater + Sync + Send,
+        I: ChainIdentity + AdapterClientBuilder + Sync + Send,
+    > EventPublisher<DKGSuccess> for PostCommitGroupingListener<G, I>
 {
-    fn publish(&self, event: DKGSuccess) {
-        self.eq.read().publish(event);
+    async fn publish(&self, event: DKGSuccess) {
+        self.eq.read().await.publish(event).await;
     }
 }
 
@@ -55,11 +56,12 @@ impl<
     > Listener for PostCommitGroupingListener<G, I>
 {
     async fn start(mut self) -> NodeResult<()> {
-        let id_address = self.main_chain_identity.read().get_id_address();
+        let id_address = self.main_chain_identity.read().await.get_id_address();
 
         let client = self
             .main_chain_identity
             .read()
+            .await
             .build_adapter_client(id_address);
 
         let retry_strategy = FixedInterval::from_millis(2000);
@@ -68,23 +70,28 @@ impl<
             if let Err(err) = RetryIf::spawn(
                 retry_strategy.clone(),
                 || async {
-                    let dkg_status = self.group_cache.read().get_dkg_status();
+                    let dkg_status = self.group_cache.read().await.get_dkg_status();
 
                     if let Ok(DKGStatus::CommitSuccess) = dkg_status {
-                        let group_index = self.group_cache.read().get_index()?;
+                        let group_index = self.group_cache.read().await.get_index()?;
 
-                        let group_epoch = self.group_cache.read().get_epoch()?;
+                        let group_epoch = self.group_cache.read().await.get_epoch()?;
 
                         if let Ok(group) = client.get_group(group_index).await {
                             if group.state {
-                                let res = self.group_cache.write().update_dkg_status(
-                                    group_index,
-                                    group_epoch,
-                                    DKGStatus::WaitForPostProcess,
-                                )?;
+                                let res = self
+                                    .group_cache
+                                    .write()
+                                    .await
+                                    .update_dkg_status(
+                                        group_index,
+                                        group_epoch,
+                                        DKGStatus::WaitForPostProcess,
+                                    )
+                                    .await?;
 
                                 if res {
-                                    self.publish(DKGSuccess { group });
+                                    self.publish(DKGSuccess { group }).await;
                                 }
                             }
                         }

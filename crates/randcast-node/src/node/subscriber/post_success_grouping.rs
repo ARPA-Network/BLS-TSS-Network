@@ -1,13 +1,14 @@
 use super::Subscriber;
 use crate::node::{
-    dal::GroupInfoUpdater,
     error::NodeResult,
     event::{dkg_success::DKGSuccess, types::Topic, Event},
     queue::{event_queue::EventQueue, EventSubscriber},
 };
+use arpa_node_dal::GroupInfoUpdater;
+use async_trait::async_trait;
 use log::info;
-use parking_lot::RwLock;
 use std::sync::Arc;
+use tokio::sync::RwLock;
 
 pub struct PostSuccessGroupingSubscriber<G: GroupInfoUpdater + Sync + Send> {
     group_cache: Arc<RwLock<G>>,
@@ -20,30 +21,31 @@ impl<G: GroupInfoUpdater + Sync + Send> PostSuccessGroupingSubscriber<G> {
     }
 }
 
+#[async_trait]
 impl<G: GroupInfoUpdater + Sync + Send + 'static> Subscriber for PostSuccessGroupingSubscriber<G> {
-    fn notify(&self, topic: Topic, payload: Box<dyn Event>) -> NodeResult<()> {
+    async fn notify(&self, topic: Topic, payload: &(dyn Event + Send + Sync)) -> NodeResult<()> {
         info!("{:?}", topic);
 
-        unsafe {
-            let ptr = Box::into_raw(payload);
+        let DKGSuccess { group } = payload
+            .as_any()
+            .downcast_ref::<DKGSuccess>()
+            .unwrap()
+            .clone();
 
-            let struct_ptr = ptr as *mut DKGSuccess;
-
-            let DKGSuccess { group } = *Box::from_raw(struct_ptr);
-
-            self.group_cache
-                .write()
-                .save_committers(group.index, group.epoch, group.committers)?;
-        }
+        self.group_cache
+            .write()
+            .await
+            .save_committers(group.index, group.epoch, group.committers)
+            .await?;
 
         Ok(())
     }
 
-    fn subscribe(self) {
+    async fn subscribe(self) {
         let eq = self.eq.clone();
 
         let subscriber = Box::new(self);
 
-        eq.write().subscribe(Topic::DKGSuccess, subscriber);
+        eq.write().await.subscribe(Topic::DKGSuccess, subscriber);
     }
 }

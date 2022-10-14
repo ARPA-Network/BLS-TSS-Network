@@ -7,26 +7,29 @@ use super::{
 };
 use crate::node::{
     committer::server,
-    contract_client::{
-        adapter::AdapterClientBuilder, controller::ControllerClientBuilder,
-        coordinator::CoordinatorClientBuilder, provider::ChainProviderBuilder,
-    },
-    dal::{
-        types::RandomnessTask,
-        ChainIdentity,
-        {BLSTasksFetcher, BLSTasksUpdater, GroupInfoFetcher, GroupInfoUpdater, NodeInfoFetcher},
-    },
-    error::{NodeError, NodeResult},
+    error::{ConfigError, NodeError, NodeResult},
     queue::event_queue::EventQueue,
     scheduler::{
         dynamic::SimpleDynamicTaskScheduler, fixed::SimpleFixedTaskScheduler, TaskScheduler,
     },
 };
+use arpa_node_contract_client::{
+    adapter::AdapterClientBuilder, controller::ControllerClientBuilder,
+    coordinator::CoordinatorClientBuilder, provider::ChainProviderBuilder,
+};
+use arpa_node_core::{ChainIdentity, RandomnessTask};
+use arpa_node_dal::{
+    BLSTasksFetcher, BLSTasksUpdater, GroupInfoFetcher, GroupInfoUpdater, NodeInfoFetcher,
+};
 use async_trait::async_trait;
+use ethers::{
+    prelude::k256::ecdsa::SigningKey,
+    signers::{coins_bip39::English, LocalWallet, MnemonicBuilder, Wallet},
+};
 use log::error;
-use parking_lot::RwLock;
 use serde::{Deserialize, Serialize};
-use std::{collections::HashMap, sync::Arc};
+use std::{collections::HashMap, env, sync::Arc};
+use tokio::sync::RwLock;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Config {
@@ -121,6 +124,7 @@ impl<
     }
 }
 
+#[async_trait]
 impl<
         N: NodeInfoFetcher + Sync + Send + 'static,
         G: GroupInfoFetcher + GroupInfoUpdater + Sync + Send + 'static,
@@ -139,11 +143,11 @@ impl<
 
     type AdapterChain = GeneralAdapterChain<N, G, T, I>;
 
-    fn deploy(self) -> ContextHandle {
-        self.get_main_chain().init_components(&self);
+    async fn deploy(self) -> ContextHandle {
+        self.get_main_chain().init_components(&self).await;
 
         for adapter_chain in self.adapter_chains.values() {
-            adapter_chain.init_components(&self);
+            adapter_chain.init_components(&self).await;
         }
 
         let f_ts = self.get_fixed_task_handler();
@@ -152,6 +156,7 @@ impl<
             .get_main_chain()
             .get_node_cache()
             .read()
+            .await
             .get_node_rpc_endpoint()
             .unwrap()
             .to_string();
@@ -159,9 +164,10 @@ impl<
         let context = Arc::new(RwLock::new(self));
 
         f_ts.write()
+            .await
             .start_committer_server(rpc_endpoint, context.clone());
 
-        let ts = context.read().get_dynamic_task_handler();
+        let ts = context.read().await.get_dynamic_task_handler();
 
         ContextHandle { ts }
     }
@@ -217,8 +223,8 @@ pub struct ContextHandle {
 impl TaskWaiter for ContextHandle {
     async fn wait_task(&self) {
         loop {
-            while !self.ts.read().dynamic_tasks.is_empty() {
-                let (task_recv, task_monitor) = self.ts.write().dynamic_tasks.pop().unwrap();
+            while !self.ts.read().await.dynamic_tasks.is_empty() {
+                let (task_recv, task_monitor) = self.ts.write().await.dynamic_tasks.pop().unwrap();
 
                 let _ = task_recv.await;
 
@@ -257,4 +263,39 @@ impl<
             };
         });
     }
+}
+
+pub fn build_wallet_from_config(account: Account) -> Result<Wallet<SigningKey>, ConfigError> {
+    if account.hdwallet.is_some() {
+        let mut hd = account.hdwallet.unwrap();
+        if hd.mnemonic.eq("env") {
+            hd.mnemonic = env::var("ARPA_NODE_HD_ACCOUNT_MNEMONIC")?;
+        }
+        let mut wallet = MnemonicBuilder::<English>::default().phrase(&*hd.mnemonic);
+
+        if hd.path.is_some() {
+            wallet = wallet.derivation_path(&hd.path.unwrap()).unwrap();
+        }
+        if hd.passphrase.is_some() {
+            wallet = wallet.password(&hd.passphrase.unwrap());
+        }
+        return Ok(wallet.index(hd.index).unwrap().build()?);
+    } else if account.keystore.is_some() {
+        let mut keystore = account.keystore.unwrap();
+        if keystore.password.eq("env") {
+            keystore.password = env::var("ARPA_NODE_ACCOUNT_KEYSTORE_PASSWORD")?;
+        }
+        return Ok(LocalWallet::decrypt_keystore(
+            &keystore.path,
+            &keystore.password,
+        )?);
+    } else if account.private_key.is_some() {
+        let mut private_key = account.private_key.unwrap();
+        if private_key.eq("env") {
+            private_key = env::var("ARPA_NODE_ACCOUNT_PRIVATE_KEY")?;
+        }
+        return Ok(private_key.parse::<Wallet<SigningKey>>()?);
+    }
+
+    Err(ConfigError::LackOfAccount)
 }

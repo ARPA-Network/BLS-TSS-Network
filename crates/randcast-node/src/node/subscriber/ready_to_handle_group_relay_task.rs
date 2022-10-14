@@ -4,24 +4,22 @@ use crate::node::{
     committer::{
         client::GeneralCommitterClient, CommitterClient, CommitterClientHandler, CommitterService,
     },
-    contract_client::adapter::{AdapterClientBuilder, AdapterViews},
-    contract_client::types::Group as ContractGroup,
-    dal::cache::GroupRelayResultCache,
-    dal::{
-        types::{GroupRelayTask, TaskType},
-        ChainIdentity,
-        {GroupInfoFetcher, SignatureResultCacheFetcher, SignatureResultCacheUpdater},
-    },
     error::{NodeError, NodeResult},
     event::{ready_to_handle_group_relay_task::ReadyToHandleGroupRelayTask, types::Topic, Event},
     queue::{event_queue::EventQueue, EventSubscriber},
     scheduler::{dynamic::SimpleDynamicTaskScheduler, TaskScheduler},
 };
+use arpa_node_contract_client::adapter::{AdapterClientBuilder, AdapterViews};
+use arpa_node_core::{ChainIdentity, ContractGroup, GroupRelayTask, TaskType};
+use arpa_node_dal::{
+    cache::GroupRelayResultCache, GroupInfoFetcher, SignatureResultCacheFetcher,
+    SignatureResultCacheUpdater,
+};
 use async_trait::async_trait;
 use ethers::types::Address;
 use log::{error, info};
-use parking_lot::RwLock;
 use std::sync::Arc;
+use tokio::sync::RwLock;
 use tokio_retry::{strategy::FixedInterval, RetryIf};
 
 pub struct ReadyToHandleGroupRelayTaskSubscriber<
@@ -78,15 +76,18 @@ pub struct GeneralGroupRelayHandler<
     group_relay_signature_cache: Arc<RwLock<C>>,
 }
 
+#[async_trait]
 impl<
-        G: GroupInfoFetcher,
-        I: ChainIdentity + AdapterClientBuilder,
+        G: GroupInfoFetcher + Sync + Send,
+        I: ChainIdentity + AdapterClientBuilder + Sync + Send,
         C: SignatureResultCacheUpdater<GroupRelayResultCache>
-            + SignatureResultCacheFetcher<GroupRelayResultCache>,
+            + SignatureResultCacheFetcher<GroupRelayResultCache>
+            + Sync
+            + Send,
     > CommitterClientHandler<GeneralCommitterClient, G> for GeneralGroupRelayHandler<G, I, C>
 {
-    fn get_id_address(&self) -> Address {
-        self.main_chain_identity.read().get_id_address()
+    async fn get_id_address(&self) -> Address {
+        self.main_chain_identity.read().await.get_id_address()
     }
 
     fn get_group_cache(&self) -> Arc<RwLock<G>> {
@@ -105,13 +106,14 @@ impl<
     > GroupRelayHandler for GeneralGroupRelayHandler<G, I, C>
 {
     async fn handle(self) -> NodeResult<()> {
-        let main_id_address = self.main_chain_identity.read().get_id_address();
+        let main_id_address = self.main_chain_identity.read().await.get_id_address();
         let client = self
             .main_chain_identity
             .read()
+            .await
             .build_adapter_client(main_id_address);
 
-        let committers = self.prepare_committer_clients()?;
+        let committers = self.prepare_committer_clients().await?;
 
         for task in self.tasks {
             let relayed_group = client.get_group(task.relayed_group_index).await?;
@@ -127,21 +129,27 @@ impl<
             let bls_core = SimpleBLSCore {};
 
             let partial_signature = bls_core.partial_sign(
-                self.group_cache.read().get_secret_share()?,
+                self.group_cache.read().await.get_secret_share()?,
                 &relayed_group_as_bytes,
             )?;
 
-            let threshold = self.group_cache.read().get_threshold()?;
+            let threshold = self.group_cache.read().await.get_threshold()?;
 
-            let current_group_index = self.group_cache.read().get_index()?;
+            let current_group_index = self.group_cache.read().await.get_index()?;
 
-            if self.group_cache.read().is_committer(main_id_address)? {
+            if self
+                .group_cache
+                .read()
+                .await
+                .is_committer(main_id_address)?
+            {
                 if !self
                     .group_relay_signature_cache
                     .read()
+                    .await
                     .contains(task.controller_global_epoch)
                 {
-                    self.group_relay_signature_cache.write().add(
+                    self.group_relay_signature_cache.write().await.add(
                         current_group_index,
                         task.controller_global_epoch,
                         relayed_group,
@@ -151,6 +159,7 @@ impl<
 
                 self.group_relay_signature_cache
                     .write()
+                    .await
                     .add_partial_signature(
                         task.controller_global_epoch,
                         main_id_address,
@@ -192,6 +201,7 @@ impl<
     }
 }
 
+#[async_trait]
 impl<
         G: GroupInfoFetcher + Sync + Send + 'static,
         I: ChainIdentity + AdapterClientBuilder + Sync + Send + 'static,
@@ -202,45 +212,44 @@ impl<
             + 'static,
     > Subscriber for ReadyToHandleGroupRelayTaskSubscriber<G, I, C>
 {
-    fn notify(&self, topic: Topic, payload: Box<dyn Event>) -> NodeResult<()> {
+    async fn notify(&self, topic: Topic, payload: &(dyn Event + Send + Sync)) -> NodeResult<()> {
         info!("{:?}", topic);
 
-        unsafe {
-            let ptr = Box::into_raw(payload);
+        let ReadyToHandleGroupRelayTask { tasks } = payload
+            .as_any()
+            .downcast_ref::<ReadyToHandleGroupRelayTask>()
+            .unwrap()
+            .clone();
 
-            let struct_ptr = ptr as *mut ReadyToHandleGroupRelayTask;
+        let main_chain_identity = self.main_chain_identity.clone();
 
-            let ReadyToHandleGroupRelayTask { tasks } = *Box::from_raw(struct_ptr);
+        let group_cache_for_handler = self.group_cache.clone();
 
-            let main_chain_identity = self.main_chain_identity.clone();
+        let group_relay_signature_cache_for_handler = self.group_relay_signature_cache.clone();
 
-            let group_cache_for_handler = self.group_cache.clone();
+        self.ts.write().await.add_task(async move {
+            let handler = GeneralGroupRelayHandler {
+                main_chain_identity,
+                tasks,
+                group_cache: group_cache_for_handler,
+                group_relay_signature_cache: group_relay_signature_cache_for_handler,
+            };
 
-            let group_relay_signature_cache_for_handler = self.group_relay_signature_cache.clone();
-
-            self.ts.write().add_task(async move {
-                let handler = GeneralGroupRelayHandler {
-                    main_chain_identity,
-                    tasks,
-                    group_cache: group_cache_for_handler,
-                    group_relay_signature_cache: group_relay_signature_cache_for_handler,
-                };
-
-                if let Err(e) = handler.handle().await {
-                    error!("{:?}", e);
-                }
-            });
-        }
+            if let Err(e) = handler.handle().await {
+                error!("{:?}", e);
+            }
+        });
 
         Ok(())
     }
 
-    fn subscribe(self) {
+    async fn subscribe(self) {
         let eq = self.eq.clone();
 
         let subscriber = Box::new(self);
 
         eq.write()
+            .await
             .subscribe(Topic::ReadyToHandleGroupRelayTask, subscriber);
     }
 }

@@ -1,16 +1,16 @@
 use super::Listener;
 use crate::node::{
-    contract_client::controller::{ControllerClientBuilder, ControllerLogs},
-    dal::{types::GroupRelayTask, ChainIdentity},
-    dal::{BLSTasksFetcher, BLSTasksUpdater},
     error::{NodeError, NodeResult},
     event::new_group_relay_task::NewGroupRelayTask,
     queue::{event_queue::EventQueue, EventPublisher},
 };
+use arpa_node_contract_client::controller::{ControllerClientBuilder, ControllerLogs};
+use arpa_node_core::{ChainIdentity, GroupRelayTask};
+use arpa_node_dal::{BLSTasksFetcher, BLSTasksUpdater};
 use async_trait::async_trait;
 use log::{error, info};
-use parking_lot::RwLock;
 use std::sync::Arc;
+use tokio::sync::RwLock;
 use tokio_retry::{strategy::FixedInterval, RetryIf};
 
 pub struct NewGroupRelayTaskListener<
@@ -40,13 +40,14 @@ impl<
     }
 }
 
+#[async_trait]
 impl<
-        I: ChainIdentity + ControllerClientBuilder,
-        Q: BLSTasksUpdater<GroupRelayTask> + BLSTasksFetcher<GroupRelayTask>,
+        I: ChainIdentity + ControllerClientBuilder + Sync + Send,
+        Q: BLSTasksUpdater<GroupRelayTask> + BLSTasksFetcher<GroupRelayTask> + Sync + Send,
     > EventPublisher<NewGroupRelayTask> for NewGroupRelayTaskListener<I, Q>
 {
-    fn publish(&self, event: NewGroupRelayTask) {
-        self.eq.read().publish(event);
+    async fn publish(&self, event: NewGroupRelayTask) {
+        self.eq.read().await.publish(event).await;
     }
 }
 
@@ -57,7 +58,11 @@ impl<
     > Listener for NewGroupRelayTaskListener<I, Q>
 {
     async fn start(mut self) -> NodeResult<()> {
-        let client = self.main_chain_identity.read().build_controller_client();
+        let client = self
+            .main_chain_identity
+            .read()
+            .await
+            .build_controller_client();
 
         let retry_strategy = FixedInterval::from_millis(2000);
 
@@ -68,21 +73,34 @@ impl<
                 let eq = self.eq.clone();
 
                 client
-                    .subscribe_group_relay_task(Box::new(move |group_relay_task| {
-                        if let Ok(false) = group_relay_tasks_cache
-                            .read()
-                            .contains(group_relay_task.controller_global_epoch)
-                        {
-                            info!("received new group relay task. {:?}", group_relay_task);
+                    .subscribe_group_relay_task(move |group_relay_task| {
+                        let group_relay_tasks_cache = group_relay_tasks_cache.clone();
+                        let eq = eq.clone();
 
-                            group_relay_tasks_cache
-                                .write()
-                                .add(group_relay_task.clone())?;
+                        async move {
+                            if let Ok(false) = group_relay_tasks_cache
+                                .read()
+                                .await
+                                .contains(group_relay_task.controller_global_epoch)
+                                .await
+                            {
+                                info!("received new group relay task. {:?}", group_relay_task);
 
-                            eq.read().publish(NewGroupRelayTask::new(group_relay_task));
+                                group_relay_tasks_cache
+                                    .write()
+                                    .await
+                                    .add(group_relay_task.clone())
+                                    .await
+                                    .map_err(anyhow::Error::from)?;
+
+                                eq.read()
+                                    .await
+                                    .publish(NewGroupRelayTask::new(group_relay_task))
+                                    .await;
+                            }
+                            Ok(())
                         }
-                        Ok(())
-                    }))
+                    })
                     .await?;
 
                 Ok(())

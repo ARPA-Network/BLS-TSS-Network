@@ -1,16 +1,16 @@
 use super::Subscriber;
 use crate::node::{
-    contract_client::controller::{ControllerClientBuilder, ControllerTransactions},
-    dal::ChainIdentity,
     error::NodeResult,
     event::{dkg_post_process::DKGPostProcess, types::Topic, Event},
     queue::{event_queue::EventQueue, EventSubscriber},
     scheduler::{dynamic::SimpleDynamicTaskScheduler, TaskScheduler},
 };
+use arpa_node_contract_client::controller::{ControllerClientBuilder, ControllerTransactions};
+use arpa_node_core::ChainIdentity;
 use async_trait::async_trait;
 use log::{error, info};
-use parking_lot::RwLock;
 use std::sync::Arc;
+use tokio::sync::RwLock;
 
 pub struct PostGroupingSubscriber<I: ChainIdentity + ControllerClientBuilder> {
     main_chain_identity: Arc<RwLock<I>>,
@@ -46,7 +46,11 @@ impl<I: ChainIdentity + ControllerClientBuilder + Sync + Send> DKGPostProcessHan
     for GeneralDKGPostProcessHandler<I>
 {
     async fn handle(&self, group_index: usize, group_epoch: usize) -> NodeResult<()> {
-        let client = self.main_chain_identity.read().build_controller_client();
+        let client = self
+            .main_chain_identity
+            .read()
+            .await
+            .build_controller_client();
 
         client.post_process_dkg(group_index, group_epoch).await?;
 
@@ -54,25 +58,21 @@ impl<I: ChainIdentity + ControllerClientBuilder + Sync + Send> DKGPostProcessHan
     }
 }
 
+#[async_trait]
 impl<I: ChainIdentity + ControllerClientBuilder + Sync + Send + 'static> Subscriber
     for PostGroupingSubscriber<I>
 {
-    fn notify(&self, topic: Topic, payload: Box<dyn Event>) -> NodeResult<()> {
+    async fn notify(&self, topic: Topic, payload: &(dyn Event + Send + Sync)) -> NodeResult<()> {
         info!("{:?}", topic);
 
-        unsafe {
-            let ptr = Box::into_raw(payload);
+        let &DKGPostProcess {
+            group_index,
+            group_epoch,
+        } = payload.as_any().downcast_ref::<DKGPostProcess>().unwrap();
 
-            let struct_ptr = ptr as *mut DKGPostProcess;
+        let main_chain_identity = self.main_chain_identity.clone();
 
-            let DKGPostProcess {
-                group_index,
-                group_epoch,
-            } = *Box::from_raw(struct_ptr);
-
-            let main_chain_identity = self.main_chain_identity.clone();
-
-            self.ts.write().add_task(async move {
+        self.ts.write().await.add_task(async move {
                 let handler = GeneralDKGPostProcessHandler {
                     main_chain_identity
                 };
@@ -83,16 +83,17 @@ impl<I: ChainIdentity + ControllerClientBuilder + Sync + Send + 'static> Subscri
                     info!("-------------------------call post process successfully-------------------------");
                 }
             });
-        }
 
         Ok(())
     }
 
-    fn subscribe(self) {
+    async fn subscribe(self) {
         let eq = self.eq.clone();
 
         let subscriber = Box::new(self);
 
-        eq.write().subscribe(Topic::DKGPostProcess, subscriber);
+        eq.write()
+            .await
+            .subscribe(Topic::DKGPostProcess, subscriber);
     }
 }

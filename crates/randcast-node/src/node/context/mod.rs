@@ -8,15 +8,16 @@ use crate::node::{
     scheduler::{dynamic::SimpleDynamicTaskScheduler, fixed::SimpleFixedTaskScheduler},
 };
 use async_trait::async_trait;
-use parking_lot::RwLock;
 use std::sync::Arc;
+use tokio::sync::RwLock;
 
+#[async_trait]
 pub trait Context {
     type MainChain;
 
     type AdapterChain;
 
-    fn deploy(self) -> ContextHandle;
+    async fn deploy(self) -> ContextHandle;
 }
 
 #[async_trait]

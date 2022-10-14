@@ -18,7 +18,7 @@ pub trait FixedTaskScheduler: TaskScheduler {
 }
 
 pub trait DynamicTaskScheduler: TaskScheduler {
-    fn add_task_with_shutdown_signal<T, P>(
+    fn add_task_with_shutdown_signal<T, P, F>(
         &mut self,
         future: T,
         shutdown_predicate: P,
@@ -26,5 +26,6 @@ pub trait DynamicTaskScheduler: TaskScheduler {
     ) where
         T: Future<Output = ()> + Send + 'static,
         T::Output: Send + 'static,
-        P: Fn() -> bool + Send + 'static;
+        P: Fn() -> F + Sync + Send + 'static,
+        F: Future<Output = bool> + Send + 'static;
 }

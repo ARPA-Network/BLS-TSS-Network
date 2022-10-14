@@ -1,17 +1,17 @@
 use super::Listener;
 use crate::node::{
-    contract_client::adapter::{AdapterClientBuilder, AdapterLogs},
-    dal::{types::GroupRelayConfirmationTask, BLSTasksFetcher},
-    dal::{BLSTasksUpdater, ChainIdentity},
     error::{NodeError, NodeResult},
     event::new_group_relay_confirmation_task::NewGroupRelayConfirmationTask,
     queue::{event_queue::EventQueue, EventPublisher},
 };
+use arpa_node_contract_client::adapter::{AdapterClientBuilder, AdapterLogs};
+use arpa_node_core::{ChainIdentity, GroupRelayConfirmationTask};
+use arpa_node_dal::{BLSTasksFetcher, BLSTasksUpdater};
 use async_trait::async_trait;
 use ethers::types::Address;
 use log::{error, info};
-use parking_lot::RwLock;
 use std::sync::Arc;
+use tokio::sync::RwLock;
 use tokio_retry::{strategy::FixedInterval, RetryIf};
 
 pub struct NewGroupRelayConfirmationTaskListener<
@@ -47,14 +47,18 @@ impl<
     }
 }
 
+#[async_trait]
 impl<
-        I: ChainIdentity + AdapterClientBuilder,
-        Q: BLSTasksUpdater<GroupRelayConfirmationTask> + BLSTasksFetcher<GroupRelayConfirmationTask>,
+        I: ChainIdentity + AdapterClientBuilder + Sync + Send,
+        Q: BLSTasksUpdater<GroupRelayConfirmationTask>
+            + BLSTasksFetcher<GroupRelayConfirmationTask>
+            + Sync
+            + Send,
     > EventPublisher<NewGroupRelayConfirmationTask>
     for NewGroupRelayConfirmationTaskListener<I, Q>
 {
-    fn publish(&self, event: NewGroupRelayConfirmationTask) {
-        self.eq.read().publish(event);
+    async fn publish(&self, event: NewGroupRelayConfirmationTask) {
+        self.eq.read().await.publish(event).await;
     }
 }
 
@@ -72,6 +76,7 @@ impl<
         let client = self
             .chain_identity
             .read()
+            .await
             .build_adapter_client(self.id_address);
 
         let retry_strategy = FixedInterval::from_millis(2000);
@@ -85,11 +90,17 @@ impl<
                 let eq = self.eq.clone();
 
                 client
-                    .subscribe_group_relay_confirmation_task(Box::new(
-                        move |group_relay_confirmation_task| {
+                    .subscribe_group_relay_confirmation_task(move |group_relay_confirmation_task| {
+                        let group_relay_confirmation_tasks_cache =
+                            group_relay_confirmation_tasks_cache.clone();
+                        let eq = eq.clone();
+
+                        async move {
                             if let Ok(false) = group_relay_confirmation_tasks_cache
                                 .read()
+                                .await
                                 .contains(group_relay_confirmation_task.index)
+                                .await
                             {
                                 info!(
                                     "received new group_relay_confirmation task. {:?}",
@@ -98,16 +109,22 @@ impl<
 
                                 group_relay_confirmation_tasks_cache
                                     .write()
-                                    .add(group_relay_confirmation_task.clone())?;
+                                    .await
+                                    .add(group_relay_confirmation_task.clone())
+                                    .await
+                                    .map_err(anyhow::Error::from)?;
 
-                                eq.read().publish(NewGroupRelayConfirmationTask::new(
-                                    chain_id,
-                                    group_relay_confirmation_task,
-                                ));
+                                eq.read()
+                                    .await
+                                    .publish(NewGroupRelayConfirmationTask::new(
+                                        chain_id,
+                                        group_relay_confirmation_task,
+                                    ))
+                                    .await;
                             }
                             Ok(())
-                        },
-                    ))
+                        }
+                    })
                     .await?;
 
                 Ok(())

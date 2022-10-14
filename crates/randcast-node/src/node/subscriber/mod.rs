@@ -10,13 +10,16 @@ pub mod ready_to_handle_group_relay_confirmation_task;
 pub mod ready_to_handle_group_relay_task;
 pub mod ready_to_handle_randomness_task;
 
+use async_trait::async_trait;
+
 use crate::node::{
     error::NodeResult,
     event::{types::Topic, Event},
 };
 
+#[async_trait]
 pub trait Subscriber {
-    fn notify(&self, topic: Topic, payload: Box<dyn Event>) -> NodeResult<()>;
+    async fn notify(&self, topic: Topic, payload: &(dyn Event + Send + Sync)) -> NodeResult<()>;
 
-    fn subscribe(self);
+    async fn subscribe(self);
 }

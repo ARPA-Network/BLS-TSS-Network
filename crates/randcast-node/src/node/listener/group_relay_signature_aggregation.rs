@@ -1,17 +1,14 @@
 use super::Listener;
 use crate::node::{
-    dal::{
-        cache::GroupRelayResultCache,
-        {GroupInfoFetcher, SignatureResultCacheUpdater},
-    },
     error::NodeResult,
     event::ready_to_fulfill_group_relay_task::ReadyToFulfillGroupRelayTask,
     queue::{event_queue::EventQueue, EventPublisher},
 };
+use arpa_node_dal::{cache::GroupRelayResultCache, GroupInfoFetcher, SignatureResultCacheUpdater};
 use async_trait::async_trait;
 use ethers::types::Address;
-use parking_lot::RwLock;
 use std::sync::Arc;
+use tokio::sync::RwLock;
 
 pub struct GroupRelaySignatureAggregationListener<
     G: GroupInfoFetcher,
@@ -41,11 +38,15 @@ impl<G: GroupInfoFetcher, C: SignatureResultCacheUpdater<GroupRelayResultCache>>
     }
 }
 
-impl<G: GroupInfoFetcher, C: SignatureResultCacheUpdater<GroupRelayResultCache>>
-    EventPublisher<ReadyToFulfillGroupRelayTask> for GroupRelaySignatureAggregationListener<G, C>
+#[async_trait]
+impl<
+        G: GroupInfoFetcher + Sync + Send,
+        C: SignatureResultCacheUpdater<GroupRelayResultCache> + Sync + Send,
+    > EventPublisher<ReadyToFulfillGroupRelayTask>
+    for GroupRelaySignatureAggregationListener<G, C>
 {
-    fn publish(&self, event: ReadyToFulfillGroupRelayTask) {
-        self.eq.read().publish(event);
+    async fn publish(&self, event: ReadyToFulfillGroupRelayTask) {
+        self.eq.read().await.publish(event).await;
     }
 }
 
@@ -57,18 +58,20 @@ impl<
 {
     async fn start(mut self) -> NodeResult<()> {
         loop {
-            let is_committer = self.group_cache.read().is_committer(self.id_address);
+            let is_committer = self.group_cache.read().await.is_committer(self.id_address);
 
             if let Ok(true) = is_committer {
                 let ready_signatures = self
                     .group_relay_signature_cache
                     .write()
+                    .await
                     .get_ready_to_commit_signatures();
 
                 if !ready_signatures.is_empty() {
                     self.publish(ReadyToFulfillGroupRelayTask {
                         tasks: ready_signatures,
-                    });
+                    })
+                    .await;
                 }
             }
 

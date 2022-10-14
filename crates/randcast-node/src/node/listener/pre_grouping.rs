@@ -1,15 +1,16 @@
 use super::Listener;
 use crate::node::{
-    contract_client::controller::{ControllerClientBuilder, ControllerLogs},
-    dal::{ChainIdentity, GroupInfoFetcher},
     error::{NodeError, NodeResult},
     event::new_dkg_task::NewDKGTask,
     queue::{event_queue::EventQueue, EventPublisher},
 };
+use arpa_node_contract_client::controller::{ControllerClientBuilder, ControllerLogs};
+use arpa_node_core::ChainIdentity;
+use arpa_node_dal::GroupInfoFetcher;
 use async_trait::async_trait;
 use log::error;
-use parking_lot::RwLock;
 use std::sync::Arc;
+use tokio::sync::RwLock;
 use tokio_retry::{strategy::FixedInterval, RetryIf};
 
 pub struct PreGroupingListener<G: GroupInfoFetcher, I: ChainIdentity + ControllerClientBuilder> {
@@ -32,11 +33,14 @@ impl<G: GroupInfoFetcher, I: ChainIdentity + ControllerClientBuilder> PreGroupin
     }
 }
 
-impl<G: GroupInfoFetcher, I: ChainIdentity + ControllerClientBuilder> EventPublisher<NewDKGTask>
-    for PreGroupingListener<G, I>
+#[async_trait]
+impl<
+        G: GroupInfoFetcher + Sync + Send,
+        I: ChainIdentity + ControllerClientBuilder + Sync + Send,
+    > EventPublisher<NewDKGTask> for PreGroupingListener<G, I>
 {
-    fn publish(&self, event: NewDKGTask) {
-        self.eq.read().publish(event);
+    async fn publish(&self, event: NewDKGTask) {
+        self.eq.read().await.publish(event).await;
     }
 }
 
@@ -47,40 +51,53 @@ impl<
     > Listener for PreGroupingListener<G, I>
 {
     async fn start(mut self) -> NodeResult<()> {
-        let client = self.main_chain_identity.read().build_controller_client();
+        let client = self
+            .main_chain_identity
+            .read()
+            .await
+            .build_controller_client();
 
         let retry_strategy = FixedInterval::from_millis(1000);
 
         if let Err(err) = RetryIf::spawn(
             retry_strategy.clone(),
             || async {
-                let self_id_address = self.main_chain_identity.read().get_id_address();
+                let self_id_address = self.main_chain_identity.read().await.get_id_address();
                 let group_cache = self.group_cache.clone();
                 let eq = self.eq.clone();
 
                 client
-                    .subscribe_dkg_task(Box::new(move |dkg_task| {
-                        if let Some((_, node_index)) = dkg_task
-                            .members
-                            .iter()
-                            .find(|(id_address, _)| **id_address == self_id_address)
-                        {
-                            let cache_index = group_cache.read().get_index().unwrap_or(0);
+                    .subscribe_dkg_task(move |dkg_task| {
+                        let group_cache = group_cache.clone();
+                        let eq = eq.clone();
 
-                            let cache_epoch = group_cache.read().get_epoch().unwrap_or(0);
-
-                            if cache_index != dkg_task.group_index || cache_epoch != dkg_task.epoch
+                        async move {
+                            if let Some((_, node_index)) = dkg_task
+                                .members
+                                .iter()
+                                .find(|(id_address, _)| **id_address == self_id_address)
                             {
-                                let self_index = *node_index;
+                                let cache_index = group_cache.read().await.get_index().unwrap_or(0);
 
-                                eq.read().publish(NewDKGTask {
-                                    dkg_task,
-                                    self_index,
-                                });
+                                let cache_epoch = group_cache.read().await.get_epoch().unwrap_or(0);
+
+                                if cache_index != dkg_task.group_index
+                                    || cache_epoch != dkg_task.epoch
+                                {
+                                    let self_index = *node_index;
+
+                                    eq.read()
+                                        .await
+                                        .publish(NewDKGTask {
+                                            dkg_task,
+                                            self_index,
+                                        })
+                                        .await;
+                                }
                             }
+                            Ok(())
                         }
-                        Ok(())
-                    }))
+                    })
                     .await?;
 
                 Ok(())

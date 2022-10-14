@@ -1,13 +1,18 @@
 pub mod client;
 pub mod server;
 
-use crate::node::dal::types::TaskType;
-use crate::node::dal::GroupInfoFetcher;
 use crate::node::error::NodeResult;
+use arpa_node_core::TaskType;
+use arpa_node_dal::GroupInfoFetcher;
 use async_trait::async_trait;
 use ethers::types::Address;
-use parking_lot::RwLock;
 use std::sync::Arc;
+use tokio::sync::RwLock;
+
+#[async_trait]
+pub trait ServiceClient<C> {
+    async fn prepare_service_client(&self) -> NodeResult<C>;
+}
 
 #[async_trait]
 pub(crate) trait CommitterService {
@@ -29,15 +34,22 @@ pub(crate) trait CommitterClient {
     fn build(id_address: Address, committer_endpoint: String) -> Self;
 }
 
-pub(crate) trait CommitterClientHandler<C: CommitterClient, G: GroupInfoFetcher> {
-    fn get_id_address(&self) -> Address;
+#[async_trait]
+pub(crate) trait CommitterClientHandler<
+    C: CommitterClient + Sync + Send,
+    G: GroupInfoFetcher + Sync + Send,
+>
+{
+    async fn get_id_address(&self) -> Address;
 
     fn get_group_cache(&self) -> Arc<RwLock<G>>;
 
-    fn prepare_committer_clients(&self) -> NodeResult<Vec<C>> {
-        let mut committers = self.get_group_cache().read().get_committers()?;
+    async fn prepare_committer_clients(&self) -> NodeResult<Vec<C>> {
+        let mut committers = self.get_group_cache().read().await.get_committers()?;
 
-        committers.retain(|c| *c != self.get_id_address());
+        let id_address = self.get_id_address().await;
+
+        committers.retain(|c| *c != id_address);
 
         let mut committer_clients = vec![];
 
@@ -45,13 +57,14 @@ pub(crate) trait CommitterClientHandler<C: CommitterClient, G: GroupInfoFetcher>
             let endpoint = self
                 .get_group_cache()
                 .read()
+                .await
                 .get_member(committer)?
                 .rpc_endpint
                 .as_ref()
                 .unwrap()
                 .to_string();
 
-            let committer_client = C::build(self.get_id_address(), endpoint.clone());
+            let committer_client = C::build(id_address, endpoint.clone());
 
             committer_clients.push(committer_client);
         }

@@ -38,7 +38,7 @@ impl TaskScheduler for SimpleDynamicTaskScheduler {
 }
 
 impl DynamicTaskScheduler for SimpleDynamicTaskScheduler {
-    fn add_task_with_shutdown_signal<T, P>(
+    fn add_task_with_shutdown_signal<T, P, F>(
         &mut self,
         future: T,
         shutdown_predicate: P,
@@ -46,7 +46,8 @@ impl DynamicTaskScheduler for SimpleDynamicTaskScheduler {
     ) where
         T: Future<Output = ()> + Send + 'static,
         T::Output: Send + 'static,
-        P: Fn() -> bool + Send + 'static,
+        P: Fn() -> F + Sync + Send + 'static,
+        F: Future<Output = bool> + Send + 'static,
     {
         let (send, recv) = channel::<()>();
 
@@ -57,7 +58,7 @@ impl DynamicTaskScheduler for SimpleDynamicTaskScheduler {
 
         let task_monitor = tokio::spawn(async move {
             loop {
-                if shutdown_predicate() {
+                if shutdown_predicate().await {
                     task.abort();
                     return;
                 }

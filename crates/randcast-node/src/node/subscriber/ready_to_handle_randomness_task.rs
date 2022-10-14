@@ -3,24 +3,21 @@ use crate::node::{
     committer::{
         client::GeneralCommitterClient, CommitterClient, CommitterClientHandler, CommitterService,
     },
-    dal::{
-        cache::RandomnessResultCache,
-        {GroupInfoFetcher, SignatureResultCacheUpdater},
-    },
-    dal::{
-        types::{RandomnessTask, TaskType},
-        SignatureResultCacheFetcher,
-    },
     error::{NodeError, NodeResult},
     event::{ready_to_handle_randomness_task::ReadyToHandleRandomnessTask, types::Topic, Event},
     queue::{event_queue::EventQueue, EventSubscriber},
     scheduler::{dynamic::SimpleDynamicTaskScheduler, TaskScheduler},
 };
+use arpa_node_core::{RandomnessTask, TaskType};
+use arpa_node_dal::{
+    cache::RandomnessResultCache, GroupInfoFetcher, SignatureResultCacheFetcher,
+    SignatureResultCacheUpdater,
+};
 use async_trait::async_trait;
 use ethers::types::Address;
 use log::{error, info};
-use parking_lot::RwLock;
 use std::sync::Arc;
+use tokio::sync::RwLock;
 use tokio_retry::{strategy::FixedInterval, RetryIf};
 
 use super::Subscriber;
@@ -80,13 +77,16 @@ pub struct GeneralRandomnessHandler<
     randomness_signature_cache: Arc<RwLock<C>>,
 }
 
+#[async_trait]
 impl<
-        G: GroupInfoFetcher,
+        G: GroupInfoFetcher + Sync + Send,
         C: SignatureResultCacheUpdater<RandomnessResultCache>
-            + SignatureResultCacheFetcher<RandomnessResultCache>,
+            + SignatureResultCacheFetcher<RandomnessResultCache>
+            + Sync
+            + Send,
     > CommitterClientHandler<GeneralCommitterClient, G> for GeneralRandomnessHandler<G, C>
 {
-    fn get_id_address(&self) -> Address {
+    async fn get_id_address(&self) -> Address {
         self.id_address
     }
 
@@ -105,23 +105,33 @@ impl<
     > RandomnessHandler for GeneralRandomnessHandler<G, C>
 {
     async fn handle(self) -> NodeResult<()> {
-        let committers = self.prepare_committer_clients()?;
+        let committers = self.prepare_committer_clients().await?;
 
         for task in self.tasks {
             let bls_core = SimpleBLSCore {};
 
             let partial_signature = bls_core.partial_sign(
-                self.group_cache.read().get_secret_share()?,
+                self.group_cache.read().await.get_secret_share()?,
                 task.message.as_bytes(),
             )?;
 
-            let threshold = self.group_cache.read().get_threshold()?;
+            let threshold = self.group_cache.read().await.get_threshold()?;
 
-            let current_group_index = self.group_cache.read().get_index()?;
+            let current_group_index = self.group_cache.read().await.get_index()?;
 
-            if self.group_cache.read().is_committer(self.id_address)? {
-                if !self.randomness_signature_cache.read().contains(task.index) {
-                    self.randomness_signature_cache.write().add(
+            if self
+                .group_cache
+                .read()
+                .await
+                .is_committer(self.id_address)?
+            {
+                if !self
+                    .randomness_signature_cache
+                    .read()
+                    .await
+                    .contains(task.index)
+                {
+                    self.randomness_signature_cache.write().await.add(
                         current_group_index,
                         task.index,
                         task.message.clone(),
@@ -131,6 +141,7 @@ impl<
 
                 self.randomness_signature_cache
                     .write()
+                    .await
                     .add_partial_signature(
                         task.index,
                         self.id_address,
@@ -174,6 +185,7 @@ impl<
     }
 }
 
+#[async_trait]
 impl<
         G: GroupInfoFetcher + Sync + Send + 'static,
         C: SignatureResultCacheUpdater<RandomnessResultCache>
@@ -183,43 +195,41 @@ impl<
             + 'static,
     > Subscriber for ReadyToHandleRandomnessTaskSubscriber<G, C>
 {
-    fn notify(&self, topic: Topic, payload: Box<dyn Event>) -> NodeResult<()> {
+    async fn notify(&self, topic: Topic, payload: &(dyn Event + Send + Sync)) -> NodeResult<()> {
         info!("{:?}", topic);
 
-        unsafe {
-            let ptr = Box::into_raw(payload);
+        let ReadyToHandleRandomnessTask { tasks, .. } = payload
+            .as_any()
+            .downcast_ref::<ReadyToHandleRandomnessTask>()
+            .unwrap()
+            .clone();
 
-            let struct_ptr = ptr as *mut ReadyToHandleRandomnessTask;
+        let chain_id = self.chain_id;
 
-            let ReadyToHandleRandomnessTask { chain_id: _, tasks } = *Box::from_raw(struct_ptr);
+        let id_address = self.id_address;
 
-            let chain_id = self.chain_id;
+        let group_cache_for_handler = self.group_cache.clone();
 
-            let id_address = self.id_address;
+        let randomness_signature_cache_for_handler = self.randomness_signature_cache.clone();
 
-            let group_cache_for_handler = self.group_cache.clone();
+        self.ts.write().await.add_task(async move {
+            let handler = GeneralRandomnessHandler {
+                chain_id,
+                id_address,
+                tasks,
+                group_cache: group_cache_for_handler,
+                randomness_signature_cache: randomness_signature_cache_for_handler,
+            };
 
-            let randomness_signature_cache_for_handler = self.randomness_signature_cache.clone();
-
-            self.ts.write().add_task(async move {
-                let handler = GeneralRandomnessHandler {
-                    chain_id,
-                    id_address,
-                    tasks,
-                    group_cache: group_cache_for_handler,
-                    randomness_signature_cache: randomness_signature_cache_for_handler,
-                };
-
-                if let Err(e) = handler.handle().await {
-                    error!("{:?}", e);
-                }
-            });
-        }
+            if let Err(e) = handler.handle().await {
+                error!("{:?}", e);
+            }
+        });
 
         Ok(())
     }
 
-    fn subscribe(self) {
+    async fn subscribe(self) {
         let eq = self.eq.clone();
 
         let chain_id = self.chain_id;
@@ -227,6 +237,7 @@ impl<
         let subscriber = Box::new(self);
 
         eq.write()
+            .await
             .subscribe(Topic::ReadyToHandleRandomnessTask(chain_id), subscriber);
     }
 }

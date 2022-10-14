@@ -1,25 +1,22 @@
 use super::Subscriber;
 use crate::node::{
     algorithm::dkg::{AllPhasesDKGCore, DKGCore},
-    contract_client::{
-        controller::{ControllerClientBuilder, ControllerTransactions},
-        coordinator::CoordinatorClientBuilder,
-    },
-    dal::{
-        types::{DKGStatus, DKGTask},
-        {GroupInfoFetcher, NodeInfoFetcher},
-    },
-    dal::{ChainIdentity, GroupInfoUpdater},
     error::NodeResult,
     event::{run_dkg::RunDKG, types::Topic, Event},
     queue::{event_queue::EventQueue, EventSubscriber},
     scheduler::{dynamic::SimpleDynamicTaskScheduler, DynamicTaskScheduler},
 };
+use arpa_node_contract_client::{
+    controller::{ControllerClientBuilder, ControllerTransactions},
+    coordinator::CoordinatorClientBuilder,
+};
+use arpa_node_core::{ChainIdentity, DKGStatus, DKGTask};
+use arpa_node_dal::{GroupInfoFetcher, GroupInfoUpdater, NodeInfoFetcher};
 use async_trait::async_trait;
 use log::{error, info};
-use parking_lot::RwLock;
 use rand::{prelude::ThreadRng, RngCore};
 use std::sync::Arc;
+use tokio::sync::RwLock;
 
 pub struct InGroupingSubscriber<
     N: NodeInfoFetcher,
@@ -114,11 +111,20 @@ impl<
         R: RngCore,
         F: Fn() -> R + Send + 'async_trait,
     {
-        let node_rpc_endpoint = self.node_cache.read().get_node_rpc_endpoint()?.to_string();
+        let node_rpc_endpoint = self
+            .node_cache
+            .read()
+            .await
+            .get_node_rpc_endpoint()?
+            .to_string();
 
-        let controller_client = self.main_chain_identity.read().build_controller_client();
+        let controller_client = self
+            .main_chain_identity
+            .read()
+            .await
+            .build_controller_client();
 
-        let dkg_private_key = *self.node_cache.read().get_dkg_private_key()?;
+        let dkg_private_key = *self.node_cache.read().await.get_dkg_private_key()?;
 
         let task_group_index = task.group_index;
 
@@ -127,6 +133,7 @@ impl<
         let coordinator_client = self
             .main_chain_identity
             .read()
+            .await
             .build_coordinator_client(task.coordinator_address);
 
         let mut dkg_core = AllPhasesDKGCore::new(coordinator_client);
@@ -138,7 +145,9 @@ impl<
         let (public_key, partial_public_key, disqualified_nodes) = self
             .group_cache
             .write()
-            .save_output(task_group_index, task_epoch, output)?;
+            .await
+            .save_output(task_group_index, task_epoch, output)
+            .await?;
 
         controller_client
             .commit_dkg(
@@ -154,80 +163,74 @@ impl<
     }
 }
 
+#[async_trait]
 impl<
         N: NodeInfoFetcher + Sync + Send + 'static,
         G: GroupInfoFetcher + GroupInfoUpdater + Sync + Send + 'static,
         I: ChainIdentity + ControllerClientBuilder + CoordinatorClientBuilder + Sync + Send + 'static,
     > Subscriber for InGroupingSubscriber<N, G, I>
 {
-    fn notify(&self, topic: Topic, payload: Box<dyn Event>) -> NodeResult<()> {
+    async fn notify(&self, topic: Topic, payload: &(dyn Event + Send + Sync)) -> NodeResult<()> {
         info!("{:?}", topic);
 
-        unsafe {
-            let ptr = Box::into_raw(payload);
+        let RunDKG { dkg_task: task, .. } =
+            payload.as_any().downcast_ref::<RunDKG>().unwrap().clone();
 
-            let struct_ptr = ptr as *mut RunDKG;
+        static RNG_FN: fn() -> ThreadRng = rand::thread_rng;
 
-            let RunDKG { dkg_task: task } = *Box::from_raw(struct_ptr);
+        let chain_identity = self.main_chain_identity.clone();
 
-            static RNG_FN: fn() -> ThreadRng = rand::thread_rng;
+        let group_cache_for_handler = self.group_cache.clone();
 
-            let chain_identity = self.main_chain_identity.clone();
+        let group_cache_for_handler_shutdown_signal = self.group_cache.clone();
 
-            let mut handler = AllInOneDKGHandler::new(
-                RNG_FN,
-                chain_identity,
-                self.node_cache.clone(),
-                self.group_cache.clone(),
-            );
+        let task_group_index = task.group_index;
 
-            let group_cache_for_handler = self.group_cache.clone();
+        let task_epoch = task.epoch;
 
-            let group_cache_for_handler_shutdown_signal = self.group_cache.clone();
+        let mut handler = AllInOneDKGHandler::new(
+            RNG_FN,
+            chain_identity,
+            self.node_cache.clone(),
+            self.group_cache.clone(),
+        );
 
-            let task_group_index = task.group_index;
-
-            let task_epoch = task.epoch;
-
-            self.ts.write().add_task_with_shutdown_signal(
+        self.ts.write().await.add_task_with_shutdown_signal(
+            async move {
+                if let Err(e) = handler.handle(task).await {
+                    error!("{:?}", e);
+                } else if let Err(e) = group_cache_for_handler
+                    .write()
+                    .await
+                    .update_dkg_status(task_group_index, task_epoch, DKGStatus::CommitSuccess)
+                    .await
+                {
+                    error!("{:?}", e);
+                }
+            },
+            move || {
+                let group_cache = group_cache_for_handler_shutdown_signal.clone();
                 async move {
-                    if let Err(e) = handler.handle(task).await {
-                        error!("{:?}", e);
-                    } else if let Err(e) = group_cache_for_handler.write().update_dkg_status(
-                        task_group_index,
-                        task_epoch,
-                        DKGStatus::CommitSuccess,
-                    ) {
-                        error!("{:?}", e);
-                    }
-                },
-                move || {
-                    let cache_index = group_cache_for_handler_shutdown_signal
-                        .read()
-                        .get_index()
-                        .unwrap_or(0);
+                    let cache_index = group_cache.clone().read().await.get_index().unwrap_or(0);
 
-                    let cache_epoch = group_cache_for_handler_shutdown_signal
-                        .read()
-                        .get_epoch()
-                        .unwrap_or(0);
+                    let cache_epoch = group_cache.clone().read().await.get_epoch().unwrap_or(0);
 
                     cache_index != task_group_index || cache_epoch != task_epoch
                     //NodeError::GroupIndexObsolete(cache_index)
                     //NodeError::GroupEpochObsolete(cache_epoch)
-                },
-                2000,
-            );
-        }
+                }
+            },
+            2000,
+        );
 
         Ok(())
     }
 
-    fn subscribe(self) {
+    async fn subscribe(self) {
         let eq = self.eq.clone();
 
         let subscriber = Box::new(self);
 
-        eq.write().subscribe(Topic::RunDKG, subscriber);
+        eq.write().await.subscribe(Topic::RunDKG, subscriber);
     }
 }

@@ -1,15 +1,15 @@
 use super::Listener;
 use crate::node::{
-    dal::types::DKGStatus,
-    dal::{BlockInfoFetcher, GroupInfoFetcher, GroupInfoUpdater},
     error::NodeResult,
     event::dkg_post_process::DKGPostProcess,
     queue::{event_queue::EventQueue, EventPublisher},
 };
+use arpa_node_core::DKGStatus;
+use arpa_node_dal::{BlockInfoFetcher, GroupInfoFetcher, GroupInfoUpdater};
 use async_trait::async_trait;
 use log::info;
-use parking_lot::RwLock;
 use std::sync::Arc;
+use tokio::sync::RwLock;
 
 pub const DEFAULT_DKG_TIMEOUT_DURATION: usize = 10 * 4;
 
@@ -33,11 +33,12 @@ impl<B: BlockInfoFetcher, G: GroupInfoFetcher + GroupInfoUpdater> PostGroupingLi
     }
 }
 
-impl<B: BlockInfoFetcher, G: GroupInfoFetcher + GroupInfoUpdater> EventPublisher<DKGPostProcess>
-    for PostGroupingListener<B, G>
+#[async_trait]
+impl<B: BlockInfoFetcher + Sync + Send, G: GroupInfoFetcher + GroupInfoUpdater + Sync + Send>
+    EventPublisher<DKGPostProcess> for PostGroupingListener<B, G>
 {
-    fn publish(&self, event: DKGPostProcess) {
-        self.eq.read().publish(event);
+    async fn publish(&self, event: DKGPostProcess) {
+        self.eq.read().await.publish(event).await;
     }
 }
 
@@ -47,7 +48,7 @@ impl<B: BlockInfoFetcher + Sync + Send, G: GroupInfoFetcher + GroupInfoUpdater +
 {
     async fn start(mut self) -> NodeResult<()> {
         loop {
-            let dkg_status = self.group_cache.read().get_dkg_status();
+            let dkg_status = self.group_cache.read().await.get_dkg_status();
 
             if let Ok(dkg_status) = dkg_status {
                 match dkg_status {
@@ -56,29 +57,33 @@ impl<B: BlockInfoFetcher + Sync + Send, G: GroupInfoFetcher + GroupInfoUpdater +
                     | DKGStatus::CommitSuccess
                     | DKGStatus::WaitForPostProcess => {
                         let dkg_start_block_height =
-                            self.group_cache.read().get_dkg_start_block_height()?;
+                            self.group_cache.read().await.get_dkg_start_block_height()?;
 
-                        let block_height = self.block_cache.read().get_block_height();
+                        let block_height = self.block_cache.read().await.get_block_height();
 
                         info!("dkg_start_block_height: {},current_block_height: {}, timeuout_dkg_block_height:{}",
                         dkg_start_block_height,block_height,dkg_start_block_height + DEFAULT_DKG_TIMEOUT_DURATION);
 
                         if block_height > dkg_start_block_height + DEFAULT_DKG_TIMEOUT_DURATION {
-                            let group_index = self.group_cache.read().get_index().unwrap_or(0);
+                            let group_index =
+                                self.group_cache.read().await.get_index().unwrap_or(0);
 
-                            let group_epoch = self.group_cache.read().get_epoch().unwrap_or(0);
+                            let group_epoch =
+                                self.group_cache.read().await.get_epoch().unwrap_or(0);
 
-                            let res = self.group_cache.write().update_dkg_status(
-                                group_index,
-                                group_epoch,
-                                DKGStatus::None,
-                            )?;
+                            let res = self
+                                .group_cache
+                                .write()
+                                .await
+                                .update_dkg_status(group_index, group_epoch, DKGStatus::None)
+                                .await?;
 
                             if res {
                                 self.publish(DKGPostProcess {
                                     group_index,
                                     group_epoch,
-                                });
+                                })
+                                .await;
                             }
                         }
                     }

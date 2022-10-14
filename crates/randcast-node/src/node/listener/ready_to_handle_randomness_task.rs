@@ -1,20 +1,17 @@
 use super::Listener;
 use crate::node::{
-    contract_client::adapter::{AdapterClientBuilder, AdapterViews},
-    dal::ChainIdentity,
-    dal::{
-        types::RandomnessTask,
-        {BLSTasksUpdater, BlockInfoFetcher, GroupInfoFetcher},
-    },
     error::{NodeError, NodeResult},
     event::ready_to_handle_randomness_task::ReadyToHandleRandomnessTask,
     queue::{event_queue::EventQueue, EventPublisher},
 };
+use arpa_node_contract_client::adapter::{AdapterClientBuilder, AdapterViews};
+use arpa_node_core::{ChainIdentity, RandomnessTask};
+use arpa_node_dal::{BLSTasksUpdater, BlockInfoFetcher, GroupInfoFetcher};
 use async_trait::async_trait;
 use ethers::types::Address;
 use log::error;
-use parking_lot::RwLock;
 use std::sync::Arc;
+use tokio::sync::RwLock;
 use tokio_retry::{strategy::FixedInterval, RetryIf};
 
 pub struct ReadyToHandleRandomnessTaskListener<
@@ -60,16 +57,17 @@ impl<
     }
 }
 
+#[async_trait]
 impl<
-        B: BlockInfoFetcher,
-        G: GroupInfoFetcher,
-        T: BLSTasksUpdater<RandomnessTask>,
-        I: ChainIdentity + AdapterClientBuilder,
+        B: BlockInfoFetcher + Sync + Send,
+        G: GroupInfoFetcher + Sync + Send,
+        T: BLSTasksUpdater<RandomnessTask> + Sync + Send,
+        I: ChainIdentity + AdapterClientBuilder + Sync + Send,
     > EventPublisher<ReadyToHandleRandomnessTask>
     for ReadyToHandleRandomnessTaskListener<B, G, T, I>
 {
-    fn publish(&self, event: ReadyToHandleRandomnessTask) {
-        self.eq.read().publish(event);
+    async fn publish(&self, event: ReadyToHandleRandomnessTask) {
+        self.eq.read().await.publish(event).await;
     }
 }
 
@@ -85,6 +83,7 @@ impl<
         let client = self
             .chain_identity
             .read()
+            .await
             .build_adapter_client(self.id_address);
 
         let retry_strategy = FixedInterval::from_millis(1000);
@@ -93,20 +92,22 @@ impl<
             if let Err(err) = RetryIf::spawn(
                 retry_strategy.clone(),
                 || async {
-                    let is_bls_ready = self.group_cache.read().get_state();
+                    let is_bls_ready = self.group_cache.read().await.get_state();
 
                     if let Ok(true) = is_bls_ready {
-                        let current_group_index = self.group_cache.read().get_index()?;
+                        let current_group_index = self.group_cache.read().await.get_index()?;
 
-                        let current_block_height = self.block_cache.read().get_block_height();
+                        let current_block_height = self.block_cache.read().await.get_block_height();
 
                         let available_tasks = self
                             .randomness_tasks_cache
                             .write()
+                            .await
                             .check_and_get_available_tasks(
                                 current_block_height,
                                 current_group_index,
-                            )?;
+                            )
+                            .await?;
 
                         let mut tasks_to_process: Vec<RandomnessTask> = vec![];
 
@@ -122,7 +123,8 @@ impl<
                             self.publish(ReadyToHandleRandomnessTask {
                                 chain_id: self.chain_id,
                                 tasks: tasks_to_process,
-                            });
+                            })
+                            .await;
                         }
                     }
 

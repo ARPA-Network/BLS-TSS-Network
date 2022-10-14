@@ -1,15 +1,15 @@
 use super::Listener;
 use crate::node::{
-    contract_client::provider::{BlockFetcher, ChainProviderBuilder},
-    dal::ChainIdentity,
     error::{NodeError, NodeResult},
     event::new_block::NewBlock,
     queue::{event_queue::EventQueue, EventPublisher},
 };
+use arpa_node_contract_client::provider::{BlockFetcher, ChainProviderBuilder};
+use arpa_node_core::ChainIdentity;
 use async_trait::async_trait;
 use log::error;
-use parking_lot::RwLock;
 use std::sync::Arc;
+use tokio::sync::RwLock;
 use tokio_retry::{strategy::FixedInterval, RetryIf};
 
 pub struct BlockListener<I: ChainIdentity + ChainProviderBuilder> {
@@ -32,9 +32,12 @@ impl<I: ChainIdentity + ChainProviderBuilder> BlockListener<I> {
     }
 }
 
-impl<I: ChainIdentity + ChainProviderBuilder> EventPublisher<NewBlock> for BlockListener<I> {
-    fn publish(&self, event: NewBlock) {
-        self.eq.read().publish(event);
+#[async_trait]
+impl<I: ChainIdentity + ChainProviderBuilder + Sync + Send> EventPublisher<NewBlock>
+    for BlockListener<I>
+{
+    async fn publish(&self, event: NewBlock) {
+        self.eq.read().await.publish(event).await;
     }
 }
 
@@ -43,7 +46,7 @@ impl<I: ChainIdentity + ChainProviderBuilder + Sync + Send + 'static> Listener
     for BlockListener<I>
 {
     async fn start(mut self) -> NodeResult<()> {
-        let client = self.chain_identity.read().build_chain_provider();
+        let client = self.chain_identity.read().await.build_chain_provider();
 
         let retry_strategy = FixedInterval::from_millis(1000);
 
@@ -52,16 +55,21 @@ impl<I: ChainIdentity + ChainProviderBuilder + Sync + Send + 'static> Listener
             || async {
                 let chain_id = self.chain_id;
                 let eq = self.eq.clone();
-
                 client
-                    .subscribe_new_block_height(Box::new(move |block_height: usize| {
-                        eq.read().publish(NewBlock {
-                            chain_id,
-                            block_height,
-                        });
+                    .subscribe_new_block_height(move |block_height: usize| {
+                        let eq = eq.clone();
+                        async move {
+                            eq.read()
+                                .await
+                                .publish(NewBlock {
+                                    chain_id,
+                                    block_height,
+                                })
+                                .await;
 
-                        Ok(())
-                    }))
+                            Ok(())
+                        }
+                    })
                     .await?;
 
                 Ok(())

@@ -1,66 +1,70 @@
 pub mod types;
 use super::ContextFetcher;
-use parking_lot::RwLock;
+use async_trait::async_trait;
 use std::sync::Arc;
+use tokio::sync::RwLock;
 
+#[async_trait]
 pub(crate) trait Chain {
     type BlockInfoCache;
     type RandomnessTasksQueue;
     type RandomnessResultCaches;
-    type Context;
+    type Context: Send + Sync;
     type ChainIdentity;
 
-    fn init_components(&self, context: &Self::Context) {
-        self.init_listeners(context);
+    async fn init_components(&self, context: &Self::Context) {
+        self.init_listeners(context).await;
 
-        self.init_subscribers(context);
+        self.init_subscribers(context).await;
     }
 
-    fn init_listeners(&self, context: &Self::Context);
+    async fn init_listeners(&self, context: &Self::Context);
 
-    fn init_subscribers(&self, context: &Self::Context);
+    async fn init_subscribers(&self, context: &Self::Context);
 }
 
+#[async_trait]
 pub(crate) trait AdapterChain: Chain {
     type GroupRelayConfirmationTasksQueue;
     type GroupRelayConfirmationResultCaches;
 
-    fn init_block_listeners(&self, context: &Self::Context);
+    async fn init_block_listeners(&self, context: &Self::Context);
 
-    fn init_randomness_listeners(&self, context: &Self::Context);
+    async fn init_randomness_listeners(&self, context: &Self::Context);
 
-    fn init_group_relay_confirmation_listeners(&self, context: &Self::Context);
+    async fn init_group_relay_confirmation_listeners(&self, context: &Self::Context);
 
-    fn init_block_subscribers(&self, context: &Self::Context);
+    async fn init_block_subscribers(&self, context: &Self::Context);
 
-    fn init_randomness_subscribers(&self, context: &Self::Context);
+    async fn init_randomness_subscribers(&self, context: &Self::Context);
 
-    fn init_group_relay_subscribers(&self, context: &Self::Context);
+    async fn init_group_relay_subscribers(&self, context: &Self::Context);
 
-    fn init_group_relay_confirmation_subscribers(&self, context: &Self::Context);
+    async fn init_group_relay_confirmation_subscribers(&self, context: &Self::Context);
 }
 
+#[async_trait]
 pub(crate) trait MainChain: Chain {
     type NodeInfoCache;
     type GroupInfoCache;
     type GroupRelayTasksQueue;
     type GroupRelayResultCaches;
 
-    fn init_block_listeners(&self, context: &Self::Context);
+    async fn init_block_listeners(&self, context: &Self::Context);
 
-    fn init_dkg_listeners(&self, context: &Self::Context);
+    async fn init_dkg_listeners(&self, context: &Self::Context);
 
-    fn init_randomness_listeners(&self, context: &Self::Context);
+    async fn init_randomness_listeners(&self, context: &Self::Context);
 
-    fn init_group_relay_listeners(&self, context: &Self::Context);
+    async fn init_group_relay_listeners(&self, context: &Self::Context);
 
-    fn init_block_subscribers(&self, context: &Self::Context);
+    async fn init_block_subscribers(&self, context: &Self::Context);
 
-    fn init_dkg_subscribers(&self, context: &Self::Context);
+    async fn init_dkg_subscribers(&self, context: &Self::Context);
 
-    fn init_randomness_subscribers(&self, context: &Self::Context);
+    async fn init_randomness_subscribers(&self, context: &Self::Context);
 
-    fn init_group_relay_subscribers(&self, context: &Self::Context);
+    async fn init_group_relay_subscribers(&self, context: &Self::Context);
 }
 
 pub(crate) trait ChainFetcher<T: Chain> {
