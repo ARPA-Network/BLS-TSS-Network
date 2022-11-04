@@ -86,12 +86,12 @@ impl<
                         let eq = eq.clone();
 
                         async move {
-                            if let Ok(false) = randomness_tasks_cache
+                            let contained_res = randomness_tasks_cache
                                 .read()
                                 .await
                                 .contains(randomness_task.index)
-                                .await
-                            {
+                                .await;
+                            if let Ok(false) = contained_res {
                                 info!("received new randomness task. {:?}", randomness_task);
 
                                 randomness_tasks_cache

@@ -7,7 +7,7 @@ use crate::node::{
 use arpa_node_core::DKGStatus;
 use arpa_node_dal::{GroupInfoFetcher, GroupInfoUpdater};
 use async_trait::async_trait;
-use log::info;
+use log::{debug, info};
 use std::sync::Arc;
 use tokio::sync::RwLock;
 
@@ -36,7 +36,7 @@ impl<G: GroupInfoFetcher + GroupInfoUpdater + Sync + Send + 'static> Subscriber
     for PreGroupingSubscriber<G>
 {
     async fn notify(&self, topic: Topic, payload: &(dyn Event + Send + Sync)) -> NodeResult<()> {
-        info!("{:?}", topic);
+        debug!("{:?}", topic);
 
         let NewDKGTask {
             dkg_task,

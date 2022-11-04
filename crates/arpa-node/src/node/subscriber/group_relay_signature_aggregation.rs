@@ -11,7 +11,7 @@ use arpa_node_core::ChainIdentity;
 use arpa_node_dal::cache::GroupRelayResultCache;
 use async_trait::async_trait;
 use ethers::types::Address;
-use log::{error, info};
+use log::{debug, error, info};
 use std::sync::Arc;
 use tokio::sync::RwLock;
 
@@ -103,7 +103,7 @@ impl<I: ChainIdentity + AdapterClientBuilder + Sync + Send + 'static> Subscriber
     for GroupRelaySignatureAggregationSubscriber<I>
 {
     async fn notify(&self, topic: Topic, payload: &(dyn Event + Send + Sync)) -> NodeResult<()> {
-        info!("{:?}", topic);
+        debug!("{:?}", topic);
 
         let ReadyToFulfillGroupRelayTask {
             tasks: ready_signatures,

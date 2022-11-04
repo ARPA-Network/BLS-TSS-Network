@@ -18,6 +18,7 @@ use arpa_node_core::{
 };
 use async_trait::async_trait;
 use ethers::types::Address;
+use log::{debug, error};
 use tonic::{Code, Request};
 
 pub mod controller_stub {
@@ -98,8 +99,14 @@ impl ControllerLogs for MockControllerClient {
         mut cb: C,
     ) -> ContractClientResult<()> {
         loop {
-            let task = self.emit_dkg_task().await?;
-            cb(task).await?;
+            let task_res = self.emit_dkg_task().await;
+            match task_res {
+                Ok(task) => cb(task).await?,
+                Err(e) => match e {
+                    ContractClientError::NoTaskAvailable => debug!("{:?}", e),
+                    _ => error!("{:?}", e),
+                },
+            }
             tokio::time::sleep(std::time::Duration::from_millis(1000)).await;
         }
     }
@@ -111,8 +118,14 @@ impl ControllerLogs for MockControllerClient {
         mut cb: C,
     ) -> ContractClientResult<()> {
         loop {
-            let task = self.emit_group_relay_task().await?;
-            cb(task).await?;
+            let task_res = self.emit_group_relay_task().await;
+            match task_res {
+                Ok(task) => cb(task).await?,
+                Err(e) => match e {
+                    ContractClientError::NoTaskAvailable => debug!("{:?}", e),
+                    _ => error!("{:?}", e),
+                },
+            }
             tokio::time::sleep(std::time::Duration::from_millis(1000)).await;
         }
     }
@@ -241,7 +254,10 @@ impl ControllerMockHelper for MockControllerClient {
                     coordinator_address: coordinator_address.parse().unwrap(),
                 }
             })
-            .map_err(|status| status.into())
+            .map_err(|status| match status.code() {
+                Code::NotFound => ContractClientError::NoTaskAvailable,
+                _ => status.into(),
+            })
     }
 
     async fn emit_group_relay_task(&self) -> ContractClientResult<GroupRelayTask> {

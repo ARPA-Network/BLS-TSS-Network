@@ -15,7 +15,7 @@ use arpa_node_dal::{
 };
 use async_trait::async_trait;
 use ethers::types::Address;
-use log::{error, info};
+use log::{debug, error};
 use std::sync::Arc;
 use tokio::sync::RwLock;
 use tokio_retry::{strategy::FixedInterval, RetryIf};
@@ -125,12 +125,12 @@ impl<
                 .await
                 .is_committer(self.id_address)?
             {
-                if !self
+                let contained_res = self
                     .randomness_signature_cache
                     .read()
                     .await
-                    .contains(task.index)
-                {
+                    .contains(task.index);
+                if !contained_res {
                     self.randomness_signature_cache.write().await.add(
                         current_group_index,
                         task.index,
@@ -196,7 +196,7 @@ impl<
     > Subscriber for ReadyToHandleRandomnessTaskSubscriber<G, C>
 {
     async fn notify(&self, topic: Topic, payload: &(dyn Event + Send + Sync)) -> NodeResult<()> {
-        info!("{:?}", topic);
+        debug!("{:?}", topic);
 
         let ReadyToHandleRandomnessTask { tasks, .. } = payload
             .as_any()

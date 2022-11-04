@@ -78,12 +78,12 @@ impl<
                         let eq = eq.clone();
 
                         async move {
-                            if let Ok(false) = group_relay_tasks_cache
+                            let contained_res = group_relay_tasks_cache
                                 .read()
                                 .await
                                 .contains(group_relay_task.controller_global_epoch)
-                                .await
-                            {
+                                .await;
+                            if let Ok(false) = contained_res {
                                 info!("received new group relay task. {:?}", group_relay_task);
 
                                 group_relay_tasks_cache

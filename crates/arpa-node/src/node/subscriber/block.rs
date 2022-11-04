@@ -6,7 +6,7 @@ use crate::node::{
 };
 use arpa_node_dal::BlockInfoUpdater;
 use async_trait::async_trait;
-use log::info;
+use log::debug;
 use std::sync::Arc;
 use tokio::sync::RwLock;
 
@@ -29,7 +29,7 @@ impl<B: BlockInfoUpdater> BlockSubscriber<B> {
 #[async_trait]
 impl<B: BlockInfoUpdater + Sync + Send + 'static> Subscriber for BlockSubscriber<B> {
     async fn notify(&self, topic: Topic, payload: &(dyn Event + Send + Sync)) -> NodeResult<()> {
-        info!("{:?}", topic);
+        debug!("{:?}", topic);
 
         let &NewBlock { block_height, .. } = payload.as_any().downcast_ref::<NewBlock>().unwrap();
 

@@ -8,7 +8,7 @@ use crate::node::{
 use arpa_node_contract_client::controller::{ControllerClientBuilder, ControllerTransactions};
 use arpa_node_core::ChainIdentity;
 use async_trait::async_trait;
-use log::{error, info};
+use log::{debug, error, info};
 use std::sync::Arc;
 use tokio::sync::RwLock;
 
@@ -63,7 +63,7 @@ impl<I: ChainIdentity + ControllerClientBuilder + Sync + Send + 'static> Subscri
     for PostGroupingSubscriber<I>
 {
     async fn notify(&self, topic: Topic, payload: &(dyn Event + Send + Sync)) -> NodeResult<()> {
-        info!("{:?}", topic);
+        debug!("{:?}", topic);
 
         let &DKGPostProcess {
             group_index,

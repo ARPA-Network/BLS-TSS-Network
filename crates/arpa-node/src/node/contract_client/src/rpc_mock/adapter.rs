@@ -18,6 +18,7 @@ use arpa_node_core::{
 };
 use async_trait::async_trait;
 use ethers::types::Address;
+use log::{debug, error};
 use std::collections::{BTreeMap, HashMap};
 use std::future::Future;
 use tonic::{Code, Request, Response};
@@ -102,8 +103,14 @@ impl AdapterLogs for MockAdapterClient {
         mut cb: C,
     ) -> ContractClientResult<()> {
         loop {
-            let task = self.emit_signature_task().await?;
-            cb(task).await?;
+            let task_res = self.emit_signature_task().await;
+            match task_res {
+                Ok(task) => cb(task).await?,
+                Err(e) => match e {
+                    ContractClientError::NoTaskAvailable => debug!("{:?}", e),
+                    _ => error!("{:?}", e),
+                },
+            }
             tokio::time::sleep(std::time::Duration::from_millis(1000)).await;
         }
     }
@@ -116,8 +123,14 @@ impl AdapterLogs for MockAdapterClient {
         mut cb: C,
     ) -> ContractClientResult<()> {
         loop {
-            let task = self.emit_group_relay_confirmation_task().await?;
-            cb(task).await?;
+            let task_res = self.emit_group_relay_confirmation_task().await;
+            match task_res {
+                Ok(task) => cb(task).await?,
+                Err(e) => match e {
+                    ContractClientError::NoTaskAvailable => debug!("{:?}", e),
+                    _ => error!("{:?}", e),
+                },
+            }
             tokio::time::sleep(std::time::Duration::from_millis(1000)).await;
         }
     }

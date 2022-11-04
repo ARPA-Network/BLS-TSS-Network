@@ -13,7 +13,7 @@ use arpa_node_contract_client::{
 use arpa_node_core::{ChainIdentity, DKGStatus, DKGTask};
 use arpa_node_dal::{GroupInfoFetcher, GroupInfoUpdater, NodeInfoFetcher};
 use async_trait::async_trait;
-use log::{error, info};
+use log::{debug, error};
 use rand::{prelude::ThreadRng, RngCore};
 use std::sync::Arc;
 use tokio::sync::RwLock;
@@ -171,7 +171,7 @@ impl<
     > Subscriber for InGroupingSubscriber<N, G, I>
 {
     async fn notify(&self, topic: Topic, payload: &(dyn Event + Send + Sync)) -> NodeResult<()> {
-        info!("{:?}", topic);
+        debug!("{:?}", topic);
 
         let RunDKG { dkg_task: task, .. } =
             payload.as_any().downcast_ref::<RunDKG>().unwrap().clone();

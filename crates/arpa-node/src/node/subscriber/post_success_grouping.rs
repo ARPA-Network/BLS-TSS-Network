@@ -6,7 +6,7 @@ use crate::node::{
 };
 use arpa_node_dal::GroupInfoUpdater;
 use async_trait::async_trait;
-use log::info;
+use log::debug;
 use std::sync::Arc;
 use tokio::sync::RwLock;
 
@@ -24,7 +24,7 @@ impl<G: GroupInfoUpdater + Sync + Send> PostSuccessGroupingSubscriber<G> {
 #[async_trait]
 impl<G: GroupInfoUpdater + Sync + Send + 'static> Subscriber for PostSuccessGroupingSubscriber<G> {
     async fn notify(&self, topic: Topic, payload: &(dyn Event + Send + Sync)) -> NodeResult<()> {
-        info!("{:?}", topic);
+        debug!("{:?}", topic);
 
         let DKGSuccess { group } = payload
             .as_any()

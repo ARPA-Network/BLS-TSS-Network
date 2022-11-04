@@ -96,12 +96,12 @@ impl<
                         let eq = eq.clone();
 
                         async move {
-                            if let Ok(false) = group_relay_confirmation_tasks_cache
+                            let contained_res = group_relay_confirmation_tasks_cache
                                 .read()
                                 .await
                                 .contains(group_relay_confirmation_task.index)
-                                .await
-                            {
+                                .await;
+                            if let Ok(false) = contained_res {
                                 info!(
                                     "received new group_relay_confirmation task. {:?}",
                                     group_relay_confirmation_task
