@@ -67,47 +67,6 @@ contract Coordinator is Ownable {
         // owner = msg.sender;
     }
 
-    // ! Start done via initialize() in randcast
-    // /// Kickoff function which starts the counter (INITIALIZE)
-    // function start() external onlyWhenNotStarted onlyOwner {
-    //     // require(msg.sender == owner, "only owner may start the DKG");
-    //     startBlock = block.number;
-    // }
-
-    // ! Allowlist (DKG Nodes) done via initialize() in randcast
-    // /// The administrator must allowlist an addrss for participation in the DKG
-    // function allowlist(address user) external onlyWhenNotStarted onlyOwner {
-    //     // require(msg.sender == owner, "only owner may allowlist users");
-
-    //     require(
-    //         userState[user] == UserState.CannotRegister,
-    //         "user is already allowlisted"
-    //     );
-    //     userState[user] = UserState.CanRegister;
-    // }
-
-    //! Register done via initialize() in randcast
-    /// This function ties a DKG participant's on-chain address with their BLS Public Key
-    // function register(bytes calldata blsPublicKey) external onlyWhenNotStarted {
-    //     require(
-    //         userState[msg.sender] == UserState.CanRegister,
-    //         "user is not allowlisted or has already registered"
-    //     );
-
-    //     participants.push(msg.sender);
-    //     keys[msg.sender] = blsPublicKey;
-
-    //     // the user is now registered
-    //     userState[msg.sender] = UserState.Registered;
-    // }
-
-    //! New initialize code here (replaces start() and register() and allowlist())
-    // struct Member {
-    //     address node_address;
-    //     // uint256 node_index; // index of node within group
-    //     bytes blsPublicKey;
-    // }
-
     function initialize(address[] calldata nodes, bytes[] calldata publicKeys)
         external
         onlyWhenNotStarted
