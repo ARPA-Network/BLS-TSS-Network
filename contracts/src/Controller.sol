@@ -69,7 +69,7 @@ contract Controller is Ownable {
         bytes partialPublicKey;
     }
 
-    // * Functions
+    // ! Node Register
     function nodeRegister(bytes calldata dkgPublicKey) public {
         require(!nodeRegistered[msg.sender], "Node is already registered"); // error sender already in list of nodes
 
@@ -98,7 +98,12 @@ contract Controller is Ownable {
         // }
     }
 
-    // function reblanceGroup(uint256 groupIndexA, uint256 groupIndexB) private {}
+    function reblanceGroup(uint256 groupIndexA, uint256 groupIndexB) private {
+        Group storage groupA = groups[groupIndexA];
+        Group storage groupB = groups[groupIndexB];
+
+        // ? What is going on here.
+    }
 
     function findOrCreateTargetGroup()
         private
@@ -191,9 +196,6 @@ contract Controller is Ownable {
     }
 
     // ! Commit DKG
-    // groupindex -> member registered -> true / false
-    // ! Drop storage mappings and iterate via view function
-
     function NodeInMembers(uint256 groupIndex, address nodeIdAddress)
         public
         view
@@ -208,8 +210,8 @@ contract Controller is Ownable {
         return false;
     }
 
-    // ! Make this private eventually
     function PartialKeyRegistered(
+        // * Make this private eventually. Public for testing
         uint256 groupIndex,
         address nodeIdAddress,
         bytes memory partialKey
@@ -235,19 +237,14 @@ contract Controller is Ownable {
         bytes calldata partialPublicKey,
         address[] calldata disqualifiedNodes
     ) public {
-        // // ! I added a check of idAddres = msg.sender, ask Ruoshan
-        // require(
-        //     idAddress == msg.sender,
-        //     "Node id address does not match msg.sender"
-        // );
+        // require group exists
+        require(groupRegistered[groupIndex], "Group does not exist");
 
-        require(groupRegistered[groupIndex], "Group does not exist"); // require group exists
-        // TODO: Bincode deserialize
-
+        // require coordinator exists
         require(
             coordinators[groupIndex] != address(0),
             "Coordinator not found for groupIndex"
-        ); // require coordinator exists
+        );
 
         // Ensure DKG Proccess is in Phase
         ICoordinator coordinator = ICoordinator(coordinators[groupIndex]);
@@ -322,16 +319,16 @@ contract Controller is Ownable {
                 }
             }
 
-            // TODO: Draw the rest of the owl (line 870 in BLS Repo)
+            // TODO: Finish commit dkg (line 870 in BLS Repo)
             // Qualified Indices / Commiter indices / CHoose randomly from indices
             // Move disqualified nodes out of group
         }
     }
 
-    //! Ask Ruoshan, can this be done more gas efficintly?
+    // Structs to track seen commit results:
     // groupIndex => commitResult (hashed) => Node Address Array
     mapping(uint256 => mapping(bytes32 => address[])) commitResultToNodes;
-    mapping(uint256 => mapping(bytes32 => bool)) commitResultSeen; // keep track of commit results seen
+    mapping(uint256 => mapping(bytes32 => bool)) commitResultSeen;
 
     // Goal: get array of majority members with identical commit result
     function getStrictlyMajorityIdenticalCommitmentResult(uint256 groupIndex)
@@ -361,7 +358,8 @@ contract Controller is Ownable {
             }
         }
 
-        // iterate through commitResultToNodes[groupIndex] and check if majority exists. If it does, return the nodes
+        // iterate through commitResultToNodes[groupIndex] and check if majority exists.
+        // If it does, return the nodes
         for (uint256 i = 0; i < g.commitCache.length; i++) {
             CommitCache memory commitCache = g.commitCache[i];
             bytes32 commitResultHash = keccak256(
@@ -369,9 +367,8 @@ contract Controller is Ownable {
             );
             if (
                 commitResultToNodes[groupIndex][commitResultHash].length >
-                g.members.length / 2 //! Ask ruoshan about this!
+                g.members.length / 2 // ? Is this okay. Differs from BLS Code (line 207)
             ) {
-                // g.isStrictlyMajorrityConsensusReached = true;
                 return (
                     true,
                     commitResultToNodes[groupIndex][commitResultHash]
@@ -382,6 +379,47 @@ contract Controller is Ownable {
     }
 
     // ! Post Proccess DKG
+    // Called by nodes after last phase of dkg ends (success or failure)
+    function postProcessDkg(uint256 groupIndex, uint256 groupEpoch) public {
+        // require group exists
+        require(groupRegistered[groupIndex], "Group does not exist");
+
+        // require calling node is in group
+        require(NodeInMembers(groupIndex, msg.sender), "Node not in group");
+
+        // require correct epoch
+        Group storage g = groups[groupIndex];
+        require(
+            groupEpoch == g.epoch,
+            "Caller Group epoch does not match Controller Group epoch"
+        );
+
+        // require coordinator exists
+        require(
+            coordinators[groupIndex] != address(0),
+            "Coordinator not found for groupIndex"
+        );
+
+        // Require DKG Proccess is in Phase
+        ICoordinator coordinator = ICoordinator(coordinators[groupIndex]);
+        int8 phase = coordinator.inPhase(); // get current phase
+        require(phase != -1, "DKG Has ended"); // require coordinator is in phase 1
+
+        // Coordinator Self Destruct
+        coordinators[groupIndex] = address(0);
+
+        bool isStrictlyMajorityConsensusReached = g
+            .isStrictlyMajorityConsensusReached;
+
+        if (isStrictlyMajorityConsensusReached) {
+            // TODO: Group relay task
+        } else {
+            // (
+            //     bool consensusReached,
+            //     address[] memory majority_members
+            // ) = getStrictlyMajorityIdenticalCommitmentResult(groupIndex);
+        }
+    }
 
     // ************************************************** //
     // * Public Test functions for testing private stuff
