@@ -46,7 +46,7 @@ cargo run --bin adapter-server "[::1]:50053"
 ## run nodes:
 
 ```bash
-cd crates/randcast-node
+cd crates/arpa-node
 cargo run --bin node-client -- -m demo -i 1
 cargo run --bin node-client -- -m demo -i 2
 cargo run --bin node-client -- -m demo -i 3
@@ -83,7 +83,7 @@ cargo run --bin controller-server "[::1]:50052"
 
 ```bash
 # run 3 nodes to prepare a BLS-ready group
-cd crates/randcast-node
+cd crates/arpa-node
 cargo run --bin node-client -- -m demo -i 1
 cargo run --bin node-client -- -m demo -i 2
 cargo run --bin node-client -- -m demo -i 3
@@ -113,7 +113,7 @@ cargo run --bin adapter-server "[::1]:50053"
 
 ```bash
 # run 3 nodes to prepare the first BLS-ready group
-cd crates/randcast-node
+cd crates/arpa-node
 cargo run --bin node-client -- -m demo -i 1
 cargo run --bin node-client -- -m demo -i 2
 cargo run --bin node-client -- -m demo -i 3
