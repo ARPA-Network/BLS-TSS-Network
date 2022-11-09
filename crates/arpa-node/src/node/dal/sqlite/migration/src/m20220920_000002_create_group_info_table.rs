@@ -15,7 +15,6 @@ impl MigrationTrait for Migration {
                         ColumnDef::new(GroupInfo::Id)
                             .integer()
                             .not_null()
-                            .auto_increment()
                             .primary_key(),
                     )
                     .col(ColumnDef::new(GroupInfo::Index).integer().not_null())

@@ -15,7 +15,6 @@ impl MigrationTrait for Migration {
                         ColumnDef::new(RandomnessTask::Id)
                             .integer()
                             .not_null()
-                            .auto_increment()
                             .primary_key(),
                     )
                     .col(ColumnDef::new(RandomnessTask::Index).integer().not_null())
