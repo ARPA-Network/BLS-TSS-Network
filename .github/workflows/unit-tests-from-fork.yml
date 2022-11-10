@@ -13,6 +13,14 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+      - name: Install Protoc
+        uses: arduino/setup-protoc@v1
+        with:
+          version: "3.x"
+      - name: Install Anvil
+        uses: foundry-rs/foundry-toolchain@v1
+        with:
+          version: nightly
       - name: Checkout
         uses: actions/checkout@v3
         with:
@@ -20,4 +28,4 @@ jobs:
           ref: ${{ github.event.pull_request.head.sha }}
           fetch-depth: 2
       - name: Run tests
-        run: cargo test --package randcast-node --lib -- --test-threads=1
+        run: cargo test --lib -- --test-threads=1

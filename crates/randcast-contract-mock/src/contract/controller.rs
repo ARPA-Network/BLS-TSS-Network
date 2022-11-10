@@ -31,6 +31,8 @@ pub const IDEAL_NUMBER_OF_GROUPS: usize = 5;
 
 pub const PENDING_BLOCK_AFTER_QUIT: usize = 100;
 
+pub const COORDINATOR_ADDRESS_PREFIX: &str = "0x00000000000000000000000000000000000000c";
+
 impl Deref for Controller {
     type Target = Adapter;
 
@@ -182,7 +184,7 @@ pub trait ControllerTransactions {
 }
 
 pub trait ControllerViews {
-    fn get_node(&self, id_address: &str) -> &Node;
+    fn get_node(&self, id_address: &str) -> Option<&Node>;
 
     // fn get_adapters(&self) -> Vec<String>;
 }
@@ -285,10 +287,9 @@ impl ControllerInternal for Controller {
 
         // mock: destruct existed coordinator
 
-        self.coordinators.insert(
-            group_index,
-            (format!("0xcoordinator{}", group_index), coordinator),
-        );
+        let coordinator_address = format!("{}{}", COORDINATOR_ADDRESS_PREFIX, group_index);
+        self.coordinators
+            .insert(group_index, (coordinator_address.clone(), coordinator));
 
         // emit event
         let group = self.groups.get(&group_index).unwrap();
@@ -306,7 +307,7 @@ impl ControllerInternal for Controller {
             threshold: group.threshold,
             members,
             assignment_block_height: self.block_height,
-            coordinator_address: self.deployed_address.clone(),
+            coordinator_address,
         };
 
         self.dkg_task = Some(dkg_task);
@@ -1084,8 +1085,8 @@ impl ControllerTransactions for Controller {
 }
 
 impl ControllerViews for Controller {
-    fn get_node(&self, id_address: &str) -> &Node {
-        self.nodes.get(id_address).unwrap()
+    fn get_node(&self, id_address: &str) -> Option<&Node> {
+        self.nodes.get(id_address)
     }
 
     // fn get_adapters(&self) -> Vec<String> {
@@ -1109,11 +1110,14 @@ pub mod tests {
     fn test() {
         let initial_entropy = 0x8762_4875_6548_6346;
 
-        let adapter = Adapter::new(initial_entropy, "0xcontroller_address".to_string());
+        let adapter = Adapter::new(
+            initial_entropy,
+            "0xcccccccccccccccccccccccccccccccccccccccc".to_string(),
+        );
 
         let mut controller = Controller::new(adapter);
 
-        let node_address = "0x1";
+        let node_address = "0x0000000000000000000000000000000000000001";
 
         controller.rewards.insert(node_address.to_string(), 1000);
 
@@ -1147,5 +1151,14 @@ pub mod tests {
         map.insert(1, str);
 
         println!("{}", map.get(&1).unwrap());
+    }
+
+    #[test]
+    fn test5() {
+        let address = "COORDINATOR_ADDRESS_PREFIX1";
+        let index = address["COORDINATOR_ADDRESS_PREFIX".len()..]
+            .parse::<usize>()
+            .unwrap();
+        assert_eq!(1, index);
     }
 }

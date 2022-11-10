@@ -1,0 +1,60 @@
+[package]
+name = "arpa-node"
+version = "0.0.1"
+authors = ["arpa-network"]
+edition = "2018"
+
+[[bin]]
+name = "node-client"
+path = "src/node_client.rs"
+
+[[bin]]
+name = "node-cmd-client"
+path = "src/node_cmd_client.rs"
+
+[[bin]]
+name = "node-account-client"
+path = "src/node_account_client.rs"
+
+[[bin]]
+name = "user-client"
+path = "src/user_client.rs"
+
+
+[dependencies]
+arpa-node-core = { path = "./src/node/core" }
+arpa-node-dal = { path = "./src/node/dal" }
+arpa-node-sqlite-db = { path = "./src/node/dal/sqlite" }
+arpa-node-contract-client = { path = "./src/node/contract_client" }
+dkg-core = { path = "../dkg-core" }
+threshold-bls = { path = "../threshold-bls", default-features = false, features = ["bls12_381"] }
+
+gumdrop = "0.7.0"
+rand = "0.7"
+bincode = "1.2.1"
+glob = "0.3.0"
+serde = "1.0.106"
+thiserror = "1.0.15"
+serde_json = "1.0.53"
+hex = "0.4.2"
+anyhow = "1.0.31"
+futures = "0.3.5"
+async-trait = "0.1.35"
+tokio = { version = "1.20.1", features = ["full"] }
+rustc-hex = "2.1.0"
+clt = "0.0.6"
+tonic = "0.8"
+prost = "0.11"
+serde_yaml = "0.8"
+tokio-retry = "0.3"
+log = "0.4"
+log4rs = "1.1.1"
+chrono = "0.4"
+structopt = "0.3"
+ethers = { git = "https://github.com/gakonst/ethers-rs", features = ["abigen"] }
+rand_chacha = "0.3.1"
+
+[build-dependencies]
+tonic-build = "0.8"
+prost-build = "0.11"
+ethers-contract-abigen = { git = "https://github.com/gakonst/ethers-rs" }
