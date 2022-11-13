@@ -272,7 +272,7 @@ contract Controller is Ownable {
             disqualifiedNodes: disqualifiedNodes
         });
 
-        if (!tryAddToExistedCommitCache(groupIndex, commitResult)) {
+        if (!tryAddToExistingCommitCache(groupIndex, commitResult)) {
             CommitCache memory commitCache = CommitCache({
                 commitResult: commitResult,
                 nodeIdAddress: new address[](1)
@@ -321,7 +321,7 @@ contract Controller is Ownable {
         }
     }
 
-    function tryAddToExistedCommitCache(
+    function tryAddToExistingCommitCache(
         uint256 groupIndex,
         CommitResult memory commitResult
     ) internal returns (bool isExist) {
