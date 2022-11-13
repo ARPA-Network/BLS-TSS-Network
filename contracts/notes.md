@@ -49,3 +49,24 @@ What is last_output and where is it generated?
 - [ ] What is actually happening in end of post_process_dkg()? (line 969)
 - [ ] Is this okay: (g.members.length / 2) (line 207)
 - [ ] Node Register -> Emit DKG Task. Need help on this (line 313)
+
+---
+
+## Overall Next steps
+
+- Testing framework with rust. Deploy to anvil.
+- Need to finish the controller.
+
+## Ruoshan Changes
+
+- CommitCache has multiple nodeIdAddress (address[]) instead of one (address),
+- CommitCache: partialPublicKey removed.
+- PartialKeyRegistered function doesnt look for specific partial key, just if one exists for the node.
+- New Function: tryAddToExistedCommitCache:
+- getStrictlyMajorityIdenticalCommitmentResult: returns commitCache instead of address[] (array of majority members with identical commit result)
+
+## Ruoshan Questions:
+
+g.members[i].partialPublicKey.length != 0
+
+is there a reason why you check for length !=0 instead of just partial key !=0.

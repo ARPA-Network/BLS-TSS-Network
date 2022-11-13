@@ -64,9 +64,8 @@ contract Controller is Ownable {
     }
 
     struct CommitCache {
-        address nodeIdAddress;
+        address[] nodeIdAddress;
         CommitResult commitResult;
-        bytes partialPublicKey;
     }
 
     // ! Node Register
@@ -210,18 +209,17 @@ contract Controller is Ownable {
         return false;
     }
 
-    function PartialKeyRegistered(
-        // * Make this private eventually. Public for testing
-        uint256 groupIndex,
-        address nodeIdAddress,
-        bytes memory partialKey
-    ) public view returns (bool) {
+    /// Check to see if a group has a partial public key registered for a given node.
+    function PartialKeyRegistered(uint256 groupIndex, address nodeIdAddress)
+        public
+        view
+        returns (bool)
+    {
         Group storage g = groups[groupIndex];
-        for (uint256 i = 0; i < g.commitCache.length; i++) {
+        for (uint256 i = 0; i < g.members.length; i++) {
             if (
-                g.commitCache[i].nodeIdAddress == nodeIdAddress &&
-                keccak256(g.commitCache[i].partialPublicKey) ==
-                keccak256(partialKey)
+                g.members[i].nodeIdAddress == nodeIdAddress &&
+                g.members[i].partialPublicKey.length != 0
             ) {
                 return true;
             }
@@ -262,7 +260,7 @@ contract Controller is Ownable {
             "Node is not a member of the group"
         );
         require(
-            !PartialKeyRegistered(groupIndex, msg.sender, partialPublicKey),
+            !PartialKeyRegistered(groupIndex, msg.sender),
             "CommitCache already contains PartialKey for this node"
         );
 
@@ -273,49 +271,48 @@ contract Controller is Ownable {
             disqualifiedNodes: disqualifiedNodes
         });
 
-        CommitCache memory commitCache = CommitCache({
-            commitResult: commitResult,
-            partialPublicKey: partialPublicKey,
-            nodeIdAddress: msg.sender
-        });
+        if (!tryAddToExistedCommitCache(groupIndex, commitResult)) {
+            CommitCache memory commitCache = CommitCache({
+                commitResult: commitResult,
+                nodeIdAddress: new address[](1)
+            });
 
-        g.commitCache.push(commitCache);
+            commitCache.nodeIdAddress[0] = msg.sender;
+            g.commitCache.push(commitCache);
+        }
 
-        // If consensus was reached previously...
-        if (g.isStrictlyMajorityConsensusReached) {
-            // assign member partial public keys
-            for (uint256 i = 0; i < g.members.length; i++) {
-                if (g.members[i].nodeIdAddress == msg.sender) {
-                    g.members[i].partialPublicKey = partialPublicKey;
-                }
+        // Record partial public key
+        for (uint256 i = 0; i < g.members.length; i++) {
+            if (g.members[i].nodeIdAddress == msg.sender) {
+                g.members[i].partialPublicKey = partialPublicKey;
             }
-        } else {
-            // check if consensus was just reached...
+        }
+        if (!g.isStrictlyMajorityConsensusReached) {
             (
                 bool consensusReached,
-                address[] memory majority_members
+                CommitCache memory commitCache
             ) = getStrictlyMajorityIdenticalCommitmentResult(groupIndex);
 
             if (consensusReached) {
                 // TODO: let last_output = self.last_output as usize; // * What is this?
                 // TODO: majority_members.retain(|m| !identical_commit.disqualified_nodes.contains(m));
                 // TODO: ensure majority members aren't contained in disqualified nodes.
-                if (majority_members.length > g.threshold) {
+                if (commitCache.nodeIdAddress.length >= g.threshold) {
                     g.isStrictlyMajorityConsensusReached = true;
                     // g.size -= g.disqualifiedNodes.length;
                     // assign member partial public keys
-                    for (uint256 i = 0; i < g.members.length; i++) {
-                        for (uint256 j = 0; j < majority_members.length; j++) {
-                            if (
-                                g.members[i].nodeIdAddress ==
-                                majority_members[j]
-                            ) {
-                                g
-                                    .members[i]
-                                    .partialPublicKey = partialPublicKey;
-                            }
-                        }
-                    }
+                    // for (uint256 i = 0; i < g.members.length; i++) {
+                    //     for (uint256 j = 0; j < majority_members.length; j++) {
+                    //         if (
+                    //             g.members[i].nodeIdAddress ==
+                    //             majority_members[j]
+                    //         ) {
+                    //             g
+                    //                 .members[i]
+                    //                 .partialPublicKey = partialPublicKey;
+                    //         }
+                    //     }
+                    // }
                 }
             }
 
@@ -325,57 +322,61 @@ contract Controller is Ownable {
         }
     }
 
-    // Structs to track seen commit results:
-    // groupIndex => commitResult (hashed) => Node Address Array
-    mapping(uint256 => mapping(bytes32 => address[])) commitResultToNodes;
-    mapping(uint256 => mapping(bytes32 => bool)) commitResultSeen;
+    function tryAddToExistedCommitCache(
+        uint256 groupIndex,
+        CommitResult memory commitResult
+    ) internal returns (bool isExist) {
+        Group storage g = groups[groupIndex]; // get group from group index
+        for (uint256 i = 0; i < g.commitCache.length; i++) {
+            if (
+                keccak256(abi.encode(g.commitCache[i].commitResult)) ==
+                keccak256(abi.encode(commitResult))
+            ) {
+                isExist = true;
+                g.commitCache[i].nodeIdAddress.push(msg.sender);
+            }
+        }
+    }
 
     // Goal: get array of majority members with identical commit result
     function getStrictlyMajorityIdenticalCommitmentResult(uint256 groupIndex)
         internal
-        returns (bool, address[] memory)
+        view
+        returns (bool, CommitCache memory)
     {
-        Group memory g = groups[groupIndex]; // get group from group index
-
-        // Populate commitResultToNodes with identical commit results => node array
-        for (uint256 i = 0; i < g.commitCache.length; i++) {
-            CommitCache memory commitCache = g.commitCache[i];
-            bytes32 commitResultHash = keccak256(
-                abi.encode(commitCache.commitResult)
+        Group memory g = groups[groupIndex];
+        if (g.commitCache.length == 0) {
+            return (
+                false,
+                CommitCache(
+                    new address[](0),
+                    CommitResult(0, "", new address[](0))
+                )
             );
-            if (commitResultSeen[groupIndex][commitResultHash]) {
-                commitResultToNodes[groupIndex][commitResultHash].push(
-                    g.commitCache[i].nodeIdAddress
-                );
-            } else {
-                commitResultSeen[groupIndex][commitResultHash] = true;
-                commitResultToNodes[groupIndex][
-                    commitResultHash
-                ] = new address[](0);
-                commitResultToNodes[groupIndex][commitResultHash].push(
-                    g.commitCache[i].nodeIdAddress
-                );
-            }
         }
 
-        // iterate through commitResultToNodes[groupIndex] and check if majority exists.
-        // If it does, return the nodes
-        for (uint256 i = 0; i < g.commitCache.length; i++) {
+        if (g.commitCache.length == 1) {
+            return (true, g.commitCache[0]);
+        }
+
+        bool isStrictlyMajorityExist = true;
+        CommitCache memory majorityCommitCache = g.commitCache[0];
+        for (uint256 i = 1; i < g.commitCache.length; i++) {
             CommitCache memory commitCache = g.commitCache[i];
-            bytes32 commitResultHash = keccak256(
-                abi.encode(commitCache.commitResult)
-            );
             if (
-                commitResultToNodes[groupIndex][commitResultHash].length >
-                g.members.length / 2 // ? Is this okay. Differs from BLS Code (line 207)
+                commitCache.nodeIdAddress.length >
+                majorityCommitCache.nodeIdAddress.length
             ) {
-                return (
-                    true,
-                    commitResultToNodes[groupIndex][commitResultHash]
-                );
+                isStrictlyMajorityExist = true;
+                majorityCommitCache = commitCache;
+            } else if (
+                commitCache.nodeIdAddress.length ==
+                majorityCommitCache.nodeIdAddress.length
+            ) {
+                isStrictlyMajorityExist = false;
             }
         }
-        return (false, new address[](0));
+        return (isStrictlyMajorityExist, majorityCommitCache);
     }
 
     // ! Post Proccess DKG

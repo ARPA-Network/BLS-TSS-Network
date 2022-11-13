@@ -226,11 +226,12 @@ contract ControllerTest is Test {
     function testIsPartialKeyRegistered() public {
         testEmitGroupEvent();
         uint256 groupIndex = 1;
-        bytes memory sampleKey = hex"DECADE";
-        assertEq(
-            controller.PartialKeyRegistered(groupIndex, node1, sampleKey),
-            false
-        );
+        // bytes memory sampleKey = hex"DECADE";
+        // assertEq(
+        //     controller.PartialKeyRegistered(groupIndex, node1, sampleKey),
+        //     false
+        // );
+        assertEq(controller.PartialKeyRegistered(groupIndex, node1), false);
     }
 
     function checkIsStrictlyMajorityConsensusReached(uint256 groupIndex)
@@ -265,6 +266,10 @@ contract ControllerTest is Test {
         emit log_named_uint("g.size", g.size);
         emit log_named_uint("g.threshold", g.threshold);
         emit log_named_uint("g.members.length", g.members.length);
+        emit log_named_uint(
+            "g.isStrictlyMajorityConsensusReached",
+            g.isStrictlyMajorityConsensusReached ? 1 : 0
+        );
         for (uint256 i = 0; i < g.members.length; i++) {
             emit log_named_address(
                 string.concat(
@@ -273,6 +278,14 @@ contract ControllerTest is Test {
                     "].nodeIdAddress"
                 ),
                 g.members[i].nodeIdAddress
+            );
+            emit log_named_bytes(
+                string.concat(
+                    "g.members[",
+                    Strings.toString(i),
+                    "].partialPublicKey"
+                ),
+                g.members[i].partialPublicKey
             );
         }
         // print committers
@@ -286,30 +299,22 @@ contract ControllerTest is Test {
         // print commit cache info
         emit log_named_uint("g.commitCache.length", g.commitCache.length);
         for (uint256 i = 0; i < g.commitCache.length; i++) {
-            emit log_named_address(
-                string.concat(
-                    "g.commitCache[",
-                    Strings.toString(i),
-                    "].nodeIdAddress"
-                ),
-                g.commitCache[i].nodeIdAddress
-            );
-            emit log_named_bytes(
-                string.concat(
-                    "g.commitCache[",
-                    Strings.toString(i),
-                    "].partialPublicKey"
-                ),
-                g.commitCache[i].partialPublicKey
-            );
-            emit log_named_bytes(
-                string.concat(
-                    "g.commitCache[",
-                    Strings.toString(i),
-                    "].commitResult.publicKey"
-                ),
-                g.commitCache[i].commitResult.publicKey
-            );
+            for (
+                uint256 j = 0;
+                j < g.commitCache[i].nodeIdAddress.length;
+                j++
+            ) {
+                emit log_named_address(
+                    string.concat(
+                        "g.commitCache[",
+                        Strings.toString(i),
+                        "].nodeIdAddress[",
+                        Strings.toString(j),
+                        "].nodeIdAddress"
+                    ),
+                    g.commitCache[i].nodeIdAddress[j]
+                );
+            }
         }
     }
 
