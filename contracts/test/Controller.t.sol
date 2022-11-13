@@ -125,9 +125,18 @@ contract ControllerTest is Test {
 
     function testIsNodeInMembers() public {
         uint256 groupIndex = 1;
-        assertEq(controller.NodeInMembers(groupIndex, node1), false);
+
+        (bool nodeInGroupMembers, uint256 memberIndex) = controller
+            .NodeInMembers(groupIndex, node1);
+        assertEq(nodeInGroupMembers, false);
+
         testEmitGroupEvent();
-        assertEq(controller.NodeInMembers(groupIndex, node1), true);
+
+        (nodeInGroupMembers, memberIndex) = controller.NodeInMembers(
+            groupIndex,
+            node1
+        );
+        assertEq(nodeInGroupMembers, true);
     }
 
     function testCommitDkg() public {

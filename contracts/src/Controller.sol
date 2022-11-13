@@ -198,15 +198,15 @@ contract Controller is Ownable {
     function NodeInMembers(uint256 groupIndex, address nodeIdAddress)
         public
         view
-        returns (bool)
+        returns (bool, uint256 memberIndex)
     {
         Group storage g = groups[groupIndex];
         for (uint256 i = 0; i < g.members.length; i++) {
             if (g.members[i].nodeIdAddress == nodeIdAddress) {
-                return true;
+                return (true, i);
             }
         }
-        return false;
+        return (false, 0);
     }
 
     /// Check to see if a group has a partial public key registered for a given node.
@@ -234,7 +234,7 @@ contract Controller is Ownable {
         bytes calldata publicKey,
         bytes calldata partialPublicKey,
         address[] calldata disqualifiedNodes
-    ) public {
+    ) external {
         // require group exists
         require(groupRegistered[groupIndex], "Group does not exist");
 
@@ -246,8 +246,7 @@ contract Controller is Ownable {
 
         // Ensure DKG Proccess is in Phase
         ICoordinator coordinator = ICoordinator(coordinators[groupIndex]);
-        int8 phase = coordinator.inPhase(); // get current phase
-        require(phase != -1, "DKG Has ended"); // require coordinator is in phase 1
+        require(coordinator.inPhase() != -1, "DKG Has ended"); // require coordinator is in phase 1
 
         // Ensure Eopch is correct,  Node is in group, and has not already submitted a partial key
         Group storage g = groups[groupIndex]; // get group from group index
@@ -255,10 +254,12 @@ contract Controller is Ownable {
             groupEpoch == g.epoch,
             "Caller Group epoch does not match Controller Group epoch"
         );
-        require(
-            NodeInMembers(groupIndex, msg.sender),
-            "Node is not a member of the group"
+
+        (bool nodeInGroupMembers, uint256 memberIndex) = NodeInMembers(
+            groupIndex,
+            msg.sender
         );
+        require(nodeInGroupMembers, "Node is not a member of the group");
         require(
             !PartialKeyRegistered(groupIndex, msg.sender),
             "CommitCache already contains PartialKey for this node"
@@ -282,11 +283,9 @@ contract Controller is Ownable {
         }
 
         // Record partial public key
-        for (uint256 i = 0; i < g.members.length; i++) {
-            if (g.members[i].nodeIdAddress == msg.sender) {
-                g.members[i].partialPublicKey = partialPublicKey;
-            }
-        }
+
+        g.members[memberIndex].partialPublicKey = partialPublicKey;
+
         if (!g.isStrictlyMajorityConsensusReached) {
             (
                 bool consensusReached,
@@ -385,8 +384,13 @@ contract Controller is Ownable {
         // require group exists
         require(groupRegistered[groupIndex], "Group does not exist");
 
+        (bool nodeInGroupMembers, uint256 memberIndex) = NodeInMembers(
+            groupIndex,
+            msg.sender
+        );
+
         // require calling node is in group
-        require(NodeInMembers(groupIndex, msg.sender), "Node not in group");
+        require(nodeInGroupMembers, "Node not in group");
 
         // require correct epoch
         Group storage g = groups[groupIndex];
