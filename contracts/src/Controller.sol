@@ -333,6 +333,7 @@ contract Controller is Ownable {
             ) {
                 isExist = true;
                 g.commitCache[i].nodeIdAddress.push(msg.sender);
+                return isExist;
             }
         }
     }

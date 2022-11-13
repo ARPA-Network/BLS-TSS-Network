@@ -75,5 +75,5 @@ is there a reason why you check for length !=0 instead of just partial key !=0.
 
 - [x] Penrose: Incorporate All changes from Ruoshan.
   - [x] Commit Ruoshan Changes
-  - [ ] I think the check `NodeInMembers` can return the member index in the Member[], then we can avoid repetitive iterating to locate the member later.
+  - [x] I think the check `NodeInMembers` can return the member index in the Member[], then we can avoid repetitive iterating to locate the member later.
   - [ ] We should return as soon as the isExist is set to true and pushing the requester's address, please update this as well.
