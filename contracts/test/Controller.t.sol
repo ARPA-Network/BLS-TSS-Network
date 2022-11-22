@@ -4,13 +4,15 @@ pragma solidity ^0.8.15;
 import "forge-std/Test.sol";
 import {Coordinator} from "src/Coordinator.sol";
 import {Controller} from "src/Controller.sol";
-
 import "openzeppelin-contracts/contracts/utils/Strings.sol";
+import "src/ICoordinator.sol";
 
 // Suggested usage: forge test --match-contract Controller -vv
 
 contract ControllerTest is Test {
     Controller controller;
+
+    uint256 PHASE_DURATION = 10;
 
     address public owner = address(0xC0FF33);
 
@@ -57,7 +59,7 @@ contract ControllerTest is Test {
         assertEq(n.idAddress, node1);
         assertEq(n.dkgPublicKey, pubkey1);
         assertEq(n.state, true);
-        assertEq(n.pending_until_block, 0);
+        assertEq(n.pendingUntilBlock, 0);
         assertEq(n.staking, 50000);
 
         vm.expectRevert("Node is already registered");
@@ -119,8 +121,8 @@ contract ControllerTest is Test {
         assertEq(m.nodeIdAddress, node2);
         // assertEq(m.partialPublicKey, TODO);
 
-        address coordinator_address = controller.getCoordinator(groupIndex);
-        emit log_named_address("\nCoordinator", coordinator_address);
+        address coordinatorAddress = controller.getCoordinator(groupIndex);
+        emit log_named_address("\nCoordinator", coordinatorAddress);
     }
 
     function testIsNodeInMembers() public {
@@ -139,10 +141,31 @@ contract ControllerTest is Test {
         assertEq(nodeInGroupMembers, true);
     }
 
+    function testCoordinatorPhase() public {
+        testEmitGroupEvent();
+        uint256 groupIndex = 1;
+        address coordinatorAddress = controller.getCoordinator(groupIndex);
+        ICoordinator coordinator = ICoordinator(coordinatorAddress);
+        uint256 startBlock = coordinator.startBlock();
+        assertEq(coordinator.inPhase(), 1);
+        vm.roll(startBlock + 1 + PHASE_DURATION);
+        assertEq(coordinator.inPhase(), 2);
+        vm.roll(startBlock + 1 + 2 * PHASE_DURATION);
+        assertEq(coordinator.inPhase(), 3);
+        vm.roll(startBlock + 1 + 3 * PHASE_DURATION);
+        assertEq(coordinator.inPhase(), 4);
+        vm.roll(startBlock + 1 + 4 * PHASE_DURATION);
+        assertEq(coordinator.inPhase(), -1);
+    }
+
     function testCommitDkg() public {
         testEmitGroupEvent();
-        // printGroupInfo(groupIndex);
+
         uint256 groupIndex = 1;
+        address coordinatorAddress = controller.getCoordinator(groupIndex);
+        ICoordinator coordinator = ICoordinator(coordinatorAddress);
+        uint256 startBlock = coordinator.startBlock();
+
         uint256 groupEpoch = 1;
         bytes memory partialPublicKey = hex"DECADE";
         bytes memory publicKey = hex"C0FFEE";
@@ -157,6 +180,18 @@ contract ControllerTest is Test {
             partialPublicKey,
             disqualifiedNodes
         );
+
+        vm.prank(node1);
+        vm.expectRevert("DKG still in progress");
+        controller.commitDkg(
+            groupIndex,
+            3,
+            publicKey,
+            partialPublicKey,
+            disqualifiedNodes
+        );
+
+        vm.roll(startBlock + 1 + 4 * PHASE_DURATION); // Put the coordinator in phase
 
         vm.prank(node1);
         vm.expectRevert(
@@ -341,7 +376,7 @@ contract ControllerTest is Test {
         emit log_named_address("n.idAddress", n.idAddress);
         emit log_named_bytes("n.dkgPublicKey", n.dkgPublicKey);
         emit log_named_string("n.state", Bool.toText(n.state));
-        emit log_named_uint("n.pending_until_block", n.pending_until_block);
+        emit log_named_uint("n.pendingUntilBlock", n.pendingUntilBlock);
         emit log_named_uint("n.staking", n.staking);
     }
 

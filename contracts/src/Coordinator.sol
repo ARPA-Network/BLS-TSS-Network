@@ -30,9 +30,6 @@ contract Coordinator is Ownable {
     // List of registered Ethereum keys (used for conveniently fetching data)
     address[] public participants;
 
-    //! Added participants map for more efficient "onlyRegistered"
-    mapping(address => bool) public participant_map;
-
     /// The duration of each phase
     uint256 public immutable PHASE_DURATION;
 
@@ -47,11 +44,13 @@ contract Coordinator is Ownable {
 
     /// A registered participant is one whose pubkey's length > 0
     modifier onlyRegistered() {
-        // require(
-        //     userState[msg.sender] == UserState.Registered,
-        //     "you are not registered!"
-        // );
-        require(participant_map[msg.sender], "you are not registered!");
+        bool isRegistered = false;
+        for (uint256 i = 0; i < participants.length; i++) {
+            if (participants[i] == msg.sender) {
+                isRegistered = true;
+            }
+        }
+        require(isRegistered, "you are not registered!");
         _;
     }
 
@@ -64,18 +63,14 @@ contract Coordinator is Ownable {
     constructor(uint256 threshold, uint256 duration) {
         THRESHOLD = threshold;
         PHASE_DURATION = duration;
-        // owner = msg.sender;
     }
 
     function initialize(address[] calldata nodes, bytes[] calldata publicKeys)
         external
         onlyWhenNotStarted
-        // group.epoch # do we really need this in the contract?
         onlyOwner
     {
-        // the below might need some work.
         for (uint256 i = 0; i < nodes.length; i++) {
-            participant_map[nodes[i]] = true;
             participants.push(nodes[i]);
             keys[nodes[i]] = publicKeys[i];
         }
@@ -151,7 +146,7 @@ contract Coordinator is Ownable {
     }
 
     /// Gets the participants' BLS keys along with the thershold of the DKG
-    function getBlsKeys() external view returns (uint256, bytes[] memory) {
+    function getDkgKeys() external view returns (uint256, bytes[] memory) {
         bytes[] memory _keys = new bytes[](participants.length);
         for (uint256 i = 0; i < participants.length; i++) {
             _keys[i] = keys[participants[i]];

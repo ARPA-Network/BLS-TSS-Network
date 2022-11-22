@@ -52,11 +52,6 @@ What is last_output and where is it generated?
 
 ---
 
-## Overall Next steps
-
-- Testing framework with rust. Deploy to anvil.
-- Need to finish the controller.
-
 ## Ruoshan Changes
 
 - CommitCache has multiple nodeIdAddress (address[]) instead of one (address),
@@ -65,15 +60,17 @@ What is last_output and where is it generated?
 - New Function: tryAddToExistedCommitCache:
 - getStrictlyMajorityIdenticalCommitmentResult: returns commitCache instead of address[] (array of majority members with identical commit result)
 
-## Ruoshan Questions:
+## Questions for Ruoshan (Code Review 11/14/22)
 
-g.members[i].partialPublicKey.length != 0
 
-is there a reason why you check for length !=0 instead of just partial key !=0.
+## Remaining Todo (from ruoshan code review)
 
-## Tasks
+- [ ] Test how [delete](https://ethereum.stackexchange.com/questions/35909/using-delete-keyword-on-storage-variables/35993#35993) works! (179, 180)
+- [ ] It seems like delete isnt doing anything. need to track down exactly when emitGroupEvent is triggered, I think it's triggering too often. 
 
-- [x] Penrose: Incorporate All changes from Ruoshan.
-  - [x] Commit Ruoshan Changes
-  - [x] I think the check `NodeInMembers` can return the member index in the Member[], then we can avoid repetitive iterating to locate the member later.
-  - [ ] We should return as soon as the isExist is set to true and pushing the requester's address, please update this as well.
+## Check the format of publickey / partial public key
+
+Format is subjected to the ECC specification that BLS12-381 used. Here we need to find a BLS12-381 library in solidity and look through their function to verify the format as far as possible. So until we find the lib I can't give more specific suggestions.
+
+## Commit Language
+

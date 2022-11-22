@@ -13,7 +13,7 @@ contract CoordinatorTest is Test {
     Coordinator coordinator;
 
     // Constructor Args
-    uint256 PHASE_DURATION = 30;
+    uint256 PHASE_DURATION = 10;
     uint256 THRESHOLD = 3;
 
     // Create 3 members for initialize()
@@ -45,12 +45,12 @@ contract CoordinatorTest is Test {
         vm.prank(controller);
         coordinator.initialize(nodes, keys);
 
-        // Test getParticipants and getBlsKeys after initialize()
+        // Test getParticipants and getDkgKeys after initialize()
         address[] memory participants = coordinator.getParticipants();
-        (uint256 threshold, bytes[] memory blsKeys) = coordinator.getBlsKeys();
+        (uint256 threshold, bytes[] memory dkgKeys) = coordinator.getDkgKeys();
         assertEq(participants, nodes);
-        for (uint256 i = 0; i < blsKeys.length; i++) {
-            assertEq(blsKeys[i], keys[i]);
+        for (uint256 i = 0; i < dkgKeys.length; i++) {
+            assertEq(dkgKeys[i], keys[i]);
         }
         assertEq(threshold, 3);
     }
@@ -130,30 +130,13 @@ contract CoordinatorTest is Test {
         coordinator.initialize(nodes, keys);
         uint256 startBlock = coordinator.startBlock();
 
-        // Phase 1
         assertEq(coordinator.inPhase(), 1);
-        // emit log("StartBlock: ");
-        // emit log_uint(startBlock);
-        // emit log("Blocks since start: ");
-        // emit log_uint(block.number - startBlock);
-
-        // Phase 2
         vm.roll(startBlock + 1 + PHASE_DURATION);
         assertEq(coordinator.inPhase(), 2);
-        // emit log("Blocks since start: ");
-        // emit log_uint(block.number - startBlock);
-
-        // Phase 3
         vm.roll(startBlock + 1 + 2 * PHASE_DURATION);
         assertEq(coordinator.inPhase(), 3);
-        // emit log("Blocks since start: ");
-        // emit log_uint(block.number - startBlock);
-
-        // Phase 4 : commit DKG
         vm.roll(startBlock + 1 + 3 * PHASE_DURATION);
         assertEq(coordinator.inPhase(), 4);
-
-        // DKG End
         vm.roll(startBlock + 1 + 4 * PHASE_DURATION);
         assertEq(coordinator.inPhase(), -1);
     }

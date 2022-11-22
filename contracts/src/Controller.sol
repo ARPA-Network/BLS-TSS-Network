@@ -22,12 +22,10 @@ contract Controller is Ownable {
     //  Node State Variables
     mapping(address => Node) public nodes; //maps node address to Node Struct
     mapping(address => uint256) public rewards; // maps node address to reward amount
-    mapping(address => bool) public nodeRegistered; // map for checking if nodes are registered
 
     // Group State Variables
     uint256 public groupCount; // Number of groups
     mapping(uint256 => Group) public groups; // group_index => Group struct
-    mapping(uint256 => bool) public groupRegistered; // map for checking if group exists
 
     // Coordinators
     mapping(uint256 => address) public coordinators; // maps group index to coordinator address
@@ -37,7 +35,7 @@ contract Controller is Ownable {
         address idAddress;
         bytes dkgPublicKey;
         bool state;
-        uint256 pending_until_block;
+        uint256 pendingUntilBlock;
         uint256 staking;
     }
     struct Group {
@@ -70,7 +68,12 @@ contract Controller is Ownable {
 
     // ! Node Register
     function nodeRegister(bytes calldata dkgPublicKey) public {
-        require(!nodeRegistered[msg.sender], "Node is already registered"); // error sender already in list of nodes
+        // require(!nodeRegistered[msg.sender], "Node is already registered"); // error sender already in list of nodes
+
+        require(
+            nodes[msg.sender].idAddress == address(0),
+            "Node is already registered"
+        ); // error sender already in list of nodes
 
         // TODO: Check to see if enough balance for staking
 
@@ -79,11 +82,11 @@ contract Controller is Ownable {
         n.idAddress = msg.sender;
         n.dkgPublicKey = dkgPublicKey;
         n.state = true;
-        n.pending_until_block = 0;
+        n.pendingUntilBlock = 0;
         n.staking = NODE_STAKING_AMOUNT;
 
-        nodeRegistered[msg.sender] = true;
-        rewards[msg.sender] = 0; // This can be removed
+        // nodeRegistered[msg.sender] = true;
+        // rewards[msg.sender] = 0; // This can be removed
         nodeJoin(msg.sender);
     }
 
@@ -121,7 +124,6 @@ contract Controller is Ownable {
     function addGroup() internal returns (uint256) {
         groupCount++;
         Group storage g = groups[groupCount];
-        groupRegistered[groupCount] = true;
         g.index = groupCount;
         g.size = 0;
         g.threshold = DEFAULT_MINIMUM_THRESHOLD;
@@ -162,16 +164,21 @@ contract Controller is Ownable {
         pure
         returns (uint256)
     {
-        uint256 min = groupSize / 2 + 1;
-        return min;
+        // uint256 min = groupSize / 2 + 1;
+        return groupSize / 2 + 1;
     }
 
     function emitGroupEvent(uint256 groupIndex) internal {
-        require(groupRegistered[groupIndex], "Group does not exist"); // group must exist
+        require(groups[groupIndex].index != 0, "Group does not exist");
 
         epoch++; // increment adapter epoch
-        Group storage g = groups[groupIndex]; // Grap group struct
+        Group storage g = groups[groupIndex]; // Grab group struct
         g.epoch++; // Increment group epoch
+        g.isStrictlyMajorityConsensusReached = false; // Reset consensus of group to false
+
+        delete g.committers; // set commiters to empty
+        delete g.commitCache; // Set commit_cache to empty
+        // g.committers.push(address(5)); // ! Need to run experiments here.
 
         // Deploy coordinator, add to coordinators mapping
         Coordinator coordinator;
@@ -236,7 +243,9 @@ contract Controller is Ownable {
         address[] calldata disqualifiedNodes
     ) external {
         // require group exists
-        require(groupRegistered[groupIndex], "Group does not exist");
+        require(groups[groupIndex].index != 0, "Group does not exist");
+
+        // require publickey and partial public key are not empty
 
         // require coordinator exists
         require(
@@ -246,7 +255,8 @@ contract Controller is Ownable {
 
         // Ensure DKG Proccess is in Phase
         ICoordinator coordinator = ICoordinator(coordinators[groupIndex]);
-        require(coordinator.inPhase() != -1, "DKG Has ended"); // require coordinator is in phase 1
+        // require(coordinator.inPhase() != -1, "DKG still in progress!"); // require coordinator to be in phase -1 (dkg end)
+        require(coordinator.inPhase() == -1, "DKG still in progress"); // require DKG Phase End.
 
         // Ensure Eopch is correct,  Node is in group, and has not already submitted a partial key
         Group storage g = groups[groupIndex]; // get group from group index
@@ -331,9 +341,9 @@ contract Controller is Ownable {
                 keccak256(abi.encode(g.commitCache[i].commitResult)) ==
                 keccak256(abi.encode(commitResult))
             ) {
-                isExist = true;
+                // isExist = true;
                 g.commitCache[i].nodeIdAddress.push(msg.sender);
-                return isExist;
+                return true;
             }
         }
     }
@@ -381,9 +391,13 @@ contract Controller is Ownable {
 
     // ! Post Proccess DKG
     // Called by nodes after last phase of dkg ends (success or failure)
+    // handles coordinator selfdestruct if it reaches DKG timeout, then
+    // 1. emit GroupRelayTask if grouping successfully
+    // 2. arrange members if fail to group
+    // and rewards trigger (sender)
     function postProcessDkg(uint256 groupIndex, uint256 groupEpoch) public {
         // require group exists
-        require(groupRegistered[groupIndex], "Group does not exist");
+        require(groups[groupIndex].index != 0, "Group does not exist");
 
         (bool nodeInGroupMembers, uint256 memberIndex) = NodeInMembers(
             groupIndex,
@@ -408,10 +422,10 @@ contract Controller is Ownable {
 
         // Require DKG Proccess is in Phase
         ICoordinator coordinator = ICoordinator(coordinators[groupIndex]);
-        int8 phase = coordinator.inPhase(); // get current phase
-        require(phase != -1, "DKG Has ended"); // require coordinator is in phase 1
+        require(coordinator.inPhase() == -1, "DKG still in progress"); // require DKG Phase End.
 
         // Coordinator Self Destruct
+
         coordinators[groupIndex] = address(0);
 
         bool isStrictlyMajorityConsensusReached = g
