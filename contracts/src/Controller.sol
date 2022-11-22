@@ -68,8 +68,6 @@ contract Controller is Ownable {
 
     // ! Node Register
     function nodeRegister(bytes calldata dkgPublicKey) public {
-        // require(!nodeRegistered[msg.sender], "Node is already registered"); // error sender already in list of nodes
-
         require(
             nodes[msg.sender].idAddress == address(0),
             "Node is already registered"
@@ -85,8 +83,6 @@ contract Controller is Ownable {
         n.pendingUntilBlock = 0;
         n.staking = NODE_STAKING_AMOUNT;
 
-        // nodeRegistered[msg.sender] = true;
-        // rewards[msg.sender] = 0; // This can be removed
         nodeJoin(msg.sender);
     }
 

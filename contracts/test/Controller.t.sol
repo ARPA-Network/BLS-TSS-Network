@@ -308,6 +308,7 @@ contract ControllerTest is Test {
         controller.postProcessDkg(groupIndex, 1); //(groupIndex, groupEpoch))
 
         // Self destruct cannot be tested in foundry at the moment:
+        // https://github.com/foundry-rs/foundry/issues/1543
         // https://github.com/foundry-rs/foundry/issues/2844
         // assertEq(coordinator.inPhase(), -1);
     }
