@@ -185,4 +185,8 @@ contract Coordinator is Ownable {
         // revert("DKG Ended");
         return -1;
     }
+
+    function selfDestruct() external onlyOwner {
+        selfdestruct(payable(owner()));
+    }
 }

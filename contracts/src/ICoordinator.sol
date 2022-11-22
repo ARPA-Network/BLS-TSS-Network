@@ -33,4 +33,6 @@ interface ICoordinator {
     function shares(address) external view returns (bytes memory);
 
     function startBlock() external view returns (uint256);
+
+    function selfDestruct() external;
 }

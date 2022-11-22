@@ -272,7 +272,7 @@ contract ControllerTest is Test {
         uint256 groupIndex = 1;
         // bytes memory sampleKey = hex"DECADE";
         // assertEq(
-        //     controller.PartialKeyRegistered(groupIndex, node1, sampleKey),
+        //   .  controller.PartialKeyRegistered(groupIndex, node1, sampleKey),
         //     false
         // );
         assertEq(controller.PartialKeyRegistered(groupIndex, node1), false);
@@ -288,7 +288,28 @@ contract ControllerTest is Test {
     }
 
     function testPostProccessDkg() public {
-        emit log_string("testPostProccessDKG");
+        testCommitDkg();
+        uint256 groupIndex = 1;
+
+        vm.expectRevert("Group does not exist");
+        controller.postProcessDkg(0, 0); //(groupIndex, groupEpoch))
+
+        vm.prank(node4);
+        vm.expectRevert("Node not in group");
+        controller.postProcessDkg(groupIndex, 0); //(groupIndex, groupEpoch))
+
+        vm.prank(node1);
+        vm.expectRevert(
+            "Caller Group epoch does not match Controller Group epoch"
+        );
+        controller.postProcessDkg(groupIndex, 0); //(groupIndex, groupEpoch))
+
+        vm.prank(node1);
+        controller.postProcessDkg(groupIndex, 1); //(groupIndex, groupEpoch))
+
+        // Self destruct cannot be tested in foundry at the moment:
+        // https://github.com/foundry-rs/foundry/issues/2844
+        // assertEq(coordinator.inPhase(), -1);
     }
 
     // ! Helper function for debugging below

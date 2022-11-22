@@ -425,6 +425,7 @@ contract Controller is Ownable {
         require(coordinator.inPhase() == -1, "DKG still in progress"); // require DKG Phase End.
 
         // Coordinator Self Destruct
+        coordinator.selfDestruct();
 
         coordinators[groupIndex] = address(0);
 

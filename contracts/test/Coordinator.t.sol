@@ -176,4 +176,13 @@ contract CoordinatorTest is Test {
         assertEq(justifications[0], "");
         assertEq(justifications[1], my_justifications);
     }
+
+    function testSelfDestructOnlyOwner() public {
+        vm.prank(controller);
+        coordinator.initialize(nodes, keys);
+        vm.expectRevert("Ownable: caller is not the owner");
+        coordinator.selfDestruct();
+        vm.prank(controller);
+        coordinator.selfDestruct();
+    }
 }

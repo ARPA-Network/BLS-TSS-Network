@@ -74,3 +74,7 @@ Format is subjected to the ECC specification that BLS12-381 used. Here we need t
 
 ## Commit Language
 
+git commit -am "removed participant_map, nodeRegistered map, and groupRegistered map to save gas (used iteration instead). Correctedt DKG Phase requirement and added phase logic to controller tests. Performed some small cleanups identified in code review"
+
+added selfDestruct function to Coordinator and trigger logic to postProccessDkg, set Controller to payable, and added a test for selfDestruct
+
