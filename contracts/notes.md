@@ -35,3 +35,9 @@ Todo:
 - [ ] Emit DKG Task in emitGroupEvent()
 - [ ] commitDKG : Last parts
 - [ ] postProccessDkg : Group Relay Task
+
+## Questions for meeting:
+
+- How much about BLS12-381 do we need to know?
+- Could you help explain controller.rebalanceGroup()?
+- some hints on emit dkg task event?

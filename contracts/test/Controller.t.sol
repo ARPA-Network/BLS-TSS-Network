@@ -288,8 +288,12 @@ contract ControllerTest is Test {
     }
 
     function testPostProccessDkg() public {
-        testCommitDkg();
+        testEmitGroupEvent();
         uint256 groupIndex = 1;
+        uint256 groupEpoch = 1;
+        address coordinatorAddress = controller.getCoordinator(groupIndex);
+        ICoordinator coordinator = ICoordinator(coordinatorAddress);
+        uint256 startBlock = coordinator.startBlock();
 
         vm.expectRevert("Group does not exist");
         controller.postProcessDkg(0, 0); //(groupIndex, groupEpoch))
@@ -305,7 +309,13 @@ contract ControllerTest is Test {
         controller.postProcessDkg(groupIndex, 0); //(groupIndex, groupEpoch))
 
         vm.prank(node1);
-        controller.postProcessDkg(groupIndex, 1); //(groupIndex, groupEpoch))
+        vm.expectRevert("DKG still in progress");
+        controller.postProcessDkg(groupIndex, groupEpoch); //(groupIndex, groupEpoch))
+
+        // Succesful post proccess dkg
+        vm.roll(startBlock + 1 + 4 * PHASE_DURATION); // Put the coordinator in phase
+        vm.prank(node1);
+        controller.postProcessDkg(groupIndex, groupEpoch); //(groupIndex, groupEpoch))
 
         // Self destruct cannot be tested in foundry at the moment:
         // https://github.com/foundry-rs/foundry/issues/1543
