@@ -182,18 +182,6 @@ contract ControllerTest is Test {
         );
 
         vm.prank(node1);
-        vm.expectRevert("DKG still in progress");
-        controller.commitDkg(
-            groupIndex,
-            3,
-            publicKey,
-            partialPublicKey,
-            disqualifiedNodes
-        );
-
-        vm.roll(startBlock + 1 + 4 * PHASE_DURATION); // Put the coordinator in phase
-
-        vm.prank(node1);
         vm.expectRevert(
             "Caller Group epoch does not match Controller Group epoch"
         );
@@ -264,7 +252,16 @@ contract ControllerTest is Test {
         assertEq(checkIsStrictlyMajorityConsensusReached(groupIndex), true);
         printGroupInfo(groupIndex);
 
-        // Commiter Indices + Group disqualification next
+        vm.roll(startBlock + 1 + 4 * PHASE_DURATION); // Put the coordinator in phase -1
+        vm.prank(node1);
+        vm.expectRevert("DKG has ended");
+        controller.commitDkg(
+            groupIndex,
+            groupEpoch,
+            publicKey,
+            partialPublicKey,
+            disqualifiedNodes
+        );
     }
 
     function testIsPartialKeyRegistered() public {

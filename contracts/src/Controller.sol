@@ -252,7 +252,7 @@ contract Controller is Ownable {
         // Ensure DKG Proccess is in Phase
         ICoordinator coordinator = ICoordinator(coordinators[groupIndex]);
         // require(coordinator.inPhase() != -1, "DKG still in progress!"); // require coordinator to be in phase -1 (dkg end)
-        require(coordinator.inPhase() == -1, "DKG still in progress"); // require DKG Phase End.
+        require(coordinator.inPhase() != -1, "DKG has ended"); // require coordinatos to still be in DKG Phase
 
         // Ensure Eopch is correct,  Node is in group, and has not already submitted a partial key
         Group storage g = groups[groupIndex]; // get group from group index
