@@ -76,7 +76,7 @@ contract CoordinatorTest is Test {
         vm.stopPrank();
     }
 
-    function testOnlyRegisteredCanPublish() public {
+    function testOnlyGroupMemberCanPublish() public {
         vm.prank(controller);
         coordinator.initialize(nodes, keys);
 

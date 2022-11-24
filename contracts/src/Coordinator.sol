@@ -43,7 +43,7 @@ contract Coordinator is Ownable {
     // address public owner;
 
     /// A registered participant is one whose pubkey's length > 0
-    modifier onlyRegistered() {
+    modifier onlyGroupMember() {
         bool isRegistered = false;
         for (uint256 i = 0; i < participants.length; i++) {
             if (participants[i] == msg.sender) {
@@ -81,7 +81,7 @@ contract Coordinator is Ownable {
     /// Participant publishes their data and depending on the phase the data gets inserted
     /// in the shares, responses or justifications mapping. Reverts if the participant
     /// has already published their data for a phase or if the DKG has ended.
-    function publish(bytes calldata value) external onlyRegistered {
+    function publish(bytes calldata value) external onlyGroupMember {
         uint256 blocksSinceStart = block.number - startBlock;
 
         if (blocksSinceStart <= PHASE_DURATION) {
