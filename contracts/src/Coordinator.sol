@@ -6,7 +6,7 @@ pragma solidity ^0.8.15;
 import "openzeppelin-contracts/contracts/access/Ownable.sol";
 
 contract Coordinator is Ownable {
-    /// Mapping of Ethereum Address => BLS public keys
+    /// Mapping of Ethereum Address => DKG public keys
     mapping(address => bytes) public keys;
 
     /// Mapping of Ethereum Address => DKG Phase 1 Shares
@@ -133,7 +133,7 @@ contract Coordinator is Ownable {
         return participants;
     }
 
-    /// Gets the participants' BLS keys along with the thershold of the DKG
+    /// Gets the participants' DKG keys along with the thershold of the DKG
     function getDkgKeys() external view returns (uint256, bytes[] memory) {
         bytes[] memory _keys = new bytes[](participants.length);
         for (uint256 i = 0; i < participants.length; i++) {
