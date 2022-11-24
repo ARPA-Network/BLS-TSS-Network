@@ -81,7 +81,7 @@ contract CoordinatorTest is Test {
         coordinator.initialize(nodes, keys);
 
         // non-registered node can't publish
-        vm.expectRevert("you are not registered!");
+        vm.expectRevert("you are not a group member!");
         coordinator.publish(data);
 
         // registered node publishes successfully

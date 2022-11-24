@@ -6,15 +6,6 @@ pragma solidity ^0.8.15;
 import "openzeppelin-contracts/contracts/access/Ownable.sol";
 
 contract Coordinator is Ownable {
-    // enum UserState {
-    //     CannotRegister,
-    //     CanRegister,
-    //     Registered
-    // }
-
-    /// Mapping of Ethereum Address => UserState for the actions a user can do
-    // mapping(address => UserState) public userState;
-
     /// Mapping of Ethereum Address => BLS public keys
     mapping(address => bytes) public keys;
 
@@ -39,18 +30,15 @@ contract Coordinator is Ownable {
     /// If it's 0 then the DKG is still pending start. If >0, it is the DKG's start block
     uint256 public startBlock = 0;
 
-    /// The owner of the DKG is the address which can call the `start` function
-    // address public owner;
-
-    /// A registered participant is one whose pubkey's length > 0
+    /// A group member is one whose pubkey's length > 0
     modifier onlyGroupMember() {
-        bool isRegistered = false;
+        bool isGroupMember = false;
         for (uint256 i = 0; i < participants.length; i++) {
             if (participants[i] == msg.sender) {
-                isRegistered = true;
+                isGroupMember = true;
             }
         }
-        require(isRegistered, "you are not registered!");
+        require(isGroupMember, "you are not a group member!");
         _;
     }
 
