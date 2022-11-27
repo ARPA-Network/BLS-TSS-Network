@@ -32,13 +32,7 @@ contract Coordinator is Ownable {
 
     /// A group member is one whose pubkey's length > 0
     modifier onlyGroupMember() {
-        bool isGroupMember = false;
-        for (uint256 i = 0; i < participants.length; i++) {
-            if (participants[i] == msg.sender) {
-                isGroupMember = true;
-            }
-        }
-        require(isGroupMember, "you are not a group member!");
+        require(keys[msg.sender].length > 0, "you are not a group member!");
         _;
     }
 
