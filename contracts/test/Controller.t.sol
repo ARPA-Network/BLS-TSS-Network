@@ -125,20 +125,16 @@ contract ControllerTest is Test {
         emit log_named_address("\nCoordinator", coordinatorAddress);
     }
 
-    function testIsNodeInMembers() public {
+    function testGetMemberIndex() public {
         uint256 groupIndex = 1;
 
-        (bool nodeInGroupMembers, uint256 memberIndex) = controller
-            .NodeInMembers(groupIndex, node1);
-        assertEq(nodeInGroupMembers, false);
+        int256 memberIndex = controller.GetMemberIndex(groupIndex, node1);
+        assertEq(memberIndex, -1);
 
         testEmitGroupEvent();
 
-        (nodeInGroupMembers, memberIndex) = controller.NodeInMembers(
-            groupIndex,
-            node1
-        );
-        assertEq(nodeInGroupMembers, true);
+        memberIndex = controller.GetMemberIndex(groupIndex, node1);
+        assertEq(memberIndex, 0);
     }
 
     function testCoordinatorPhase() public {

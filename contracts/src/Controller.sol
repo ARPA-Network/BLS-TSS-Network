@@ -47,6 +47,7 @@ contract Controller is Ownable {
         address[] committers;
         CommitCache[] commitCache; // Map in rust mock contract
         bool isStrictlyMajorityConsensusReached;
+        bytes publicKey;
     }
 
     struct Member {
@@ -198,18 +199,18 @@ contract Controller is Ownable {
     }
 
     // ! Commit DKG
-    function NodeInMembers(uint256 groupIndex, address nodeIdAddress)
+    function GetMemberIndex(uint256 groupIndex, address nodeIdAddress)
         public
         view
-        returns (bool, uint256 memberIndex)
+        returns (int256 memberIndex)
     {
         Group storage g = groups[groupIndex];
         for (uint256 i = 0; i < g.members.length; i++) {
             if (g.members[i].nodeIdAddress == nodeIdAddress) {
-                return (true, i);
+                return int256(i);
             }
         }
-        return (false, 0);
+        return -1;
     }
 
     /// Check to see if a group has a partial public key registered for a given node.
@@ -231,7 +232,6 @@ contract Controller is Ownable {
     }
 
     function commitDkg(
-        // address idAddress,
         uint256 groupIndex,
         uint256 groupEpoch,
         bytes calldata publicKey,
@@ -241,7 +241,7 @@ contract Controller is Ownable {
         // require group exists
         require(groups[groupIndex].index != 0, "Group does not exist");
 
-        // require publickey and partial public key are not empty
+        // require publickey and partial public key are not empty  / are the right format
 
         // require coordinator exists
         require(
@@ -261,11 +261,10 @@ contract Controller is Ownable {
             "Caller Group epoch does not match Controller Group epoch"
         );
 
-        (bool nodeInGroupMembers, uint256 memberIndex) = NodeInMembers(
-            groupIndex,
-            msg.sender
+        require(
+            GetMemberIndex(groupIndex, msg.sender) != -1, // -1 if node is not member of group
+            "Node is not a member of the group"
         );
-        require(nodeInGroupMembers, "Node is not a member of the group");
         require(
             !PartialKeyRegistered(groupIndex, msg.sender),
             "CommitCache already contains PartialKey for this node"
@@ -288,43 +287,62 @@ contract Controller is Ownable {
             g.commitCache.push(commitCache);
         }
 
-        // Record partial public key
+        // if consensus previously reached, update the partial public key of the given node's member entry in the group
+        if (g.isStrictlyMajorityConsensusReached) {
+            g
+            .members[uint256(GetMemberIndex(groupIndex, msg.sender))] // uint256 memberIndex
+                .partialPublicKey = partialPublicKey;
+        }
 
-        g.members[memberIndex].partialPublicKey = partialPublicKey;
-
+        // if not.. call getStrictlyMajorityIdenticalCommitmentResult for the group and check if consensus has been reached.
         if (!g.isStrictlyMajorityConsensusReached) {
             (
                 bool consensusReached,
-                CommitCache memory commitCache
+                CommitCache memory identicalCommits
             ) = getStrictlyMajorityIdenticalCommitmentResult(groupIndex);
 
             if (consensusReached) {
                 // TODO: let last_output = self.last_output as usize; // * What is this?
-                // TODO: majority_members.retain(|m| !identical_commit.disqualified_nodes.contains(m));
-                // TODO: ensure majority members aren't contained in disqualified nodes.
-                if (commitCache.nodeIdAddress.length >= g.threshold) {
+                // Get list of majority members with disqualified nodes excluded
+                address[] memory majorityMembers = getMajorityMembers(
+                    groupIndex,
+                    identicalCommits.commitResult.disqualifiedNodes
+                );
+                if (majorityMembers.length >= g.threshold) {
                     g.isStrictlyMajorityConsensusReached = true;
-                    // g.size -= g.disqualifiedNodes.length;
-                    // assign member partial public keys
-                    // for (uint256 i = 0; i < g.members.length; i++) {
-                    //     for (uint256 j = 0; j < majority_members.length; j++) {
-                    //         if (
-                    //             g.members[i].nodeIdAddress ==
-                    //             majority_members[j]
-                    //         ) {
-                    //             g
-                    //                 .members[i]
-                    //                 .partialPublicKey = partialPublicKey;
-                    //         }
-                    //     }
-                    // }
+                    g.size -= identicalCommits
+                        .commitResult
+                        .disqualifiedNodes
+                        .length;
+                    g.publicKey = identicalCommits.commitResult.publicKey;
                 }
             }
-
-            // TODO: Finish commit dkg (line 870 in BLS Repo)
-            // Qualified Indices / Commiter indices / CHoose randomly from indices
-            // Move disqualified nodes out of group
         }
+    }
+
+    // function getMajorityMembers iterates through the members of a group and returns a list of members that are not in the list of disqualified nodes.
+    function getMajorityMembers(
+        uint256 groupIndex,
+        address[] memory disqualifiedNodes
+    ) public view returns (address[] memory) {
+        Group storage g = groups[groupIndex];
+        address[] memory majorityMembers = new address[](g.size);
+        uint256 majorityMembersIndex = 0;
+        for (uint256 i = 0; i < g.members.length; i++) {
+            bool isDisqualified = false;
+            for (uint256 j = 0; j < disqualifiedNodes.length; j++) {
+                if (g.members[i].nodeIdAddress == disqualifiedNodes[j]) {
+                    isDisqualified = true;
+                }
+            }
+            if (!isDisqualified) {
+                majorityMembers[majorityMembersIndex] = g
+                    .members[i]
+                    .nodeIdAddress;
+                majorityMembersIndex++;
+            }
+        }
+        return majorityMembers;
     }
 
     function tryAddToExistingCommitCache(
@@ -395,14 +413,11 @@ contract Controller is Ownable {
         // require group exists
         require(groups[groupIndex].index != 0, "Group does not exist");
 
-        (bool nodeInGroupMembers, uint256 memberIndex) = NodeInMembers(
-            groupIndex,
-            msg.sender
-        );
-
         // require calling node is in group
-        require(nodeInGroupMembers, "Node not in group");
-
+        require(
+            GetMemberIndex(groupIndex, msg.sender) != -1, // -1 if node is not member of group
+            "Node is not a member of the group"
+        );
         // require correct epoch
         Group storage g = groups[groupIndex];
         require(
