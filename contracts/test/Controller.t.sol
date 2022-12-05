@@ -366,22 +366,25 @@ contract ControllerTest is Test {
             );
         }
         // print commit cache info
-        emit log_named_uint("g.commitCache.length", g.commitCache.length);
-        for (uint256 i = 0; i < g.commitCache.length; i++) {
+        emit log_named_uint(
+            "g.commitCacheList.length",
+            g.commitCacheList.length
+        );
+        for (uint256 i = 0; i < g.commitCacheList.length; i++) {
             for (
                 uint256 j = 0;
-                j < g.commitCache[i].nodeIdAddress.length;
+                j < g.commitCacheList[i].nodeIdAddress.length;
                 j++
             ) {
                 emit log_named_address(
                     string.concat(
-                        "g.commitCache[",
+                        "g.commitCacheList[",
                         Strings.toString(i),
                         "].nodeIdAddress[",
                         Strings.toString(j),
                         "].nodeIdAddress"
                     ),
-                    g.commitCache[i].nodeIdAddress[j]
+                    g.commitCacheList[i].nodeIdAddress[j]
                 );
             }
         }

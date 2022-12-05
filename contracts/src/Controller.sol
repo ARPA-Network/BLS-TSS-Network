@@ -45,7 +45,7 @@ contract Controller is Ownable {
         uint256 threshold; // DEFAULT_MINIMUM_THRESHOLD
         Member[] members; // Map in rust mock contract
         address[] committers;
-        CommitCache[] commitCache; // Map in rust mock contract
+        CommitCache[] commitCacheList; // Map in rust mock contract
         bool isStrictlyMajorityConsensusReached;
         bytes publicKey;
     }
@@ -174,7 +174,7 @@ contract Controller is Ownable {
         g.isStrictlyMajorityConsensusReached = false; // Reset consensus of group to false
 
         delete g.committers; // set commiters to empty
-        delete g.commitCache; // Set commit_cache to empty
+        delete g.commitCacheList; // Set commit_cache to empty
         // g.committers.push(address(5)); // ! Need to run experiments here.
 
         // Deploy coordinator, add to coordinators mapping
@@ -265,6 +265,9 @@ contract Controller is Ownable {
             GetMemberIndex(groupIndex, msg.sender) != -1, // -1 if node is not member of group
             "Node is not a member of the group"
         );
+
+        // uint256 memberIndex = uint256(GetMemberIndex(groupIndex, msg.sender));
+
         require(
             !PartialKeyRegistered(groupIndex, msg.sender),
             "CommitCache already contains PartialKey for this node"
@@ -284,7 +287,7 @@ contract Controller is Ownable {
             });
 
             commitCache.nodeIdAddress[0] = msg.sender;
-            g.commitCache.push(commitCache);
+            g.commitCacheList.push(commitCache);
         }
 
         // if consensus previously reached, update the partial public key of the given node's member entry in the group
@@ -296,11 +299,6 @@ contract Controller is Ownable {
 
         // if not.. call getStrictlyMajorityIdenticalCommitmentResult for the group and check if consensus has been reached.
         if (!g.isStrictlyMajorityConsensusReached) {
-            // (
-            //     bool consensusReached,
-            //     CommitCache memory identicalCommits
-            // ) = getStrictlyMajorityIdenticalCommitmentResult(groupIndex);
-
             CommitCache
                 memory identicalCommits = getStrictlyMajorityIdenticalCommitmentResult(
                     groupIndex
@@ -320,10 +318,32 @@ contract Controller is Ownable {
                         .disqualifiedNodes
                         .length;
                     g.publicKey = identicalCommits.commitResult.publicKey;
+
+                    //! Did my best here, but I think it's not quite there.
+                    // Is majorityMembers the same at group.commitCache in the rust code?
+                    // update partial public key of all non-disqualified members
+                    g
+                        .members[
+                            uint256(GetMemberIndex(groupIndex, msg.sender))
+                        ]
+                        .partialPublicKey = partialPublicKey;
+                    for (uint256 i = 0; i < majorityMembers.length; i++) {
+                        g
+                            .members[
+                                uint256(
+                                    GetMemberIndex(
+                                        groupIndex,
+                                        majorityMembers[i]
+                                    )
+                                )
+                            ]
+                            .partialPublicKey = partialPublicKey;
+                    }
                 }
             }
         }
 
+        // This works... the above fails.
         // g
         //     .members[uint256(GetMemberIndex(groupIndex, msg.sender))]
         //     .partialPublicKey = partialPublicKey;
@@ -372,13 +392,13 @@ contract Controller is Ownable {
         CommitResult memory commitResult
     ) internal returns (bool isExist) {
         Group storage g = groups[groupIndex]; // get group from group index
-        for (uint256 i = 0; i < g.commitCache.length; i++) {
+        for (uint256 i = 0; i < g.commitCacheList.length; i++) {
             if (
-                keccak256(abi.encode(g.commitCache[i].commitResult)) ==
+                keccak256(abi.encode(g.commitCacheList[i].commitResult)) ==
                 keccak256(abi.encode(commitResult))
             ) {
                 // isExist = true;
-                g.commitCache[i].nodeIdAddress.push(msg.sender);
+                g.commitCacheList[i].nodeIdAddress.push(msg.sender);
                 return true;
             }
         }
@@ -396,18 +416,18 @@ contract Controller is Ownable {
         );
 
         Group memory g = groups[groupIndex];
-        if (g.commitCache.length == 0) {
+        if (g.commitCacheList.length == 0) {
             return (emptyCache);
         }
 
-        if (g.commitCache.length == 1) {
-            return (g.commitCache[0]);
+        if (g.commitCacheList.length == 1) {
+            return (g.commitCacheList[0]);
         }
 
         bool isStrictlyMajorityExist = true;
-        CommitCache memory majorityCommitCache = g.commitCache[0];
-        for (uint256 i = 1; i < g.commitCache.length; i++) {
-            CommitCache memory commitCache = g.commitCache[i];
+        CommitCache memory majorityCommitCache = g.commitCacheList[0];
+        for (uint256 i = 1; i < g.commitCacheList.length; i++) {
+            CommitCache memory commitCache = g.commitCacheList[i];
             if (
                 commitCache.nodeIdAddress.length >
                 majorityCommitCache.nodeIdAddress.length
