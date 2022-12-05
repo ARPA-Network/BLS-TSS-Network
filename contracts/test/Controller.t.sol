@@ -292,7 +292,7 @@ contract ControllerTest is Test {
         controller.postProcessDkg(0, 0); //(groupIndex, groupEpoch))
 
         vm.prank(node4);
-        vm.expectRevert("Node not in group");
+        vm.expectRevert("Node is not a member of the group");
         controller.postProcessDkg(groupIndex, 0); //(groupIndex, groupEpoch))
 
         vm.prank(node1);

@@ -296,12 +296,17 @@ contract Controller is Ownable {
 
         // if not.. call getStrictlyMajorityIdenticalCommitmentResult for the group and check if consensus has been reached.
         if (!g.isStrictlyMajorityConsensusReached) {
-            (
-                bool consensusReached,
-                CommitCache memory identicalCommits
-            ) = getStrictlyMajorityIdenticalCommitmentResult(groupIndex);
+            // (
+            //     bool consensusReached,
+            //     CommitCache memory identicalCommits
+            // ) = getStrictlyMajorityIdenticalCommitmentResult(groupIndex);
 
-            if (consensusReached) {
+            CommitCache
+                memory identicalCommits = getStrictlyMajorityIdenticalCommitmentResult(
+                    groupIndex
+                );
+
+            if (identicalCommits.nodeIdAddress.length != 0) {
                 // TODO: let last_output = self.last_output as usize; // * What is this?
                 // Get list of majority members with disqualified nodes excluded
                 address[] memory majorityMembers = getMajorityMembers(
@@ -318,6 +323,23 @@ contract Controller is Ownable {
                 }
             }
         }
+
+        // g
+        //     .members[uint256(GetMemberIndex(groupIndex, msg.sender))]
+        //     .partialPublicKey = partialPublicKey;
+
+        // if (!g.isStrictlyMajorityConsensusReached) {
+        //     CommitCache
+        //         memory identicalCommits = getStrictlyMajorityIdenticalCommitmentResult(
+        //             groupIndex
+        //         );
+
+        //     if (identicalCommits.nodeIdAddress.length != 0) {
+        //         if (identicalCommits.nodeIdAddress.length >= g.threshold) {
+        //             g.isStrictlyMajorityConsensusReached = true;
+        //         }
+        //     }
+        // }
     }
 
     // function getMajorityMembers iterates through the members of a group and returns a list of members that are not in the list of disqualified nodes.
@@ -366,21 +388,20 @@ contract Controller is Ownable {
     function getStrictlyMajorityIdenticalCommitmentResult(uint256 groupIndex)
         internal
         view
-        returns (bool, CommitCache memory)
+        returns (CommitCache memory)
     {
+        CommitCache memory emptyCache = CommitCache(
+            new address[](0),
+            CommitResult(0, "", new address[](0))
+        );
+
         Group memory g = groups[groupIndex];
         if (g.commitCache.length == 0) {
-            return (
-                false,
-                CommitCache(
-                    new address[](0),
-                    CommitResult(0, "", new address[](0))
-                )
-            );
+            return (emptyCache);
         }
 
         if (g.commitCache.length == 1) {
-            return (true, g.commitCache[0]);
+            return (g.commitCache[0]);
         }
 
         bool isStrictlyMajorityExist = true;
@@ -400,7 +421,12 @@ contract Controller is Ownable {
                 isStrictlyMajorityExist = false;
             }
         }
-        return (isStrictlyMajorityExist, majorityCommitCache);
+
+        if (!isStrictlyMajorityExist) {
+            return (emptyCache);
+        }
+
+        return (majorityCommitCache);
     }
 
     // ! Post Proccess DKG
