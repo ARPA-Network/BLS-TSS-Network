@@ -165,6 +165,27 @@ contract Controller is Ownable {
         return groupSize / 2 + 1;
     }
 
+    // ! Rust dkgtask struct
+    // struct DKGTask {
+    //     group_index: usize,
+    //     epoch: usize,
+    //     size: usize,
+    //     threshold: usize,
+    //     members: BTreeMap<String, usize>,
+    //     assignment_block_height: usize,
+    //     coordinator_address: String,
+    // }
+
+    event dkgTask(
+        uint256 _groupIndex,
+        uint256 _epoch,
+        uint256 _size,
+        uint256 _threshold,
+        address[] _members,
+        uint256 _assignmentBlockHeight,
+        address _coordinatorAddress
+    );
+
     function emitGroupEvent(uint256 groupIndex) internal {
         require(groups[groupIndex].index != 0, "Group does not exist");
 
@@ -194,8 +215,15 @@ contract Controller is Ownable {
         coordinator.initialize(groupNodes, groupKeys);
 
         // TODO: Emit event
-        // dkgtask = {}
-        // emit_dkg_task (dkg_task) -> this let nodes know to start DKG with the coordinator
+        emit dkgTask(
+            g.index,
+            g.epoch,
+            g.size,
+            g.threshold,
+            groupNodes,
+            block.number,
+            address(coordinator)
+        );
     }
 
     // ! Commit DKG
