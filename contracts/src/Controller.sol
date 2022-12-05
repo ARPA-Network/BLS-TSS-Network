@@ -297,57 +297,7 @@ contract Controller is Ownable {
                 .partialPublicKey = partialPublicKey;
         }
 
-        // if not.. call getStrictlyMajorityIdenticalCommitmentResult for the group and check if consensus has been reached.
-        if (!g.isStrictlyMajorityConsensusReached) {
-            CommitCache
-                memory identicalCommits = getStrictlyMajorityIdenticalCommitmentResult(
-                    groupIndex
-                );
-
-            if (identicalCommits.nodeIdAddress.length != 0) {
-                // TODO: let last_output = self.last_output as usize; // * What is this?
-                // Get list of majority members with disqualified nodes excluded
-                address[] memory majorityMembers = getMajorityMembers(
-                    groupIndex,
-                    identicalCommits.commitResult.disqualifiedNodes
-                );
-                if (majorityMembers.length >= g.threshold) {
-                    g.isStrictlyMajorityConsensusReached = true;
-                    g.size -= identicalCommits
-                        .commitResult
-                        .disqualifiedNodes
-                        .length;
-                    g.publicKey = identicalCommits.commitResult.publicKey;
-
-                    //! Did my best here, but I think it's not quite there.
-                    // Is majorityMembers the same at group.commitCache in the rust code?
-                    // update partial public key of all non-disqualified members
-                    g
-                        .members[
-                            uint256(GetMemberIndex(groupIndex, msg.sender))
-                        ]
-                        .partialPublicKey = partialPublicKey;
-                    for (uint256 i = 0; i < majorityMembers.length; i++) {
-                        g
-                            .members[
-                                uint256(
-                                    GetMemberIndex(
-                                        groupIndex,
-                                        majorityMembers[i]
-                                    )
-                                )
-                            ]
-                            .partialPublicKey = partialPublicKey;
-                    }
-                }
-            }
-        }
-
-        // This works... the above fails.
-        // g
-        //     .members[uint256(GetMemberIndex(groupIndex, msg.sender))]
-        //     .partialPublicKey = partialPublicKey;
-
+        // // if not.. call getStrictlyMajorityIdenticalCommitmentResult for the group and check if consensus has been reached.
         // if (!g.isStrictlyMajorityConsensusReached) {
         //     CommitCache
         //         memory identicalCommits = getStrictlyMajorityIdenticalCommitmentResult(
@@ -355,11 +305,61 @@ contract Controller is Ownable {
         //         );
 
         //     if (identicalCommits.nodeIdAddress.length != 0) {
-        //         if (identicalCommits.nodeIdAddress.length >= g.threshold) {
+        //         // TODO: let last_output = self.last_output as usize; // * What is this?
+        //         // Get list of majority members with disqualified nodes excluded
+        //         address[] memory majorityMembers = getMajorityMembers(
+        //             groupIndex,
+        //             identicalCommits.commitResult.disqualifiedNodes
+        //         );
+        //         if (majorityMembers.length >= g.threshold) {
         //             g.isStrictlyMajorityConsensusReached = true;
+        //             g.size -= identicalCommits
+        //                 .commitResult
+        //                 .disqualifiedNodes
+        //                 .length;
+        //             g.publicKey = identicalCommits.commitResult.publicKey;
+
+        //             //! Did my best here, but I think it's not quite there.
+        //             // Is majorityMembers the same at group.commitCache in the rust code?
+        //             // update partial public key of all non-disqualified members
+        //             g
+        //                 .members[
+        //                     uint256(GetMemberIndex(groupIndex, msg.sender))
+        //                 ]
+        //                 .partialPublicKey = partialPublicKey;
+        //             for (uint256 i = 0; i < majorityMembers.length; i++) {
+        //                 g
+        //                     .members[
+        //                         uint256(
+        //                             GetMemberIndex(
+        //                                 groupIndex,
+        //                                 majorityMembers[i]
+        //                             )
+        //                         )
+        //                     ]
+        //                     .partialPublicKey = partialPublicKey;
+        //             }
         //         }
         //     }
         // }
+
+        // This works... the above fails.
+        g
+            .members[uint256(GetMemberIndex(groupIndex, msg.sender))]
+            .partialPublicKey = partialPublicKey;
+
+        if (!g.isStrictlyMajorityConsensusReached) {
+            CommitCache
+                memory identicalCommits = getStrictlyMajorityIdenticalCommitmentResult(
+                    groupIndex
+                );
+
+            if (identicalCommits.nodeIdAddress.length != 0) {
+                if (identicalCommits.nodeIdAddress.length >= g.threshold) {
+                    g.isStrictlyMajorityConsensusReached = true;
+                }
+            }
+        }
     }
 
     // function getMajorityMembers iterates through the members of a group and returns a list of members that are not in the list of disqualified nodes.
