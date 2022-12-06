@@ -28,4 +28,4 @@ jobs:
           ref: ${{ github.event.pull_request.head.sha }}
           fetch-depth: 2
       - name: Run tests
-        run: cargo test --lib -- --test-threads=1
+        run: cargo test --all -- --test-threads=1 --nocapture
