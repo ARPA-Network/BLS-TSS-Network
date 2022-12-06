@@ -24,7 +24,7 @@ solidity/build
 .vscode
 .idea
 
-**/log
+/log/
 
 **/contract_stub
 **/rpc_stub
