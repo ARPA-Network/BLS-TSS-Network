@@ -4,7 +4,7 @@ use serde::{ser::Serialize, ser::SerializeMap, Serializer};
 use std::sync::Mutex;
 
 pub static SL: SimpleLogger = SimpleLogger {
-    log_level: Level::Trace,
+    log_level: Level::Debug,
     message: Mutex::new(vec![]),
 };
 

@@ -5,6 +5,7 @@ mod tests {
     use crate::logger::{self, SimpleLogger, SL};
     use arpa_node_log::LogModel;
     use arpa_node_log_impl::log_function;
+    use async_trait::async_trait;
     use log::debug;
     use std::sync::Once;
 
@@ -45,16 +46,16 @@ mod tests {
     }
 
     #[log_function]
-    fn return_match_expr(_a: usize) -> usize {
-        match 1 > 0 {
+    fn return_match_expr(a: usize) -> usize {
+        match a > 0 {
             true => 1,
             false => 0,
         }
     }
 
     #[log_function("ignore-return")]
-    fn ignore_return(a: usize, b: usize) -> usize {
-        a + b
+    fn ignore_return(a: usize) -> usize {
+        a
     }
 
     #[log_function]
@@ -62,6 +63,21 @@ mod tests {
         std::fs::read_to_string("noexist")?;
 
         Ok(())
+    }
+
+    struct Dummy {}
+
+    #[async_trait]
+    trait AsyncTest {
+        async fn test_async(&self, a: usize) -> usize;
+    }
+
+    #[async_trait]
+    impl AsyncTest for Dummy {
+        #[log_function]
+        async fn test_async(&self, a: usize) -> usize {
+            a
+        }
     }
 
     static START: Once = Once::new();
@@ -126,16 +142,16 @@ mod tests {
     #[test]
     fn test_return_match_expr() {
         setup_tests();
-        return_match_expr(0);
-        let expected = build_expected_log("return_match_expr", &["_a: 0"], "1");
+        return_match_expr(100);
+        let expected = build_expected_log("return_match_expr", &["a: 100"], "1");
         assert_eq!(expected, LOGGER.last_message().unwrap());
     }
 
     #[test]
     fn test_ignore_return() {
         setup_tests();
-        ignore_return(1, 2);
-        let expected = build_expected_log("ignore_return", &["a: 1", "b: 2"], "\"ignored\"");
+        ignore_return(1);
+        let expected = build_expected_log("ignore_return", &["a: 1"], "\"ignored\"");
         assert_eq!(expected, LOGGER.last_message().unwrap());
     }
 
@@ -152,10 +168,22 @@ mod tests {
         assert_eq!(expected, LOGGER.last_message().unwrap());
     }
 
+    #[tokio::test]
+    async fn test_async_by_async_trait() {
+        setup_tests();
+        let dummy = Dummy {};
+        dummy.test_async(1).await;
+        let expected = build_expected_log("test_async", &["a: 1"], "1");
+        assert_eq!(expected, LOGGER.last_message().unwrap());
+    }
+
     fn build_expected_log(fn_name: &str, fn_args: &[&str], fn_return: &str) -> String {
         let log = LogModel {
             fn_name,
-            fn_args,
+            fn_args: &fn_args
+                .iter()
+                .map(|s| s.to_string())
+                .collect::<Vec<String>>(),
             fn_return,
         };
         let expected = format!(

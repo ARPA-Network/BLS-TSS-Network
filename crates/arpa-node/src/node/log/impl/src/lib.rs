@@ -7,14 +7,17 @@ use syn::{
     punctuated::Punctuated,
     spanned::Spanned,
     token::{Comma, Semi},
-    AttributeArgs, Expr, FnArg, ItemFn, Lit, NestedMeta, Pat, Stmt,
+    AttributeArgs, Expr, FnArg, GenericParam, ItemFn, Lit, NestedMeta, Pat, Stmt,
 };
 
 struct FunctionLogVisitor {
     name: Ident,
     ignore_return: bool,
-    /// We don't want add log before expr stmt in sub block
-    current_block_count: u32,
+    /// support async function by `#[async_trait]`
+    async_trait: bool,
+    /// we don't want add log before returning in sub block or sub closure/async block
+    current_block_count: i32,
+    current_closure_or_async_block_count: i32,
     /// deal with no explicitly return stmt for () as return type
     has_return_stmt: bool,
 }
@@ -44,8 +47,8 @@ macro_rules! macro_error {
 /// Notes:
 /// 1. Input and return type need to implement `Debug`.
 /// 2. When dealing with async function, using `#![feature(async_fn_in_trait)]` is recommended.
-/// However there is an option as `log_function("ignore-return")` to ignore printing return value
-///  so that it can be compatible with `#[async_trait]`(mainly for conflicting order of attribute expansion).
+/// Also this is compatible with `#[async_trait]`.
+/// 3. There is an option as `log_function("ignore-return")` to ignore printing return value.
 #[proc_macro_attribute]
 pub fn log_function(attr: TokenStream, input: TokenStream) -> TokenStream {
     // ItemFn seems OK for impl function perhaps for they both have sig and block.
@@ -54,6 +57,11 @@ pub fn log_function(attr: TokenStream, input: TokenStream) -> TokenStream {
     let fn_args = fn_decl.sig.inputs.clone();
     let fn_sig = &fn_decl.sig;
     let fn_stmts = &fn_decl.block.stmts;
+
+    let fn_async_trait = fn_decl.sig.generics.params.iter().any(|p| match p {
+        GenericParam::Lifetime(x) => x.lifetime.ident == "async_trait",
+        _ => false,
+    });
 
     let args = parse_macro_input!(attr as AttributeArgs);
     if args.len() > 1 {
@@ -82,7 +90,9 @@ pub fn log_function(attr: TokenStream, input: TokenStream) -> TokenStream {
     let mut visitor = FunctionLogVisitor {
         name: fn_ident.clone(),
         ignore_return,
+        async_trait: fn_async_trait,
         current_block_count: 0,
+        current_closure_or_async_block_count: 0,
         has_return_stmt: false,
     };
 
@@ -119,7 +129,7 @@ pub fn log_function(attr: TokenStream, input: TokenStream) -> TokenStream {
 
 fn generate_args_text(fn_args: Punctuated<FnArg, Comma>) -> TokenStream2 {
     let mut args = quote! {
-        let mut __args: Vec<&str> = vec![];
+        let mut __args: Vec<String> = vec![];
     };
     for arg in fn_args {
         if let FnArg::Typed(a) = arg {
@@ -129,7 +139,7 @@ fn generate_args_text(fn_args: Punctuated<FnArg, Comma>) -> TokenStream2 {
             };
             let arg_text = quote! {
                 let __arg = format!("{}: {:?}", stringify!(#ident), #ident);
-                __args.push(&__arg);
+                __args.push(__arg);
             };
             args.extend(arg_text);
         }
@@ -175,6 +185,21 @@ impl FunctionLogVisitor {
             }
         )
     }
+
+    fn insert_log_and_fold_expr_stmt(&mut self, e: Expr) -> Stmt {
+        if !self.async_trait && self.current_block_count == 0 {
+            self.has_return_stmt = true;
+            let log = self.generate_log();
+            let expr = fold::fold_expr(self, e);
+            parse_quote!({
+                let __res = #expr;
+                #log
+                __res
+            })
+        } else {
+            fold::fold_stmt(self, Stmt::Expr(e))
+        }
+    }
 }
 
 impl Fold for FunctionLogVisitor {
@@ -194,21 +219,25 @@ impl Fold for FunctionLogVisitor {
                 res
             }
             Expr::Return(e) => {
-                self.has_return_stmt = true;
-                let log = self.generate_log();
-                if let Some(v) = e.expr {
-                    let expr = fold::fold_expr(self, *v);
-                    parse_quote!({
-                        let __res = #expr;
-                        #log
-                        return __res;
-                    })
+                if self.current_closure_or_async_block_count == 0 {
+                    self.has_return_stmt = true;
+                    let log = self.generate_log();
+                    if let Some(v) = e.expr {
+                        let expr = fold::fold_expr(self, *v);
+                        parse_quote!({
+                            let __res = #expr;
+                            #log
+                            return __res;
+                        })
+                    } else {
+                        parse_quote!({
+                            let __res = "nothing";
+                            #log
+                            return;
+                        })
+                    }
                 } else {
-                    parse_quote!({
-                        let __res = "nothing";
-                        #log
-                        return;
-                    })
+                    fold::fold_expr(self, Expr::Return(e))
                 }
             }
             Expr::Try(e) => {
@@ -217,6 +246,34 @@ impl Fold for FunctionLogVisitor {
                     #expr_try
                 )
             }
+            // clone __args before move block
+            Expr::Async(e) => {
+                if e.capture.is_some() {
+                    self.current_closure_or_async_block_count += 1;
+                    let expr = fold::fold_expr_async(self, e);
+                    self.current_closure_or_async_block_count -= 1;
+                    parse_quote!({
+                        let __args = __args.clone();
+                        #expr
+                    })
+                } else {
+                    fold::fold_expr(self, Expr::Async(e))
+                }
+            }
+            // clone __args before move block
+            Expr::Closure(e) => {
+                if e.capture.is_some() {
+                    self.current_closure_or_async_block_count += 1;
+                    let expr = fold::fold_expr_closure(self, e);
+                    self.current_closure_or_async_block_count -= 1;
+                    parse_quote!({
+                        let __args = __args.clone();
+                        #expr
+                    })
+                } else {
+                    fold::fold_expr(self, Expr::Closure(e))
+                }
+            }
             _ => fold::fold_expr(self, e),
         }
     }
@@ -224,11 +281,43 @@ impl Fold for FunctionLogVisitor {
     fn fold_stmt(&mut self, s: Stmt) -> Stmt {
         match s {
             Stmt::Expr(e) => match e {
+                // ignore log on Box::pin in async_trait attribute macro
+                Expr::Call(c) => match *c.func.clone() {
+                    Expr::Path(p) => {
+                        let first = p.path.segments.first();
+                        let last = p.path.segments.last();
+                        if self.async_trait
+                            && first.is_some()
+                            && first.unwrap().ident == "Box"
+                            && last.is_some()
+                            && last.unwrap().ident == "pin"
+                        {
+                            fold::fold_stmt(self, Stmt::Expr(Expr::Call(c)))
+                        } else {
+                            self.insert_log_and_fold_expr_stmt(Expr::Call(c))
+                        }
+                    }
+                    _ => self.insert_log_and_fold_expr_stmt(Expr::Call(c)),
+                },
+                // log on __ret in async_trait attribute macro
+                Expr::Path(p) => {
+                    let ident = p.path.get_ident();
+                    if self.async_trait && ident.is_some() && *ident.unwrap() == "__ret" {
+                        self.has_return_stmt = true;
+                        let log = self.generate_log();
+                        parse_quote!({
+                            let __res = __ret;
+                            #log
+                            __res
+                        })
+                    } else {
+                        self.insert_log_and_fold_expr_stmt(Expr::Path(p))
+                    }
+                }
                 // These exprs should be common for return value.
                 Expr::Array(_)
                 | Expr::Await(_)
                 | Expr::Binary(_)
-                | Expr::Call(_)
                 | Expr::Closure(_)
                 | Expr::Cast(_)
                 | Expr::Field(_)
@@ -245,26 +334,14 @@ impl Fold for FunctionLogVisitor {
                 | Expr::Repeat(_)
                 | Expr::Struct(_)
                 | Expr::Tuple(_)
-                | Expr::Unary(_) => {
-                    if self.current_block_count == 0 {
-                        self.has_return_stmt = true;
-                        let log = self.generate_log();
-                        let expr = fold::fold_expr(self, e);
-                        parse_quote!({
-                            let __res = #expr;
-                            #log
-                            __res
-                        })
-                    } else {
-                        fold::fold_stmt(self, Stmt::Expr(e))
-                    }
-                }
+                | Expr::Unary(_) => self.insert_log_and_fold_expr_stmt(e),
                 Expr::Block(_) => {
                     self.current_block_count += 1;
                     let res = fold::fold_stmt(self, Stmt::Expr(e));
                     self.current_block_count -= 1;
                     res
                 }
+
                 _ => fold::fold_stmt(self, Stmt::Expr(e)),
             },
             Stmt::Semi(e, semi) => match e {
