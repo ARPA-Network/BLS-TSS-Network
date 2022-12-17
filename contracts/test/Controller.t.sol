@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity ^0.8.15;
+pragma experimental ABIEncoderV2;
 
 import "forge-std/Test.sol";
 import {Coordinator} from "src/Coordinator.sol";
@@ -31,7 +32,7 @@ contract ControllerTest is Test {
     bytes pubkey3 = hex"DECADE03";
     bytes pubkey4 = hex"DECADE04";
 
-    uint256 registerCount; // track number of registered nodes for tests
+    // uint256 registerCount; // track number of registered nodes for tests
 
     function setUp() public {
         // deal nodes
@@ -46,7 +47,7 @@ contract ControllerTest is Test {
         vm.prank(owner);
         controller = new Controller();
 
-        registerCount = 0; // reset registered node count to 0
+        // registerCount = 0; // reset registered node count to 0
     }
 
     function testNodeRegister() public {
@@ -154,6 +155,15 @@ contract ControllerTest is Test {
         assertEq(coordinator.inPhase(), -1);
     }
 
+    // ! new
+    struct CommitDkgParams {
+        uint256 groupIndex;
+        uint256 groupEpoch;
+        bytes publicKey;
+        bytes partialPublicKey;
+        address[] disqualifiedNodes;
+    }
+
     function testCommitDkg() public {
         testEmitGroupEvent();
 
@@ -167,97 +177,107 @@ contract ControllerTest is Test {
         bytes memory publicKey = hex"C0FFEE";
         address[] memory disqualifiedNodes = new address[](0);
 
+        // ! new
+        // Fail if group does not exist
         vm.prank(node1);
         vm.expectRevert("Group does not exist");
-        controller.commitDkg(
-            2,
+        Controller.CommitDkgParams memory params = Controller.CommitDkgParams(
+            999, // wrong group index
             groupEpoch,
             publicKey,
             partialPublicKey,
             disqualifiedNodes
         );
+        controller.commitDkg(params);
 
+        // Fail if group does not match Controller Group Epoch
         vm.prank(node1);
         vm.expectRevert(
-            "Caller Group epoch does not match Controller Group epoch"
+            "Caller Group epoch does not match controller Group epoch"
         );
-        controller.commitDkg(
+        params = Controller.CommitDkgParams(
             groupIndex,
-            3,
+            999, //  wrong epoch
             publicKey,
             partialPublicKey,
             disqualifiedNodes
         );
+        controller.commitDkg(params);
 
+        // Fail if node is not a member of the group
         vm.prank(node5);
         vm.expectRevert("Node is not a member of the group");
-        controller.commitDkg(
+        params = Controller.CommitDkgParams(
             groupIndex,
             groupEpoch,
             publicKey,
             partialPublicKey,
             disqualifiedNodes
         );
+        controller.commitDkg(params);
 
         // Succesful Commit: Node 1
         vm.prank(node1);
-        controller.commitDkg(
+        params = Controller.CommitDkgParams(
             groupIndex,
             groupEpoch,
             publicKey,
             partialPublicKey,
             disqualifiedNodes
         );
+        controller.commitDkg(params);
 
-        vm.prank(node1);
+        //  Fail if CommitCache already contains PartialKey for this node
+        vm.prank(node2);
         vm.expectRevert(
             "CommitCache already contains PartialKey for this node"
         );
-        controller.commitDkg(
+        params = Controller.CommitDkgParams(
             groupIndex,
             groupEpoch,
             publicKey,
             partialPublicKey,
             disqualifiedNodes
         );
+        controller.commitDkg(params);
 
-        assertEq(checkIsStrictlyMajorityConsensusReached(groupIndex), false);
+        // vm.prank(node1);
+        // controller.commitDkg(
+        //     groupIndex,
+        //     groupEpoch,
+        //     publicKey,
+        //     partialPublicKey,
+        //     disqualifiedNodes
+        // );
 
-        // Succesful Commit: Node 2
-        vm.prank(node2);
-        controller.commitDkg(
-            groupIndex,
-            groupEpoch,
-            publicKey,
-            partialPublicKey,
-            disqualifiedNodes
-        );
+        // assertEq(checkIsStrictlyMajorityConsensusReached(groupIndex), false);
 
-        assertEq(checkIsStrictlyMajorityConsensusReached(groupIndex), false);
+        // * Succesful Commit: Node 2
+        // vm.prank(node2);
+        // controller.commitDkg(
+        //     groupIndex,
+        //     groupEpoch,
+        //     publicKey,
+        //     partialPublicKey,
+        //     disqualifiedNodes
+        // );
 
-        // Succesful Commit: Node 3
-        vm.prank(node3);
-        controller.commitDkg(
-            groupIndex,
-            groupEpoch,
-            publicKey,
-            partialPublicKey,
-            disqualifiedNodes
-        );
+        // assertEq(checkIsStrictlyMajorityConsensusReached(groupIndex), false);
 
-        assertEq(checkIsStrictlyMajorityConsensusReached(groupIndex), true);
+        // * Succesful Commit: Node 3
+        // vm.prank(node3);
+        // controller.commitDkg(
+        //     groupIndex,
+        //     groupEpoch,
+        //     publicKey,
+        //     partialPublicKey,
+        //     disqualifiedNodes
+        // );
+
+        // assertEq(checkIsStrictlyMajorityConsensusReached(groupIndex), true);
+        // printGroupInfo(groupIndex);
+
         printGroupInfo(groupIndex);
-
-        vm.roll(startBlock + 1 + 4 * PHASE_DURATION); // Put the coordinator in phase -1
-        vm.prank(node1);
-        vm.expectRevert("DKG has ended");
-        controller.commitDkg(
-            groupIndex,
-            groupEpoch,
-            publicKey,
-            partialPublicKey,
-            disqualifiedNodes
-        );
     }
 
     function testIsPartialKeyRegistered() public {
@@ -318,13 +338,13 @@ contract ControllerTest is Test {
 
     // ! Helper function for debugging below
     function printGroupInfo(uint256 groupIndex) public {
-        emit log(
-            string.concat(
-                "\n",
-                Strings.toString(registerCount++),
-                " Nodes Registered:"
-            )
-        );
+        // emit log(
+        //     string.concat(
+        //         "\n",
+        //         Strings.toString(registerCount++),
+        //         " Nodes Registered:"
+        //     )
+        // );
 
         Controller.Group memory g = controller.getGroup(groupIndex);
 
@@ -391,13 +411,13 @@ contract ControllerTest is Test {
     }
 
     function printNodeInfo(address nodeAddress) public {
-        emit log(
-            string.concat(
-                "\n",
-                Strings.toString(registerCount++),
-                " Nodes Registered:"
-            )
-        );
+        // emit log(
+        //     string.concat(
+        //         "\n",
+        //         Strings.toString(registerCount++),
+        //         " Nodes Registered:"
+        //     )
+        // );
 
         Controller.Node memory n = controller.getNode(nodeAddress);
 

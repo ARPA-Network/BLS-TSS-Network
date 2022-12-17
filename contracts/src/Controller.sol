@@ -259,56 +259,60 @@ contract Controller is Ownable {
         return false;
     }
 
-    function commitDkg(
-        uint256 groupIndex,
-        uint256 groupEpoch,
-        bytes calldata publicKey,
-        bytes calldata partialPublicKey,
-        address[] calldata disqualifiedNodes
-    ) external {
+    struct CommitDkgParams {
+        uint256 groupIndex;
+        uint256 groupEpoch;
+        bytes publicKey;
+        bytes partialPublicKey;
+        address[] disqualifiedNodes;
+    }
+
+    function commitDkg(CommitDkgParams memory params) external {
         // require group exists
-        require(groups[groupIndex].index != 0, "Group does not exist");
+        require(groups[params.groupIndex].index != 0, "Group does not exist");
 
         // require publickey and partial public key are not empty  / are the right format
 
         // require coordinator exists
         require(
-            coordinators[groupIndex] != address(0),
+            coordinators[params.groupIndex] != address(0),
             "Coordinator not found for groupIndex"
         );
 
         // Ensure DKG Proccess is in Phase
-        ICoordinator coordinator = ICoordinator(coordinators[groupIndex]);
+        ICoordinator coordinator = ICoordinator(
+            coordinators[params.groupIndex]
+        );
         // require(coordinator.inPhase() != -1, "DKG still in progress!"); // require coordinator to be in phase -1 (dkg end)
         require(coordinator.inPhase() != -1, "DKG has ended"); // require coordinator to still be in DKG Phase
 
         // Ensure Eopch is correct,  Node is in group, and has not already submitted a partial key
-        Group storage g = groups[groupIndex]; // get group from group index
+        Group storage g = groups[params.groupIndex]; // get group from group index
         require(
-            groupEpoch == g.epoch,
-            "Caller Group epoch does not match Controller Group epoch"
+            params.groupEpoch == g.epoch,
+            "Caller Group epoch does not match controller Group epoch"
         );
 
         require(
-            GetMemberIndex(groupIndex, msg.sender) != -1, // -1 if node is not member of group
+            GetMemberIndex(params.groupIndex, msg.sender) != -1, // -1 if node is not member of group
             "Node is not a member of the group"
         );
 
         // uint256 memberIndex = uint256(GetMemberIndex(groupIndex, msg.sender));
 
         require(
-            !PartialKeyRegistered(groupIndex, msg.sender),
+            !PartialKeyRegistered(params.groupIndex, msg.sender),
             "CommitCache already contains PartialKey for this node"
         );
 
         // Populate CommitResult / CommitCache
         CommitResult memory commitResult = CommitResult({
-            groupEpoch: groupEpoch,
-            publicKey: publicKey,
-            disqualifiedNodes: disqualifiedNodes
+            groupEpoch: params.groupEpoch,
+            publicKey: params.publicKey,
+            disqualifiedNodes: params.disqualifiedNodes
         });
 
-        if (!tryAddToExistingCommitCache(groupIndex, commitResult)) {
+        if (!tryAddToExistingCommitCache(params.groupIndex, commitResult)) {
             CommitCache memory commitCache = CommitCache({
                 commitResult: commitResult,
                 nodeIdAddress: new address[](1)
@@ -321,65 +325,69 @@ contract Controller is Ownable {
         // if consensus previously reached, update the partial public key of the given node's member entry in the group
         if (g.isStrictlyMajorityConsensusReached) {
             g
-            .members[uint256(GetMemberIndex(groupIndex, msg.sender))] // uint256 memberIndex
-                .partialPublicKey = partialPublicKey;
+            .members[uint256(GetMemberIndex(params.groupIndex, msg.sender))] // uint256 memberIndex
+                .partialPublicKey = params.partialPublicKey;
         }
 
-        // // if not.. call getStrictlyMajorityIdenticalCommitmentResult for the group and check if consensus has been reached.
-        // if (!g.isStrictlyMajorityConsensusReached) {
-        //     CommitCache
-        //         memory identicalCommits = getStrictlyMajorityIdenticalCommitmentResult(
-        //             groupIndex
-        //         );
+        // ! start
+        // if not.. call getStrictlyMajorityIdenticalCommitmentResult for the group and check if consensus has been reached.
+        if (!g.isStrictlyMajorityConsensusReached) {
+            CommitCache
+                memory identicalCommits = getStrictlyMajorityIdenticalCommitmentResult(
+                    params.groupIndex
+                );
 
-        //     if (identicalCommits.nodeIdAddress.length != 0) {
-        //         // TODO: let last_output = self.last_output as usize; // * What is this?
-        //         // Get list of majority members with disqualified nodes excluded
-        //         address[] memory majorityMembers = getMajorityMembers(
-        //             groupIndex,
-        //             identicalCommits.commitResult.disqualifiedNodes
-        //         );
-        //         if (majorityMembers.length >= g.threshold) {
-        //             g.isStrictlyMajorityConsensusReached = true;
-        //             g.size -= identicalCommits
-        //                 .commitResult
-        //                 .disqualifiedNodes
-        //                 .length;
-        //             g.publicKey = identicalCommits.commitResult.publicKey;
+            if (identicalCommits.nodeIdAddress.length != 0) {
+                // TODO: let last_output = self.last_output as usize; // * What is this?
+                // Get list of majority members with disqualified nodes excluded
+                address[] memory majorityMembers = getMajorityMembers(
+                    params.groupIndex,
+                    identicalCommits.commitResult.disqualifiedNodes
+                );
+                if (majorityMembers.length >= g.threshold) {
+                    g.isStrictlyMajorityConsensusReached = true;
+                    g.size -= identicalCommits
+                        .commitResult
+                        .disqualifiedNodes
+                        .length;
+                    g.publicKey = identicalCommits.commitResult.publicKey;
 
-        //             //! Did my best here, but I think it's not quite there.
-        //             // Is majorityMembers the same at group.commitCache in the rust code?
-        //             // update partial public key of all non-disqualified members
-        //             g
-        //                 .members[
-        //                     uint256(GetMemberIndex(groupIndex, msg.sender))
-        //                 ]
-        //                 .partialPublicKey = partialPublicKey;
-        //             for (uint256 i = 0; i < majorityMembers.length; i++) {
-        //                 g
-        //                     .members[
-        //                         uint256(
-        //                             GetMemberIndex(
-        //                                 groupIndex,
-        //                                 majorityMembers[i]
-        //                             )
-        //                         )
-        //                     ]
-        //                     .partialPublicKey = partialPublicKey;
-        //             }
-        //         }
-        //     }
-        // }
+                    //! Did my best here, but I think it's not quite there.
+                    // Is majorityMembers the same at group.commitCache in the rust code?
+                    // update partial public key of all non-disqualified members
+                    g
+                        .members[
+                            uint256(
+                                GetMemberIndex(params.groupIndex, msg.sender)
+                            )
+                        ]
+                        .partialPublicKey = params.partialPublicKey;
+                    for (uint256 i = 0; i < majorityMembers.length; i++) {
+                        g
+                            .members[
+                                uint256(
+                                    GetMemberIndex(
+                                        params.groupIndex,
+                                        majorityMembers[i]
+                                    )
+                                )
+                            ]
+                            .partialPublicKey = params.partialPublicKey;
+                    }
+                }
+            }
+        }
+        // ! end
 
         // This works... the above fails.
         g
-            .members[uint256(GetMemberIndex(groupIndex, msg.sender))]
-            .partialPublicKey = partialPublicKey;
+            .members[uint256(GetMemberIndex(params.groupIndex, msg.sender))]
+            .partialPublicKey = params.partialPublicKey;
 
         if (!g.isStrictlyMajorityConsensusReached) {
             CommitCache
                 memory identicalCommits = getStrictlyMajorityIdenticalCommitmentResult(
-                    groupIndex
+                    params.groupIndex
                 );
 
             if (identicalCommits.nodeIdAddress.length != 0) {
