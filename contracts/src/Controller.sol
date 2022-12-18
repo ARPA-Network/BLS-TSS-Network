@@ -299,7 +299,7 @@ contract Controller is Ownable {
         );
 
         // uint256 memberIndex = uint256(GetMemberIndex(groupIndex, msg.sender));
-
+        // ! something fishy
         require(
             !PartialKeyRegistered(params.groupIndex, msg.sender),
             "CommitCache already contains PartialKey for this node"
@@ -330,53 +330,53 @@ contract Controller is Ownable {
         }
 
         // ! start
-        // if not.. call getStrictlyMajorityIdenticalCommitmentResult for the group and check if consensus has been reached.
-        if (!g.isStrictlyMajorityConsensusReached) {
-            CommitCache
-                memory identicalCommits = getStrictlyMajorityIdenticalCommitmentResult(
-                    params.groupIndex
-                );
+        // // if not.. call getStrictlyMajorityIdenticalCommitmentResult for the group and check if consensus has been reached.
+        // if (!g.isStrictlyMajorityConsensusReached) {
+        //     CommitCache
+        //         memory identicalCommits = getStrictlyMajorityIdenticalCommitmentResult(
+        //             params.groupIndex
+        //         );
 
-            if (identicalCommits.nodeIdAddress.length != 0) {
-                // TODO: let last_output = self.last_output as usize; // * What is this?
-                // Get list of majority members with disqualified nodes excluded
-                address[] memory majorityMembers = getMajorityMembers(
-                    params.groupIndex,
-                    identicalCommits.commitResult.disqualifiedNodes
-                );
-                if (majorityMembers.length >= g.threshold) {
-                    g.isStrictlyMajorityConsensusReached = true;
-                    g.size -= identicalCommits
-                        .commitResult
-                        .disqualifiedNodes
-                        .length;
-                    g.publicKey = identicalCommits.commitResult.publicKey;
+        //     if (identicalCommits.nodeIdAddress.length != 0) {
+        //         // TODO: let last_output = self.last_output as usize; // * What is this?
+        //         // Get list of majority members with disqualified nodes excluded
+        //         address[] memory majorityMembers = getMajorityMembers(
+        //             params.groupIndex,
+        //             identicalCommits.commitResult.disqualifiedNodes
+        //         );
+        //         if (majorityMembers.length >= g.threshold) {
+        //             g.isStrictlyMajorityConsensusReached = true;
+        //             g.size -= identicalCommits
+        //                 .commitResult
+        //                 .disqualifiedNodes
+        //                 .length;
+        //             g.publicKey = identicalCommits.commitResult.publicKey;
 
-                    //! Did my best here, but I think it's not quite there.
-                    // Is majorityMembers the same at group.commitCache in the rust code?
-                    // update partial public key of all non-disqualified members
-                    g
-                        .members[
-                            uint256(
-                                GetMemberIndex(params.groupIndex, msg.sender)
-                            )
-                        ]
-                        .partialPublicKey = params.partialPublicKey;
-                    for (uint256 i = 0; i < majorityMembers.length; i++) {
-                        g
-                            .members[
-                                uint256(
-                                    GetMemberIndex(
-                                        params.groupIndex,
-                                        majorityMembers[i]
-                                    )
-                                )
-                            ]
-                            .partialPublicKey = params.partialPublicKey;
-                    }
-                }
-            }
-        }
+        //             //! Did my best here, but I think it's not quite there.
+        //             // Is majorityMembers the same at group.commitCache in the rust code?
+        //             // update partial public key of all non-disqualified members
+        //             g
+        //                 .members[
+        //                     uint256(
+        //                         GetMemberIndex(params.groupIndex, msg.sender)
+        //                     )
+        //                 ]
+        //                 .partialPublicKey = params.partialPublicKey;
+        //             for (uint256 i = 0; i < majorityMembers.length; i++) {
+        //                 g
+        //                     .members[
+        //                         uint256(
+        //                             GetMemberIndex(
+        //                                 params.groupIndex,
+        //                                 majorityMembers[i]
+        //                             )
+        //                         )
+        //                     ]
+        //                     .partialPublicKey = params.partialPublicKey;
+        //             }
+        //         }
+        //     }
+        // }
         // ! end
 
         // This works... the above fails.

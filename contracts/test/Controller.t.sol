@@ -228,7 +228,9 @@ contract ControllerTest is Test {
         controller.commitDkg(params);
 
         //  Fail if CommitCache already contains PartialKey for this node
-        vm.prank(node2);
+        // ! something fishy (new code block breaks this)
+        // ! When node2 is pranked, test should pass but it fails
+        vm.prank(node1); 
         vm.expectRevert(
             "CommitCache already contains PartialKey for this node"
         );
@@ -240,31 +242,31 @@ contract ControllerTest is Test {
             disqualifiedNodes
         );
         controller.commitDkg(params);
+        assertEq(checkIsStrictlyMajorityConsensusReached(groupIndex), false);
 
-        // vm.prank(node1);
-        // controller.commitDkg(
-        //     groupIndex,
-        //     groupEpoch,
-        //     publicKey,
-        //     partialPublicKey,
-        //     disqualifiedNodes
-        // );
-
-        // assertEq(checkIsStrictlyMajorityConsensusReached(groupIndex), false);
-
-        // * Succesful Commit: Node 2
-        // vm.prank(node2);
-        // controller.commitDkg(
-        //     groupIndex,
-        //     groupEpoch,
-        //     publicKey,
-        //     partialPublicKey,
-        //     disqualifiedNodes
-        // );
-
-        // assertEq(checkIsStrictlyMajorityConsensusReached(groupIndex), false);
+        // Succesful Commit: Node 2
+        vm.prank(node2);
+        params = Controller.CommitDkgParams(
+            groupIndex,
+            groupEpoch,
+            publicKey,
+            hex"DECADE22", // partial public key 2
+            disqualifiedNodes
+        );
+        controller.commitDkg(params);
+        assertEq(checkIsStrictlyMajorityConsensusReached(groupIndex), false);
 
         // * Succesful Commit: Node 3
+        vm.prank(node3);
+        params = Controller.CommitDkgParams(
+            groupIndex,
+            groupEpoch,
+            publicKey,
+            hex"DECADE33", // partial public key 2
+            disqualifiedNodes
+        );
+        controller.commitDkg(params);
+        assertEq(checkIsStrictlyMajorityConsensusReached(groupIndex), true);
         // vm.prank(node3);
         // controller.commitDkg(
         //     groupIndex,
@@ -408,6 +410,11 @@ contract ControllerTest is Test {
                 );
             }
         }
+        // emit isStrictlyMajorityConsensusReached
+        emit log_named_uint(
+            "g.isStrictlyMajorityConsensusReached",
+            g.isStrictlyMajorityConsensusReached ? 1 : 0
+        );
     }
 
     function printNodeInfo(address nodeAddress) public {
