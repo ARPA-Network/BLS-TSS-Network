@@ -256,7 +256,7 @@ contract ControllerTest is Test {
         controller.commitDkg(params);
         assertEq(checkIsStrictlyMajorityConsensusReached(groupIndex), false);
 
-        // * Succesful Commit: Node 3
+        // Succesful Commit: Node 3
         vm.prank(node3);
         params = Controller.CommitDkgParams(
             groupIndex,
@@ -267,18 +267,8 @@ contract ControllerTest is Test {
         );
         controller.commitDkg(params);
         assertEq(checkIsStrictlyMajorityConsensusReached(groupIndex), true);
-        // vm.prank(node3);
-        // controller.commitDkg(
-        //     groupIndex,
-        //     groupEpoch,
-        //     publicKey,
-        //     partialPublicKey,
-        //     disqualifiedNodes
-        // );
 
-        // assertEq(checkIsStrictlyMajorityConsensusReached(groupIndex), true);
-        // printGroupInfo(groupIndex);
-
+        // Print group info
         printGroupInfo(groupIndex);
     }
 
