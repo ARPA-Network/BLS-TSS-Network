@@ -124,7 +124,6 @@ impl<
     }
 }
 
-#[async_trait]
 impl<
         N: NodeInfoFetcher + Sync + Send + 'static,
         G: GroupInfoFetcher + GroupInfoUpdater + Sync + Send + 'static,

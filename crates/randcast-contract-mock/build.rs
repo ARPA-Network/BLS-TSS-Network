@@ -11,7 +11,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let mut prost_build = prost_build::Config::new();
 
-    prost_build.btree_map(&["members"]);
+    prost_build.btree_map(["members"]);
 
     tonic_build::configure()
         .out_dir("stub")
