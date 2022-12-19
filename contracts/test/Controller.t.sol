@@ -129,12 +129,12 @@ contract ControllerTest is Test {
     function testGetMemberIndex() public {
         uint256 groupIndex = 1;
 
-        int256 memberIndex = controller.GetMemberIndex(groupIndex, node1);
+        int256 memberIndex = controller.getMemberIndex(groupIndex, node1);
         assertEq(memberIndex, -1);
 
         testEmitGroupEvent();
 
-        memberIndex = controller.GetMemberIndex(groupIndex, node1);
+        memberIndex = controller.getMemberIndex(groupIndex, node1);
         assertEq(memberIndex, 0);
     }
 
@@ -217,6 +217,10 @@ contract ControllerTest is Test {
 
         assertEq(checkIsStrictlyMajorityConsensusReached(groupIndex), false);
 
+        // * Remove
+        printGroupInfo(groupIndex);
+
+
         // Succesful Commit: Node 1
         vm.prank(node1);
         params = Controller.CommitDkgParams(
@@ -228,53 +232,53 @@ contract ControllerTest is Test {
         );
         controller.commitDkg(params);
         assertEq(checkIsStrictlyMajorityConsensusReached(groupIndex), false);
+        printGroupInfo(groupIndex); // ! Print
+
 
         //  Fail if CommitCache already contains PartialKey for this node
-        // ! something fishy (new code block breaks this)
-        // ! When node2 is pranked, test should pass but it fails
-        // vm.prank(node1); 
-        // vm.expectRevert(
-        //     "CommitCache already contains PartialKey for this node"
-        // );
-        // params = Controller.CommitDkgParams(
-        //     groupIndex,
-        //     groupEpoch,
-        //     publicKey,
-        //     partialPublicKey,
-        //     disqualifiedNodes
-        // );
-        // controller.commitDkg(params);
-        // assertEq(checkIsStrictlyMajorityConsensusReached(groupIndex), false);
+        vm.prank(node1); 
+        vm.expectRevert(
+            "CommitCache already contains PartialKey for this node"  // ! PublcKey, not PartialKey? Should we add partialkey to commitresult?
+        );
+        params = Controller.CommitDkgParams(
+            groupIndex,
+            groupEpoch,
+            publicKey,
+            partialPublicKey,
+            disqualifiedNodes
+        );
+        controller.commitDkg(params);
+        assertEq(checkIsStrictlyMajorityConsensusReached(groupIndex), false);
 
-        // // Succesful Commit: Node 2
-        // vm.prank(node2);
-        // params = Controller.CommitDkgParams(
-        //     groupIndex,
-        //     groupEpoch,
-        //     publicKey,
-        //     hex"DECADE22", // partial public key 2
-        //     disqualifiedNodes
-        // );
-        // controller.commitDkg(params);
-        // assertEq(checkIsStrictlyMajorityConsensusReached(groupIndex), false);
+        // Succesful Commit: Node 2
+        vm.prank(node2);
+        params = Controller.CommitDkgParams(
+            groupIndex,
+            groupEpoch,
+            publicKey,
+            hex"DECADE22", // partial public key 2
+            disqualifiedNodes
+        );
+        controller.commitDkg(params);
+        assertEq(checkIsStrictlyMajorityConsensusReached(groupIndex), false);
+        printGroupInfo(groupIndex); // ! Print
 
-        // // Succesful Commit: Node 3
-        // vm.prank(node3);
-        // params = Controller.CommitDkgParams(
-        //     groupIndex,
-        //     groupEpoch,
-        //     publicKey,
-        //     hex"DECADE33", // partial public key 2
-        //     disqualifiedNodes
-        // );
-        // controller.commitDkg(params);
-        // assertEq(checkIsStrictlyMajorityConsensusReached(groupIndex), true);
 
-        // // Print group info
-        printGroupInfo(groupIndex);
+        // Succesful Commit: Node 3
+        vm.prank(node3);
+        params = Controller.CommitDkgParams(
+            groupIndex,
+            groupEpoch,
+            publicKey,
+            hex"DECADE33", // partial public key 2
+            disqualifiedNodes
+        );
+        controller.commitDkg(params);
+        assertEq(checkIsStrictlyMajorityConsensusReached(groupIndex), true);
+        printGroupInfo(groupIndex); // ! Print
     }
 
-    function testGetMajorityMembers() public {
+    function testGetNonDisqualifiedMajorityMembers() public {
         address[] memory nodes = new address[](3);
         nodes[0] = node1;
         nodes[1] = node2;
@@ -283,7 +287,7 @@ contract ControllerTest is Test {
         address[] memory disqualifedNodes = new address[](1);
         disqualifedNodes[0] = node2;
 
-        address[] memory majorityMembers = controller.getMajorityMembers(
+        address[] memory majorityMembers = controller.getNonDisqualifiedMajorityMembers(
             nodes,
             disqualifedNodes
         );
@@ -299,7 +303,7 @@ contract ControllerTest is Test {
         //   .  controller.PartialKeyRegistered(groupIndex, node1, sampleKey),
         //     false
         // );
-        assertEq(controller.PartialKeyRegistered(groupIndex, node1), false);
+        assertEq(controller.partialKeyRegistered(groupIndex, node1), false);
     }
 
     function checkIsStrictlyMajorityConsensusReached(uint256 groupIndex)
@@ -360,6 +364,7 @@ contract ControllerTest is Test {
         Controller.Group memory g = controller.getGroup(groupIndex);
 
         uint256 groupCount = controller.groupCount();
+        emit log("----");
         emit log_named_uint("groupCount", groupCount);
         emit log_named_uint("g.index", g.index);
         emit log_named_uint("g.epoch", g.epoch);

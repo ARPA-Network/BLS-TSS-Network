@@ -227,7 +227,7 @@ contract Controller is Ownable {
     }
 
     // ! Commit DKG
-    function GetMemberIndex(uint256 groupIndex, address nodeIdAddress)
+    function getMemberIndex(uint256 groupIndex, address nodeIdAddress)
         public
         view
         returns (int256 memberIndex)
@@ -241,23 +241,47 @@ contract Controller is Ownable {
         return -1;
     }
 
+
+
+    // ! Partal Key Registered: Old Code.. I think this needs to be changed to look inside the commit cache
     /// Check to see if a group has a partial public key registered for a given node.
-    function PartialKeyRegistered(uint256 groupIndex, address nodeIdAddress)
+    // function partialKeyRegistered(uint256 groupIndex, address nodeIdAddress)
+    //     public
+    //     view
+    //     returns (bool)
+    // {
+    //     Group storage g = groups[groupIndex];
+    //     for (uint256 i = 0; i < g.members.length; i++) {
+    //         if (
+    //             g.members[i].nodeIdAddress == nodeIdAddress &&
+    //             g.members[i].partialPublicKey.length != 0
+    //         ) {
+    //             return true;
+    //         }
+    //     }
+    //     return false;
+    // }
+    // ! New Code ?
+    function partialKeyRegistered(uint256 groupIndex, address nodeIdAddress)
         public
         view
         returns (bool)
     {
         Group storage g = groups[groupIndex];
-        for (uint256 i = 0; i < g.members.length; i++) {
-            if (
-                g.members[i].nodeIdAddress == nodeIdAddress &&
-                g.members[i].partialPublicKey.length != 0
-            ) {
-                return true;
+        for (uint256 i = 0; i < g.commitCacheList.length; i++) {
+            CommitCache memory commitCache = g.commitCacheList[i];
+            for (uint256 j = 0; j < commitCache.nodeIdAddress.length; j++) {
+                if (commitCache.nodeIdAddress[j] == nodeIdAddress) {
+                    CommitResult memory commitResult = commitCache.commitResult;
+                    if (commitResult.publicKey.length != 0) {
+                        return true;
+                    }
+                }
             }
         }
         return false;
     }
+
 
     struct CommitDkgParams {
         uint256 groupIndex;
@@ -294,14 +318,14 @@ contract Controller is Ownable {
         );
 
         require(
-            GetMemberIndex(params.groupIndex, msg.sender) != -1, // -1 if node is not member of group
+            getMemberIndex(params.groupIndex, msg.sender) != -1, // -1 if node is not member of group
             "Node is not a member of the group"
         );
 
-        // uint256 memberIndex = uint256(GetMemberIndex(groupIndex, msg.sender));
+        // uint256 memberIndex = uint256(getMemberIndex(groupIndex, msg.sender));
         // ! something fishy
         require(
-            !PartialKeyRegistered(params.groupIndex, msg.sender),
+            !partialKeyRegistered(params.groupIndex, msg.sender),
             "CommitCache already contains PartialKey for this node"
         );
 
@@ -325,7 +349,7 @@ contract Controller is Ownable {
         // if consensus previously reached, update the partial public key of the given node's member entry in the group
         if (g.isStrictlyMajorityConsensusReached) {
             g
-            .members[uint256(GetMemberIndex(params.groupIndex, msg.sender))] // uint256 memberIndex
+            .members[uint256(getMemberIndex(params.groupIndex, msg.sender))] // uint256 memberIndex
                 .partialPublicKey = params.partialPublicKey;
         }
 
@@ -339,7 +363,7 @@ contract Controller is Ownable {
             if (identicalCommits.nodeIdAddress.length != 0) {
                 // TODO: let last_output = self.last_output as usize; // * What is this?
                 // Get list of majority members with disqualified nodes excluded
-                address[] memory majorityMembers = getMajorityMembers(
+                address[] memory majorityMembers = getNonDisqualifiedMajorityMembers(
                     identicalCommits.nodeIdAddress,
                     identicalCommits.commitResult.disqualifiedNodes
                 );
@@ -359,7 +383,7 @@ contract Controller is Ownable {
                     g
                         .members[
                             uint256(
-                                GetMemberIndex(params.groupIndex, msg.sender)
+                                getMemberIndex(params.groupIndex, msg.sender)
                             )
                         ]
                         .partialPublicKey = params.partialPublicKey;
@@ -367,7 +391,7 @@ contract Controller is Ownable {
                         g
                             .members[
                                 uint256(
-                                    GetMemberIndex(
+                                    getMemberIndex(
                                         params.groupIndex,
                                         majorityMembers[i]
                                     )
@@ -382,7 +406,7 @@ contract Controller is Ownable {
 
         // This works... the above fails.
         // g
-        //     .members[uint256(GetMemberIndex(params.groupIndex, msg.sender))]
+        //     .members[uint256(getMemberIndex(params.groupIndex, msg.sender))]
         //     .partialPublicKey = params.partialPublicKey;
 
         // if (!g.isStrictlyMajorityConsensusReached) {
@@ -421,7 +445,7 @@ contract Controller is Ownable {
 
         bool isStrictlyMajorityExist = true;
         CommitCache memory majorityCommitCache = g.commitCacheList[0];
-        for (uint256 i = 1; i < g.commitCacheList.length; i++) {
+        for (uint256 i = 0; i < g.commitCacheList.length; i++) {
             CommitCache memory commitCache = g.commitCacheList[i];
             if (
                 commitCache.nodeIdAddress.length >
@@ -445,8 +469,8 @@ contract Controller is Ownable {
     }
 
 
-    // function getMajorityMembers iterates through list of members and remove disqualified nodes.
-    function getMajorityMembers(
+    // function getNonDisqualifiedMajorityMembers iterates through list of members and remove disqualified nodes.
+    function getNonDisqualifiedMajorityMembers(
         address[] memory nodeAddresses,
         address[] memory disqualifiedNodes
     ) public pure returns (address[] memory) {
@@ -505,7 +529,7 @@ contract Controller is Ownable {
 
         // require calling node is in group
         require(
-            GetMemberIndex(groupIndex, msg.sender) != -1, // -1 if node is not member of group
+            getMemberIndex(groupIndex, msg.sender) != -1, // -1 if node is not member of group
             "Node is not a member of the group"
         );
         // require correct epoch
