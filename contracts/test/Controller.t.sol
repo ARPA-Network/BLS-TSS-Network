@@ -278,6 +278,26 @@ contract ControllerTest is Test {
         printGroupInfo(groupIndex); // ! Print
     }
 
+    function testChooseRandomlyFromIndices() public {
+
+        uint64 lastOutput = 0x2222222222222222; 
+
+        uint256[] memory indices = new uint256[](5);
+        indices[0] = 0;
+        indices[1] = 1;
+        indices[2] = 2;
+        indices[3] = 3; 
+        indices[4] = 4;
+        
+        uint256[] memory chosenIndices = controller.chooseRandomlyFromIndices(lastOutput, indices, 3);
+
+        for (uint256 i = 0; i < chosenIndices.length; i++) {
+            emit log_named_uint("chosenIndices", chosenIndices[i]);
+        }
+
+        assertEq(chosenIndices.length, 3);
+    }
+
     function testGetNonDisqualifiedMajorityMembers() public {
         address[] memory nodes = new address[](3);
         nodes[0] = node1;

@@ -466,7 +466,8 @@ contract Controller is Ownable {
         // TODO 
     }
 
-    function chooseRandomlyFromIndices(uint64 seed, uint256[] memory indices, uint256 count) internal pure returns (uint256[] memory) {
+    // temporarily public for testing. This should be internal.
+    function chooseRandomlyFromIndices(uint64 seed, uint256[] memory indices, uint256 count) public pure returns (uint256[] memory) {
         uint256[] memory chosenIndices = new uint256[](count);
         uint256[] memory remainingIndices = indices;
         uint256 remainingCount = remainingIndices.length;
@@ -476,8 +477,8 @@ contract Controller is Ownable {
             remainingIndices[index] = remainingIndices[remainingCount - 1];
             remainingCount--;
         }
-    return chosenIndices;
-}
+        return chosenIndices;
+    }
 
 
     // Goal: get array of majority members with identical commit result. Return commit cache. if no majority, return empty commit cache. 
