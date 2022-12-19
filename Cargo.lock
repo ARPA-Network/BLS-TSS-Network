@@ -189,6 +189,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "arpa-node-log-impl",
+ "async-trait",
  "log",
  "log-mdc",
  "serde",
