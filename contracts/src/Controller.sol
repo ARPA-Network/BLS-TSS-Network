@@ -48,6 +48,7 @@ contract Controller is Ownable {
         CommitCache[] commitCacheList; // Map in rust mock contract
         bool isStrictlyMajorityConsensusReached;
         bytes publicKey;
+        uint64 lastOutput; // ! is this chill?
     }
 
     struct Member {
@@ -124,6 +125,7 @@ contract Controller is Ownable {
         g.index = groupCount;
         g.size = 0;
         g.threshold = DEFAULT_MINIMUM_THRESHOLD;
+        g.lastOutput = 0x2222222222222222; // ! is this chill?
         return groupCount;
     }
 
@@ -359,13 +361,20 @@ contract Controller is Ownable {
                 memory identicalCommits = getStrictlyMajorityIdenticalCommitmentResult(
                     params.groupIndex
                 );
+                
 
             if (identicalCommits.nodeIdAddress.length != 0) {
                 // TODO: let last_output = self.last_output as usize; // * What is this?
+                uint64 lastOutput = g.lastOutput; //! Is this chill?
+
+                address[] memory disqualifiedNodes = identicalCommits
+                    .commitResult
+                    .disqualifiedNodes;
+
                 // Get list of majority members with disqualified nodes excluded
                 address[] memory majorityMembers = getNonDisqualifiedMajorityMembers(
                     identicalCommits.nodeIdAddress,
-                    identicalCommits.commitResult.disqualifiedNodes
+                    disqualifiedNodes
                 );
                 // address[] memory majorityMembers = identicalCommits.nodeIdAddress;
 
@@ -399,29 +408,77 @@ contract Controller is Ownable {
                             ]
                             .partialPublicKey = params.partialPublicKey;
                     }
+
+                    // ! Commiters / Qualified Indices / Remove and Slash Disqualfied nodes
+
+                    // Create indexMemberMap: Iterate through group.members and create mapping: memberIndex -> nodeIdAddress
+                    
+                    // Create qualifiedIndices: Iterate through group, add all member indexes found in majorityMembers.
+                    uint256[] memory qualifiedIndices = new uint256[](
+                        majorityMembers.length
+                    );  
+
+                    for (uint256 i = 0; i < g.members.length; i++) {
+                        for (uint256 j = 0; j < majorityMembers.length; j++) {
+                            if (g.members[i].nodeIdAddress == majorityMembers[j]) {
+                                qualifiedIndices[j] = i;
+                            }
+                        }
+                    }
+                    
+                    // Compute commiter_indices by calling chooseRandomlyFromIndices with qualifiedIndices as input.
+                    uint256[] memory committerIndices = chooseRandomlyFromIndices(lastOutput, qualifiedIndices, DEFAULT_NUMBER_OF_COMMITTERS);
+
+                    // For selected commiter_indices: add corresponding members into g.committers
+                    g.committers = new address[](committerIndices.length);
+                    for (uint256 i = 0; i < committerIndices.length; i++) {
+                        g.committers[i] = g.members[committerIndices[i]].nodeIdAddress;
+                    }
+
+                    // Remove all members from group where member.nodeIdAddress is in the disqualified nodes. 
+                    for (uint256 i = 0; i < disqualifiedNodes.length; i++) {
+                        for (uint256 j = 0; j < g.members.length; j++) {
+                            if (g.members[j].nodeIdAddress == disqualifiedNodes[i]) {
+                                g.members[j] = g.members[g.members.length - 1];
+                                g.members.pop();
+                            }
+                        }
+                    }
+
+                    // Iterate over disqualified nodes and call slashNode on each.
+                    for (uint256 i = 0; i < disqualifiedNodes.length; i++) {
+                        slashNode(disqualifiedNodes[i], DISQUALIFIED_NODE_PENALTY_AMOUNT, 0, false);
+                    }
                 }
             }
         }
-        // ! end
+    } // end commitDkg
 
-        // This works... the above fails.
-        // g
-        //     .members[uint256(getMemberIndex(params.groupIndex, msg.sender))]
-        //     .partialPublicKey = params.partialPublicKey;
-
-        // if (!g.isStrictlyMajorityConsensusReached) {
-        //     CommitCache
-        //         memory identicalCommits = getStrictlyMajorityIdenticalCommitmentResult(
-        //             params.groupIndex
-        //         );
-
-        //     if (identicalCommits.nodeIdAddress.length != 0) {
-        //         if (identicalCommits.nodeIdAddress.length >= g.threshold) {
-        //             g.isStrictlyMajorityConsensusReached = true;
-        //         }
-        //     }
-        // }
+    function slashNode(address nodeIdAddress, uint256 stakingPenalty, uint256 pendingBlock, bool handleGroup ) internal {
+        Node storage node = nodes[nodeIdAddress];
+        node.staking -= stakingPenalty;
+        if (node.staking < NODE_STAKING_AMOUNT || pendingBlock > 0) {
+            freezeNode(nodeIdAddress, pendingBlock, handleGroup);
+        }
     }
+
+    function freezeNode(address nodeIdAddress, uint256 pendingBlock, bool handleGroup) internal {
+        // TODO 
+    }
+
+    function chooseRandomlyFromIndices(uint64 seed, uint256[] memory indices, uint256 count) internal pure returns (uint256[] memory) {
+        uint256[] memory chosenIndices = new uint256[](count);
+        uint256[] memory remainingIndices = indices;
+        uint256 remainingCount = remainingIndices.length;
+        for (uint256 i = 0; i < count; i++) {
+            uint256 index = uint256(keccak256(abi.encodePacked(seed, i))) % remainingCount;
+            chosenIndices[i] = remainingIndices[index];
+            remainingIndices[index] = remainingIndices[remainingCount - 1];
+            remainingCount--;
+        }
+    return chosenIndices;
+}
+
 
     // Goal: get array of majority members with identical commit result. Return commit cache. if no majority, return empty commit cache. 
     function getStrictlyMajorityIdenticalCommitmentResult(uint256 groupIndex)
