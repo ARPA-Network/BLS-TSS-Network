@@ -329,61 +329,7 @@ contract Controller is Ownable {
                 .partialPublicKey = params.partialPublicKey;
         }
 
-        // ! start
-        // // if not.. call getStrictlyMajorityIdenticalCommitmentResult for the group and check if consensus has been reached.
-        // if (!g.isStrictlyMajorityConsensusReached) {
-        //     CommitCache
-        //         memory identicalCommits = getStrictlyMajorityIdenticalCommitmentResult(
-        //             params.groupIndex
-        //         );
-
-        //     if (identicalCommits.nodeIdAddress.length != 0) {
-        //         // TODO: let last_output = self.last_output as usize; // * What is this?
-        //         // Get list of majority members with disqualified nodes excluded
-        //         address[] memory majorityMembers = getMajorityMembers(
-        //             params.groupIndex,
-        //             identicalCommits.commitResult.disqualifiedNodes
-        //         );
-        //         if (majorityMembers.length >= g.threshold) {
-        //             g.isStrictlyMajorityConsensusReached = true;
-        //             g.size -= identicalCommits
-        //                 .commitResult
-        //                 .disqualifiedNodes
-        //                 .length;
-        //             g.publicKey = identicalCommits.commitResult.publicKey;
-
-        //             //! Did my best here, but I think it's not quite there.
-        //             // Is majorityMembers the same at group.commitCache in the rust code?
-        //             // update partial public key of all non-disqualified members
-        //             g
-        //                 .members[
-        //                     uint256(
-        //                         GetMemberIndex(params.groupIndex, msg.sender)
-        //                     )
-        //                 ]
-        //                 .partialPublicKey = params.partialPublicKey;
-        //             for (uint256 i = 0; i < majorityMembers.length; i++) {
-        //                 g
-        //                     .members[
-        //                         uint256(
-        //                             GetMemberIndex(
-        //                                 params.groupIndex,
-        //                                 majorityMembers[i]
-        //                             )
-        //                         )
-        //                     ]
-        //                     .partialPublicKey = params.partialPublicKey;
-        //             }
-        //         }
-        //     }
-        // }
-        // ! end
-
-        // This works... the above fails.
-        g
-            .members[uint256(GetMemberIndex(params.groupIndex, msg.sender))]
-            .partialPublicKey = params.partialPublicKey;
-
+        // if not.. call getStrictlyMajorityIdenticalCommitmentResult for the group and check if consensus has been reached.
         if (!g.isStrictlyMajorityConsensusReached) {
             CommitCache
                 memory identicalCommits = getStrictlyMajorityIdenticalCommitmentResult(
@@ -391,56 +337,69 @@ contract Controller is Ownable {
                 );
 
             if (identicalCommits.nodeIdAddress.length != 0) {
-                if (identicalCommits.nodeIdAddress.length >= g.threshold) {
+                // TODO: let last_output = self.last_output as usize; // * What is this?
+                // Get list of majority members with disqualified nodes excluded
+                address[] memory majorityMembers = getMajorityMembers(
+                    identicalCommits.nodeIdAddress,
+                    identicalCommits.commitResult.disqualifiedNodes
+                );
+                // address[] memory majorityMembers = identicalCommits.nodeIdAddress;
+
+                if (majorityMembers.length >= g.threshold) {
                     g.isStrictlyMajorityConsensusReached = true;
+                    g.size -= identicalCommits
+                        .commitResult
+                        .disqualifiedNodes
+                        .length;
+                    g.publicKey = identicalCommits.commitResult.publicKey;
+
+                    //! Did my best here, but I think it's not quite there.
+                    // Is majorityMembers the same at group.commitCache in the rust code?
+                    // update partial public key of all non-disqualified members
+                    g
+                        .members[
+                            uint256(
+                                GetMemberIndex(params.groupIndex, msg.sender)
+                            )
+                        ]
+                        .partialPublicKey = params.partialPublicKey;
+                    for (uint256 i = 0; i < majorityMembers.length; i++) {
+                        g
+                            .members[
+                                uint256(
+                                    GetMemberIndex(
+                                        params.groupIndex,
+                                        majorityMembers[i]
+                                    )
+                                )
+                            ]
+                            .partialPublicKey = params.partialPublicKey;
+                    }
                 }
             }
         }
+        // ! end
+
+        // This works... the above fails.
+        // g
+        //     .members[uint256(GetMemberIndex(params.groupIndex, msg.sender))]
+        //     .partialPublicKey = params.partialPublicKey;
+
+        // if (!g.isStrictlyMajorityConsensusReached) {
+        //     CommitCache
+        //         memory identicalCommits = getStrictlyMajorityIdenticalCommitmentResult(
+        //             params.groupIndex
+        //         );
+
+        //     if (identicalCommits.nodeIdAddress.length != 0) {
+        //         if (identicalCommits.nodeIdAddress.length >= g.threshold) {
+        //             g.isStrictlyMajorityConsensusReached = true;
+        //         }
+        //     }
+        // }
     }
 
-    // function getMajorityMembers iterates through the members of a group and returns a list of members that are not in the list of disqualified nodes.
-    function getMajorityMembers(
-        uint256 groupIndex,
-        address[] memory disqualifiedNodes
-    ) public view returns (address[] memory) {
-        Group storage g = groups[groupIndex];
-        address[] memory majorityMembers = new address[](g.size);
-        uint256 majorityMembersIndex = 0;
-        for (uint256 i = 0; i < g.members.length; i++) {
-            bool isDisqualified = false;
-            for (uint256 j = 0; j < disqualifiedNodes.length; j++) {
-                if (g.members[i].nodeIdAddress == disqualifiedNodes[j]) {
-                    isDisqualified = true;
-                }
-            }
-            if (!isDisqualified) {
-                majorityMembers[majorityMembersIndex] = g
-                    .members[i]
-                    .nodeIdAddress;
-                majorityMembersIndex++;
-            }
-        }
-        return majorityMembers;
-    }
-
-    function tryAddToExistingCommitCache(
-        uint256 groupIndex,
-        CommitResult memory commitResult
-    ) internal returns (bool isExist) {
-        Group storage g = groups[groupIndex]; // get group from group index
-        for (uint256 i = 0; i < g.commitCacheList.length; i++) {
-            if (
-                keccak256(abi.encode(g.commitCacheList[i].commitResult)) ==
-                keccak256(abi.encode(commitResult))
-            ) {
-                // isExist = true;
-                g.commitCacheList[i].nodeIdAddress.push(msg.sender);
-                return true;
-            }
-        }
-    }
-
-    // Goal: get array of majority members with identical commit result
+    // Goal: get array of majority members with identical commit result. Return commit cache. if no majority, return empty commit cache. 
     function getStrictlyMajorityIdenticalCommitmentResult(uint256 groupIndex)
         internal
         view
@@ -478,12 +437,61 @@ contract Controller is Ownable {
             }
         }
 
-        if (!isStrictlyMajorityExist) {
+        if (!isStrictlyMajorityExist) { // If no majority, return empty commit cache
             return (emptyCache);
         }
 
-        return (majorityCommitCache);
+        return (majorityCommitCache); // If majority, return majority commit cache
     }
+
+
+    // function getMajorityMembers iterates through list of members and remove disqualified nodes.
+    function getMajorityMembers(
+        address[] memory nodeAddresses,
+        address[] memory disqualifiedNodes
+    ) public pure returns (address[] memory) {
+        address[] memory majorityMembers = new address[](nodeAddresses.length);
+        uint256 majorityMembersLength = 0;
+        for (uint256 i = 0; i < nodeAddresses.length; i++) {
+            bool isDisqualified = false;
+            for (uint256 j = 0; j < disqualifiedNodes.length; j++) {
+                if (nodeAddresses[i] == disqualifiedNodes[j]) {
+                    isDisqualified = true;
+                    break;
+                }
+            }
+            if (!isDisqualified) {
+                majorityMembers[majorityMembersLength] = nodeAddresses[i];
+                majorityMembersLength++;
+            }
+        }
+
+        // remove trailing zero addresses
+        address[] memory output = new address[](majorityMembersLength);
+        for (uint256 i = 0; i < majorityMembersLength; i++) {
+            output[i] = majorityMembers[i];
+        }
+
+        return output;
+    }
+
+    function tryAddToExistingCommitCache(
+        uint256 groupIndex,
+        CommitResult memory commitResult
+    ) internal returns (bool isExist) {
+        Group storage g = groups[groupIndex]; // get group from group index
+        for (uint256 i = 0; i < g.commitCacheList.length; i++) {
+            if (
+                keccak256(abi.encode(g.commitCacheList[i].commitResult)) ==
+                keccak256(abi.encode(commitResult))
+            ) {
+                // isExist = true;
+                g.commitCacheList[i].nodeIdAddress.push(msg.sender);
+                return true;
+            }
+        }
+    }
+
 
     // ! Post Proccess DKG
     // Called by nodes after last phase of dkg ends (success or failure)

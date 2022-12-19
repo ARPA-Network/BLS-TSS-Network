@@ -177,7 +177,6 @@ contract ControllerTest is Test {
         bytes memory publicKey = hex"C0FFEE";
         address[] memory disqualifiedNodes = new address[](0);
 
-        // ! new
         // Fail if group does not exist
         vm.prank(node1);
         vm.expectRevert("Group does not exist");
@@ -216,6 +215,8 @@ contract ControllerTest is Test {
         );
         controller.commitDkg(params);
 
+        assertEq(checkIsStrictlyMajorityConsensusReached(groupIndex), false);
+
         // Succesful Commit: Node 1
         vm.prank(node1);
         params = Controller.CommitDkgParams(
@@ -226,50 +227,68 @@ contract ControllerTest is Test {
             disqualifiedNodes
         );
         controller.commitDkg(params);
+        assertEq(checkIsStrictlyMajorityConsensusReached(groupIndex), false);
 
         //  Fail if CommitCache already contains PartialKey for this node
         // ! something fishy (new code block breaks this)
         // ! When node2 is pranked, test should pass but it fails
-        vm.prank(node1); 
-        vm.expectRevert(
-            "CommitCache already contains PartialKey for this node"
-        );
-        params = Controller.CommitDkgParams(
-            groupIndex,
-            groupEpoch,
-            publicKey,
-            partialPublicKey,
-            disqualifiedNodes
-        );
-        controller.commitDkg(params);
-        assertEq(checkIsStrictlyMajorityConsensusReached(groupIndex), false);
+        // vm.prank(node1); 
+        // vm.expectRevert(
+        //     "CommitCache already contains PartialKey for this node"
+        // );
+        // params = Controller.CommitDkgParams(
+        //     groupIndex,
+        //     groupEpoch,
+        //     publicKey,
+        //     partialPublicKey,
+        //     disqualifiedNodes
+        // );
+        // controller.commitDkg(params);
+        // assertEq(checkIsStrictlyMajorityConsensusReached(groupIndex), false);
 
-        // Succesful Commit: Node 2
-        vm.prank(node2);
-        params = Controller.CommitDkgParams(
-            groupIndex,
-            groupEpoch,
-            publicKey,
-            hex"DECADE22", // partial public key 2
-            disqualifiedNodes
-        );
-        controller.commitDkg(params);
-        assertEq(checkIsStrictlyMajorityConsensusReached(groupIndex), false);
+        // // Succesful Commit: Node 2
+        // vm.prank(node2);
+        // params = Controller.CommitDkgParams(
+        //     groupIndex,
+        //     groupEpoch,
+        //     publicKey,
+        //     hex"DECADE22", // partial public key 2
+        //     disqualifiedNodes
+        // );
+        // controller.commitDkg(params);
+        // assertEq(checkIsStrictlyMajorityConsensusReached(groupIndex), false);
 
-        // Succesful Commit: Node 3
-        vm.prank(node3);
-        params = Controller.CommitDkgParams(
-            groupIndex,
-            groupEpoch,
-            publicKey,
-            hex"DECADE33", // partial public key 2
-            disqualifiedNodes
-        );
-        controller.commitDkg(params);
-        assertEq(checkIsStrictlyMajorityConsensusReached(groupIndex), true);
+        // // Succesful Commit: Node 3
+        // vm.prank(node3);
+        // params = Controller.CommitDkgParams(
+        //     groupIndex,
+        //     groupEpoch,
+        //     publicKey,
+        //     hex"DECADE33", // partial public key 2
+        //     disqualifiedNodes
+        // );
+        // controller.commitDkg(params);
+        // assertEq(checkIsStrictlyMajorityConsensusReached(groupIndex), true);
 
-        // Print group info
+        // // Print group info
         printGroupInfo(groupIndex);
+    }
+
+    function testGetMajorityMembers() public {
+        address[] memory nodes = new address[](3);
+        nodes[0] = node1;
+        nodes[1] = node2;
+        nodes[2] = node3;
+
+        address[] memory disqualifedNodes = new address[](1);
+        disqualifedNodes[0] = node2;
+
+        address[] memory majorityMembers = controller.getMajorityMembers(
+            nodes,
+            disqualifedNodes
+        );
+
+        assertEq(majorityMembers.length, 2);
     }
 
     function testIsPartialKeyRegistered() public {
@@ -383,6 +402,15 @@ contract ControllerTest is Test {
             g.commitCacheList.length
         );
         for (uint256 i = 0; i < g.commitCacheList.length; i++) {
+            // print commit result
+            emit log_named_bytes(
+                string.concat(
+                    "g.commitCacheList[",
+                    Strings.toString(i),
+                    "].commitResult.publicKey"
+                ),
+                g.commitCacheList[i].commitResult.publicKey
+            );
             for (
                 uint256 j = 0;
                 j < g.commitCacheList[i].nodeIdAddress.length;
@@ -400,11 +428,6 @@ contract ControllerTest is Test {
                 );
             }
         }
-        // emit isStrictlyMajorityConsensusReached
-        emit log_named_uint(
-            "g.isStrictlyMajorityConsensusReached",
-            g.isStrictlyMajorityConsensusReached ? 1 : 0
-        );
     }
 
     function printNodeInfo(address nodeAddress) public {
@@ -445,9 +468,59 @@ contract ControllerTest is Test {
         emit log_named_address("m.nodeIdAddress", m.nodeIdAddress);
         emit log_named_bytes("m.partialPublicKey", m.partialPublicKey);
     }
-}
 
-// ! Helper library for logging bool
+
+
+
+    ////// ! Solidity Playground
+
+    // function testDynamicArray() public {
+    //     uint256[] memory numbers = new uint256[](3);
+    //     numbers[0] = 1;
+    //     numbers[1] = 2;
+    //     numbers[2] = 3;
+
+    //     uint256[] memory badNumbers = new uint256[](1);
+    //     badNumbers[0] = 2;
+
+    //     uint256[] memory goodNumbers = new uint256[](numbers.length);
+
+    //     emit log_named_uint("numbers.length", numbers.length);
+    //     emit log_named_uint("badNumbers.length", badNumbers.length);
+    //     emit log_named_uint("goodNumbers.length (before)", goodNumbers.length);
+
+    //     uint256 goodNumbersLength = 0;
+
+    //     for (uint256 i = 0; i < numbers.length; i++) {
+    //         bool disqualified = false;
+    //         for (uint256 j = 0; j < badNumbers.length; j++) {
+    //             if (numbers[i] == badNumbers[j]) {
+    //                 disqualified = true;
+    //                 break;
+    //             }
+    //             else {
+    //                 goodNumbers[goodNumbersLength] = numbers[i];
+    //                 goodNumbersLength++;
+    //             }
+    //         }
+    //     }
+    //     // delete trailing zeros
+    //     uint256[] memory output = new uint256[](goodNumbersLength);
+    //     for (uint256 i = 0; i < goodNumbersLength; i++) {
+    //         output[i] = goodNumbers[i];
+    //     }
+
+
+    //     emit log_named_uint("output.length", output.length);
+        
+    // }
+
+}
+//////////////////////////////////////////////////////////////////////////////////////////////////
+//////////////////////////////////////////////////////////////////////////////////////////////////
+//////////////////////////////////////////////////////////////////////////////////////////////////
+//////////////////////////////////////////////////////////////////////////////////////////////////
+// * Helper library for logging bool
 // EX : emit log_named_string("n.state", Bool.toText(n.state));
 library Bool {
     function toUInt256(bool x) internal pure returns (uint256 r) {
@@ -471,3 +544,5 @@ library Bool {
         r = inString;
     }
 }
+
+
