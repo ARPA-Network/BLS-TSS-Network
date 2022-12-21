@@ -25,12 +25,15 @@ contract Controller is Ownable {
 
     // Group State Variables
     uint256 public groupCount; // Number of groups
-    mapping(uint256 => Group) public groups; // group_index => Group struct
-
+    mapping(uint256 => Group) public groups; // group_index => Group struct    
+    // uint256 [] groupIndexes;  // Needed if groups can be deleted.
     // Coordinators
     mapping(uint256 => address) public coordinators; // maps group index to coordinator address
 
-    // * Structs
+    // Global last output
+    uint64 lastOutput = 0x2222222222222222; 
+
+    // * Structs 
     struct Node {
         address idAddress;
         bytes dkgPublicKey;
@@ -48,7 +51,6 @@ contract Controller is Ownable {
         CommitCache[] commitCacheList; // Map in rust mock contract
         bool isStrictlyMajorityConsensusReached;
         bytes publicKey;
-        uint64 lastOutput; // ! is this chill?
     }
 
     struct Member {
@@ -92,6 +94,9 @@ contract Controller is Ownable {
         // * get groupIndex from findOrCreateTargetGroup -> addGroup
         (uint256 groupIndex, bool needsRebalance) = findOrCreateTargetGroup();
         addToGroup(idAddress, groupIndex, true); // * add to group
+
+        // uint[] memory groupIndices = groups.keys(); //! 
+
         // TODO: Reblance Group: Implement later!
         // if (needsRebalance) {
         //     // reblanceGroup();
@@ -125,7 +130,6 @@ contract Controller is Ownable {
         g.index = groupCount;
         g.size = 0;
         g.threshold = DEFAULT_MINIMUM_THRESHOLD;
-        g.lastOutput = 0x2222222222222222; // ! is this chill?
         return groupCount;
     }
 
@@ -166,17 +170,6 @@ contract Controller is Ownable {
         // uint256 min = groupSize / 2 + 1;
         return groupSize / 2 + 1;
     }
-
-    // ! Rust dkgtask struct
-    // struct DKGTask {
-    //     group_index: usize,
-    //     epoch: usize,
-    //     size: usize,
-    //     threshold: usize,
-    //     members: BTreeMap<String, usize>,
-    //     assignment_block_height: usize,
-    //     coordinator_address: String,
-    // }
 
     event dkgTask(
         uint256 _groupIndex,
@@ -247,42 +240,42 @@ contract Controller is Ownable {
 
     // ! Partal Key Registered: Old Code.. I think this needs to be changed to look inside the commit cache
     /// Check to see if a group has a partial public key registered for a given node.
-    // function partialKeyRegistered(uint256 groupIndex, address nodeIdAddress)
-    //     public
-    //     view
-    //     returns (bool)
-    // {
-    //     Group storage g = groups[groupIndex];
-    //     for (uint256 i = 0; i < g.members.length; i++) {
-    //         if (
-    //             g.members[i].nodeIdAddress == nodeIdAddress &&
-    //             g.members[i].partialPublicKey.length != 0
-    //         ) {
-    //             return true;
-    //         }
-    //     }
-    //     return false;
-    // }
-    // ! New Code ?
     function partialKeyRegistered(uint256 groupIndex, address nodeIdAddress)
         public
         view
         returns (bool)
     {
         Group storage g = groups[groupIndex];
-        for (uint256 i = 0; i < g.commitCacheList.length; i++) {
-            CommitCache memory commitCache = g.commitCacheList[i];
-            for (uint256 j = 0; j < commitCache.nodeIdAddress.length; j++) {
-                if (commitCache.nodeIdAddress[j] == nodeIdAddress) {
-                    CommitResult memory commitResult = commitCache.commitResult;
-                    if (commitResult.publicKey.length != 0) {
-                        return true;
-                    }
-                }
+        for (uint256 i = 0; i < g.members.length; i++) {
+            if (
+                g.members[i].nodeIdAddress == nodeIdAddress &&
+                g.members[i].partialPublicKey.length != 0
+            ) {
+                return true;
             }
         }
         return false;
     }
+    // ! New Code ?
+    // function partialKeyRegistered(uint256 groupIndex, address nodeIdAddress)
+    //     public
+    //     view
+    //     returns (bool)
+    // {
+    //     Group storage g = groups[groupIndex];
+    //     for (uint256 i = 0; i < g.commitCacheList.length; i++) {
+    //         CommitCache memory commitCache = g.commitCacheList[i];
+    //         for (uint256 j = 0; j < commitCache.nodeIdAddress.length; j++) {
+    //             if (commitCache.nodeIdAddress[j] == nodeIdAddress) {
+    //                 CommitResult memory commitResult = commitCache.commitResult;
+    //                 if (commitResult.publicKey.length != 0) {
+    //                     return true;
+    //                 }
+    //             }
+    //         }
+    //     }
+    //     return false;
+    // }
 
 
     struct CommitDkgParams {
@@ -326,7 +319,7 @@ contract Controller is Ownable {
 
         // uint256 memberIndex = uint256(getMemberIndex(groupIndex, msg.sender));
         // ! something fishy
-        require(
+        require(   // check to see if member has called commitdkg in the past. 
             !partialKeyRegistered(params.groupIndex, msg.sender),
             "CommitCache already contains PartialKey for this node"
         );
@@ -349,11 +342,9 @@ contract Controller is Ownable {
         }
 
         // if consensus previously reached, update the partial public key of the given node's member entry in the group
-        if (g.isStrictlyMajorityConsensusReached) {
-            g
-            .members[uint256(getMemberIndex(params.groupIndex, msg.sender))] // uint256 memberIndex
-                .partialPublicKey = params.partialPublicKey;
-        }
+        // if (g.isStrictlyMajorityConsensusReached) {
+        g.members[uint256(getMemberIndex(params.groupIndex, msg.sender))].partialPublicKey = params.partialPublicKey;
+        // }
 
         // if not.. call getStrictlyMajorityIdenticalCommitmentResult for the group and check if consensus has been reached.
         if (!g.isStrictlyMajorityConsensusReached) {
@@ -365,7 +356,6 @@ contract Controller is Ownable {
 
             if (identicalCommits.nodeIdAddress.length != 0) {
                 // TODO: let last_output = self.last_output as usize; // * What is this?
-                uint64 lastOutput = g.lastOutput; //! Is this chill?
 
                 address[] memory disqualifiedNodes = identicalCommits
                     .commitResult
@@ -389,25 +379,25 @@ contract Controller is Ownable {
                     //! Did my best here, but I think it's not quite there.
                     // Is majorityMembers the same at group.commitCache in the rust code?
                     // update partial public key of all non-disqualified members
-                    g
-                        .members[
-                            uint256(
-                                getMemberIndex(params.groupIndex, msg.sender)
-                            )
-                        ]
-                        .partialPublicKey = params.partialPublicKey;
-                    for (uint256 i = 0; i < majorityMembers.length; i++) {
-                        g
-                            .members[
-                                uint256(
-                                    getMemberIndex(
-                                        params.groupIndex,
-                                        majorityMembers[i]
-                                    )
-                                )
-                            ]
-                            .partialPublicKey = params.partialPublicKey;
-                    }
+                    // g
+                    //     .members[
+                    //         uint256(
+                    //             getMemberIndex(params.groupIndex, msg.sender)
+                    //         )
+                    //     ]
+                    //     .partialPublicKey = params.partialPublicKey;
+                    // for (uint256 i = 0; i < majorityMembers.length; i++) {
+                    //     g
+                    //         .members[
+                    //             uint256(
+                    //                 getMemberIndex(
+                    //                     params.groupIndex,
+                    //                     majorityMembers[i]
+                    //                 )
+                    //             )
+                    //         ]
+                    //         .partialPublicKey = params.partialPublicKey;
+                    // }
 
                     // ! Commiters / Qualified Indices / Remove and Slash Disqualfied nodes
 
