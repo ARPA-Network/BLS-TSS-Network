@@ -1,7 +1,7 @@
-use super::Subscriber;
+use super::{DebuggableEvent, Subscriber};
 use crate::node::{
     error::NodeResult,
-    event::{dkg_success::DKGSuccess, types::Topic, Event},
+    event::{dkg_success::DKGSuccess, types::Topic},
     queue::{event_queue::EventQueue, EventSubscriber},
 };
 use arpa_node_dal::GroupInfoUpdater;
@@ -23,7 +23,7 @@ impl<G: GroupInfoUpdater + Sync + Send> PostSuccessGroupingSubscriber<G> {
 
 #[async_trait]
 impl<G: GroupInfoUpdater + Sync + Send + 'static> Subscriber for PostSuccessGroupingSubscriber<G> {
-    async fn notify(&self, topic: Topic, payload: &(dyn Event + Send + Sync)) -> NodeResult<()> {
+    async fn notify(&self, topic: Topic, payload: &(dyn DebuggableEvent)) -> NodeResult<()> {
         debug!("{:?}", topic);
 
         let DKGSuccess { group } = payload

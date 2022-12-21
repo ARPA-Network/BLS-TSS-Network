@@ -1,8 +1,8 @@
+use super::{types::Topic, Event};
+use crate::node::subscriber::DebuggableEvent;
 use arpa_node_dal::cache::GroupRelayResultCache;
 
-use super::{types::Topic, Event};
-
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct ReadyToFulfillGroupRelayTask {
     pub tasks: Vec<GroupRelayResultCache>,
 }
@@ -22,3 +22,4 @@ impl Event for ReadyToFulfillGroupRelayTask {
         self
     }
 }
+impl DebuggableEvent for ReadyToFulfillGroupRelayTask {}

@@ -1,8 +1,8 @@
+use super::{types::Topic, Event};
+use crate::node::subscriber::DebuggableEvent;
 use arpa_node_core::GroupRelayConfirmationTask;
 
-use super::{types::Topic, Event};
-
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct NewGroupRelayConfirmationTask {
     pub chain_id: usize,
     pub group_relay_confirmation_task: GroupRelayConfirmationTask,
@@ -26,3 +26,4 @@ impl Event for NewGroupRelayConfirmationTask {
         self
     }
 }
+impl DebuggableEvent for NewGroupRelayConfirmationTask {}

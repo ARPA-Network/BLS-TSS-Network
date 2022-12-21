@@ -1,8 +1,9 @@
+use crate::node::subscriber::DebuggableEvent;
 use arpa_node_core::Group;
 
 use super::{types::Topic, Event};
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct DKGSuccess {
     pub group: Group,
 }
@@ -22,3 +23,4 @@ impl Event for DKGSuccess {
         self
     }
 }
+impl DebuggableEvent for DKGSuccess {}

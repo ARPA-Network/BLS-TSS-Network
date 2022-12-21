@@ -1,7 +1,7 @@
 use super::{EventPublisher, EventSubscriber};
 use crate::node::{
-    event::{types::Topic, Event},
-    subscriber::Subscriber,
+    event::types::Topic,
+    subscriber::{DebuggableEvent, Subscriber},
 };
 use async_trait::async_trait;
 use log::error;
@@ -29,7 +29,7 @@ impl EventSubscriber for EventQueue {
 }
 
 #[async_trait]
-impl<E: Event + Clone + Send + Sync + 'static> EventPublisher<E> for EventQueue {
+impl<E: DebuggableEvent + Clone + Send + Sync + 'static> EventPublisher<E> for EventQueue {
     async fn publish(&self, event: E) {
         let topic = event.topic();
 

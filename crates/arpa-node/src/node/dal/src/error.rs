@@ -1,4 +1,4 @@
-use arpa_node_core::TaskError;
+use arpa_node_core::BLSTaskError;
 use thiserror::Error;
 
 pub type DataAccessResult<A> = Result<A, DataAccessError>;
@@ -15,7 +15,7 @@ pub enum DataAccessError {
     RandomnessTaskError(#[from] RandomnessTaskError),
 
     #[error(transparent)]
-    TaskError(#[from] TaskError),
+    TaskError(#[from] BLSTaskError),
 
     #[error(transparent)]
     DBError(anyhow::Error),

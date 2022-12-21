@@ -4,11 +4,11 @@ use crate::node::{
         client::GeneralCommitterClient, CommitterClient, CommitterClientHandler, CommitterService,
     },
     error::{NodeError, NodeResult},
-    event::{ready_to_handle_randomness_task::ReadyToHandleRandomnessTask, types::Topic, Event},
+    event::{ready_to_handle_randomness_task::ReadyToHandleRandomnessTask, types::Topic},
     queue::{event_queue::EventQueue, EventSubscriber},
-    scheduler::{dynamic::SimpleDynamicTaskScheduler, TaskScheduler},
+    scheduler::{dynamic::SimpleDynamicTaskScheduler, SubscriberType, TaskScheduler, TaskType},
 };
-use arpa_node_core::{RandomnessTask, TaskType};
+use arpa_node_core::{RandomnessTask, TaskType as BLSTaskType};
 use arpa_node_dal::{
     cache::RandomnessResultCache, GroupInfoFetcher, SignatureResultCacheFetcher,
     SignatureResultCacheUpdater,
@@ -20,7 +20,7 @@ use std::sync::Arc;
 use tokio::sync::RwLock;
 use tokio_retry::{strategy::FixedInterval, RetryIf};
 
-use super::Subscriber;
+use super::{DebuggableEvent, Subscriber};
 
 pub struct ReadyToHandleRandomnessTaskSubscriber<
     G: GroupInfoFetcher,
@@ -159,7 +159,7 @@ impl<
                     || {
                         committer.clone().commit_partial_signature(
                             chain_id,
-                            TaskType::Randomness,
+                            BLSTaskType::Randomness,
                             task.message.as_bytes().to_vec(),
                             task.index,
                             partial_signature.clone(),
@@ -195,7 +195,7 @@ impl<
             + 'static,
     > Subscriber for ReadyToHandleRandomnessTaskSubscriber<G, C>
 {
-    async fn notify(&self, topic: Topic, payload: &(dyn Event + Send + Sync)) -> NodeResult<()> {
+    async fn notify(&self, topic: Topic, payload: &(dyn DebuggableEvent)) -> NodeResult<()> {
         debug!("{:?}", topic);
 
         let ReadyToHandleRandomnessTask { tasks, .. } = payload
@@ -212,19 +212,22 @@ impl<
 
         let randomness_signature_cache_for_handler = self.randomness_signature_cache.clone();
 
-        self.ts.write().await.add_task(async move {
-            let handler = GeneralRandomnessHandler {
-                chain_id,
-                id_address,
-                tasks,
-                group_cache: group_cache_for_handler,
-                randomness_signature_cache: randomness_signature_cache_for_handler,
-            };
+        self.ts.write().await.add_task(
+            TaskType::Subscriber(SubscriberType::ReadyToHandleRandomnessTask),
+            async move {
+                let handler = GeneralRandomnessHandler {
+                    chain_id,
+                    id_address,
+                    tasks,
+                    group_cache: group_cache_for_handler,
+                    randomness_signature_cache: randomness_signature_cache_for_handler,
+                };
 
-            if let Err(e) = handler.handle().await {
-                error!("{:?}", e);
-            }
-        });
+                if let Err(e) = handler.handle().await {
+                    error!("{:?}", e);
+                }
+            },
+        )?;
 
         Ok(())
     }

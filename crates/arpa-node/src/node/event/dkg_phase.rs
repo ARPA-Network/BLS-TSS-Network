@@ -1,6 +1,7 @@
 use super::{types::Topic, Event};
+use crate::node::subscriber::DebuggableEvent;
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct DKGPhase {
     pub phase: usize,
 }
@@ -20,3 +21,4 @@ impl Event for DKGPhase {
         self
     }
 }
+impl DebuggableEvent for DKGPhase {}

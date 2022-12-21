@@ -1,6 +1,7 @@
 use super::{types::Topic, Event};
+use crate::node::subscriber::DebuggableEvent;
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct DKGPostProcess {
     pub group_index: usize,
     pub group_epoch: usize,
@@ -24,3 +25,4 @@ impl Event for DKGPostProcess {
         self
     }
 }
+impl DebuggableEvent for DKGPostProcess {}

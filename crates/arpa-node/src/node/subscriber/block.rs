@@ -1,7 +1,7 @@
-use super::Subscriber;
+use super::{DebuggableEvent, Subscriber};
 use crate::node::{
     error::NodeResult,
-    event::{new_block::NewBlock, types::Topic, Event},
+    event::{new_block::NewBlock, types::Topic},
     queue::{event_queue::EventQueue, EventSubscriber},
 };
 use arpa_node_dal::BlockInfoUpdater;
@@ -28,7 +28,7 @@ impl<B: BlockInfoUpdater> BlockSubscriber<B> {
 
 #[async_trait]
 impl<B: BlockInfoUpdater + Sync + Send + 'static> Subscriber for BlockSubscriber<B> {
-    async fn notify(&self, topic: Topic, payload: &(dyn Event + Send + Sync)) -> NodeResult<()> {
+    async fn notify(&self, topic: Topic, payload: &(dyn DebuggableEvent)) -> NodeResult<()> {
         debug!("{:?}", topic);
 
         let &NewBlock { block_height, .. } = payload.as_any().downcast_ref::<NewBlock>().unwrap();

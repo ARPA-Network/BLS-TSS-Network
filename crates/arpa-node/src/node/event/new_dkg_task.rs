@@ -1,7 +1,8 @@
 use super::{types::Topic, Event};
+use crate::node::subscriber::DebuggableEvent;
 use arpa_node_core::DKGTask;
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct NewDKGTask {
     pub dkg_task: DKGTask,
     pub self_index: usize,
@@ -25,3 +26,4 @@ impl Event for NewDKGTask {
         self
     }
 }
+impl DebuggableEvent for NewDKGTask {}

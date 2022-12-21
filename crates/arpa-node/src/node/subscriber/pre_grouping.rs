@@ -1,7 +1,7 @@
-use super::Subscriber;
+use super::{DebuggableEvent, Subscriber};
 use crate::node::{
     error::NodeResult,
-    event::{new_dkg_task::NewDKGTask, run_dkg::RunDKG, types::Topic, Event},
+    event::{new_dkg_task::NewDKGTask, run_dkg::RunDKG, types::Topic},
     queue::{event_queue::EventQueue, EventPublisher, EventSubscriber},
 };
 use arpa_node_core::DKGStatus;
@@ -35,7 +35,7 @@ impl<G: GroupInfoFetcher + GroupInfoUpdater + Sync + Send> EventPublisher<RunDKG
 impl<G: GroupInfoFetcher + GroupInfoUpdater + Sync + Send + 'static> Subscriber
     for PreGroupingSubscriber<G>
 {
-    async fn notify(&self, topic: Topic, payload: &(dyn Event + Send + Sync)) -> NodeResult<()> {
+    async fn notify(&self, topic: Topic, payload: &(dyn DebuggableEvent)) -> NodeResult<()> {
         debug!("{:?}", topic);
 
         let NewDKGTask {

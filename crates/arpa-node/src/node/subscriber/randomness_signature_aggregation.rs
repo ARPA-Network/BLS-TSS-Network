@@ -1,10 +1,10 @@
-use super::Subscriber;
+use super::{DebuggableEvent, Subscriber};
 use crate::node::{
     algorithm::bls::{BLSCore, SimpleBLSCore},
     error::NodeResult,
-    event::{ready_to_fulfill_randomness_task::ReadyToFulfillRandomnessTask, types::Topic, Event},
+    event::{ready_to_fulfill_randomness_task::ReadyToFulfillRandomnessTask, types::Topic},
     queue::{event_queue::EventQueue, EventSubscriber},
-    scheduler::{dynamic::SimpleDynamicTaskScheduler, TaskScheduler},
+    scheduler::{dynamic::SimpleDynamicTaskScheduler, SubscriberType, TaskScheduler, TaskType},
 };
 use arpa_node_contract_client::adapter::{AdapterClientBuilder, AdapterTransactions, AdapterViews};
 use arpa_node_core::ChainIdentity;
@@ -105,7 +105,7 @@ impl<I: ChainIdentity + AdapterClientBuilder + Sync + Send> FulfillRandomnessHan
 impl<I: ChainIdentity + AdapterClientBuilder + Sync + Send + 'static> Subscriber
     for RandomnessSignatureAggregationSubscriber<I>
 {
-    async fn notify(&self, topic: Topic, payload: &(dyn Event + Send + Sync)) -> NodeResult<()> {
+    async fn notify(&self, topic: Topic, payload: &(dyn DebuggableEvent)) -> NodeResult<()> {
         debug!("{:?}", topic);
 
         let ReadyToFulfillRandomnessTask {
@@ -136,24 +136,27 @@ impl<I: ChainIdentity + AdapterClientBuilder + Sync + Send + 'static> Subscriber
 
             let chain_identity = self.chain_identity.clone();
 
-            self.ts.write().await.add_task(async move {
-                let handler = GeneralFulfillRandomnessHandler {
-                    id_address,
-                    chain_identity,
-                };
+            self.ts.write().await.add_task(
+                TaskType::Subscriber(SubscriberType::RandomnessSignatureAggregation),
+                async move {
+                    let handler = GeneralFulfillRandomnessHandler {
+                        id_address,
+                        chain_identity,
+                    };
 
-                if let Err(e) = handler
-                    .handle(
-                        group_index,
-                        randomness_task_index,
-                        signature.clone(),
-                        partial_signatures,
-                    )
-                    .await
-                {
-                    error!("{:?}", e);
-                }
-            });
+                    if let Err(e) = handler
+                        .handle(
+                            group_index,
+                            randomness_task_index,
+                            signature.clone(),
+                            partial_signatures,
+                        )
+                        .await
+                    {
+                        error!("{:?}", e);
+                    }
+                },
+            )?;
         }
 
         Ok(())

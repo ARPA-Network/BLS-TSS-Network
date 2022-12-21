@@ -1,8 +1,8 @@
+use super::{types::Topic, Event};
+use crate::node::subscriber::DebuggableEvent;
 use arpa_node_core::RandomnessTask;
 
-use super::{types::Topic, Event};
-
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct NewRandomnessTask {
     pub chain_id: usize,
     pub randomness_task: RandomnessTask,
@@ -26,3 +26,4 @@ impl Event for NewRandomnessTask {
         self
     }
 }
+impl DebuggableEvent for NewRandomnessTask {}

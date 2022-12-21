@@ -1,8 +1,8 @@
+use super::{types::Topic, Event};
+use crate::node::subscriber::DebuggableEvent;
 use arpa_node_dal::cache::GroupRelayConfirmationResultCache;
 
-use super::{types::Topic, Event};
-
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct ReadyToFulfillGroupRelayConfirmationTask {
     pub chain_id: usize,
     pub tasks: Vec<GroupRelayConfirmationResultCache>,
@@ -23,3 +23,4 @@ impl Event for ReadyToFulfillGroupRelayConfirmationTask {
         self
     }
 }
+impl DebuggableEvent for ReadyToFulfillGroupRelayConfirmationTask {}

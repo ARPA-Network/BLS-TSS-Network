@@ -6,8 +6,8 @@ use super::{
     SignatureResultCacheUpdater,
 };
 use arpa_node_core::{
-    BLSTask, ContractGroup, DKGStatus, DKGTask, Group, GroupRelayConfirmation,
-    GroupRelayConfirmationTask, GroupRelayTask, Member, RandomnessTask, Task, TaskError,
+    BLSTask, BLSTaskError, ContractGroup, DKGStatus, DKGTask, Group, GroupRelayConfirmation,
+    GroupRelayConfirmationTask, GroupRelayTask, Member, RandomnessTask, Task,
     RANDOMNESS_TASK_EXCLUSIVE_WINDOW,
 };
 use async_trait::async_trait;
@@ -463,7 +463,7 @@ impl<T: Task + Sync + Clone> BLSTasksFetcher<T> for InMemoryBLSTasksQueue<T> {
         self.bls_tasks
             .get(task_index)
             .map(|task| task.task.clone())
-            .ok_or_else(|| TaskError::TaskNotFound.into())
+            .ok_or_else(|| BLSTaskError::TaskNotFound.into())
     }
 
     async fn is_handled(&self, task_index: usize) -> DataAccessResult<bool> {
@@ -609,7 +609,7 @@ pub struct BLSResultCache<T: ResultCache> {
     pub state: bool,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct RandomnessResultCache {
     pub group_index: usize,
     pub randomness_task_index: usize,
@@ -618,7 +618,7 @@ pub struct RandomnessResultCache {
     pub partial_signatures: HashMap<Address, Vec<u8>>,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct GroupRelayResultCache {
     pub group_index: usize,
     pub group_relay_task_index: usize,
@@ -627,7 +627,7 @@ pub struct GroupRelayResultCache {
     pub partial_signatures: HashMap<Address, Vec<u8>>,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct GroupRelayConfirmationResultCache {
     pub group_index: usize,
     pub group_relay_confirmation_task_index: usize,
@@ -684,7 +684,7 @@ impl SignatureResultCacheUpdater<RandomnessResultCache>
         let signature_result_cache = self
             .signature_result_caches
             .get_mut(&signature_index)
-            .ok_or(TaskError::CommitterCacheNotExisted)?;
+            .ok_or(BLSTaskError::CommitterCacheNotExisted)?;
 
         signature_result_cache
             .result_cache
@@ -746,7 +746,7 @@ impl SignatureResultCacheUpdater<GroupRelayResultCache>
         let signature_result_cache = self
             .signature_result_caches
             .get_mut(&signature_index)
-            .ok_or(TaskError::CommitterCacheNotExisted)?;
+            .ok_or(BLSTaskError::CommitterCacheNotExisted)?;
 
         signature_result_cache
             .result_cache
@@ -808,7 +808,7 @@ impl SignatureResultCacheUpdater<GroupRelayConfirmationResultCache>
         let signature_result_cache = self
             .signature_result_caches
             .get_mut(&signature_index)
-            .ok_or(TaskError::CommitterCacheNotExisted)?;
+            .ok_or(BLSTaskError::CommitterCacheNotExisted)?;
 
         signature_result_cache
             .result_cache
