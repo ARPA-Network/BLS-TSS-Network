@@ -1,10 +1,11 @@
+use arpa_node_core::SchedulerResult;
 use futures::Future;
 use tokio::{
     sync::{oneshot::channel, oneshot::Receiver},
     task::JoinHandle,
 };
 
-use super::{DynamicTaskScheduler, TaskScheduler};
+use super::{DynamicTaskScheduler, TaskScheduler, TaskType};
 
 #[derive(Default)]
 pub struct SimpleDynamicTaskScheduler {
@@ -21,7 +22,7 @@ impl SimpleDynamicTaskScheduler {
 }
 
 impl TaskScheduler for SimpleDynamicTaskScheduler {
-    fn add_task<T>(&mut self, future: T)
+    fn add_task<T>(&mut self, _: TaskType, future: T) -> SchedulerResult<()>
     where
         T: Future<Output = ()> + Send + 'static,
         T::Output: Send + 'static,
@@ -34,6 +35,8 @@ impl TaskScheduler for SimpleDynamicTaskScheduler {
         });
 
         self.dynamic_tasks.push((recv, None));
+
+        Ok(())
     }
 }
 
