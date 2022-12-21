@@ -5,18 +5,14 @@ use self::committer_stub::{
 use crate::node::context::chain::MainChainFetcher;
 use crate::node::{
     algorithm::bls::{BLSCore, SimpleBLSCore},
-    context::{
-        chain::{AdapterChainFetcher, ChainFetcher},
-        types::GeneralContext,
-        ContextFetcher,
-    },
+    context::{chain::ChainFetcher, types::GeneralContext, ContextFetcher},
     error::NodeError,
 };
 use arpa_node_contract_client::{
     adapter::AdapterClientBuilder, controller::ControllerClientBuilder,
     coordinator::CoordinatorClientBuilder, provider::ChainProviderBuilder,
 };
-use arpa_node_core::{ChainIdentity, RandomnessTask, TaskError, TaskType};
+use arpa_node_core::{BLSTaskError, ChainIdentity, RandomnessTask, TaskType};
 use arpa_node_dal::{
     BLSTasksFetcher, BLSTasksUpdater, GroupInfoFetcher, GroupInfoUpdater, NodeInfoFetcher,
     SignatureResultCacheFetcher, SignatureResultCacheUpdater,
@@ -125,17 +121,9 @@ impl<
                             .get_main_chain()
                             .get_randomness_result_cache(),
                         _ => {
-                            if !self.context.read().await.contains_chain(chain_id) {
-                                return Err(Status::invalid_argument(
-                                    NodeError::InvalidChainId(chain_id).to_string(),
-                                ));
-                            }
-                            self.context
-                                .read()
-                                .await
-                                .get_adapter_chain(req.chain_id as usize)
-                                .unwrap()
-                                .get_randomness_result_cache()
+                            return Err(Status::invalid_argument(
+                                NodeError::InvalidChainId(chain_id).to_string(),
+                            ));
                         }
                     };
 
@@ -145,7 +133,7 @@ impl<
                         .contains(req.signature_index as usize)
                     {
                         return Err(Status::invalid_argument(
-                            TaskError::CommitterCacheNotExisted.to_string(),
+                            BLSTaskError::CommitterCacheNotExisted.to_string(),
                         ));
                         // because we can't assure reliability of requested partial signature to original message,
                         // we refuse to accept other node's request if the committer has not build this committer cache first.
@@ -178,115 +166,14 @@ impl<
                             req.partial_signature,
                         )
                         .map_err(|_| {
-                            Status::internal(TaskError::CommitterCacheNotExisted.to_string())
+                            Status::internal(BLSTaskError::CommitterCacheNotExisted.to_string())
                         })?;
                 }
 
-                TaskType::GroupRelay => {
-                    let group_relay_result_cache = self
-                        .context
-                        .read()
-                        .await
-                        .get_main_chain()
-                        .get_group_relay_result_cache();
-
-                    if !group_relay_result_cache
-                        .read()
-                        .await
-                        .contains(req.signature_index as usize)
-                    {
-                        return Err(Status::invalid_argument(
-                            TaskError::CommitterCacheNotExisted.to_string(),
-                        ));
-                        // because we can't assure reliability of requested partial signature to original message,
-                        // we refuse to accept other node's request if the committer has not build this committer cache first.
-                    }
-
-                    let relayed_group = group_relay_result_cache
-                        .read()
-                        .await
-                        .get(req.signature_index as usize)
-                        .unwrap()
-                        .result_cache
-                        .relayed_group
-                        .clone();
-
-                    let relayed_group_as_bytes = bincode::serialize(&relayed_group).unwrap();
-
-                    if req.message != relayed_group_as_bytes {
-                        return Err(Status::invalid_argument(
-                            NodeError::InvalidTaskMessage.to_string(),
-                        ));
-                    }
-
-                    group_relay_result_cache
-                        .write()
-                        .await
-                        .add_partial_signature(
-                            req.signature_index as usize,
-                            req_id_address,
-                            req.partial_signature,
-                        )
-                        .map_err(|_| {
-                            Status::internal(TaskError::CommitterCacheNotExisted.to_string())
-                        })?;
-                }
-                TaskType::GroupRelayConfirmation => {
-                    if chain_id == 0 || !self.context.read().await.contains_chain(chain_id) {
-                        return Err(Status::invalid_argument(
-                            NodeError::InvalidChainId(chain_id).to_string(),
-                        ));
-                    }
-
-                    let group_relay_confirmation_result_cache = self
-                        .context
-                        .read()
-                        .await
-                        .get_adapter_chain(req.chain_id as usize)
-                        .unwrap()
-                        .get_group_relay_confirmation_result_cache();
-
-                    if !group_relay_confirmation_result_cache
-                        .read()
-                        .await
-                        .contains(req.signature_index as usize)
-                    {
-                        return Err(Status::invalid_argument(
-                            TaskError::CommitterCacheNotExisted.to_string(),
-                        ));
-                        // because we can't assure reliability of requested partial signature to original message,
-                        // we refuse to accept other node's request if the committer has not build this committer cache first.
-                    }
-
-                    let group_relay_confirmation = group_relay_confirmation_result_cache
-                        .read()
-                        .await
-                        .get(req.signature_index as usize)
-                        .unwrap()
-                        .result_cache
-                        .group_relay_confirmation
-                        .clone();
-
-                    let group_relay_confirmation_as_bytes =
-                        bincode::serialize(&group_relay_confirmation).unwrap();
-
-                    if req.message != group_relay_confirmation_as_bytes {
-                        return Err(Status::invalid_argument(
-                            NodeError::InvalidTaskMessage.to_string(),
-                        ));
-                    }
-
-                    group_relay_confirmation_result_cache
-                        .write()
-                        .await
-                        .add_partial_signature(
-                            req.signature_index as usize,
-                            req_id_address,
-                            req.partial_signature,
-                        )
-                        .map_err(|_| {
-                            Status::internal(TaskError::CommitterCacheNotExisted.to_string())
-                        })?;
+                _ => {
+                    return Err(Status::invalid_argument(
+                        NodeError::InvalidTaskType.to_string(),
+                    ));
                 }
             }
 

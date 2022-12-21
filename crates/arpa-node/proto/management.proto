@@ -1,0 +1,37 @@
+syntax = "proto3";
+
+import "google/protobuf/empty.proto";
+
+package management;
+
+service ManagementService {
+  rpc StartListener(StartListenerRequest) returns (StartListenerReply);
+
+  rpc ShutdownListener(ShutdownListenerRequest) returns (ShutdownListenerReply);
+}
+
+enum TaskType {
+  Block = 0;
+  PreGrouping = 1;
+  PostCommitGrouping = 2;
+  PostGrouping = 3;
+  NewRandomnessTask = 4;
+  ReadyToHandleRandomnessTask = 5;
+  RandomnessSignatureAggregation = 6;
+}
+
+message StartListenerRequest {
+  TaskType task_type = 1;
+}
+
+message StartListenerReply {
+  bool result = 1;
+}
+
+message ShutdownListenerRequest {
+  TaskType task_type = 1;
+}
+
+message ShutdownListenerReply {
+  bool result = 1;
+}

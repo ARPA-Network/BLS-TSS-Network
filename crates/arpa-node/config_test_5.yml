@@ -1,4 +1,6 @@
-node_rpc_endpoint: "[::1]:50065"
+node_committer_rpc_endpoint: "[::1]:50065"
+
+node_management_rpc_endpoint: "[::1]:50099"
 
 provider_endpoint: "[::1]:50052"
 
@@ -6,10 +8,3 @@ controller_address: "0x0000000000000000000000000000000000000000"
 
 account:
   private_key: "0000000000000000000000000000000000000000000000000000000000000005"
-
-adapters:
-  - id: 1
-    name: eth
-    endpoint: "[::1]:50053"
-    account:
-      private_key: "0000000000000000000000000000000000000000000000000000000000000015"

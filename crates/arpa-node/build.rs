@@ -17,6 +17,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         "proto/controller.proto",
         "proto/coordinator.proto",
         "proto/committer.proto",
+        "proto/management.proto",
     ];
 
     tonic_build::configure()
