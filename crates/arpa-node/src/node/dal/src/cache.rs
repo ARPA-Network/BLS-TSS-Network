@@ -1,4 +1,5 @@
 use crate::error::{DataAccessResult, GroupError, NodeInfoError};
+use crate::MdcContextUpdater;
 
 use super::{
     BLSTasksFetcher, BLSTasksUpdater, BlockInfoFetcher, BlockInfoUpdater, GroupInfoFetcher,
@@ -14,6 +15,7 @@ use async_trait::async_trait;
 use dkg_core::primitives::DKGOutput;
 use ethers_core::types::Address;
 use log::info;
+use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, HashMap};
 use threshold_bls::group::Element;
 use threshold_bls::{
@@ -44,7 +46,7 @@ impl BlockInfoUpdater for InMemoryBlockInfoCache {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct InMemoryNodeInfoCache {
     pub(crate) id_address: Address,
     pub(crate) node_rpc_endpoint: Option<String>,
@@ -77,10 +79,17 @@ impl InMemoryNodeInfoCache {
     }
 }
 
+impl MdcContextUpdater for InMemoryNodeInfoCache {
+    fn refresh_mdc_entry(&self) {
+        log_mdc::insert("node_info", serde_json::to_string(&self).unwrap());
+    }
+}
+
 #[async_trait]
 impl NodeInfoUpdater for InMemoryNodeInfoCache {
     async fn set_node_rpc_endpoint(&mut self, node_rpc_endpoint: String) -> DataAccessResult<()> {
         self.node_rpc_endpoint = Some(node_rpc_endpoint);
+        self.refresh_mdc_entry();
         Ok(())
     }
 
@@ -91,6 +100,7 @@ impl NodeInfoUpdater for InMemoryNodeInfoCache {
     ) -> DataAccessResult<()> {
         self.dkg_private_key = Some(dkg_private_key);
         self.dkg_public_key = Some(dkg_public_key);
+        self.refresh_mdc_entry();
         Ok(())
     }
 }
@@ -120,7 +130,7 @@ impl NodeInfoFetcher for InMemoryNodeInfoCache {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct InMemoryGroupInfoCache {
     pub(crate) share: Option<Share<Scalar>>,
     pub(crate) group: Group,
@@ -177,6 +187,12 @@ impl InMemoryGroupInfoCache {
     }
 }
 
+impl MdcContextUpdater for InMemoryGroupInfoCache {
+    fn refresh_mdc_entry(&self) {
+        log_mdc::insert("group_info", serde_json::to_string(&self).unwrap());
+    }
+}
+
 #[async_trait]
 impl GroupInfoUpdater for InMemoryGroupInfoCache {
     async fn update_dkg_status(
@@ -205,6 +221,8 @@ impl GroupInfoUpdater for InMemoryGroupInfoCache {
         );
 
         self.dkg_status = dkg_status;
+
+        self.refresh_mdc_entry();
 
         Ok(true)
     }
@@ -239,6 +257,8 @@ impl GroupInfoUpdater for InMemoryGroupInfoCache {
             };
             self.group.members.insert(*address, member);
         });
+
+        self.refresh_mdc_entry();
 
         Ok(())
     }
@@ -309,6 +329,8 @@ impl GroupInfoUpdater for InMemoryGroupInfoCache {
             }
         }
 
+        self.refresh_mdc_entry();
+
         Ok((public_key, partial_public_key, disqualified_nodes))
     }
 
@@ -335,6 +357,8 @@ impl GroupInfoUpdater for InMemoryGroupInfoCache {
         self.group.committers = committer_indices;
 
         self.group.state = true;
+
+        self.refresh_mdc_entry();
 
         Ok(())
     }

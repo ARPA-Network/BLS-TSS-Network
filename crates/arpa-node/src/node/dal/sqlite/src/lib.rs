@@ -14,6 +14,7 @@ use arpa_node_dal::cache::InMemoryNodeInfoCache;
 use arpa_node_dal::error::DataAccessResult;
 use arpa_node_dal::error::GroupError;
 use arpa_node_dal::error::RandomnessTaskError;
+use arpa_node_dal::MdcContextUpdater;
 use arpa_node_dal::NodeInfoUpdater;
 use arpa_node_dal::{
     error::DataAccessError, BLSTasksFetcher, BLSTasksUpdater, DKGOutput, GroupInfoFetcher,
@@ -144,12 +145,16 @@ impl NodeInfoDBClient {
         let conn = &self.db_client.connection;
         let node_info = NodeQuery::find_current_node_info(conn).await?.unwrap();
 
-        self.node_info_cache = Some(InMemoryNodeInfoCache::rebuild(
+        let node_info_cache = InMemoryNodeInfoCache::rebuild(
             node_info.id_address.parse().unwrap(),
             node_info.node_rpc_endpoint.clone(),
             bincode::deserialize(&node_info.dkg_private_key).unwrap(),
             bincode::deserialize(&node_info.dkg_public_key).unwrap(),
-        ));
+        );
+
+        node_info_cache.refresh_mdc_entry();
+
+        self.node_info_cache = Some(node_info_cache);
 
         self.node_info_cache_model = Some(node_info);
 
@@ -218,7 +223,7 @@ impl GroupInfoDBClient {
                 .map_or(vec![], |str| serde_json::from_str(str).unwrap()),
         };
 
-        self.group_info_cache = Some(InMemoryGroupInfoCache::rebuild(
+        let group_info_cache = InMemoryGroupInfoCache::rebuild(
             group_info
                 .share
                 .as_ref()
@@ -227,7 +232,11 @@ impl GroupInfoDBClient {
             (group_info.dkg_status as usize).into(),
             group_info.self_member_index as usize,
             group_info.dkg_start_block_height as usize,
-        ));
+        );
+
+        group_info_cache.refresh_mdc_entry();
+
+        self.group_info_cache = Some(group_info_cache);
 
         self.group_info_cache_model = Some(group_info);
 

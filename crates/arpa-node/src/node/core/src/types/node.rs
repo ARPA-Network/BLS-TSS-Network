@@ -192,7 +192,7 @@ impl From<i32> for TaskType {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Hash, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Hash, Eq, Serialize, Deserialize)]
 pub enum DKGStatus {
     None,
     InPhase,

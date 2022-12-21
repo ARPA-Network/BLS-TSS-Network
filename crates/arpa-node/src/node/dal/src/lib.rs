@@ -22,6 +22,10 @@ pub trait BlockInfoUpdater {
     fn set_block_height(&mut self, block_height: usize);
 }
 
+pub trait MdcContextUpdater {
+    fn refresh_mdc_entry(&self);
+}
+
 #[async_trait]
 pub trait NodeInfoUpdater {
     async fn set_node_rpc_endpoint(&mut self, node_rpc_endpoint: String) -> DataAccessResult<()>;
