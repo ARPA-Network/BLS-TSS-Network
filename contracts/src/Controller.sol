@@ -90,44 +90,101 @@ contract Controller is Ownable {
         nodeJoin(msg.sender);
     }
 
-    function nodeJoin(address idAddress) private {
+    function nodeJoin(address idAddress) internal {
         // * get groupIndex from findOrCreateTargetGroup -> addGroup
         (uint256 groupIndex, bool needsRebalance) = findOrCreateTargetGroup();
+
+        require(groupIndex != 0, "Group index cannot be 0"); // ! remove later
+
         addToGroup(idAddress, groupIndex, true); // * add to group
 
-        // uint[] memory groupIndices = groups.keys(); //! 
+        // Get list of all group indicies exclusing the current group index.
+        // uint256[] memory groupIndices;
+        // uint256 index = 0;
+        // for (uint256 i = 0; i < groupCount; i++) {
+        //     if (i != groupIndex) {
+        //         groupIndices[index] = i;
+        //         index++;
+        //     }
+        // }
 
-        // TODO: Reblance Group: Implement later!
+        // todo
         // if (needsRebalance) {
-        //     // reblanceGroup();
+        //     reblanceGroup();
         // }
     }
 
-    function reblanceGroup(uint256 groupIndexA, uint256 groupIndexB) private {
+    function reblanceGroup(uint256 groupIndexA, uint256 groupIndexB) internal {
         Group storage groupA = groups[groupIndexA];
         Group storage groupB = groups[groupIndexB];
 
         // ? What is going on here.
+        // todo
     }
 
+    //
     function findOrCreateTargetGroup()
-        private
+        public
         returns (
             uint256, //groupIndex
             bool // needsRebalance
         )
     {
-        if (groupCount == 0) {
+        if (groupCount == 0) { // if group is empty, addgroup.
             uint256 groupIndex = addGroup();
             return (groupIndex, false);
         }
-        return (1, false); // TODO: Need to implement index_of_min_size
+
+        // get the group index of the group with the minimum size, as well as the min size
+        uint256 indexOfMinSize;
+        uint256 minSize = GROUP_MAX_CAPACITY;
+        for (uint256 i = 0; i < groupCount; i++) {
+            Group memory g = groups[i+1]; // because groupCount starts at 1
+            if (g.size < minSize) {
+                minSize = g.size;
+                indexOfMinSize = i+1; // because groupCount starts at 1
+            }
+        }
+
+        // compute the valid group count 
+        uint256 validGroupCount = validGroupIndices().length;
+        
+        // // check if valid group count < ideal_number_of_groups || minSize == group_max_capacity
+        // // If either condition is met and the number of valid groups == group count, call add group and return (index of new group, true)
+        if ((validGroupCount < IDEAL_NUMBER_OF_GROUPS || minSize == GROUP_MAX_CAPACITY) && (validGroupCount == groupCount)) {
+            uint256 groupIndex = addGroup();
+            return (groupIndex, true);
+        }
+
+        // // if none of the above conditions are met:
+        return (indexOfMinSize, false);
+    }
+
+    // Get list of all group indexes where group.isStrictlyMajorityConsensusReached == true
+    function validGroupIndices() public view returns (uint256[] memory) {
+        uint256[] memory groupIndices = new uint256[](groupCount); //max length is group count
+        uint256 index = 0;
+        for (uint256 i = 0; i < groupCount; i++) {
+            Group memory g = groups[i+1];
+            if (g.isStrictlyMajorityConsensusReached) {
+                groupIndices[index] = i+1; // because groupCount starts at 1
+                index++;
+            }
+        }
+
+        // create result array of correct size (remove possible trailing zero elements)
+        uint256[] memory result = new uint256[](index);
+        for (uint256 i = 0; i < index; i++) {
+            result[i] = groupIndices[i];
+        }
+
+        return result;
     }
 
     function addGroup() internal returns (uint256) {
-        groupCount++;
+        groupCount++; // count starts  at 1, not 0
         Group storage g = groups[groupCount];
-        g.index = groupCount;
+        g.index = groupCount; // index starts at 1, not 0
         g.size = 0;
         g.threshold = DEFAULT_MINIMUM_THRESHOLD;
         return groupCount;

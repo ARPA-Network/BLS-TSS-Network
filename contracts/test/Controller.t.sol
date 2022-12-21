@@ -22,15 +22,26 @@ contract ControllerTest is Test {
     address public node2 = address(0x2);
     address public node3 = address(0x3);
     address public node4 = address(0x4);
-
-    //Unregistered Node
     address public node5 = address(0x5);
+    address public node6 = address(0x6);
+    address public node7 = address(0x7);
+    address public node8 = address(0x8);
+    address public node9 = address(0x9);
+    address public node10 = address(0xA);
+    address public node11 = address(0xB);
 
     // Node Public Keys
     bytes pubkey1 = hex"DECADE01";
     bytes pubkey2 = hex"DECADE02";
     bytes pubkey3 = hex"DECADE03";
     bytes pubkey4 = hex"DECADE04";
+    bytes pubkey5 = hex"DECADE05";
+    bytes pubkey6 = hex"DECADE06";
+    bytes pubkey7 = hex"DECADE07";
+    bytes pubkey8 = hex"DECADE08";
+    bytes pubkey9 = hex"DECADE09";
+    bytes pubkey10 = hex"DECADE10";
+    bytes pubkey11 = hex"DECADE11";
 
     // uint256 registerCount; // track number of registered nodes for tests
 
@@ -123,7 +134,84 @@ contract ControllerTest is Test {
         // assertEq(m.partialPublicKey, TODO);
 
         address coordinatorAddress = controller.getCoordinator(groupIndex);
-        emit log_named_address("\nCoordinator", coordinatorAddress);
+        // emit log_named_address("\nCoordinator", coordinatorAddress);
+    }
+
+    function mockFindOrCreateTargetGroup()
+        public
+        returns (
+            uint256, //groupIndex
+            bool // needsRebalance
+        )
+    {
+        emit log("============");
+        if (controller.groupCount() == 0) { // if group is empty, addgroup.
+            emit log("if groupCount == 0:");
+            return (1,true);
+        }
+
+        // get the group index of the group with the minimum size, as well as the min size
+        uint256 indexOfMinSize;
+        uint256 minSize = controller.GROUP_MAX_CAPACITY();
+        for (uint256 i = 0; i < controller.groupCount(); i++) {
+            Controller.Group memory g = controller.getGroup(i+1); //
+            if (g.size < minSize) {
+                minSize = g.size;
+                indexOfMinSize = i+1; // ! because groupCount starts at 1, ruoshan please check this. 
+            }
+        }
+
+
+
+        // Get length of list of all group indexes where group.isStrictlyMajorityConsensusReached == true
+        uint256 validGroupCount = controller.validGroupIndices().length;
+        emit log("else:");
+        emit log_named_uint("indexOfMinSize", indexOfMinSize);
+        emit log_named_uint("minSize", minSize);
+        emit log_named_uint("validGroupCount", validGroupCount);
+
+        // // check if valid group count < ideal_number_of_groups || minSize == group_max_capacity
+        // // If either condition is met and the number of valid groups == group count, call add group and return (index of new group, true)
+        if ((validGroupCount < controller.IDEAL_NUMBER_OF_GROUPS() || minSize == controller.GROUP_MAX_CAPACITY()) && (validGroupCount == controller.groupCount())) {
+            emit log("validGroupCount < IDEAL_NUMBER_OF_GROUPS || minSize == GROUP_MAX_CAPACITY");
+            return (1,true);
+            // uint256 groupIndex = controller.addGroup();
+            // return (groupIndex, true);
+        }
+
+        // // if none of the above conditions are met:
+        // return (indexOfMinSize, false);
+        emit log ("neither condition met:");
+        // emit log_named_uint("indexOfMinSize", indexOfMinSize);
+        // emit log_named_uint("minSize", minSize);
+        return (indexOfMinSize, false);
+
+    }
+
+    function testValidGroupIndices() public {
+        uint256[] memory groupIndices = controller.validGroupIndices();
+        assertEq(groupIndices.length, 0);
+        assertEq(controller.groupCount(), 0);
+
+        testCommitDkg();
+
+        groupIndices = controller.validGroupIndices();
+        // for (uint256 i = 0; i < groupIndices.length; i++) {
+        //     emit log_named_uint("groupIndices[i]", groupIndices[i]);
+        // }
+        assertEq(groupIndices.length, 1);
+        assertEq(controller.groupCount(), 1);
+    }
+
+    function testFindOrCreateTargetGroup() public {
+        emit log_named_uint("groupCount", controller.groupCount());
+        testCommitDkg();
+        emit log_named_uint("groupCount", controller.groupCount());
+        printGroupInfo(1);
+        vm.prank(node4);
+        controller.nodeRegister(pubkey4);
+        emit log_named_uint("groupCount", controller.groupCount());
+        printGroupInfo(2);
     }
 
     function testGetMemberIndex() public {
@@ -217,9 +305,7 @@ contract ControllerTest is Test {
 
         assertEq(checkIsStrictlyMajorityConsensusReached(groupIndex), false);
 
-        // * Remove
-        printGroupInfo(groupIndex);
-
+        // printGroupInfo(groupIndex); // ! Print
 
         // Succesful Commit: Node 1
         vm.prank(node1);
@@ -232,7 +318,7 @@ contract ControllerTest is Test {
         );
         controller.commitDkg(params);
         assertEq(checkIsStrictlyMajorityConsensusReached(groupIndex), false);
-        printGroupInfo(groupIndex); // ! Print
+        // printGroupInfo(groupIndex); // ! Print
 
 
         //  Fail if CommitCache already contains PartialKey for this node
@@ -261,7 +347,7 @@ contract ControllerTest is Test {
         );
         controller.commitDkg(params);
         assertEq(checkIsStrictlyMajorityConsensusReached(groupIndex), false);
-        printGroupInfo(groupIndex); // ! Print
+        // printGroupInfo(groupIndex); // ! Print
 
 
         // Succesful Commit: Node 3
@@ -275,7 +361,7 @@ contract ControllerTest is Test {
         );
         controller.commitDkg(params);
         assertEq(checkIsStrictlyMajorityConsensusReached(groupIndex), true);
-        printGroupInfo(groupIndex); // ! Print
+        // printGroupInfo(groupIndex); // ! Print
     }
 
     function testChooseRandomlyFromIndices() public {
@@ -384,8 +470,10 @@ contract ControllerTest is Test {
         Controller.Group memory g = controller.getGroup(groupIndex);
 
         uint256 groupCount = controller.groupCount();
-        emit log("----");
-        emit log_named_uint("groupCount", groupCount);
+        emit log("--------------------");
+        emit log_named_uint("printing group info for: groupIndex", groupIndex);
+        emit log("--------------------");
+        emit log_named_uint("Total groupCount", groupCount);
         emit log_named_uint("g.index", g.index);
         emit log_named_uint("g.epoch", g.epoch);
         emit log_named_uint("g.size", g.size);
