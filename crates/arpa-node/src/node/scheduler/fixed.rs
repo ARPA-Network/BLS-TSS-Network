@@ -27,7 +27,14 @@ impl TaskScheduler for SimpleFixedTaskScheduler {
         if self.fixed_tasks.contains_key(&task_type) {
             return Err(SchedulerError::TaskAlreadyExisted);
         }
-        let handle = tokio::spawn(future);
+
+        let mut mdc = vec![];
+        log_mdc::iter(|k, v| mdc.push((k.to_owned(), v.to_owned())));
+
+        let handle = tokio::spawn(async move {
+            log_mdc::extend(mdc);
+            future.await;
+        });
         self.fixed_tasks.insert(task_type, handle);
         Ok(())
     }

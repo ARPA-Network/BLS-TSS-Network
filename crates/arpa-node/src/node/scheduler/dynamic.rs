@@ -29,7 +29,11 @@ impl TaskScheduler for SimpleDynamicTaskScheduler {
     {
         let (send, recv) = channel::<()>();
 
+        let mut mdc = vec![];
+        log_mdc::iter(|k, v| mdc.push((k.to_owned(), v.to_owned())));
+
         tokio::spawn(async move {
+            log_mdc::extend(mdc);
             future.await;
             drop(send);
         });
