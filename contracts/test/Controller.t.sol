@@ -134,7 +134,7 @@ contract ControllerTest is Test {
         // assertEq(m.partialPublicKey, TODO);
 
         address coordinatorAddress = controller.getCoordinator(groupIndex);
-        // emit log_named_address("\nCoordinator", coordinatorAddress);
+        emit log_named_address("\nCoordinator", coordinatorAddress);
     }
 
     function mockFindOrCreateTargetGroup()
@@ -256,11 +256,7 @@ contract ControllerTest is Test {
         testEmitGroupEvent();
 
         uint256 groupIndex = 1;
-        address coordinatorAddress = controller.getCoordinator(groupIndex);
-        ICoordinator coordinator = ICoordinator(coordinatorAddress);
-        uint256 startBlock = coordinator.startBlock();
-
-        uint256 groupEpoch = 1;
+         uint256 groupEpoch = 1;
         bytes memory partialPublicKey = hex"DECADE";
         bytes memory publicKey = hex"C0FFEE";
         address[] memory disqualifiedNodes = new address[](0);

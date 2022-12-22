@@ -99,28 +99,116 @@ contract Controller is Ownable {
         addToGroup(idAddress, groupIndex, true); // * add to group
 
         // Get list of all group indicies exclusing the current group index.
-        // uint256[] memory groupIndices;
-        // uint256 index = 0;
-        // for (uint256 i = 0; i < groupCount; i++) {
-        //     if (i != groupIndex) {
-        //         groupIndices[index] = i;
-        //         index++;
-        //     }
-        // }
+        uint256[] memory groupIndices = new uint256[](groupCount - 1);
+        uint256 index = 0;
+        for (uint256 i = 0; i < groupCount; i++) {
+            if (groupIndex != i+1) {
+                groupIndices[index] = i+1;
+                index++;
+            }
+        }
+
+        // If needs rebalance, iterate over group indices and attempt to rebalance group, break as soon as success
+        if (needsRebalance) {
+            for (uint256 i = 0; i < groupIndices.length; i++) {
+                if (rebalanceGroup(groupIndices[i], groupIndex)) {
+                    break;
+                }
+            }
+        }
 
         // todo
+
         // if (needsRebalance) {
         //     reblanceGroup();
         // }
     }
+    
 
-    function reblanceGroup(uint256 groupIndexA, uint256 groupIndexB) internal {
-        Group storage groupA = groups[groupIndexA];
-        Group storage groupB = groups[groupIndexB];
+    // ! Test this code
+    // Rebalance group. Group A Index = iterate over each group other than Group B Index.
+    function rebalanceGroup(uint groupAIndex, uint groupBIndex) public returns (bool) {
+        Group memory groupA = groups[groupAIndex];
+        Group memory groupB = groups[groupBIndex];
 
-        // ? What is going on here.
-        // todo
+        if (groupB.size > groupA.size) {
+            // Swap groupA and groupB
+            Group memory temp = groupA;
+            groupA = groupB;
+            groupB = temp;
+
+            // Swap groupAIndex and groupBIndex
+            uint tempIndex = groupAIndex;
+            groupAIndex = groupBIndex;
+            groupBIndex = tempIndex;
+        }
+
+        uint expectedSizeToMove = groupA.size - (groupA.size + groupB.size) / 2;
+        if (expectedSizeToMove == 0 || groupA.size - expectedSizeToMove < DEFAULT_MINIMUM_THRESHOLD) {
+            return false;
+        }
+
+        uint[] memory qualifiedIndices = new uint[](groupA.members.length);
+        for (uint i = 0; i < groupA.members.length; i++) {
+            qualifiedIndices[i] = groupA.members[i].index;
+        }
+
+        uint[] memory membersToMove = chooseRandomlyFromIndices(lastOutput, qualifiedIndices, expectedSizeToMove);
+        for (uint i = 0; i < membersToMove.length; i++) {
+            uint memberIndex = membersToMove[i];
+            address idAddress;
+            for (uint j = 0; j < groupA.members.length; j++) {
+                if (groupA.members[j].index == memberIndex) {
+                    idAddress = groupA.members[j].nodeIdAddress;
+                    break;
+                }
+            }
+            removeFromGroup(idAddress, groupAIndex, false);
+            addToGroup(idAddress, groupBIndex, false);
+        }
+
+        emitGroupEvent(groupAIndex);
+        emitGroupEvent(groupBIndex);
+
+        return true;
     }
+
+    function removeFromGroup(
+        address nodeIdAddress,
+        uint groupIndex,
+        bool emitEventInstantly
+    ) public returns (bool) {
+        Group storage group = groups[groupIndex];
+
+        group.size--;
+
+        if (group.size == 0) {
+            return false;
+        }
+
+        for (uint i = 0; i < group.members.length; i++) {
+            if (group.members[i].nodeIdAddress == nodeIdAddress) {
+                delete group.members[i];
+                break;
+            }
+        }
+
+        uint minimum = minimumThreshold(group.size);
+
+        group.threshold = minimum > DEFAULT_MINIMUM_THRESHOLD ? minimum : DEFAULT_MINIMUM_THRESHOLD;
+
+        if (group.size < 3) {
+            return true;
+        }
+
+        if (emitEventInstantly) {
+            emitGroupEvent(groupIndex);
+        }
+
+        return false;
+    }
+
+    // ! Test code end
 
     //
     function findOrCreateTargetGroup()
@@ -149,14 +237,14 @@ contract Controller is Ownable {
         // compute the valid group count 
         uint256 validGroupCount = validGroupIndices().length;
         
-        // // check if valid group count < ideal_number_of_groups || minSize == group_max_capacity
-        // // If either condition is met and the number of valid groups == group count, call add group and return (index of new group, true)
+        // check if valid group count < ideal_number_of_groups || minSize == group_max_capacity
+        // If either condition is met and the number of valid groups == group count, call add group and return (index of new group, true)
         if ((validGroupCount < IDEAL_NUMBER_OF_GROUPS || minSize == GROUP_MAX_CAPACITY) && (validGroupCount == groupCount)) {
             uint256 groupIndex = addGroup();
-            return (groupIndex, true);
+            return (groupIndex, true); // NEEDS REBALANCE
         }
 
-        // // if none of the above conditions are met:
+        // if none of the above conditions are met:
         return (indexOfMinSize, false);
     }
 
@@ -293,9 +381,6 @@ contract Controller is Ownable {
         return -1;
     }
 
-
-
-    // ! Partal Key Registered: Old Code.. I think this needs to be changed to look inside the commit cache
     /// Check to see if a group has a partial public key registered for a given node.
     function partialKeyRegistered(uint256 groupIndex, address nodeIdAddress)
         public
@@ -313,27 +398,6 @@ contract Controller is Ownable {
         }
         return false;
     }
-    // ! New Code ?
-    // function partialKeyRegistered(uint256 groupIndex, address nodeIdAddress)
-    //     public
-    //     view
-    //     returns (bool)
-    // {
-    //     Group storage g = groups[groupIndex];
-    //     for (uint256 i = 0; i < g.commitCacheList.length; i++) {
-    //         CommitCache memory commitCache = g.commitCacheList[i];
-    //         for (uint256 j = 0; j < commitCache.nodeIdAddress.length; j++) {
-    //             if (commitCache.nodeIdAddress[j] == nodeIdAddress) {
-    //                 CommitResult memory commitResult = commitCache.commitResult;
-    //                 if (commitResult.publicKey.length != 0) {
-    //                     return true;
-    //                 }
-    //             }
-    //         }
-    //     }
-    //     return false;
-    // }
-
 
     struct CommitDkgParams {
         uint256 groupIndex;
@@ -374,8 +438,6 @@ contract Controller is Ownable {
             "Node is not a member of the group"
         );
 
-        // uint256 memberIndex = uint256(getMemberIndex(groupIndex, msg.sender));
-        // ! something fishy
         require(   // check to see if member has called commitdkg in the past. 
             !partialKeyRegistered(params.groupIndex, msg.sender),
             "CommitCache already contains PartialKey for this node"
