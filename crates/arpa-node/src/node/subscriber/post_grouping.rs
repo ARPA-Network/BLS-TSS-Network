@@ -1,4 +1,4 @@
-use super::{DebuggableEvent, Subscriber};
+use super::{DebuggableEvent, DebuggableSubscriber, Subscriber};
 use crate::node::{
     error::NodeResult,
     event::{dkg_post_process::DKGPostProcess, types::Topic},
@@ -12,6 +12,7 @@ use log::{debug, error, info};
 use std::sync::Arc;
 use tokio::sync::RwLock;
 
+#[derive(Debug)]
 pub struct PostGroupingSubscriber<I: ChainIdentity + ControllerClientBuilder> {
     main_chain_identity: Arc<RwLock<I>>,
     eq: Arc<RwLock<EventQueue>>,
@@ -59,8 +60,8 @@ impl<I: ChainIdentity + ControllerClientBuilder + Sync + Send> DKGPostProcessHan
 }
 
 #[async_trait]
-impl<I: ChainIdentity + ControllerClientBuilder + Sync + Send + 'static> Subscriber
-    for PostGroupingSubscriber<I>
+impl<I: ChainIdentity + ControllerClientBuilder + std::fmt::Debug + Sync + Send + 'static>
+    Subscriber for PostGroupingSubscriber<I>
 {
     async fn notify(&self, topic: Topic, payload: &(dyn DebuggableEvent)) -> NodeResult<()> {
         debug!("{:?}", topic);
@@ -96,4 +97,9 @@ impl<I: ChainIdentity + ControllerClientBuilder + Sync + Send + 'static> Subscri
             .await
             .subscribe(Topic::DKGPostProcess, subscriber);
     }
+}
+
+impl<I: ChainIdentity + ControllerClientBuilder + std::fmt::Debug + Sync + Send + 'static>
+    DebuggableSubscriber for PostGroupingSubscriber<I>
+{
 }

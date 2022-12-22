@@ -18,7 +18,8 @@ use arpa_node_contract_client::{
 };
 use arpa_node_core::{ChainIdentity, RandomnessTask, SchedulerResult};
 use arpa_node_dal::{
-    BLSTasksFetcher, BLSTasksUpdater, GroupInfoFetcher, GroupInfoUpdater, NodeInfoFetcher,
+    BLSTasksFetcher, BLSTasksUpdater, GroupInfoFetcher, GroupInfoUpdater, MdcContextUpdater,
+    NodeInfoFetcher, NodeInfoUpdater,
 };
 use async_trait::async_trait;
 use ethers::{
@@ -72,9 +73,10 @@ pub struct HDWallet {
     pub passphrase: Option<String>,
 }
 
+#[derive(Debug)]
 pub struct GeneralContext<
-    N: NodeInfoFetcher,
-    G: GroupInfoFetcher + GroupInfoUpdater,
+    N: NodeInfoFetcher + NodeInfoUpdater + MdcContextUpdater,
+    G: GroupInfoFetcher + GroupInfoUpdater + MdcContextUpdater,
     T: BLSTasksFetcher<RandomnessTask> + BLSTasksUpdater<RandomnessTask>,
     I: ChainIdentity + ControllerClientBuilder + CoordinatorClientBuilder + AdapterClientBuilder,
 > {
@@ -86,8 +88,8 @@ pub struct GeneralContext<
 }
 
 impl<
-        N: NodeInfoFetcher + Sync + Send + 'static,
-        G: GroupInfoFetcher + GroupInfoUpdater + Sync + Send + 'static,
+        N: NodeInfoFetcher + NodeInfoUpdater + MdcContextUpdater + Sync + Send + 'static,
+        G: GroupInfoFetcher + GroupInfoUpdater + MdcContextUpdater + Sync + Send + 'static,
         T: BLSTasksFetcher<RandomnessTask> + BLSTasksUpdater<RandomnessTask> + Sync + Send + 'static,
         I: ChainIdentity
             + ControllerClientBuilder
@@ -111,14 +113,36 @@ impl<
 }
 
 impl<
-        N: NodeInfoFetcher + Sync + Send + 'static,
-        G: GroupInfoFetcher + GroupInfoUpdater + Sync + Send + 'static,
-        T: BLSTasksFetcher<RandomnessTask> + BLSTasksUpdater<RandomnessTask> + Sync + Send + 'static,
+        N: NodeInfoFetcher
+            + NodeInfoUpdater
+            + MdcContextUpdater
+            + std::fmt::Debug
+            + Clone
+            + Sync
+            + Send
+            + 'static,
+        G: GroupInfoFetcher
+            + GroupInfoUpdater
+            + MdcContextUpdater
+            + std::fmt::Debug
+            + Clone
+            + Sync
+            + Send
+            + 'static,
+        T: BLSTasksFetcher<RandomnessTask>
+            + BLSTasksUpdater<RandomnessTask>
+            + std::fmt::Debug
+            + Clone
+            + Sync
+            + Send
+            + 'static,
         I: ChainIdentity
             + ControllerClientBuilder
             + CoordinatorClientBuilder
             + AdapterClientBuilder
             + ChainProviderBuilder
+            + std::fmt::Debug
+            + Clone
             + Sync
             + Send
             + 'static,
@@ -159,14 +183,36 @@ impl<
 }
 
 impl<
-        N: NodeInfoFetcher + Sync + Send + 'static,
-        G: GroupInfoFetcher + GroupInfoUpdater + Sync + Send + 'static,
-        T: BLSTasksFetcher<RandomnessTask> + BLSTasksUpdater<RandomnessTask> + Sync + Send + 'static,
+        N: NodeInfoFetcher
+            + NodeInfoUpdater
+            + MdcContextUpdater
+            + std::fmt::Debug
+            + Clone
+            + Sync
+            + Send
+            + 'static,
+        G: GroupInfoFetcher
+            + GroupInfoUpdater
+            + MdcContextUpdater
+            + std::fmt::Debug
+            + Clone
+            + Sync
+            + Send
+            + 'static,
+        T: BLSTasksFetcher<RandomnessTask>
+            + BLSTasksUpdater<RandomnessTask>
+            + std::fmt::Debug
+            + Clone
+            + Sync
+            + Send
+            + 'static,
         I: ChainIdentity
             + ControllerClientBuilder
             + CoordinatorClientBuilder
             + AdapterClientBuilder
             + ChainProviderBuilder
+            + std::fmt::Debug
+            + Clone
             + Sync
             + Send
             + 'static,
@@ -217,14 +263,36 @@ impl TaskWaiter for ContextHandle {
 }
 
 impl<
-        N: NodeInfoFetcher + Sync + Send + 'static,
-        G: GroupInfoFetcher + GroupInfoUpdater + Sync + Send + 'static,
-        T: BLSTasksFetcher<RandomnessTask> + BLSTasksUpdater<RandomnessTask> + Sync + Send + 'static,
+        N: NodeInfoFetcher
+            + NodeInfoUpdater
+            + MdcContextUpdater
+            + std::fmt::Debug
+            + Clone
+            + Sync
+            + Send
+            + 'static,
+        G: GroupInfoFetcher
+            + GroupInfoUpdater
+            + MdcContextUpdater
+            + std::fmt::Debug
+            + Clone
+            + Sync
+            + Send
+            + 'static,
+        T: BLSTasksFetcher<RandomnessTask>
+            + BLSTasksUpdater<RandomnessTask>
+            + std::fmt::Debug
+            + Clone
+            + Sync
+            + Send
+            + 'static,
         I: ChainIdentity
             + ControllerClientBuilder
             + CoordinatorClientBuilder
             + AdapterClientBuilder
             + ChainProviderBuilder
+            + std::fmt::Debug
+            + Clone
             + Sync
             + Send
             + 'static,
@@ -244,14 +312,36 @@ impl<
 }
 
 impl<
-        N: NodeInfoFetcher + Sync + Send + 'static,
-        G: GroupInfoFetcher + GroupInfoUpdater + Sync + Send + 'static,
-        T: BLSTasksFetcher<RandomnessTask> + BLSTasksUpdater<RandomnessTask> + Sync + Send + 'static,
+        N: NodeInfoFetcher
+            + NodeInfoUpdater
+            + MdcContextUpdater
+            + std::fmt::Debug
+            + Clone
+            + Sync
+            + Send
+            + 'static,
+        G: GroupInfoFetcher
+            + GroupInfoUpdater
+            + MdcContextUpdater
+            + std::fmt::Debug
+            + Clone
+            + Sync
+            + Send
+            + 'static,
+        T: BLSTasksFetcher<RandomnessTask>
+            + BLSTasksUpdater<RandomnessTask>
+            + std::fmt::Debug
+            + Clone
+            + Sync
+            + Send
+            + 'static,
         I: ChainIdentity
             + ControllerClientBuilder
             + CoordinatorClientBuilder
             + AdapterClientBuilder
             + ChainProviderBuilder
+            + std::fmt::Debug
+            + Clone
             + Sync
             + Send
             + 'static,

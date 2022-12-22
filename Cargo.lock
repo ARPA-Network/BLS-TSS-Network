@@ -109,6 +109,7 @@ dependencies = [
  "glob",
  "gumdrop",
  "hex",
+ "hyper",
  "log",
  "log-mdc",
  "log4rs",
@@ -127,6 +128,7 @@ dependencies = [
  "tokio-retry",
  "tonic 0.8.0",
  "tonic-build 0.8.0",
+ "tower",
  "uuid 1.2.2",
 ]
 
@@ -177,7 +179,9 @@ dependencies = [
  "dkg-core",
  "ethers-core",
  "log",
+ "log-mdc",
  "serde",
+ "serde_json",
  "thiserror",
  "threshold-bls",
  "tokio 1.20.1",

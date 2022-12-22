@@ -1,6 +1,8 @@
 use crate::node::error::NodeResult;
 use arpa_node_contract_client::coordinator::{CoordinatorTransactions, CoordinatorViews};
+use arpa_node_log::*;
 use async_trait::async_trait;
+use core::fmt::Debug;
 use dkg_core::{
     primitives::{joint_feldman::*, *},
     BoardPublisher, DKGPhase, Phase2Result,
@@ -24,7 +26,7 @@ pub(crate) trait DKGCore<F, R> {
     ) -> NodeResult<DKGOutput<Curve>>
     where
         R: RngCore,
-        F: Fn() -> R + Send + 'async_trait;
+        F: Fn() -> R + Send + Debug + 'async_trait;
 }
 
 pub(crate) struct AllPhasesDKGCore<
@@ -46,6 +48,7 @@ where
     F: Fn() -> R,
     P: CoordinatorTransactions + CoordinatorViews + BoardPublisher<Curve> + Sync + Send,
 {
+    #[log_function]
     async fn run_dkg(
         &mut self,
         dkg_private_key: Scalar,
@@ -53,7 +56,7 @@ where
         rng: F,
     ) -> NodeResult<DKGOutput<Curve>>
     where
-        F: Send + 'async_trait,
+        F: Send + Debug + 'async_trait,
     {
         // TODO error handling and retry
 
@@ -186,9 +189,9 @@ fn parse_bundle<D: serde::de::DeserializeOwned>(bundle: &[Vec<u8>]) -> NodeResul
 
 fn write_output(out: &DKGOutput<Curve>) -> NodeResult<()> {
     let output = OutputJson {
-        public_key: hex::encode(&bincode::serialize(&out.public.public_key())?),
-        public_polynomial: hex::encode(&bincode::serialize(&out.public)?),
-        share: hex::encode(&bincode::serialize(&out.share)?),
+        public_key: hex::encode(bincode::serialize(&out.public.public_key())?),
+        public_polynomial: hex::encode(bincode::serialize(&out.public)?),
+        share: hex::encode(bincode::serialize(&out.share)?),
     };
 
     info!("{:?}", output);

@@ -5,7 +5,7 @@ use futures::Future;
 use std::collections::HashMap;
 use tokio::task::JoinHandle;
 
-#[derive(Default)]
+#[derive(Debug, Default)]
 pub struct SimpleFixedTaskScheduler {
     fixed_tasks: HashMap<TaskType, JoinHandle<()>>,
 }

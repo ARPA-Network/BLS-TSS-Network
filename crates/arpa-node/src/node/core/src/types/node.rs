@@ -8,7 +8,7 @@ pub trait Task {
     fn index(&self) -> usize;
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct BLSTask<T: Task> {
     pub task: T,
     pub state: bool,

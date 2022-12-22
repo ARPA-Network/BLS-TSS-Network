@@ -1,4 +1,4 @@
-use super::{DebuggableEvent, Subscriber};
+use super::{DebuggableEvent, DebuggableSubscriber, Subscriber};
 use crate::node::{
     algorithm::bls::{BLSCore, SimpleBLSCore},
     error::NodeResult,
@@ -15,6 +15,7 @@ use log::{debug, error, info};
 use std::{collections::HashMap, sync::Arc};
 use tokio::sync::RwLock;
 
+#[derive(Debug)]
 pub struct RandomnessSignatureAggregationSubscriber<I: ChainIdentity + AdapterClientBuilder> {
     pub chain_id: usize,
     id_address: Address,
@@ -102,7 +103,7 @@ impl<I: ChainIdentity + AdapterClientBuilder + Sync + Send> FulfillRandomnessHan
 }
 
 #[async_trait]
-impl<I: ChainIdentity + AdapterClientBuilder + Sync + Send + 'static> Subscriber
+impl<I: ChainIdentity + AdapterClientBuilder + std::fmt::Debug + Sync + Send + 'static> Subscriber
     for RandomnessSignatureAggregationSubscriber<I>
 {
     async fn notify(&self, topic: Topic, payload: &(dyn DebuggableEvent)) -> NodeResult<()> {
@@ -173,4 +174,9 @@ impl<I: ChainIdentity + AdapterClientBuilder + Sync + Send + 'static> Subscriber
             .await
             .subscribe(Topic::ReadyToFulfillRandomnessTask(chain_id), subscriber);
     }
+}
+
+impl<I: ChainIdentity + AdapterClientBuilder + std::fmt::Debug + Sync + Send + 'static>
+    DebuggableSubscriber for RandomnessSignatureAggregationSubscriber<I>
+{
 }

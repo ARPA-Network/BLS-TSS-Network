@@ -7,7 +7,7 @@ use tokio::{
 
 use super::{DynamicTaskScheduler, TaskScheduler, TaskType};
 
-#[derive(Default)]
+#[derive(Debug, Default)]
 pub struct SimpleDynamicTaskScheduler {
     // TODO access control
     pub dynamic_tasks: Vec<(Receiver<()>, Option<JoinHandle<()>>)>,

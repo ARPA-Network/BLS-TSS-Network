@@ -23,7 +23,7 @@ use threshold_bls::{
     sig::Share,
 };
 
-#[derive(Default)]
+#[derive(Debug, Default)]
 pub struct InMemoryBlockInfoCache {
     block_height: usize,
 }
@@ -46,7 +46,7 @@ impl BlockInfoUpdater for InMemoryBlockInfoCache {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct InMemoryNodeInfoCache {
     pub(crate) id_address: Address,
     pub(crate) node_rpc_endpoint: Option<String>,
@@ -130,7 +130,7 @@ impl NodeInfoFetcher for InMemoryNodeInfoCache {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct InMemoryGroupInfoCache {
     pub(crate) share: Option<Share<Scalar>>,
     pub(crate) group: Group,
@@ -461,7 +461,7 @@ impl GroupInfoFetcher for InMemoryGroupInfoCache {
     }
 }
 
-#[derive(Default)]
+#[derive(Default, Debug, Clone)]
 pub struct InMemoryBLSTasksQueue<T: Task> {
     bls_tasks: Vec<BLSTask<T>>,
 }
@@ -589,7 +589,7 @@ impl BLSTasksUpdater<GroupRelayConfirmationTask>
     }
 }
 
-#[derive(Default)]
+#[derive(Debug, Default)]
 pub struct InMemorySignatureResultCache<T: ResultCache> {
     signature_result_caches: HashMap<usize, BLSResultCache<T>>,
 }
@@ -628,6 +628,7 @@ impl ResultCache for GroupRelayConfirmationResultCache {
     type M = GroupRelayConfirmation;
 }
 
+#[derive(Debug)]
 pub struct BLSResultCache<T: ResultCache> {
     pub result_cache: T,
     pub state: bool,

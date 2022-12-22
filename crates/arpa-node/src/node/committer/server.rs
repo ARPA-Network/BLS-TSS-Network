@@ -14,8 +14,8 @@ use arpa_node_contract_client::{
 };
 use arpa_node_core::{BLSTaskError, ChainIdentity, RandomnessTask, TaskType};
 use arpa_node_dal::{
-    BLSTasksFetcher, BLSTasksUpdater, GroupInfoFetcher, GroupInfoUpdater, NodeInfoFetcher,
-    SignatureResultCacheFetcher, SignatureResultCacheUpdater,
+    BLSTasksFetcher, BLSTasksUpdater, GroupInfoFetcher, GroupInfoUpdater, MdcContextUpdater,
+    NodeInfoFetcher, NodeInfoUpdater, SignatureResultCacheFetcher, SignatureResultCacheUpdater,
 };
 use ethers::types::Address;
 use futures::Future;
@@ -28,8 +28,8 @@ pub mod committer_stub {
 }
 
 pub(crate) struct BLSCommitterServiceServer<
-    N: NodeInfoFetcher,
-    G: GroupInfoFetcher + GroupInfoUpdater,
+    N: NodeInfoFetcher + NodeInfoUpdater + MdcContextUpdater,
+    G: GroupInfoFetcher + GroupInfoUpdater + MdcContextUpdater,
     T: BLSTasksFetcher<RandomnessTask> + BLSTasksUpdater<RandomnessTask>,
     I: ChainIdentity
         + ControllerClientBuilder
@@ -43,8 +43,8 @@ pub(crate) struct BLSCommitterServiceServer<
 }
 
 impl<
-        N: NodeInfoFetcher,
-        G: GroupInfoFetcher + GroupInfoUpdater,
+        N: NodeInfoFetcher + NodeInfoUpdater + MdcContextUpdater,
+        G: GroupInfoFetcher + GroupInfoUpdater + MdcContextUpdater,
         T: BLSTasksFetcher<RandomnessTask> + BLSTasksUpdater<RandomnessTask>,
         I: ChainIdentity
             + ControllerClientBuilder
@@ -68,14 +68,36 @@ impl<
 
 #[tonic::async_trait]
 impl<
-        N: NodeInfoFetcher + Sync + Send + 'static,
-        G: GroupInfoFetcher + GroupInfoUpdater + Sync + Send + 'static,
-        T: BLSTasksFetcher<RandomnessTask> + BLSTasksUpdater<RandomnessTask> + Sync + Send + 'static,
+        N: NodeInfoFetcher
+            + NodeInfoUpdater
+            + MdcContextUpdater
+            + std::fmt::Debug
+            + Clone
+            + Sync
+            + Send
+            + 'static,
+        G: GroupInfoFetcher
+            + GroupInfoUpdater
+            + MdcContextUpdater
+            + std::fmt::Debug
+            + Clone
+            + Sync
+            + Send
+            + 'static,
+        T: BLSTasksFetcher<RandomnessTask>
+            + BLSTasksUpdater<RandomnessTask>
+            + std::fmt::Debug
+            + Clone
+            + Sync
+            + Send
+            + 'static,
         I: ChainIdentity
             + ControllerClientBuilder
             + CoordinatorClientBuilder
             + AdapterClientBuilder
             + ChainProviderBuilder
+            + std::fmt::Debug
+            + Clone
             + Sync
             + Send
             + 'static,
@@ -186,14 +208,36 @@ impl<
 
 pub async fn start_committer_server_with_shutdown<
     F: Future<Output = ()>,
-    N: NodeInfoFetcher + Sync + Send + 'static,
-    G: GroupInfoFetcher + GroupInfoUpdater + Sync + Send + 'static,
-    T: BLSTasksFetcher<RandomnessTask> + BLSTasksUpdater<RandomnessTask> + Sync + Send + 'static,
+    N: NodeInfoFetcher
+        + NodeInfoUpdater
+        + MdcContextUpdater
+        + std::fmt::Debug
+        + Clone
+        + Sync
+        + Send
+        + 'static,
+    G: GroupInfoFetcher
+        + GroupInfoUpdater
+        + MdcContextUpdater
+        + std::fmt::Debug
+        + Clone
+        + Sync
+        + Send
+        + 'static,
+    T: BLSTasksFetcher<RandomnessTask>
+        + BLSTasksUpdater<RandomnessTask>
+        + std::fmt::Debug
+        + Clone
+        + Sync
+        + Send
+        + 'static,
     I: ChainIdentity
         + ControllerClientBuilder
         + CoordinatorClientBuilder
         + AdapterClientBuilder
         + ChainProviderBuilder
+        + std::fmt::Debug
+        + Clone
         + Sync
         + Send
         + 'static,
@@ -226,14 +270,36 @@ pub async fn start_committer_server_with_shutdown<
 }
 
 pub async fn start_committer_server<
-    N: NodeInfoFetcher + Sync + Send + 'static,
-    G: GroupInfoFetcher + GroupInfoUpdater + Sync + Send + 'static,
-    T: BLSTasksFetcher<RandomnessTask> + BLSTasksUpdater<RandomnessTask> + Sync + Send + 'static,
+    N: NodeInfoFetcher
+        + NodeInfoUpdater
+        + MdcContextUpdater
+        + std::fmt::Debug
+        + Clone
+        + Sync
+        + Send
+        + 'static,
+    G: GroupInfoFetcher
+        + GroupInfoUpdater
+        + MdcContextUpdater
+        + std::fmt::Debug
+        + Clone
+        + Sync
+        + Send
+        + 'static,
+    T: BLSTasksFetcher<RandomnessTask>
+        + BLSTasksUpdater<RandomnessTask>
+        + std::fmt::Debug
+        + Clone
+        + Sync
+        + Send
+        + 'static,
     I: ChainIdentity
         + ControllerClientBuilder
         + CoordinatorClientBuilder
         + AdapterClientBuilder
         + ChainProviderBuilder
+        + std::fmt::Debug
+        + Clone
         + Sync
         + Send
         + 'static,

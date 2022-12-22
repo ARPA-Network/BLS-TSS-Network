@@ -1,15 +1,15 @@
 use super::{EventPublisher, EventSubscriber};
 use crate::node::{
     event::types::Topic,
-    subscriber::{DebuggableEvent, Subscriber},
+    subscriber::{DebuggableEvent, DebuggableSubscriber},
 };
 use async_trait::async_trait;
 use log::error;
 use std::collections::HashMap;
 
-#[derive(Default)]
+#[derive(Debug, Default)]
 pub struct EventQueue {
-    subscribers: HashMap<Topic, Vec<Box<dyn Subscriber + Send + Sync>>>,
+    subscribers: HashMap<Topic, Vec<Box<dyn DebuggableSubscriber>>>,
 }
 
 impl EventQueue {
@@ -21,7 +21,7 @@ impl EventQueue {
 }
 
 impl EventSubscriber for EventQueue {
-    fn subscribe(&mut self, topic: Topic, subscriber: Box<dyn Subscriber + Send + Sync>) {
+    fn subscribe(&mut self, topic: Topic, subscriber: Box<dyn DebuggableSubscriber>) {
         self.subscribers.entry(topic).or_insert_with(Vec::new);
 
         self.subscribers.get_mut(&topic).unwrap().push(subscriber);

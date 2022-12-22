@@ -6,7 +6,8 @@ use arpa_node_contract_client::{
 };
 use arpa_node_core::{ChainIdentity, RandomnessTask};
 use arpa_node_dal::{
-    BLSTasksFetcher, BLSTasksUpdater, GroupInfoFetcher, GroupInfoUpdater, NodeInfoFetcher,
+    BLSTasksFetcher, BLSTasksUpdater, GroupInfoFetcher, GroupInfoUpdater, MdcContextUpdater,
+    NodeInfoFetcher, NodeInfoUpdater,
 };
 
 use super::{
@@ -31,14 +32,36 @@ pub trait NodeService {
 }
 
 impl<
-        N: NodeInfoFetcher + Sync + Send + 'static,
-        G: GroupInfoFetcher + GroupInfoUpdater + Sync + Send + 'static,
-        T: BLSTasksFetcher<RandomnessTask> + BLSTasksUpdater<RandomnessTask> + Sync + Send + 'static,
+        N: NodeInfoFetcher
+            + NodeInfoUpdater
+            + MdcContextUpdater
+            + std::fmt::Debug
+            + Clone
+            + Sync
+            + Send
+            + 'static,
+        G: GroupInfoFetcher
+            + GroupInfoUpdater
+            + MdcContextUpdater
+            + std::fmt::Debug
+            + Clone
+            + Sync
+            + Send
+            + 'static,
+        T: BLSTasksFetcher<RandomnessTask>
+            + BLSTasksUpdater<RandomnessTask>
+            + std::fmt::Debug
+            + Clone
+            + Sync
+            + Send
+            + 'static,
         I: ChainIdentity
             + ControllerClientBuilder
             + CoordinatorClientBuilder
             + AdapterClientBuilder
             + ChainProviderBuilder
+            + std::fmt::Debug
+            + Clone
             + Sync
             + Send
             + 'static,

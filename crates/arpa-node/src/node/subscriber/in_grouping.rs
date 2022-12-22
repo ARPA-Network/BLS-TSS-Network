@@ -1,4 +1,4 @@
-use super::{DebuggableEvent, Subscriber};
+use super::{DebuggableEvent, DebuggableSubscriber, Subscriber};
 use crate::node::{
     algorithm::dkg::{AllPhasesDKGCore, DKGCore},
     error::NodeResult,
@@ -11,7 +11,9 @@ use arpa_node_contract_client::{
     coordinator::CoordinatorClientBuilder,
 };
 use arpa_node_core::{ChainIdentity, DKGStatus, DKGTask};
-use arpa_node_dal::{GroupInfoFetcher, GroupInfoUpdater, NodeInfoFetcher};
+use arpa_node_dal::{
+    GroupInfoFetcher, GroupInfoUpdater, MdcContextUpdater, NodeInfoFetcher, NodeInfoUpdater,
+};
 use async_trait::async_trait;
 use core::fmt::Debug;
 use log::{debug, error};
@@ -19,10 +21,11 @@ use rand::{prelude::ThreadRng, RngCore};
 use std::sync::Arc;
 use tokio::sync::RwLock;
 
+#[derive(Debug)]
 pub struct InGroupingSubscriber<
     N: NodeInfoFetcher,
     G: GroupInfoFetcher + GroupInfoUpdater,
-    I: ChainIdentity + ControllerClientBuilder + CoordinatorClientBuilder,
+    I: ChainIdentity + ControllerClientBuilder + CoordinatorClientBuilder + std::fmt::Debug,
 > {
     main_chain_identity: Arc<RwLock<I>>,
     node_cache: Arc<RwLock<N>>,
@@ -34,7 +37,7 @@ pub struct InGroupingSubscriber<
 impl<
         N: NodeInfoFetcher,
         G: GroupInfoFetcher + GroupInfoUpdater,
-        I: ChainIdentity + ControllerClientBuilder + CoordinatorClientBuilder,
+        I: ChainIdentity + ControllerClientBuilder + CoordinatorClientBuilder + std::fmt::Debug,
     > InGroupingSubscriber<N, G, I>
 {
     pub fn new(
@@ -166,9 +169,27 @@ impl<
 
 #[async_trait]
 impl<
-        N: NodeInfoFetcher + Sync + Send + 'static,
-        G: GroupInfoFetcher + GroupInfoUpdater + Sync + Send + 'static,
-        I: ChainIdentity + ControllerClientBuilder + CoordinatorClientBuilder + Sync + Send + 'static,
+        N: NodeInfoFetcher
+            + NodeInfoUpdater
+            + MdcContextUpdater
+            + std::fmt::Debug
+            + Sync
+            + Send
+            + 'static,
+        G: GroupInfoFetcher
+            + GroupInfoUpdater
+            + MdcContextUpdater
+            + std::fmt::Debug
+            + Sync
+            + Send
+            + 'static,
+        I: ChainIdentity
+            + ControllerClientBuilder
+            + CoordinatorClientBuilder
+            + std::fmt::Debug
+            + Sync
+            + Send
+            + 'static,
     > Subscriber for InGroupingSubscriber<N, G, I>
 {
     async fn notify(&self, topic: Topic, payload: &(dyn DebuggableEvent)) -> NodeResult<()> {
@@ -234,4 +255,30 @@ impl<
 
         eq.write().await.subscribe(Topic::RunDKG, subscriber);
     }
+}
+
+impl<
+        N: NodeInfoFetcher
+            + NodeInfoUpdater
+            + MdcContextUpdater
+            + std::fmt::Debug
+            + Sync
+            + Send
+            + 'static,
+        G: GroupInfoFetcher
+            + GroupInfoUpdater
+            + MdcContextUpdater
+            + std::fmt::Debug
+            + Sync
+            + Send
+            + 'static,
+        I: ChainIdentity
+            + ControllerClientBuilder
+            + CoordinatorClientBuilder
+            + std::fmt::Debug
+            + Sync
+            + Send
+            + 'static,
+    > DebuggableSubscriber for InGroupingSubscriber<N, G, I>
+{
 }

@@ -20,8 +20,9 @@ use std::sync::Arc;
 use tokio::sync::RwLock;
 use tokio_retry::{strategy::FixedInterval, RetryIf};
 
-use super::{DebuggableEvent, Subscriber};
+use super::{DebuggableEvent, DebuggableSubscriber, Subscriber};
 
+#[derive(Debug)]
 pub struct ReadyToHandleRandomnessTaskSubscriber<
     G: GroupInfoFetcher,
     C: SignatureResultCacheUpdater<RandomnessResultCache>
@@ -187,9 +188,10 @@ impl<
 
 #[async_trait]
 impl<
-        G: GroupInfoFetcher + Sync + Send + 'static,
+        G: GroupInfoFetcher + std::fmt::Debug + Sync + Send + 'static,
         C: SignatureResultCacheUpdater<RandomnessResultCache>
             + SignatureResultCacheFetcher<RandomnessResultCache>
+            + std::fmt::Debug
             + Sync
             + Send
             + 'static,
@@ -243,4 +245,16 @@ impl<
             .await
             .subscribe(Topic::ReadyToHandleRandomnessTask(chain_id), subscriber);
     }
+}
+
+impl<
+        G: GroupInfoFetcher + std::fmt::Debug + Sync + Send + 'static,
+        C: SignatureResultCacheUpdater<RandomnessResultCache>
+            + SignatureResultCacheFetcher<RandomnessResultCache>
+            + std::fmt::Debug
+            + Sync
+            + Send
+            + 'static,
+    > DebuggableSubscriber for ReadyToHandleRandomnessTaskSubscriber<G, C>
+{
 }

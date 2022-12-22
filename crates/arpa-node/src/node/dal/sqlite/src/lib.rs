@@ -133,7 +133,7 @@ impl SqliteDB {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct NodeInfoDBClient {
     db_client: Arc<SqliteDB>,
     node_info_cache_model: Option<node_info::Model>,
@@ -192,7 +192,15 @@ impl NodeInfoDBClient {
     }
 }
 
-#[derive(Debug)]
+impl MdcContextUpdater for NodeInfoDBClient {
+    fn refresh_mdc_entry(&self) {
+        if let Some(cache) = &self.node_info_cache {
+            cache.refresh_mdc_entry();
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
 pub struct GroupInfoDBClient {
     db_client: Arc<SqliteDB>,
     group_info_cache_model: Option<group_info::Model>,
@@ -255,7 +263,15 @@ impl GroupInfoDBClient {
     }
 }
 
-#[derive(Debug)]
+impl MdcContextUpdater for GroupInfoDBClient {
+    fn refresh_mdc_entry(&self) {
+        if let Some(cache) = &self.group_info_cache {
+            cache.refresh_mdc_entry();
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
 pub struct BLSTasksDBClient<T: Task> {
     db_client: Arc<SqliteDB>,
     bls_tasks: PhantomData<T>,

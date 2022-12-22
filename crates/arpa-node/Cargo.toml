@@ -56,6 +56,8 @@ structopt = "0.3"
 ethers = { git = "https://github.com/gakonst/ethers-rs", features = ["abigen"] }
 rand_chacha = "0.3.1"
 uuid = { version = "1.2.2", features = ["v4", "fast-rng", "macro-diagnostics"] }
+tower = "0.4"
+hyper = "0.14"
 
 [build-dependencies]
 tonic-build = "0.8"
