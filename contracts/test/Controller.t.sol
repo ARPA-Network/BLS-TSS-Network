@@ -79,6 +79,16 @@ contract ControllerTest is Test {
         controller.nodeRegister(pubkey1);
     }
 
+    function testRemoveFromGroup() public {
+        testCommitDkg();
+        printGroupInfo(1);   
+        assertEq(controller.getGroup(1).size, 3);
+        controller.removeFromGroup(address(0x1), 1, false);
+        printGroupInfo(1);   
+        assertEq(controller.getGroup(1).size, 2);
+
+    }
+
     function testMinimumThreshold() public {
         uint256 min;
         min = controller.tMinimumThreshold(3);
@@ -243,7 +253,7 @@ contract ControllerTest is Test {
         assertEq(coordinator.inPhase(), -1);
     }
 
-    // ! new
+    // Start commitdkg testing
     struct CommitDkgParams {
         uint256 groupIndex;
         uint256 groupEpoch;

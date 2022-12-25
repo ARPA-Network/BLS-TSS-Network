@@ -186,12 +186,25 @@ contract Controller is Ownable {
             return false;
         }
 
+        //// Delete Mthod
+        // for (uint i = 0; i < group.members.length; i++) {
+        //     if (group.members[i].nodeIdAddress == nodeIdAddress) {
+        //         delete group.members[i];
+        //         break;
+        //     }
+        // }
+
+        // code to pop and resize array instead of delete
+        uint foundIndex;
         for (uint i = 0; i < group.members.length; i++) {
             if (group.members[i].nodeIdAddress == nodeIdAddress) {
-                delete group.members[i];
+                foundIndex = i;
                 break;
             }
         }
+        group.members[foundIndex] = group.members[group.members.length - 1];
+        group.members.pop();
+
 
         uint minimum = minimumThreshold(group.size);
 
