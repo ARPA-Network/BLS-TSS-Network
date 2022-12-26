@@ -81,16 +81,13 @@ mod tests {
     }
 
     static START: Once = Once::new();
-    static LOGGER: &SimpleLogger = &SL;
     // Sure to run this once
     fn setup_tests() {
-        START.call_once(|| {
-            build_logger();
-        });
+        START.call_once(|| logger::init(log::Level::Debug).unwrap());
     }
 
-    fn build_logger() -> &'static SimpleLogger {
-        logger::init().unwrap()
+    fn logger() -> &'static SimpleLogger {
+        SL.get().unwrap()
     }
 
     #[tokio::test]
@@ -98,7 +95,7 @@ mod tests {
         setup_tests();
         async_and_return_value(3, 5).await;
         let expected = build_expected_log("async_and_return_value", &["a: 3", "b: 5"], "8");
-        assert_eq!(expected, LOGGER.last_message().unwrap());
+        assert_eq!(expected, logger().last_message().unwrap());
     }
 
     #[test]
@@ -106,7 +103,7 @@ mod tests {
         setup_tests();
         omit_return(1);
         let expected = build_expected_log("omit_return", &["_a: 1"], "\"nothing\"");
-        assert_eq!(expected, LOGGER.last_message().unwrap());
+        assert_eq!(expected, logger().last_message().unwrap());
     }
 
     #[test]
@@ -114,7 +111,7 @@ mod tests {
         setup_tests();
         return_nothing(1);
         let expected = build_expected_log("return_nothing", &["_a: 1"], "\"nothing\"");
-        assert_eq!(expected, LOGGER.last_message().unwrap());
+        assert_eq!(expected, logger().last_message().unwrap());
     }
 
     #[test]
@@ -128,7 +125,7 @@ mod tests {
             ],
             "20",
         );
-        assert_eq!(expected, LOGGER.last_message().unwrap());
+        assert_eq!(expected, logger().last_message().unwrap());
     }
 
     #[test]
@@ -136,7 +133,7 @@ mod tests {
         setup_tests();
         expr_stmt_in_sub_blocks(3, 5);
         let expected = build_expected_log("expr_stmt_in_sub_blocks", &["a: 3", "b: 5"], "8");
-        assert_eq!(expected, LOGGER.last_message().unwrap());
+        assert_eq!(expected, logger().last_message().unwrap());
     }
 
     #[test]
@@ -144,7 +141,7 @@ mod tests {
         setup_tests();
         return_match_expr(100);
         let expected = build_expected_log("return_match_expr", &["a: 100"], "1");
-        assert_eq!(expected, LOGGER.last_message().unwrap());
+        assert_eq!(expected, logger().last_message().unwrap());
     }
 
     #[test]
@@ -152,7 +149,7 @@ mod tests {
         setup_tests();
         ignore_return(1);
         let expected = build_expected_log("ignore_return", &["a: 1"], "\"ignored\"");
-        assert_eq!(expected, LOGGER.last_message().unwrap());
+        assert_eq!(expected, logger().last_message().unwrap());
     }
 
     #[test]
@@ -165,7 +162,7 @@ mod tests {
             &[],
             "Err(No such file or directory (os error 2))",
         );
-        assert_eq!(expected, LOGGER.last_message().unwrap());
+        assert_eq!(expected, logger().last_message().unwrap());
     }
 
     #[tokio::test]
@@ -174,7 +171,7 @@ mod tests {
         let dummy = Dummy {};
         dummy.test_async(1).await;
         let expected = build_expected_log("test_async", &["a: 1"], "1");
-        assert_eq!(expected, LOGGER.last_message().unwrap());
+        assert_eq!(expected, logger().last_message().unwrap());
     }
 
     fn build_expected_log(fn_name: &str, fn_args: &[&str], fn_return: &str) -> String {
