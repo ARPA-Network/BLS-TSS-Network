@@ -71,16 +71,11 @@ pub fn log_function(attr: TokenStream, input: TokenStream) -> TokenStream {
     let mut ignore_return = false;
     if let Some(arg) = args.get(0) {
         match arg {
-            NestedMeta::Lit(x) => match x {
-                Lit::Str(x) => {
-                    if format!("{}", x.token()) == "\"ignore-return\"" {
-                        ignore_return = true;
-                    }
+            NestedMeta::Lit(Lit::Str(x)) => {
+                if format!("{}", x.token()) == "\"ignore-return\"" {
+                    ignore_return = true;
                 }
-                _ => {
-                    return macro_error!("expected string literal for logging message", x.span());
-                }
-            },
+            }
             _ => {
                 return macro_error!("expected string literal for logging message", arg.span());
             }
@@ -99,11 +94,10 @@ pub fn log_function(attr: TokenStream, input: TokenStream) -> TokenStream {
     let args_text = generate_args_text(fn_args);
 
     // Use a syntax tree traversal to transform the function body.
-    let mut stmts: Punctuated<Stmt, Semi> = Punctuated::new();
-    for stmt in fn_stmts {
-        let stmt = visitor.fold_stmt(stmt.to_owned());
-        stmts.push(stmt);
-    }
+    let stmts: Punctuated<Stmt, Semi> = fn_stmts
+        .into_iter()
+        .map(|stmt| visitor.fold_stmt(stmt.to_owned()))
+        .collect();
 
     let post_code = if visitor.has_return_stmt {
         TokenStream2::new()
@@ -262,7 +256,7 @@ impl Fold for FunctionLogVisitor {
             }
             // clone __args before move block
             Expr::Closure(e) => {
-                if e.capture.is_some() {
+                if let Some(_) = e.capture {
                     self.current_closure_or_async_block_count += 1;
                     let expr = fold::fold_expr_closure(self, e);
                     self.current_closure_or_async_block_count -= 1;
@@ -286,15 +280,11 @@ impl Fold for FunctionLogVisitor {
                     Expr::Path(p) => {
                         let first = p.path.segments.first();
                         let last = p.path.segments.last();
-                        if self.async_trait
-                            && first.is_some()
-                            && first.unwrap().ident == "Box"
-                            && last.is_some()
-                            && last.unwrap().ident == "pin"
-                        {
-                            fold::fold_stmt(self, Stmt::Expr(Expr::Call(c)))
-                        } else {
-                            self.insert_log_and_fold_expr_stmt(Expr::Call(c))
+                        match (self.async_trait, first, last) {
+                            (true, Some(f), Some(l)) if f.ident == "Box" && l.ident == "pin" => {
+                                fold::fold_stmt(self, Stmt::Expr(Expr::Call(c)))
+                            }
+                            _ => self.insert_log_and_fold_expr_stmt(Expr::Call(c)),
                         }
                     }
                     _ => self.insert_log_and_fold_expr_stmt(Expr::Call(c)),
