@@ -347,6 +347,14 @@ impl NodeInfoUpdater for NodeInfoDBClient {
 }
 
 impl GroupInfoFetcher for GroupInfoDBClient {
+    fn get_group(&self) -> DataAccessResult<&Group> {
+        self.only_has_group_task()?;
+
+        let group_info = self.group_info_cache.as_ref().unwrap();
+
+        group_info.get_group()
+    }
+
     fn get_index(&self) -> DataAccessResult<usize> {
         self.only_has_group_task()?;
 
@@ -474,7 +482,7 @@ impl GroupInfoUpdater for GroupInfoDBClient {
                 let member = Member {
                     index: *index,
                     id_address: *address,
-                    rpc_endpint: None,
+                    rpc_endpoint: None,
                     partial_public_key: None,
                 };
                 (*address, member)
@@ -512,7 +520,7 @@ impl GroupInfoUpdater for GroupInfoDBClient {
 
         let self_index = self.group_info_cache.as_ref().unwrap().get_self_index()?;
 
-        let mut group = self.group_info_cache.as_ref().unwrap().get_group().clone();
+        let mut group = self.group_info_cache.as_ref().unwrap().get_group()?.clone();
 
         if group.index != index {
             return Err(GroupError::GroupIndexObsolete(group.index).into());
@@ -555,7 +563,7 @@ impl GroupInfoUpdater for GroupInfoDBClient {
                 .find(|node| member.index == node.id() as usize)
             {
                 if let Some(rpc_endpoint) = node.get_rpc_endpoint() {
-                    member.rpc_endpint = Some(rpc_endpoint.to_string());
+                    member.rpc_endpoint = Some(rpc_endpoint.to_string());
                 }
             }
 
@@ -595,7 +603,7 @@ impl GroupInfoUpdater for GroupInfoDBClient {
 
         let current_dkg_status = self.group_info_cache.as_ref().unwrap().get_dkg_status()?;
 
-        let group = self.group_info_cache.as_ref().unwrap().get_group();
+        let group = self.group_info_cache.as_ref().unwrap().get_group()?;
 
         if group.index != index {
             return Err(GroupError::GroupIndexObsolete(group.index).into());
@@ -633,7 +641,7 @@ impl GroupInfoUpdater for GroupInfoDBClient {
     ) -> DataAccessResult<()> {
         self.only_has_group_task()?;
 
-        let group = self.group_info_cache.as_ref().unwrap().get_group();
+        let group = self.group_info_cache.as_ref().unwrap().get_group()?;
 
         if group.index != index {
             return Err(GroupError::GroupIndexObsolete(group.index).into());

@@ -105,7 +105,7 @@ impl Group {
 pub struct Member {
     pub index: usize,
     pub id_address: Address,
-    pub rpc_endpint: Option<String>,
+    pub rpc_endpoint: Option<String>,
     pub partial_public_key: Option<G1>,
 }
 

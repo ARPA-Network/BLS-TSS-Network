@@ -1,3 +1,5 @@
+use std::string::FromUtf8Error;
+
 use thiserror::Error;
 
 #[derive(Debug, Error, PartialEq)]
@@ -7,6 +9,9 @@ pub enum BLSTaskError {
 
     #[error("there is no signature cache yet")]
     CommitterCacheNotExisted,
+
+    #[error(transparent)]
+    TaskMsgError(#[from] FromUtf8Error),
 }
 
 pub type SchedulerResult<A> = Result<A, SchedulerError>;

@@ -48,13 +48,17 @@ impl FixedTaskScheduler for SimpleFixedTaskScheduler {
         }
     }
 
-    async fn abort(&mut self, task_type: TaskType) -> SchedulerResult<()> {
-        if !self.fixed_tasks.contains_key(&task_type) {
+    async fn abort(&mut self, task_type: &TaskType) -> SchedulerResult<()> {
+        if !self.fixed_tasks.contains_key(task_type) {
             return Err(SchedulerError::TaskNotFound);
         }
-        let handle = self.fixed_tasks.remove(&task_type).unwrap();
+        let handle = self.fixed_tasks.remove(task_type).unwrap();
         handle.abort();
         Ok(())
+    }
+
+    fn get_tasks(&self) -> Vec<&TaskType> {
+        self.fixed_tasks.keys().collect::<Vec<&TaskType>>()
     }
 }
 

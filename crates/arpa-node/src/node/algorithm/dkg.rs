@@ -1,6 +1,5 @@
 use crate::node::error::NodeResult;
 use arpa_node_contract_client::coordinator::{CoordinatorTransactions, CoordinatorViews};
-use arpa_node_log::*;
 use async_trait::async_trait;
 use core::fmt::Debug;
 use dkg_core::{
@@ -48,7 +47,6 @@ where
     F: Fn() -> R,
     P: CoordinatorTransactions + CoordinatorViews + BoardPublisher<Curve> + Sync + Send,
 {
-    #[log_function]
     async fn run_dkg(
         &mut self,
         dkg_private_key: Scalar,

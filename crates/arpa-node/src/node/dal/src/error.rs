@@ -29,6 +29,9 @@ pub enum GroupError {
     #[error("the group is not exist")]
     GroupNotExisted,
 
+    #[error("the member is not exist")]
+    MemberNotExisted,
+
     #[error("there is not an available DKG output")]
     GroupNotReady,
 

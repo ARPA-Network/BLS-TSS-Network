@@ -333,7 +333,7 @@ impl From<Member> for ModelMember {
         ModelMember {
             index: member.index as usize,
             id_address: member.id_address.parse().unwrap(),
-            rpc_endpint: None,
+            rpc_endpoint: None,
             partial_public_key,
         }
     }

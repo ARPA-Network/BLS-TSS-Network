@@ -22,6 +22,13 @@ pub(crate) trait BLSCore {
 
     /// Verifies that the signature on the provided message was produced by the public key
     fn verify(&self, public: &G1, msg: &[u8], sig: &[u8]) -> NodeResult<()>;
+
+    fn verify_partial_sigs(
+        &self,
+        publics: &[G1],
+        msg: &[u8],
+        partial_sigs: &[&[u8]],
+    ) -> NodeResult<()>;
 }
 
 impl BLSCore for SimpleBLSCore {
@@ -48,6 +55,16 @@ impl BLSCore for SimpleBLSCore {
 
     fn verify(&self, public: &G1, msg: &[u8], sig: &[u8]) -> NodeResult<()> {
         G1Scheme::<BLS12_381>::verify(public, msg, sig)?;
+        Ok(())
+    }
+
+    fn verify_partial_sigs(
+        &self,
+        publics: &[G1],
+        msg: &[u8],
+        partial_sigs: &[&[u8]],
+    ) -> NodeResult<()> {
+        G1Scheme::<BLS12_381>::aggregation_verify_on_the_same_msg(publics, msg, partial_sigs)?;
         Ok(())
     }
 }

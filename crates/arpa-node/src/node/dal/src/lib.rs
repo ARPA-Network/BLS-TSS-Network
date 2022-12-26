@@ -3,7 +3,7 @@ pub mod error;
 
 use std::collections::BTreeMap;
 
-use arpa_node_core::{DKGStatus, DKGTask, Member, Task};
+use arpa_node_core::{DKGStatus, DKGTask, Group, Member, Task};
 use async_trait::async_trait;
 use cache::BLSResultCache;
 pub use dkg_core::primitives::DKGOutput;
@@ -74,6 +74,8 @@ pub trait GroupInfoUpdater {
 }
 
 pub trait GroupInfoFetcher {
+    fn get_group(&self) -> DataAccessResult<&Group>;
+
     fn get_index(&self) -> DataAccessResult<usize>;
 
     fn get_epoch(&self) -> DataAccessResult<usize>;

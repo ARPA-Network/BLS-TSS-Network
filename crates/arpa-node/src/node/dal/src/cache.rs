@@ -174,10 +174,6 @@ impl InMemoryGroupInfoCache {
         }
     }
 
-    pub fn get_group(&self) -> &Group {
-        &self.group
-    }
-
     fn only_has_group_task(&self) -> DataAccessResult<()> {
         if self.group.index == 0 {
             return Err(GroupError::NoGroupTask.into());
@@ -252,7 +248,7 @@ impl GroupInfoUpdater for InMemoryGroupInfoCache {
             let member = Member {
                 index: *index,
                 id_address: *address,
-                rpc_endpint: None,
+                rpc_endpoint: None,
                 partial_public_key: None,
             };
             self.group.members.insert(*address, member);
@@ -318,7 +314,7 @@ impl GroupInfoUpdater for InMemoryGroupInfoCache {
                 .find(|node| member.index == node.id() as usize)
             {
                 if let Some(rpc_endpoint) = node.get_rpc_endpoint() {
-                    member.rpc_endpint = Some(rpc_endpoint.to_string());
+                    member.rpc_endpoint = Some(rpc_endpoint.to_string());
                 }
             }
 
@@ -365,6 +361,12 @@ impl GroupInfoUpdater for InMemoryGroupInfoCache {
 }
 
 impl GroupInfoFetcher for InMemoryGroupInfoCache {
+    fn get_group(&self) -> DataAccessResult<&Group> {
+        self.only_has_group_task()?;
+
+        Ok(&self.group)
+    }
+
     fn get_index(&self) -> DataAccessResult<usize> {
         self.only_has_group_task()?;
 
@@ -432,7 +434,7 @@ impl GroupInfoFetcher for InMemoryGroupInfoCache {
         self.group
             .members
             .get(&id_address)
-            .ok_or(GroupError::GroupNotExisted)
+            .ok_or(GroupError::MemberNotExisted)
             .map_err(|e| e.into())
     }
 

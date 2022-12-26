@@ -7,6 +7,7 @@ use crate::node::{
 };
 use arpa_node_contract_client::controller::{ControllerClientBuilder, ControllerTransactions};
 use arpa_node_core::ChainIdentity;
+use arpa_node_log::*;
 use async_trait::async_trait;
 use log::{debug, error, info};
 use std::sync::Arc;
@@ -46,6 +47,7 @@ pub struct GeneralDKGPostProcessHandler<I: ChainIdentity + ControllerClientBuild
 impl<I: ChainIdentity + ControllerClientBuilder + Sync + Send> DKGPostProcessHandler
     for GeneralDKGPostProcessHandler<I>
 {
+    #[log_function]
     async fn handle(&self, group_index: usize, group_epoch: usize) -> NodeResult<()> {
         let client = self
             .main_chain_identity
@@ -63,6 +65,7 @@ impl<I: ChainIdentity + ControllerClientBuilder + Sync + Send> DKGPostProcessHan
 impl<I: ChainIdentity + ControllerClientBuilder + std::fmt::Debug + Sync + Send + 'static>
     Subscriber for PostGroupingSubscriber<I>
 {
+    #[log_function]
     async fn notify(&self, topic: Topic, payload: &(dyn DebuggableEvent)) -> NodeResult<()> {
         debug!("{:?}", topic);
 

@@ -35,12 +35,23 @@ use tokio::sync::RwLock;
 pub struct Config {
     pub node_committer_rpc_endpoint: String,
     pub node_management_rpc_endpoint: String,
+    pub node_management_rpc_token: String,
     pub provider_endpoint: String,
     pub controller_address: String,
     // Data file for persistence
     pub data_path: Option<String>,
     pub account: Account,
     pub listeners: Option<Vec<ListenerType>>,
+}
+
+impl Config {
+    pub fn get_node_management_rpc_token(&self) -> Result<String, ConfigError> {
+        if self.node_management_rpc_token.eq("env") {
+            let token = env::var("ARPA_NODE_MANAGEMENT_SERVER_TOKEN")?;
+            return Ok(token);
+        }
+        Ok(self.node_management_rpc_token.clone())
+    }
 }
 
 #[derive(Debug, Serialize, Deserialize)]

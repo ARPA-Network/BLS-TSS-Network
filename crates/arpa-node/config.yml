@@ -2,6 +2,8 @@ node_committer_rpc_endpoint: "[::1]:50060"
 
 node_management_rpc_endpoint: "[::1]:50099"
 
+node_management_rpc_token: "for_test"
+
 provider_endpoint: "[::1]:50052"
 
 controller_address: "0x0000000000000000000000000000000000000001"
