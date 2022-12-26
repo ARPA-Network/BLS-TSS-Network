@@ -131,15 +131,14 @@ fn generate_args_text(fn_args: Punctuated<FnArg, Comma>) -> TokenStream2 {
     let mut args = quote! {
         let mut __args: Vec<String> = vec![];
     };
-    for arg in fn_args {
+    for arg in fn_args.iter() {
         if let FnArg::Typed(a) = arg {
-            let ident = match *a.pat {
+            let ident = match a.pat.as_ref() {
                 Pat::Ident(ref p) => &p.ident,
                 _ => unreachable!(),
             };
             let arg_text = quote! {
-                let __arg = format!("{}: {:?}", stringify!(#ident), #ident);
-                __args.push(__arg);
+                __args.push(format!("{}: {:?}", stringify!(#ident), #ident));
             };
             args.extend(arg_text);
         }
@@ -161,9 +160,10 @@ impl FunctionLogVisitor {
             }
         };
         quote! {
+            let ___args: Vec<&str> = __args.iter().map(|arg| arg as &str).collect();
             let __log = LogModel{
                 fn_name: stringify!(#fn_ident),
-                fn_args: &__args,
+                fn_args: &___args,
                 fn_return: #return_text,
             };
             debug!(target: stringify!(#fn_ident), "{:?}", __log);

@@ -180,10 +180,7 @@ mod tests {
     fn build_expected_log(fn_name: &str, fn_args: &[&str], fn_return: &str) -> String {
         let log = LogModel {
             fn_name,
-            fn_args: &fn_args
-                .iter()
-                .map(|s| s.to_string())
-                .collect::<Vec<String>>(),
+            fn_args,
             fn_return,
         };
         let expected = format!(
