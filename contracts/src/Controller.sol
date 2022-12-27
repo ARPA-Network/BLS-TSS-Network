@@ -70,7 +70,6 @@ contract Controller is Ownable {
         CommitResult commitResult;
     }
 
-    // ! Node Register
     function nodeRegister(bytes calldata dkgPublicKey) public {
         require(
             nodes[msg.sender].idAddress == address(0),
@@ -119,11 +118,10 @@ contract Controller is Ownable {
         }
     }
 
-    // ! Test this code
-    function rebalanceGroup(uint256 groupAIndex, uint256 groupBIndex)
-        public
-        returns (bool)
-    {
+    function rebalanceGroup(
+        uint256 groupAIndex,
+        uint256 groupBIndex // Needs further testing
+    ) public returns (bool) {
         Group memory groupA = groups[groupAIndex];
         Group memory groupB = groups[groupBIndex];
 
@@ -181,6 +179,7 @@ contract Controller is Ownable {
     }
 
     function removeFromGroup(
+        // Needs further testing
         address nodeIdAddress,
         uint256 groupIndex,
         bool emitEventInstantly
@@ -229,12 +228,10 @@ contract Controller is Ownable {
         return false;
     }
 
-    // ! Test code end
-
-    //
     function findOrCreateTargetGroup()
         public
         returns (
+            // Needs further testing
             uint256, //groupIndex
             bool // needsRebalance
         )
@@ -338,7 +335,6 @@ contract Controller is Ownable {
         pure
         returns (uint256)
     {
-        // uint256 min = groupSize / 2 + 1;
         return groupSize / 2 + 1;
     }
 
@@ -380,8 +376,7 @@ contract Controller is Ownable {
 
         coordinator.initialize(groupNodes, groupKeys);
 
-        // TODO: Emit event
-        emit dkgTask(
+        emit dkgTask( // needs to be verified against what node is expecting
             g.index,
             g.epoch,
             g.size,
@@ -392,7 +387,6 @@ contract Controller is Ownable {
         );
     }
 
-    // ! Commit DKG
     function getMemberIndex(uint256 groupIndex, address nodeIdAddress)
         public
         view
@@ -523,7 +517,6 @@ contract Controller is Ownable {
                         .length;
                     g.publicKey = identicalCommits.commitResult.publicKey;
 
-                    // ! Commiters / Qualified Indices / Remove and Slash Disqualfied nodes
                     // Create indexMemberMap: Iterate through group.members and create mapping: memberIndex -> nodeIdAddress
                     // Create qualifiedIndices: Iterate through group, add all member indexes found in majorityMembers.
                     uint256[] memory qualifiedIndices = new uint256[](
@@ -718,7 +711,7 @@ contract Controller is Ownable {
         }
     }
 
-    // ! Post Proccess DKG
+    // Post Proccess DKG
     // Called by nodes after last phase of dkg ends (success or failure)
     // handles coordinator selfdestruct if it reaches DKG timeout, then
     // 1. emit GroupRelayTask if grouping successfully

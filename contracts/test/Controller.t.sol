@@ -89,7 +89,6 @@ contract ControllerTest is Test {
     }
 
     function testReblanceGroup() public {
-        //! Needs work
         emit log_named_uint("groupCount", controller.groupCount());
         testCommitDkg();
         emit log_named_uint("groupCount", controller.groupCount());
@@ -101,6 +100,7 @@ contract ControllerTest is Test {
         emit log_named_uint("groupCount", controller.groupCount());
         printGroupInfo(2);
 
+        //! The below needs further testing
         // Test needsReblance
         vm.prank(node5);
         controller.nodeRegister(pubkey5);
