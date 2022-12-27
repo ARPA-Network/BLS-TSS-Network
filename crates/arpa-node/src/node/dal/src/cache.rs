@@ -46,12 +46,23 @@ impl BlockInfoUpdater for InMemoryBlockInfoCache {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize)]
 pub struct InMemoryNodeInfoCache {
     pub(crate) id_address: Address,
     pub(crate) node_rpc_endpoint: Option<String>,
     pub(crate) dkg_private_key: Option<Scalar>,
     pub(crate) dkg_public_key: Option<G1>,
+}
+
+impl std::fmt::Debug for InMemoryNodeInfoCache {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("InMemoryNodeInfoCache")
+            .field("id_address", &self.id_address)
+            .field("node_rpc_endpoint", &self.node_rpc_endpoint)
+            .field("dkg_private_key", &"ignored")
+            .field("dkg_public_key", &self.dkg_public_key)
+            .finish()
+    }
 }
 
 impl InMemoryNodeInfoCache {
@@ -130,7 +141,7 @@ impl NodeInfoFetcher for InMemoryNodeInfoCache {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize)]
 pub struct InMemoryGroupInfoCache {
     pub(crate) share: Option<Share<Scalar>>,
     pub(crate) group: Group,
@@ -142,6 +153,18 @@ pub struct InMemoryGroupInfoCache {
 impl Default for InMemoryGroupInfoCache {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+impl std::fmt::Debug for InMemoryGroupInfoCache {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("InMemoryGroupInfoCache")
+            .field("share", &"ignored")
+            .field("group", &self.group)
+            .field("dkg_status", &self.dkg_status)
+            .field("self_index", &self.self_index)
+            .field("dkg_start_block_height", &self.dkg_start_block_height)
+            .finish()
     }
 }
 
