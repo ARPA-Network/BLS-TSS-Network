@@ -25,15 +25,15 @@ contract Controller is Ownable {
 
     // Group State Variables
     uint256 public groupCount; // Number of groups
-    mapping(uint256 => Group) public groups; // group_index => Group struct    
+    mapping(uint256 => Group) public groups; // group_index => Group struct
     // uint256 [] groupIndexes;  // Needed if groups can be deleted.
     // Coordinators
     mapping(uint256 => address) public coordinators; // maps group index to coordinator address
 
     // Global last output
-    uint64 lastOutput = 0x2222222222222222; 
+    uint64 lastOutput = 0x2222222222222222;
 
-    // * Structs 
+    // * Structs
     struct Node {
         address idAddress;
         bytes dkgPublicKey;
@@ -54,7 +54,7 @@ contract Controller is Ownable {
     }
 
     struct Member {
-        uint256 index;
+        // uint256 index;
         address nodeIdAddress;
         bytes partialPublicKey;
     }
@@ -94,7 +94,7 @@ contract Controller is Ownable {
         // * get groupIndex from findOrCreateTargetGroup -> addGroup
         (uint256 groupIndex, bool needsRebalance) = findOrCreateTargetGroup();
 
-        require(groupIndex != 0, "Group index cannot be 0"); // ! remove later
+        require(groupIndex != 0, "Group index cannot be 0"); // remove?
 
         addToGroup(idAddress, groupIndex, true); // * add to group
 
@@ -102,32 +102,28 @@ contract Controller is Ownable {
         uint256[] memory groupIndices = new uint256[](groupCount - 1);
         uint256 index = 0;
         for (uint256 i = 0; i < groupCount; i++) {
-            if (groupIndex != i+1) {
-                groupIndices[index] = i+1;
+            if (groupIndex != i + 1) {
+                groupIndices[index] = i + 1;
                 index++;
             }
         }
 
         // If needs rebalance, iterate over group indices and attempt to rebalance group, break as soon as success
         if (needsRebalance) {
+            // Rebalance group. Group A Index = iterate over each group other than Group B Index.
             for (uint256 i = 0; i < groupIndices.length; i++) {
                 if (rebalanceGroup(groupIndices[i], groupIndex)) {
                     break;
                 }
             }
         }
-
-        // todo
-
-        // if (needsRebalance) {
-        //     reblanceGroup();
-        // }
     }
-    
 
     // ! Test this code
-    // Rebalance group. Group A Index = iterate over each group other than Group B Index.
-    function rebalanceGroup(uint groupAIndex, uint groupBIndex) public returns (bool) {
+    function rebalanceGroup(uint256 groupAIndex, uint256 groupBIndex)
+        public
+        returns (bool)
+    {
         Group memory groupA = groups[groupAIndex];
         Group memory groupB = groups[groupBIndex];
 
@@ -138,27 +134,38 @@ contract Controller is Ownable {
             groupB = temp;
 
             // Swap groupAIndex and groupBIndex
-            uint tempIndex = groupAIndex;
+            uint256 tempIndex = groupAIndex;
             groupAIndex = groupBIndex;
             groupBIndex = tempIndex;
         }
 
-        uint expectedSizeToMove = groupA.size - (groupA.size + groupB.size) / 2;
-        if (expectedSizeToMove == 0 || groupA.size - expectedSizeToMove < DEFAULT_MINIMUM_THRESHOLD) {
+        uint256 expectedSizeToMove = groupA.size -
+            (groupA.size + groupB.size) /
+            2;
+        if (
+            expectedSizeToMove == 0 ||
+            groupA.size - expectedSizeToMove < DEFAULT_MINIMUM_THRESHOLD
+        ) {
             return false;
         }
 
-        uint[] memory qualifiedIndices = new uint[](groupA.members.length);
-        for (uint i = 0; i < groupA.members.length; i++) {
-            qualifiedIndices[i] = groupA.members[i].index;
+        uint256[] memory qualifiedIndices = new uint256[](
+            groupA.members.length
+        );
+        for (uint256 i = 0; i < groupA.members.length; i++) {
+            qualifiedIndices[i] = i;
         }
 
-        uint[] memory membersToMove = chooseRandomlyFromIndices(lastOutput, qualifiedIndices, expectedSizeToMove);
-        for (uint i = 0; i < membersToMove.length; i++) {
-            uint memberIndex = membersToMove[i];
+        uint256[] memory membersToMove = chooseRandomlyFromIndices(
+            lastOutput,
+            qualifiedIndices,
+            expectedSizeToMove
+        );
+        for (uint256 i = 0; i < membersToMove.length; i++) {
+            uint256 memberIndex = membersToMove[i];
             address idAddress;
-            for (uint j = 0; j < groupA.members.length; j++) {
-                if (groupA.members[j].index == memberIndex) {
+            for (uint256 j = 0; j < groupA.members.length; j++) {
+                if (j == memberIndex) {
                     idAddress = groupA.members[j].nodeIdAddress;
                     break;
                 }
@@ -175,7 +182,7 @@ contract Controller is Ownable {
 
     function removeFromGroup(
         address nodeIdAddress,
-        uint groupIndex,
+        uint256 groupIndex,
         bool emitEventInstantly
     ) public returns (bool) {
         Group storage group = groups[groupIndex];
@@ -195,8 +202,8 @@ contract Controller is Ownable {
         // }
 
         // code to pop and resize array instead of delete
-        uint foundIndex;
-        for (uint i = 0; i < group.members.length; i++) {
+        uint256 foundIndex;
+        for (uint256 i = 0; i < group.members.length; i++) {
             if (group.members[i].nodeIdAddress == nodeIdAddress) {
                 foundIndex = i;
                 break;
@@ -205,10 +212,11 @@ contract Controller is Ownable {
         group.members[foundIndex] = group.members[group.members.length - 1];
         group.members.pop();
 
+        uint256 minimum = minimumThreshold(group.size);
 
-        uint minimum = minimumThreshold(group.size);
-
-        group.threshold = minimum > DEFAULT_MINIMUM_THRESHOLD ? minimum : DEFAULT_MINIMUM_THRESHOLD;
+        group.threshold = minimum > DEFAULT_MINIMUM_THRESHOLD
+            ? minimum
+            : DEFAULT_MINIMUM_THRESHOLD;
 
         if (group.size < 3) {
             return true;
@@ -231,7 +239,8 @@ contract Controller is Ownable {
             bool // needsRebalance
         )
     {
-        if (groupCount == 0) { // if group is empty, addgroup.
+        if (groupCount == 0) {
+            // if group is empty, addgroup.
             uint256 groupIndex = addGroup();
             return (groupIndex, false);
         }
@@ -240,19 +249,23 @@ contract Controller is Ownable {
         uint256 indexOfMinSize;
         uint256 minSize = GROUP_MAX_CAPACITY;
         for (uint256 i = 0; i < groupCount; i++) {
-            Group memory g = groups[i+1]; // because groupCount starts at 1
+            Group memory g = groups[i + 1]; // because groupCount starts at 1
             if (g.size < minSize) {
                 minSize = g.size;
-                indexOfMinSize = i+1; // because groupCount starts at 1
+                indexOfMinSize = i + 1; // because groupCount starts at 1
             }
         }
 
-        // compute the valid group count 
+        // compute the valid group count
         uint256 validGroupCount = validGroupIndices().length;
-        
+
         // check if valid group count < ideal_number_of_groups || minSize == group_max_capacity
         // If either condition is met and the number of valid groups == group count, call add group and return (index of new group, true)
-        if ((validGroupCount < IDEAL_NUMBER_OF_GROUPS || minSize == GROUP_MAX_CAPACITY) && (validGroupCount == groupCount)) {
+        if (
+            (validGroupCount < IDEAL_NUMBER_OF_GROUPS ||
+                minSize == GROUP_MAX_CAPACITY) &&
+            (validGroupCount == groupCount)
+        ) {
             uint256 groupIndex = addGroup();
             return (groupIndex, true); // NEEDS REBALANCE
         }
@@ -266,9 +279,9 @@ contract Controller is Ownable {
         uint256[] memory groupIndices = new uint256[](groupCount); //max length is group count
         uint256 index = 0;
         for (uint256 i = 0; i < groupCount; i++) {
-            Group memory g = groups[i+1];
+            Group memory g = groups[i + 1];
             if (g.isStrictlyMajorityConsensusReached) {
-                groupIndices[index] = i+1; // because groupCount starts at 1
+                groupIndices[index] = i + 1; // because groupCount starts at 1
                 index++;
             }
         }
@@ -301,7 +314,7 @@ contract Controller is Ownable {
 
         // Add Member Struct to group at group index
         Member memory m;
-        m.index = g.size;
+        // m.index = g.size;
         m.nodeIdAddress = idAddress;
 
         // insert (node id address - > member) into group.members
@@ -451,7 +464,7 @@ contract Controller is Ownable {
             "Node is not a member of the group"
         );
 
-        require(   // check to see if member has called commitdkg in the past. 
+        require( // check to see if member has called commitdkg in the past.
             !partialKeyRegistered(params.groupIndex, msg.sender),
             "CommitCache already contains PartialKey for this node"
         );
@@ -475,7 +488,9 @@ contract Controller is Ownable {
 
         // if consensus previously reached, update the partial public key of the given node's member entry in the group
         // if (g.isStrictlyMajorityConsensusReached) {
-        g.members[uint256(getMemberIndex(params.groupIndex, msg.sender))].partialPublicKey = params.partialPublicKey;
+        g
+            .members[uint256(getMemberIndex(params.groupIndex, msg.sender))]
+            .partialPublicKey = params.partialPublicKey;
         // }
 
         // if not.. call getStrictlyMajorityIdenticalCommitmentResult for the group and check if consensus has been reached.
@@ -484,7 +499,6 @@ contract Controller is Ownable {
                 memory identicalCommits = getStrictlyMajorityIdenticalCommitmentResult(
                     params.groupIndex
                 );
-                
 
             if (identicalCommits.nodeIdAddress.length != 0) {
                 // TODO: let last_output = self.last_output as usize; // * What is this?
@@ -494,10 +508,11 @@ contract Controller is Ownable {
                     .disqualifiedNodes;
 
                 // Get list of majority members with disqualified nodes excluded
-                address[] memory majorityMembers = getNonDisqualifiedMajorityMembers(
-                    identicalCommits.nodeIdAddress,
-                    disqualifiedNodes
-                );
+                address[]
+                    memory majorityMembers = getNonDisqualifiedMajorityMembers(
+                        identicalCommits.nodeIdAddress,
+                        disqualifiedNodes
+                    );
                 // address[] memory majorityMembers = identicalCommits.nodeIdAddress;
 
                 if (majorityMembers.length >= g.threshold) {
@@ -508,59 +523,46 @@ contract Controller is Ownable {
                         .length;
                     g.publicKey = identicalCommits.commitResult.publicKey;
 
-                    //! Did my best here, but I think it's not quite there.
-                    // Is majorityMembers the same at group.commitCache in the rust code?
-                    // update partial public key of all non-disqualified members
-                    // g
-                    //     .members[
-                    //         uint256(
-                    //             getMemberIndex(params.groupIndex, msg.sender)
-                    //         )
-                    //     ]
-                    //     .partialPublicKey = params.partialPublicKey;
-                    // for (uint256 i = 0; i < majorityMembers.length; i++) {
-                    //     g
-                    //         .members[
-                    //             uint256(
-                    //                 getMemberIndex(
-                    //                     params.groupIndex,
-                    //                     majorityMembers[i]
-                    //                 )
-                    //             )
-                    //         ]
-                    //         .partialPublicKey = params.partialPublicKey;
-                    // }
-
                     // ! Commiters / Qualified Indices / Remove and Slash Disqualfied nodes
-
                     // Create indexMemberMap: Iterate through group.members and create mapping: memberIndex -> nodeIdAddress
-                    
                     // Create qualifiedIndices: Iterate through group, add all member indexes found in majorityMembers.
                     uint256[] memory qualifiedIndices = new uint256[](
                         majorityMembers.length
-                    );  
+                    );
 
                     for (uint256 i = 0; i < g.members.length; i++) {
                         for (uint256 j = 0; j < majorityMembers.length; j++) {
-                            if (g.members[i].nodeIdAddress == majorityMembers[j]) {
+                            if (
+                                g.members[i].nodeIdAddress == majorityMembers[j]
+                            ) {
                                 qualifiedIndices[j] = i;
                             }
                         }
                     }
-                    
+
                     // Compute commiter_indices by calling chooseRandomlyFromIndices with qualifiedIndices as input.
-                    uint256[] memory committerIndices = chooseRandomlyFromIndices(lastOutput, qualifiedIndices, DEFAULT_NUMBER_OF_COMMITTERS);
+                    uint256[]
+                        memory committerIndices = chooseRandomlyFromIndices(
+                            lastOutput,
+                            qualifiedIndices,
+                            DEFAULT_NUMBER_OF_COMMITTERS
+                        );
 
                     // For selected commiter_indices: add corresponding members into g.committers
                     g.committers = new address[](committerIndices.length);
                     for (uint256 i = 0; i < committerIndices.length; i++) {
-                        g.committers[i] = g.members[committerIndices[i]].nodeIdAddress;
+                        g.committers[i] = g
+                            .members[committerIndices[i]]
+                            .nodeIdAddress;
                     }
 
-                    // Remove all members from group where member.nodeIdAddress is in the disqualified nodes. 
+                    // Remove all members from group where member.nodeIdAddress is in the disqualified nodes.
                     for (uint256 i = 0; i < disqualifiedNodes.length; i++) {
                         for (uint256 j = 0; j < g.members.length; j++) {
-                            if (g.members[j].nodeIdAddress == disqualifiedNodes[i]) {
+                            if (
+                                g.members[j].nodeIdAddress ==
+                                disqualifiedNodes[i]
+                            ) {
                                 g.members[j] = g.members[g.members.length - 1];
                                 g.members.pop();
                             }
@@ -569,14 +571,24 @@ contract Controller is Ownable {
 
                     // Iterate over disqualified nodes and call slashNode on each.
                     for (uint256 i = 0; i < disqualifiedNodes.length; i++) {
-                        slashNode(disqualifiedNodes[i], DISQUALIFIED_NODE_PENALTY_AMOUNT, 0, false);
+                        slashNode(
+                            disqualifiedNodes[i],
+                            DISQUALIFIED_NODE_PENALTY_AMOUNT,
+                            0,
+                            false
+                        );
                     }
                 }
             }
         }
     } // end commitDkg
 
-    function slashNode(address nodeIdAddress, uint256 stakingPenalty, uint256 pendingBlock, bool handleGroup ) internal {
+    function slashNode(
+        address nodeIdAddress,
+        uint256 stakingPenalty,
+        uint256 pendingBlock,
+        bool handleGroup
+    ) internal {
         Node storage node = nodes[nodeIdAddress];
         node.staking -= stakingPenalty;
         if (node.staking < NODE_STAKING_AMOUNT || pendingBlock > 0) {
@@ -584,17 +596,28 @@ contract Controller is Ownable {
         }
     }
 
-    function freezeNode(address nodeIdAddress, uint256 pendingBlock, bool handleGroup) internal {
-        // TODO 
+    function freezeNode(
+        address nodeIdAddress,
+        uint256 pendingBlock,
+        bool handleGroup
+    ) internal {
+        // TODO
     }
 
     // temporarily public for testing. This should be internal.
-    function chooseRandomlyFromIndices(uint64 seed, uint256[] memory indices, uint256 count) public pure returns (uint256[] memory) {
+
+    // Choose "count" random indices from "indices" array.
+    function chooseRandomlyFromIndices(
+        uint64 seed,
+        uint256[] memory indices,
+        uint256 count
+    ) public pure returns (uint256[] memory) {
         uint256[] memory chosenIndices = new uint256[](count);
         uint256[] memory remainingIndices = indices;
         uint256 remainingCount = remainingIndices.length;
         for (uint256 i = 0; i < count; i++) {
-            uint256 index = uint256(keccak256(abi.encodePacked(seed, i))) % remainingCount;
+            uint256 index = uint256(keccak256(abi.encodePacked(seed, i))) %
+                remainingCount;
             chosenIndices[i] = remainingIndices[index];
             remainingIndices[index] = remainingIndices[remainingCount - 1];
             remainingCount--;
@@ -602,8 +625,7 @@ contract Controller is Ownable {
         return chosenIndices;
     }
 
-
-    // Goal: get array of majority members with identical commit result. Return commit cache. if no majority, return empty commit cache. 
+    // Goal: get array of majority members with identical commit result. Return commit cache. if no majority, return empty commit cache.
     function getStrictlyMajorityIdenticalCommitmentResult(uint256 groupIndex)
         internal
         view
@@ -641,13 +663,13 @@ contract Controller is Ownable {
             }
         }
 
-        if (!isStrictlyMajorityExist) { // If no majority, return empty commit cache
+        if (!isStrictlyMajorityExist) {
+            // If no majority, return empty commit cache
             return (emptyCache);
         }
 
         return (majorityCommitCache); // If majority, return majority commit cache
     }
-
 
     // function getNonDisqualifiedMajorityMembers iterates through list of members and remove disqualified nodes.
     function getNonDisqualifiedMajorityMembers(
@@ -695,7 +717,6 @@ contract Controller is Ownable {
             }
         }
     }
-
 
     // ! Post Proccess DKG
     // Called by nodes after last phase of dkg ends (success or failure)

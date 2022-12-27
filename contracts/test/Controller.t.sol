@@ -81,12 +81,54 @@ contract ControllerTest is Test {
 
     function testRemoveFromGroup() public {
         testCommitDkg();
-        printGroupInfo(1);   
+        printGroupInfo(1);
         assertEq(controller.getGroup(1).size, 3);
         controller.removeFromGroup(address(0x1), 1, false);
-        printGroupInfo(1);   
+        printGroupInfo(1);
         assertEq(controller.getGroup(1).size, 2);
+    }
 
+    function testReblanceGroup() public {
+        //! Needs work
+        emit log_named_uint("groupCount", controller.groupCount());
+        testCommitDkg();
+        emit log_named_uint("groupCount", controller.groupCount());
+        printGroupInfo(1);
+
+        // Add 4th node, should create new group
+        vm.prank(node4);
+        controller.nodeRegister(pubkey4);
+        emit log_named_uint("groupCount", controller.groupCount());
+        printGroupInfo(2);
+
+        // Test needsReblance
+        vm.prank(node5);
+        controller.nodeRegister(pubkey5);
+        vm.prank(node6);
+        controller.nodeRegister(pubkey6);
+        vm.prank(node7);
+        controller.nodeRegister(pubkey7);
+        vm.prank(node8);
+        controller.nodeRegister(pubkey8);
+        vm.prank(node9);
+        controller.nodeRegister(pubkey9);
+        vm.prank(node10);
+        controller.nodeRegister(pubkey10);
+        vm.prank(node11);
+        controller.nodeRegister(pubkey11);
+        emit log("+++++++++++++++++++++++");
+        printGroupInfo(1);
+        printGroupInfo(2);
+        emit log("++++++ Reblance 1 +++++++");
+        bool output = controller.rebalanceGroup(1, 2);
+        assertEq(output, true);
+        printGroupInfo(1);
+        printGroupInfo(2);
+        emit log("++++++ Reblance 2 +++++++");
+        output = controller.rebalanceGroup(1, 2);
+        assertEq(output, true);
+        printGroupInfo(1);
+        printGroupInfo(2);
     }
 
     function testMinimumThreshold() public {
@@ -139,63 +181,12 @@ contract ControllerTest is Test {
         // Verify node2 info is recorded in group.members[1]
         Controller.Member memory m = g.members[1];
         // printMemberInfo(groupIndex, 1);
-        assertEq(m.index, 1);
+        // assertEq(m.index, 1);
         assertEq(m.nodeIdAddress, node2);
         // assertEq(m.partialPublicKey, TODO);
 
         address coordinatorAddress = controller.getCoordinator(groupIndex);
         emit log_named_address("\nCoordinator", coordinatorAddress);
-    }
-
-    function mockFindOrCreateTargetGroup()
-        public
-        returns (
-            uint256, //groupIndex
-            bool // needsRebalance
-        )
-    {
-        emit log("============");
-        if (controller.groupCount() == 0) { // if group is empty, addgroup.
-            emit log("if groupCount == 0:");
-            return (1,true);
-        }
-
-        // get the group index of the group with the minimum size, as well as the min size
-        uint256 indexOfMinSize;
-        uint256 minSize = controller.GROUP_MAX_CAPACITY();
-        for (uint256 i = 0; i < controller.groupCount(); i++) {
-            Controller.Group memory g = controller.getGroup(i+1); //
-            if (g.size < minSize) {
-                minSize = g.size;
-                indexOfMinSize = i+1; // ! because groupCount starts at 1, ruoshan please check this. 
-            }
-        }
-
-
-
-        // Get length of list of all group indexes where group.isStrictlyMajorityConsensusReached == true
-        uint256 validGroupCount = controller.validGroupIndices().length;
-        emit log("else:");
-        emit log_named_uint("indexOfMinSize", indexOfMinSize);
-        emit log_named_uint("minSize", minSize);
-        emit log_named_uint("validGroupCount", validGroupCount);
-
-        // // check if valid group count < ideal_number_of_groups || minSize == group_max_capacity
-        // // If either condition is met and the number of valid groups == group count, call add group and return (index of new group, true)
-        if ((validGroupCount < controller.IDEAL_NUMBER_OF_GROUPS() || minSize == controller.GROUP_MAX_CAPACITY()) && (validGroupCount == controller.groupCount())) {
-            emit log("validGroupCount < IDEAL_NUMBER_OF_GROUPS || minSize == GROUP_MAX_CAPACITY");
-            return (1,true);
-            // uint256 groupIndex = controller.addGroup();
-            // return (groupIndex, true);
-        }
-
-        // // if none of the above conditions are met:
-        // return (indexOfMinSize, false);
-        emit log ("neither condition met:");
-        // emit log_named_uint("indexOfMinSize", indexOfMinSize);
-        // emit log_named_uint("minSize", minSize);
-        return (indexOfMinSize, false);
-
     }
 
     function testValidGroupIndices() public {
@@ -218,6 +209,8 @@ contract ControllerTest is Test {
         testCommitDkg();
         emit log_named_uint("groupCount", controller.groupCount());
         printGroupInfo(1);
+
+        // Add 4th node, should create new group
         vm.prank(node4);
         controller.nodeRegister(pubkey4);
         emit log_named_uint("groupCount", controller.groupCount());
@@ -266,7 +259,7 @@ contract ControllerTest is Test {
         testEmitGroupEvent();
 
         uint256 groupIndex = 1;
-         uint256 groupEpoch = 1;
+        uint256 groupEpoch = 1;
         bytes memory partialPublicKey = hex"DECADE";
         bytes memory publicKey = hex"C0FFEE";
         address[] memory disqualifiedNodes = new address[](0);
@@ -326,11 +319,10 @@ contract ControllerTest is Test {
         assertEq(checkIsStrictlyMajorityConsensusReached(groupIndex), false);
         // printGroupInfo(groupIndex); // ! Print
 
-
         //  Fail if CommitCache already contains PartialKey for this node
-        vm.prank(node1); 
+        vm.prank(node1);
         vm.expectRevert(
-            "CommitCache already contains PartialKey for this node"  // ! PublcKey, not PartialKey? Should we add partialkey to commitresult?
+            "CommitCache already contains PartialKey for this node"
         );
         params = Controller.CommitDkgParams(
             groupIndex,
@@ -355,7 +347,6 @@ contract ControllerTest is Test {
         assertEq(checkIsStrictlyMajorityConsensusReached(groupIndex), false);
         // printGroupInfo(groupIndex); // ! Print
 
-
         // Succesful Commit: Node 3
         vm.prank(node3);
         params = Controller.CommitDkgParams(
@@ -371,17 +362,20 @@ contract ControllerTest is Test {
     }
 
     function testChooseRandomlyFromIndices() public {
-
-        uint64 lastOutput = 0x2222222222222222; 
+        uint64 lastOutput = 0x2222222222222222;
 
         uint256[] memory indices = new uint256[](5);
         indices[0] = 0;
         indices[1] = 1;
         indices[2] = 2;
-        indices[3] = 3; 
+        indices[3] = 3;
         indices[4] = 4;
-        
-        uint256[] memory chosenIndices = controller.chooseRandomlyFromIndices(lastOutput, indices, 3);
+
+        uint256[] memory chosenIndices = controller.chooseRandomlyFromIndices(
+            lastOutput,
+            indices,
+            3
+        );
 
         for (uint256 i = 0; i < chosenIndices.length; i++) {
             emit log_named_uint("chosenIndices", chosenIndices[i]);
@@ -399,10 +393,8 @@ contract ControllerTest is Test {
         address[] memory disqualifedNodes = new address[](1);
         disqualifedNodes[0] = node2;
 
-        address[] memory majorityMembers = controller.getNonDisqualifiedMajorityMembers(
-            nodes,
-            disqualifedNodes
-        );
+        address[] memory majorityMembers = controller
+            .getNonDisqualifiedMajorityMembers(nodes, disqualifedNodes);
 
         assertEq(majorityMembers.length, 2);
     }
@@ -583,13 +575,10 @@ contract ControllerTest is Test {
             memberIndex
         );
 
-        emit log_named_uint("m.index", m.index);
+        // emit log_named_uint("m.index", m.index);
         emit log_named_address("m.nodeIdAddress", m.nodeIdAddress);
         emit log_named_bytes("m.partialPublicKey", m.partialPublicKey);
     }
-
-
-
 
     ////// ! Solidity Playground
 
@@ -629,12 +618,11 @@ contract ControllerTest is Test {
     //         output[i] = goodNumbers[i];
     //     }
 
-
     //     emit log_named_uint("output.length", output.length);
-        
-    // }
 
+    // }
 }
+
 //////////////////////////////////////////////////////////////////////////////////////////////////
 //////////////////////////////////////////////////////////////////////////////////////////////////
 //////////////////////////////////////////////////////////////////////////////////////////////////
@@ -663,5 +651,3 @@ library Bool {
         r = inString;
     }
 }
-
-
