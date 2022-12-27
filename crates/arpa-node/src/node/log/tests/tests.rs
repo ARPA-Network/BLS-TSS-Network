@@ -9,20 +9,20 @@ mod tests {
     use log::debug;
     use std::sync::Once;
 
-    #[log_function]
+    #[log_function("show-input", "show-return")]
     fn omit_return(_a: usize) {}
 
-    #[log_function]
+    #[log_function("show-input", "show-return")]
     fn return_nothing(_a: usize) {
         return;
     }
 
-    #[log_function]
+    #[log_function("show-input", "show-return")]
     async fn async_and_return_value(a: usize, b: usize) -> usize {
         return a + b;
     }
 
-    #[log_function]
+    #[log_function("show-input", "show-return")]
     fn more_than_seven_inputs(
         a: usize,
         b: usize,
@@ -36,7 +36,7 @@ mod tests {
         a + b + c + d + aa + bb + cc + dd
     }
 
-    #[log_function]
+    #[log_function("show-input", "show-return")]
     fn expr_stmt_in_sub_blocks(a: usize, b: usize) -> usize {
         if true {
             a + b
@@ -45,7 +45,7 @@ mod tests {
         }
     }
 
-    #[log_function]
+    #[log_function("show-input", "show-return")]
     fn return_match_expr(a: usize) -> usize {
         match a > 0 {
             true => 1,
@@ -53,16 +53,21 @@ mod tests {
         }
     }
 
-    #[log_function("ignore-return")]
+    #[log_function("show-input")]
     fn ignore_return(a: usize) -> usize {
         a
     }
 
-    #[log_function]
+    #[log_function("show-input", "show-return")]
     fn return_error_by_question_mark_operator() -> anyhow::Result<()> {
         std::fs::read_to_string("noexist")?;
 
         Ok(())
+    }
+
+    #[log_function("show-input", "except foo bar", "show-return")]
+    fn show_subset_of_input_and_return_value(foo: usize, bar: usize, baz: usize) -> usize {
+        foo + bar + baz
     }
 
     struct Dummy {}
@@ -74,7 +79,7 @@ mod tests {
 
     #[async_trait]
     impl AsyncTest for Dummy {
-        #[log_function]
+        #[log_function("show-input", "show-return")]
         async fn test_async(&self, a: usize) -> usize {
             a
         }
@@ -161,6 +166,18 @@ mod tests {
             "return_error_by_question_mark_operator",
             &[],
             "Err(No such file or directory (os error 2))",
+        );
+        assert_eq!(expected, logger().last_message().unwrap());
+    }
+
+    #[test]
+    fn test_show_subset_of_input_and_return_value() {
+        setup_tests();
+        show_subset_of_input_and_return_value(1, 2, 3);
+        let expected = build_expected_log(
+            "show_subset_of_input_and_return_value",
+            &["foo: ignored", "bar: ignored", "baz: 3"],
+            "6",
         );
         assert_eq!(expected, logger().last_message().unwrap());
     }
