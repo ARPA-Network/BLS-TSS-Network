@@ -152,30 +152,37 @@ pub fn log_function(attr: TokenStream, input: TokenStream) -> TokenStream {
 
 impl FunctionLogVisitor {
     fn generate_args_text(&self, fn_args: Punctuated<FnArg, Comma>) -> TokenStream2 {
-        let mut args = quote! {
+        let args = quote! {
             let mut __args: Vec<String> = vec![];
         };
-        for arg in fn_args.iter() {
-            if let FnArg::Typed(a) = arg {
-                let ident = match a.pat.as_ref() {
-                    Pat::Ident(ref p) => &p.ident,
-                    _ => unreachable!(),
-                };
-                let arg_text =
-                    if self.show_input && !self.ignore_input_args.contains(&ident.to_string()) {
-                        quote! {
-                            __args.push(format!("{}: {:?}", stringify!(#ident), #ident));
-                        }
-                    } else {
-                        quote! {
-                            __args.push(format!("{}: ignored", stringify!(#ident)));
-                        }
-                    };
 
-                args.extend(arg_text);
-            }
-        }
-        args
+        fn_args
+            .iter()
+            .filter_map(|arg| match arg {
+                FnArg::Typed(a) => match a.pat.as_ref() {
+                    Pat::Ident(p) => {
+                        let ident = &p.ident;
+                        let arg_text = if self.show_input
+                            && !self.ignore_input_args.contains(&ident.to_string())
+                        {
+                            quote! {
+                                __args.push(format!("{}: {:?}", stringify!(#ident), #ident));
+                            }
+                        } else {
+                            quote! {
+                                __args.push(format!("{}: ignored", stringify!(#ident)));
+                            }
+                        };
+                        Some(arg_text)
+                    }
+                    _ => None,
+                },
+                _ => None,
+            })
+            .fold(args, |mut args, arg| {
+                args.extend(arg);
+                args
+            })
     }
 
     fn generate_log(&self) -> TokenStream2 {
