@@ -1,3 +1,5 @@
+#![feature(box_patterns)]
+
 use proc_macro::TokenStream;
 use proc_macro2::{Ident, TokenStream as TokenStream2};
 use quote::quote;
@@ -7,7 +9,7 @@ use syn::{
     punctuated::Punctuated,
     spanned::Spanned,
     token::{Comma, Semi},
-    AttributeArgs, Expr, FnArg, GenericParam, ItemFn, Lit, NestedMeta, Pat, Stmt,
+    AttributeArgs, Expr, FnArg, GenericParam, ItemFn, Lit, NestedMeta, Pat, PatType, Stmt,
 };
 
 struct FunctionLogVisitor {
@@ -159,24 +161,26 @@ impl FunctionLogVisitor {
         fn_args
             .iter()
             .filter_map(|arg| match arg {
-                FnArg::Typed(a) => match a.pat.as_ref() {
-                    Pat::Ident(p) => {
-                        let ident = &p.ident;
-                        let arg_text = if self.show_input
-                            && !self.ignore_input_args.contains(&ident.to_string())
-                        {
-                            quote! {
-                                __args.push(format!("{}: {:?}", stringify!(#ident), #ident));
-                            }
-                        } else {
-                            quote! {
-                                __args.push(format!("{}: ignored", stringify!(#ident)));
-                            }
-                        };
-                        Some(arg_text)
-                    }
-                    _ => None,
-                },
+                FnArg::Typed(PatType {
+                    attrs: _,
+                    pat: box Pat::Ident(p),
+                    colon_token: _,
+                    ty: _,
+                }) => {
+                    let ident = &p.ident;
+                    let arg_text = if self.show_input
+                        && !self.ignore_input_args.contains(&ident.to_string())
+                    {
+                        quote! {
+                            __args.push(format!("{}: {:?}", stringify!(#ident), #ident));
+                        }
+                    } else {
+                        quote! {
+                            __args.push(format!("{}: ignored", stringify!(#ident)));
+                        }
+                    };
+                    Some(arg_text)
+                }
                 _ => None,
             })
             .fold(args, |mut args, arg| {
