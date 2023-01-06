@@ -11,7 +11,6 @@ use async_trait::async_trait;
 use std::sync::Arc;
 use tokio::sync::RwLock;
 
-#[async_trait]
 pub trait Context {
     type MainChain;
 

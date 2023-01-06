@@ -431,6 +431,7 @@ impl<
         }
     }
 }
+
 pub struct GeneralMainChain<
     N: NodeInfoFetcher,
     G: GroupInfoFetcher + GroupInfoUpdater,
