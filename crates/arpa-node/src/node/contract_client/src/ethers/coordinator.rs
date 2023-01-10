@@ -21,7 +21,7 @@ use threshold_bls::curve::bls12381::Curve;
 
 #[allow(clippy::useless_conversion)]
 pub mod coordinator_stub {
-    include!("../../../../../contract_stub/coordinator.rs");
+    include!("../../contract_stub/coordinator.rs");
 }
 
 pub struct CoordinatorClient {
@@ -239,7 +239,7 @@ pub mod coordinator_tests {
     use std::{convert::TryFrom, sync::Arc, time::Duration};
     use threshold_bls::schemes::bls12_381::G1Scheme;
 
-    include!("../../../../../contract_stub/coordinator.rs");
+    include!("../../contract_stub/coordinator.rs");
 
     #[test]
     fn test_cargo_manifest_parent_dir() {

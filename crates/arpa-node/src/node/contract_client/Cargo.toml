@@ -25,3 +25,8 @@ rustc-hex = "2.1.0"
 [lib]
 name = "arpa_node_contract_client"
 path = "src/lib.rs"
+
+[build-dependencies]
+tonic-build = "0.8"
+prost-build = "0.11"
+ethers-contract-abigen = { git = "https://github.com/gakonst/ethers-rs" }

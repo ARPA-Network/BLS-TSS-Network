@@ -22,7 +22,7 @@ use log::{debug, error};
 use tonic::{Code, Request};
 
 pub mod controller_stub {
-    include!("../../../../../rpc_stub/controller.rs");
+    include!("../../rpc_stub/controller.rs");
 }
 
 #[async_trait]

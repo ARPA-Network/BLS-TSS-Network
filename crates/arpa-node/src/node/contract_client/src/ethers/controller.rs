@@ -17,7 +17,7 @@ use super::WalletSigner;
 
 #[allow(clippy::useless_conversion)]
 pub mod controller_stub {
-    include!("../../../../../contract_stub/controller.rs");
+    include!("../../contract_stub/controller.rs");
 }
 
 pub struct ControllerClient {

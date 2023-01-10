@@ -62,4 +62,3 @@ hyper = "0.14"
 [build-dependencies]
 tonic-build = "0.8"
 prost-build = "0.11"
-ethers-contract-abigen = { git = "https://github.com/gakonst/ethers-rs" }

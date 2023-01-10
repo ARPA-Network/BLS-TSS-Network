@@ -24,7 +24,7 @@ use std::future::Future;
 use tonic::{Code, Request, Response};
 
 pub mod adapter_stub {
-    include!("../../../../../rpc_stub/adapter.rs");
+    include!("../../rpc_stub/adapter.rs");
 }
 
 #[async_trait]

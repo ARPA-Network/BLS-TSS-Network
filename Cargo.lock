@@ -104,7 +104,6 @@ dependencies = [
  "clt",
  "dkg-core",
  "ethers",
- "ethers-contract-abigen",
  "futures",
  "glob",
  "gumdrop",
@@ -142,15 +141,18 @@ dependencies = [
  "bincode",
  "dkg-core",
  "ethers",
+ "ethers-contract-abigen",
  "ethers-core",
  "log",
  "prost 0.11.0",
+ "prost-build 0.11.1",
  "rustc-hex",
  "serde",
  "thiserror",
  "threshold-bls",
  "tokio 1.20.1",
  "tonic 0.8.0",
+ "tonic-build 0.8.0",
 ]
 
 [[package]]
