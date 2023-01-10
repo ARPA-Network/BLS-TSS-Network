@@ -19,7 +19,7 @@ jobs:
       - name: Install latest nightly
         uses: actions-rs/toolchain@v1
         with:
-          toolchain: nightly
+          toolchain: nightly-2022-11-29
           override: true
           components: rustfmt, clippy
       - name: Install Protoc
