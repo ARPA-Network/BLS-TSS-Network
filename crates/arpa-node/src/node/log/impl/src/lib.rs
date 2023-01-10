@@ -1,3 +1,5 @@
+#![feature(box_patterns)]
+
 use proc_macro::TokenStream;
 use proc_macro2::{Ident, TokenStream as TokenStream2};
 use quote::quote;
@@ -7,12 +9,14 @@ use syn::{
     punctuated::Punctuated,
     spanned::Spanned,
     token::{Comma, Semi},
-    AttributeArgs, Expr, FnArg, GenericParam, ItemFn, Lit, NestedMeta, Pat, Stmt,
+    AttributeArgs, Expr, FnArg, GenericParam, ItemFn, Lit, NestedMeta, Pat, PatType, Stmt,
 };
 
 struct FunctionLogVisitor {
     name: Ident,
-    ignore_return: bool,
+    show_input: bool,
+    ignore_input_args: Vec<String>,
+    show_return: bool,
     /// support async function by `#[async_trait]`
     async_trait: bool,
     /// we don't want add log before returning in sub block or sub closure/async block
@@ -44,11 +48,25 @@ macro_rules! macro_error {
 /// 2. Set the name of current function as a key in `mdc` at the beginning of the function and
 ///  remove it before the function returns.
 ///
-/// Notes:
+/// Note:
 /// 1. Input and return type need to implement `Debug`.
 /// 2. When dealing with async function, using `#![feature(async_fn_in_trait)]` is recommended.
 /// Also this is compatible with `#[async_trait]`.
-/// 3. There is an option as `log_function("ignore-return")` to ignore printing return value.
+/// 3. To protect secrets, input and return values are ignored by default.
+/// You can specify whether to print all values, or a subset of them with semantic literal options.
+/// For example:
+///     ```
+///     #[log_function("show-input", "except foo bar", "show-return")]
+///     fn show_subset_of_input_and_return_value(foo: usize, bar: usize, baz: usize) -> usize {
+///        foo + bar + baz
+///     }
+///     ```
+///     Then the log should be: {"message":"LogModel { fn_name: \"show_subset_of_input_and_return_value\",
+///     fn_args: [\"foo: ignored\", \"bar: ignored\", \"baz: 3\"], fn_return: \"6\" }","level":"DEBUG",
+///     "target":"show_subset_of_input_and_return_value","mdc":{"fn_name":"show_subset_of_input_and_return_value"}}
+///     with test logger.
+///
+/// Note: Logging result can be different with different logger implementation.
 #[proc_macro_attribute]
 pub fn log_function(attr: TokenStream, input: TokenStream) -> TokenStream {
     // ItemFn seems OK for impl function perhaps for they both have sig and block.
@@ -64,46 +82,53 @@ pub fn log_function(attr: TokenStream, input: TokenStream) -> TokenStream {
     });
 
     let args = parse_macro_input!(attr as AttributeArgs);
-    if args.len() > 1 {
-        return macro_error!("Only one argument is allowed", args[1].span());
-    }
 
-    let mut ignore_return = false;
-    if let Some(arg) = args.get(0) {
+    let mut show_input = false;
+    let mut show_return = false;
+    let mut ignore_input_args = vec![];
+
+    for arg in args {
         match arg {
-            NestedMeta::Lit(x) => match x {
-                Lit::Str(x) => {
-                    if format!("{}", x.token()) == "\"ignore-return\"" {
-                        ignore_return = true;
-                    }
-                }
-                _ => {
-                    return macro_error!("expected string literal for logging message", x.span());
-                }
-            },
+            NestedMeta::Lit(Lit::Str(x)) if x.token().to_string() == "\"show-input\"" => {
+                show_input = true;
+            }
+            NestedMeta::Lit(Lit::Str(x)) if x.token().to_string() == "\"show-return\"" => {
+                show_return = true;
+            }
+            NestedMeta::Lit(Lit::Str(x)) if x.token().to_string().starts_with("\"except") => {
+                ignore_input_args = x
+                    .token()
+                    .to_string()
+                    .trim_end_matches("\"")
+                    .split_whitespace()
+                    .skip(1)
+                    .filter_map(|word| word.parse().ok())
+                    .collect();
+            }
             _ => {
-                return macro_error!("expected string literal for logging message", arg.span());
+                return macro_error!("unknown logging options", arg.span());
             }
         }
     }
 
     let mut visitor = FunctionLogVisitor {
         name: fn_ident.clone(),
-        ignore_return,
+        show_input,
+        ignore_input_args,
+        show_return,
         async_trait: fn_async_trait,
         current_block_count: 0,
         current_closure_or_async_block_count: 0,
         has_return_stmt: false,
     };
 
-    let args_text = generate_args_text(fn_args);
+    let args_text = visitor.generate_args_text(fn_args);
 
     // Use a syntax tree traversal to transform the function body.
-    let mut stmts: Punctuated<Stmt, Semi> = Punctuated::new();
-    for stmt in fn_stmts {
-        let stmt = visitor.fold_stmt(stmt.to_owned());
-        stmts.push(stmt);
-    }
+    let stmts: Punctuated<Stmt, Semi> = fn_stmts
+        .into_iter()
+        .map(|stmt| visitor.fold_stmt(stmt.to_owned()))
+        .collect();
 
     let post_code = if visitor.has_return_stmt {
         TokenStream2::new()
@@ -127,43 +152,60 @@ pub fn log_function(attr: TokenStream, input: TokenStream) -> TokenStream {
     .into()
 }
 
-fn generate_args_text(fn_args: Punctuated<FnArg, Comma>) -> TokenStream2 {
-    let mut args = quote! {
-        let mut __args: Vec<String> = vec![];
-    };
-    for arg in fn_args {
-        if let FnArg::Typed(a) = arg {
-            let ident = match *a.pat {
-                Pat::Ident(ref p) => &p.ident,
-                _ => unreachable!(),
-            };
-            let arg_text = quote! {
-                let __arg = format!("{}: {:?}", stringify!(#ident), #ident);
-                __args.push(__arg);
-            };
-            args.extend(arg_text);
-        }
-    }
-    args
-}
-
 impl FunctionLogVisitor {
+    fn generate_args_text(&self, fn_args: Punctuated<FnArg, Comma>) -> TokenStream2 {
+        let args = quote! {
+            let mut __args: Vec<String> = vec![];
+        };
+
+        fn_args
+            .iter()
+            .filter_map(|arg| match arg {
+                FnArg::Typed(PatType {
+                    attrs: _,
+                    pat: box Pat::Ident(p),
+                    colon_token: _,
+                    ty: _,
+                }) => {
+                    let ident = &p.ident;
+                    let arg_text = if self.show_input
+                        && !self.ignore_input_args.contains(&ident.to_string())
+                    {
+                        quote! {
+                            __args.push(format!("{}: {:?}", stringify!(#ident), #ident));
+                        }
+                    } else {
+                        quote! {
+                            __args.push(format!("{}: ignored", stringify!(#ident)));
+                        }
+                    };
+                    Some(arg_text)
+                }
+                _ => None,
+            })
+            .fold(args, |mut args, arg| {
+                args.extend(arg);
+                args
+            })
+    }
+
     fn generate_log(&self) -> TokenStream2 {
         let fn_ident = &self.name;
 
-        let return_text = if self.ignore_return {
-            quote! {
-                &format!("{:?}", "ignored")
-            }
-        } else {
+        let return_text = if self.show_return {
             quote! {
                 &format!("{:?}", __res)
             }
+        } else {
+            quote! {
+                &format!("{:?}", "ignored")
+            }
         };
         quote! {
+            let ___args: Vec<&str> = __args.iter().map(|arg| arg as &str).collect();
             let __log = LogModel{
                 fn_name: stringify!(#fn_ident),
-                fn_args: &__args,
+                fn_args: &___args,
                 fn_return: #return_text,
             };
             debug!(target: stringify!(#fn_ident), "{:?}", __log);
@@ -262,7 +304,7 @@ impl Fold for FunctionLogVisitor {
             }
             // clone __args before move block
             Expr::Closure(e) => {
-                if e.capture.is_some() {
+                if let Some(_) = e.capture {
                     self.current_closure_or_async_block_count += 1;
                     let expr = fold::fold_expr_closure(self, e);
                     self.current_closure_or_async_block_count -= 1;
@@ -286,15 +328,11 @@ impl Fold for FunctionLogVisitor {
                     Expr::Path(p) => {
                         let first = p.path.segments.first();
                         let last = p.path.segments.last();
-                        if self.async_trait
-                            && first.is_some()
-                            && first.unwrap().ident == "Box"
-                            && last.is_some()
-                            && last.unwrap().ident == "pin"
-                        {
-                            fold::fold_stmt(self, Stmt::Expr(Expr::Call(c)))
-                        } else {
-                            self.insert_log_and_fold_expr_stmt(Expr::Call(c))
+                        match (self.async_trait, first, last) {
+                            (true, Some(f), Some(l)) if f.ident == "Box" && l.ident == "pin" => {
+                                fold::fold_stmt(self, Stmt::Expr(Expr::Call(c)))
+                            }
+                            _ => self.insert_log_and_fold_expr_stmt(Expr::Call(c)),
                         }
                     }
                     _ => self.insert_log_and_fold_expr_stmt(Expr::Call(c)),

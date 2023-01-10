@@ -1,13 +1,12 @@
 use core::fmt;
 use log::{Level, Log, Metadata, Record, SetLoggerError};
+use once_cell::sync::OnceCell;
+use parking_lot::Mutex;
 use serde::{ser::Serialize, ser::SerializeMap, Serializer};
-use std::sync::Mutex;
 
-pub static SL: SimpleLogger = SimpleLogger {
-    log_level: Level::Debug,
-    message: Mutex::new(vec![]),
-};
+pub static SL: OnceCell<SimpleLogger> = OnceCell::new();
 
+#[derive(Debug)]
 pub struct SimpleLogger {
     log_level: Level,
     message: Mutex<Vec<String>>,
@@ -15,7 +14,7 @@ pub struct SimpleLogger {
 
 impl SimpleLogger {
     pub fn last_message(&self) -> Option<String> {
-        self.message.lock().unwrap().last().map(|s| s.to_owned())
+        self.message.lock().last().map(|s| s.to_owned())
     }
 }
 
@@ -34,7 +33,7 @@ impl Log for SimpleLogger {
             };
 
             let log = serde_json::to_string(&message).unwrap();
-            let mut message = self.message.lock().unwrap();
+            let mut message = self.message.lock();
             println!("{}", log);
             message.push(log);
         }
@@ -43,10 +42,15 @@ impl Log for SimpleLogger {
     fn flush(&self) {}
 }
 
-pub fn init() -> Result<&'static SimpleLogger, SetLoggerError> {
+pub fn init(log_level: Level) -> Result<(), SetLoggerError> {
     log::set_max_level(log::LevelFilter::Trace);
-    log::set_logger(&SL)?;
-    return Ok(&SL);
+    let logger = SimpleLogger {
+        log_level,
+        message: Mutex::new(vec![]),
+    };
+    SL.set(logger).unwrap();
+    log::set_logger(SL.get().unwrap())?;
+    Ok(())
 }
 
 #[derive(serde::Serialize)]

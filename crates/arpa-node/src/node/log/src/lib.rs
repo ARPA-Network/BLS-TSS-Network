@@ -5,6 +5,6 @@ pub use log_mdc;
 #[derive(Debug)]
 pub struct LogModel<'a> {
     pub fn_name: &'a str,
-    pub fn_args: &'a [String],
+    pub fn_args: &'a [&'a str],
     pub fn_return: &'a str,
 }
