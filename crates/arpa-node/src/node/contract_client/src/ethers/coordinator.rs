@@ -253,7 +253,7 @@ pub mod coordinator_tests {
     const INDEX: u32 = 0;
 
     fn start_chain() -> AnvilInstance {
-        Anvil::new().mnemonic(PHRASE).spawn()
+        Anvil::new().chain_id(1u64).mnemonic(PHRASE).spawn()
     }
 
     async fn deploy_contract(anvil: &AnvilInstance) -> Coordinator<WalletSigner> {
@@ -321,17 +321,17 @@ pub mod coordinator_tests {
 
         let mock_value = vec![1, 2, 3, 4];
         let res = client.publish(mock_value.clone()).await;
-        // assert!(res.is_ok());
-
-        // let res = client.publish(mock_value.clone()).await;
-        // assert!(res.is_err());
-        // let err = res.unwrap_err();
-        // assert!(err
-        //     .to_string()
-        //     .contains("execution reverted: you have already published your shares"));
-        if let Err(e) = res {
+        if let Err(e) = &res {
             println!("{}", e.to_string());
         }
+        assert!(res.is_ok());
+
+        let res = client.publish(mock_value.clone()).await;
+        assert!(res.is_err());
+        let err = res.unwrap_err();
+        assert!(err
+            .to_string()
+            .contains("you have already published your shares"));
     }
 
     #[test]
