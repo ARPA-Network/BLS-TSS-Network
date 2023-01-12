@@ -302,6 +302,8 @@ pub mod coordinator_tests {
             .build()
             .unwrap();
 
+        let wallet = wallet.with_chain_id(anvil.chain_id());
+
         // mock dkg key pair
         let (_, dkg_public_key) = dkg_core::generate_keypair::<G1Scheme>();
 
