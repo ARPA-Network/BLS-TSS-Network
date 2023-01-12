@@ -302,8 +302,6 @@ pub mod coordinator_tests {
             .build()
             .unwrap();
 
-        let wallet = wallet.with_chain_id(anvil.chain_id());
-
         // mock dkg key pair
         let (_, dkg_public_key) = dkg_core::generate_keypair::<G1Scheme>();
 
@@ -316,16 +314,18 @@ pub mod coordinator_tests {
             .await
             .unwrap();
 
-        let main_chain_identity =
-            GeneralChainIdentity::new(0, 0, wallet, anvil.endpoint(), Address::random());
+        let main_chain_identity = GeneralChainIdentity::new(
+            0,
+            anvil.chain_id() as usize,
+            wallet,
+            anvil.endpoint(),
+            Address::random(),
+        );
 
         let client = CoordinatorClient::new(coordinator_contract.address(), &main_chain_identity);
 
         let mock_value = vec![1, 2, 3, 4];
         let res = client.publish(mock_value.clone()).await;
-        if let Err(e) = &res {
-            println!("{}", e.to_string());
-        }
         assert!(res.is_ok());
 
         let res = client.publish(mock_value.clone()).await;
