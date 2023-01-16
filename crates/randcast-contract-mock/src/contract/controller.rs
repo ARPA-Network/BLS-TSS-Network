@@ -99,6 +99,8 @@ trait ControllerInternal {
         group_b_index: usize,
     ) -> ControllerResult<bool>;
 
+    fn arrange_members_in_group(&mut self, group_index: usize) -> ControllerResult<()>;
+
     fn rotate_group(
         &mut self,
         group_a_index: usize,
@@ -608,56 +610,7 @@ impl ControllerInternal for Controller {
                 // else try rebalance
 
                 if need_rebalance {
-                    let group_indices = self
-                        .groups
-                        .keys()
-                        .copied()
-                        .filter(|i| *i != group_index)
-                        .collect::<Vec<_>>();
-
-                    let rebalance_failure = group_indices.iter().try_for_each(|index| {
-                        if let Ok(true) = self.rebalance_group(*index, group_index) {
-                            return None;
-                        }
-                        Some(())
-                    });
-
-                    if rebalance_failure.is_some() {
-                        let members_left_in_group = self
-                            .groups
-                            .get(&group_index)
-                            .unwrap()
-                            .members
-                            .keys()
-                            .map(|m| m.to_string())
-                            .collect::<Vec<_>>();
-
-                        let mut invovled_groups = HashSet::new();
-
-                        for member_address in members_left_in_group.iter() {
-                            let (target_group_index, _) = self.find_or_create_target_group();
-
-                            if group_index == target_group_index {
-                                break;
-                            }
-
-                            self.add_to_group(
-                                member_address.to_string(),
-                                target_group_index,
-                                false,
-                            )?;
-
-                            invovled_groups.insert(target_group_index);
-                        }
-
-                        for index in invovled_groups.iter() {
-                            let group = self.groups.get(index).unwrap();
-
-                            if group.size >= 3 {
-                                self.emit_group_event(*index)?;
-                            }
-                        }
-                    }
+                    self.arrange_members_in_group(group_index)?;
                 }
             }
         }
@@ -673,6 +626,57 @@ impl ControllerInternal for Controller {
         } else {
             block_height + pending_block
         };
+
+        Ok(())
+    }
+
+    fn arrange_members_in_group(&mut self, group_index: usize) -> ControllerResult<()> {
+        let group_indices = self
+            .groups
+            .keys()
+            .copied()
+            .filter(|i| *i != group_index)
+            .collect::<Vec<_>>();
+
+        let rebalance_failure = group_indices.iter().try_for_each(|index| {
+            if let Ok(true) = self.rebalance_group(*index, group_index) {
+                return None;
+            }
+            Some(())
+        });
+
+        if rebalance_failure.is_some() {
+            let members_left_in_group = self
+                .groups
+                .get(&group_index)
+                .unwrap()
+                .members
+                .keys()
+                .map(|m| m.to_string())
+                .collect::<Vec<_>>();
+
+            let mut invovled_groups = HashSet::new();
+
+            for member_address in members_left_in_group.iter() {
+                let (target_group_index, _) = self.find_or_create_target_group();
+
+                if group_index == target_group_index {
+                    break;
+                }
+
+                self.add_to_group(member_address.to_string(), target_group_index, false)?;
+
+                invovled_groups.insert(target_group_index);
+            }
+
+            for index in invovled_groups.iter() {
+                let group = self.groups.get(index).unwrap();
+
+                if group.size >= 3 {
+                    self.emit_group_event(*index)?;
+                }
+            }
+        }
 
         Ok(())
     }
@@ -1008,17 +1012,16 @@ impl ControllerTransactions for Controller {
                         .members
                         .retain(|node, _| !disqualified_nodes.contains(node));
 
-                    for (index, disqualified_node) in disqualified_nodes.iter().enumerate() {
-                        // last time try to rebalance to arrange honest nodes
-                        let handle_group = index == disqualified_node.len() - 1;
-
+                    for disqualified_node in disqualified_nodes.iter() {
                         self.slash_node(
                             disqualified_node,
                             DISQUALIFIED_NODE_PENALTY_AMOUNT,
                             0,
-                            handle_group,
+                            false,
                         )?;
                     }
+
+                    self.arrange_members_in_group(group_index)?;
                 }
             }
         }
