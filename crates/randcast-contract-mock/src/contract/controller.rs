@@ -332,8 +332,8 @@ impl ControllerInternal for Controller {
 
         let valid_group_count = self.valid_group_indices().len();
 
-        if (valid_group_count < IDEAL_NUMBER_OF_GROUPS || min_size == GROUP_MAX_CAPACITY)
-            && valid_group_count == self.groups.len()
+        if (valid_group_count < IDEAL_NUMBER_OF_GROUPS && valid_group_count == self.groups.len())
+            || min_size == GROUP_MAX_CAPACITY
         {
             return (self.add_group(), true);
         }
