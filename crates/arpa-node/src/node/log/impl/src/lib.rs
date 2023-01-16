@@ -74,7 +74,7 @@ pub fn log_function(attr: TokenStream, input: TokenStream) -> TokenStream {
                 ignore_input_args = x
                     .token()
                     .to_string()
-                    .trim_end_matches("\"")
+                    .trim_end_matches('\"')
                     .split_whitespace()
                     .skip(1)
                     .filter_map(|word| word.parse().ok())
@@ -101,7 +101,7 @@ pub fn log_function(attr: TokenStream, input: TokenStream) -> TokenStream {
 
     // Use a syntax tree traversal to transform the function body.
     let stmts: Punctuated<Stmt, Semi> = fn_stmts
-        .into_iter()
+        .iter()
         .map(|stmt| visitor.fold_stmt(stmt.to_owned()))
         .collect();
 
@@ -279,7 +279,7 @@ impl Fold for FunctionLogVisitor {
             }
             // clone __args before move block
             Expr::Closure(e) => {
-                if let Some(_) = e.capture {
+                if e.capture.is_some() {
                     self.current_closure_or_async_block_count += 1;
                     let expr = fold::fold_expr_closure(self, e);
                     self.current_closure_or_async_block_count -= 1;
