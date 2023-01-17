@@ -1,7 +1,10 @@
 use std::fs;
 
+use ethers_contract_abigen::MultiAbigen;
+
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("cargo:rerun-if-changed=proto");
+    println!("cargo:rerun-if-changed=abi");
 
     let mut prost_build = prost_build::Config::new();
 
@@ -9,11 +12,20 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     fs::create_dir_all("rpc_stub")?;
 
-    let protos = &["proto/committer.proto", "proto/management.proto"];
+    let protos = &[
+        "proto/adapter.proto",
+        "proto/controller.proto",
+        "proto/coordinator.proto",
+    ];
 
     tonic_build::configure()
         .out_dir("rpc_stub")
         .compile_with_config(prost_build, protos, &["proto"])?;
+
+    MultiAbigen::from_json_files("./abi")
+        .unwrap()
+        .build()?
+        .write_to_module("contract_stub", false)?;
 
     Ok(())
 }

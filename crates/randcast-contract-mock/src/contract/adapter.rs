@@ -5,7 +5,6 @@ use super::types::{
 };
 use super::utils::calculate_hash;
 use std::collections::HashMap;
-use threshold_bls::poly::Eval;
 use threshold_bls::schemes::bls12_381::G1Scheme as SigScheme;
 use threshold_bls::sig::SignatureScheme;
 
@@ -275,12 +274,10 @@ impl AdapterTransactions for Adapter {
         SigScheme::verify(&group_public_key, message.as_bytes(), &signature)?;
 
         // verify bls-aggregation signature for incentivizing worker list
-        let mut sigs = Vec::new();
-        for partial_signature in partial_signatures.values() {
-            let sig_as_bytes: Eval<Vec<u8>> = bincode::deserialize(partial_signature)?;
-            let sig = bincode::deserialize(&sig_as_bytes.value)?;
-            sigs.push(sig);
-        }
+        let sigs = partial_signatures
+            .values()
+            .map(|sig| sig as &[u8])
+            .collect::<Vec<_>>();
 
         let mut public_keys = Vec::new();
 

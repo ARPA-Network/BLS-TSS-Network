@@ -14,6 +14,7 @@ use arpa_node_dal::cache::InMemoryNodeInfoCache;
 use arpa_node_dal::error::DataAccessResult;
 use arpa_node_dal::error::GroupError;
 use arpa_node_dal::error::RandomnessTaskError;
+use arpa_node_dal::MdcContextUpdater;
 use arpa_node_dal::NodeInfoUpdater;
 use arpa_node_dal::{
     error::DataAccessError, BLSTasksFetcher, BLSTasksUpdater, DKGOutput, GroupInfoFetcher,
@@ -132,7 +133,7 @@ impl SqliteDB {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct NodeInfoDBClient {
     db_client: Arc<SqliteDB>,
     node_info_cache_model: Option<node_info::Model>,
@@ -144,12 +145,16 @@ impl NodeInfoDBClient {
         let conn = &self.db_client.connection;
         let node_info = NodeQuery::find_current_node_info(conn).await?.unwrap();
 
-        self.node_info_cache = Some(InMemoryNodeInfoCache::rebuild(
+        let node_info_cache = InMemoryNodeInfoCache::rebuild(
             node_info.id_address.parse().unwrap(),
             node_info.node_rpc_endpoint.clone(),
             bincode::deserialize(&node_info.dkg_private_key).unwrap(),
             bincode::deserialize(&node_info.dkg_public_key).unwrap(),
-        ));
+        );
+
+        node_info_cache.refresh_mdc_entry();
+
+        self.node_info_cache = Some(node_info_cache);
 
         self.node_info_cache_model = Some(node_info);
 
@@ -187,7 +192,15 @@ impl NodeInfoDBClient {
     }
 }
 
-#[derive(Debug)]
+impl MdcContextUpdater for NodeInfoDBClient {
+    fn refresh_mdc_entry(&self) {
+        if let Some(cache) = &self.node_info_cache {
+            cache.refresh_mdc_entry();
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
 pub struct GroupInfoDBClient {
     db_client: Arc<SqliteDB>,
     group_info_cache_model: Option<group_info::Model>,
@@ -218,7 +231,7 @@ impl GroupInfoDBClient {
                 .map_or(vec![], |str| serde_json::from_str(str).unwrap()),
         };
 
-        self.group_info_cache = Some(InMemoryGroupInfoCache::rebuild(
+        let group_info_cache = InMemoryGroupInfoCache::rebuild(
             group_info
                 .share
                 .as_ref()
@@ -227,7 +240,11 @@ impl GroupInfoDBClient {
             (group_info.dkg_status as usize).into(),
             group_info.self_member_index as usize,
             group_info.dkg_start_block_height as usize,
-        ));
+        );
+
+        group_info_cache.refresh_mdc_entry();
+
+        self.group_info_cache = Some(group_info_cache);
 
         self.group_info_cache_model = Some(group_info);
 
@@ -246,7 +263,15 @@ impl GroupInfoDBClient {
     }
 }
 
-#[derive(Debug)]
+impl MdcContextUpdater for GroupInfoDBClient {
+    fn refresh_mdc_entry(&self) {
+        if let Some(cache) = &self.group_info_cache {
+            cache.refresh_mdc_entry();
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
 pub struct BLSTasksDBClient<T: Task> {
     db_client: Arc<SqliteDB>,
     bls_tasks: PhantomData<T>,
@@ -322,6 +347,14 @@ impl NodeInfoUpdater for NodeInfoDBClient {
 }
 
 impl GroupInfoFetcher for GroupInfoDBClient {
+    fn get_group(&self) -> DataAccessResult<&Group> {
+        self.only_has_group_task()?;
+
+        let group_info = self.group_info_cache.as_ref().unwrap();
+
+        group_info.get_group()
+    }
+
     fn get_index(&self) -> DataAccessResult<usize> {
         self.only_has_group_task()?;
 
@@ -449,7 +482,7 @@ impl GroupInfoUpdater for GroupInfoDBClient {
                 let member = Member {
                     index: *index,
                     id_address: *address,
-                    rpc_endpint: None,
+                    rpc_endpoint: None,
                     partial_public_key: None,
                 };
                 (*address, member)
@@ -487,7 +520,7 @@ impl GroupInfoUpdater for GroupInfoDBClient {
 
         let self_index = self.group_info_cache.as_ref().unwrap().get_self_index()?;
 
-        let mut group = self.group_info_cache.as_ref().unwrap().get_group().clone();
+        let mut group = self.group_info_cache.as_ref().unwrap().get_group()?.clone();
 
         if group.index != index {
             return Err(GroupError::GroupIndexObsolete(group.index).into());
@@ -530,7 +563,7 @@ impl GroupInfoUpdater for GroupInfoDBClient {
                 .find(|node| member.index == node.id() as usize)
             {
                 if let Some(rpc_endpoint) = node.get_rpc_endpoint() {
-                    member.rpc_endpint = Some(rpc_endpoint.to_string());
+                    member.rpc_endpoint = Some(rpc_endpoint.to_string());
                 }
             }
 
@@ -570,7 +603,7 @@ impl GroupInfoUpdater for GroupInfoDBClient {
 
         let current_dkg_status = self.group_info_cache.as_ref().unwrap().get_dkg_status()?;
 
-        let group = self.group_info_cache.as_ref().unwrap().get_group();
+        let group = self.group_info_cache.as_ref().unwrap().get_group()?;
 
         if group.index != index {
             return Err(GroupError::GroupIndexObsolete(group.index).into());
@@ -608,7 +641,7 @@ impl GroupInfoUpdater for GroupInfoDBClient {
     ) -> DataAccessResult<()> {
         self.only_has_group_task()?;
 
-        let group = self.group_info_cache.as_ref().unwrap().get_group();
+        let group = self.group_info_cache.as_ref().unwrap().get_group()?;
 
         if group.index != index {
             return Err(GroupError::GroupIndexObsolete(group.index).into());

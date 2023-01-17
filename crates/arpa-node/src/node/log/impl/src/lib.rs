@@ -42,31 +42,6 @@ macro_rules! macro_error {
     };
 }
 
-/// This attribute macro will
-/// 1. Automatically log the name, input and return value of current function at debug level
-///  before it returns by trying to recognize return stmt and inserting a `debug!` stmt.
-/// 2. Set the name of current function as a key in `mdc` at the beginning of the function and
-///  remove it before the function returns.
-///
-/// Note:
-/// 1. Input and return type need to implement `Debug`.
-/// 2. When dealing with async function, using `#![feature(async_fn_in_trait)]` is recommended.
-/// Also this is compatible with `#[async_trait]`.
-/// 3. To protect secrets, input and return values are ignored by default.
-/// You can specify whether to print all values, or a subset of them with semantic literal options.
-/// For example:
-///     ```
-///     #[log_function("show-input", "except foo bar", "show-return")]
-///     fn show_subset_of_input_and_return_value(foo: usize, bar: usize, baz: usize) -> usize {
-///        foo + bar + baz
-///     }
-///     ```
-///     Then the log should be: {"message":"LogModel { fn_name: \"show_subset_of_input_and_return_value\",
-///     fn_args: [\"foo: ignored\", \"bar: ignored\", \"baz: 3\"], fn_return: \"6\" }","level":"DEBUG",
-///     "target":"show_subset_of_input_and_return_value","mdc":{"fn_name":"show_subset_of_input_and_return_value"}}
-///     with test logger.
-///
-/// Note: Logging result can be different with different logger implementation.
 #[proc_macro_attribute]
 pub fn log_function(attr: TokenStream, input: TokenStream) -> TokenStream {
     // ItemFn seems OK for impl function perhaps for they both have sig and block.
@@ -99,7 +74,7 @@ pub fn log_function(attr: TokenStream, input: TokenStream) -> TokenStream {
                 ignore_input_args = x
                     .token()
                     .to_string()
-                    .trim_end_matches("\"")
+                    .trim_end_matches('\"')
                     .split_whitespace()
                     .skip(1)
                     .filter_map(|word| word.parse().ok())
@@ -126,7 +101,7 @@ pub fn log_function(attr: TokenStream, input: TokenStream) -> TokenStream {
 
     // Use a syntax tree traversal to transform the function body.
     let stmts: Punctuated<Stmt, Semi> = fn_stmts
-        .into_iter()
+        .iter()
         .map(|stmt| visitor.fold_stmt(stmt.to_owned()))
         .collect();
 
@@ -304,7 +279,7 @@ impl Fold for FunctionLogVisitor {
             }
             // clone __args before move block
             Expr::Closure(e) => {
-                if let Some(_) = e.capture {
+                if e.capture.is_some() {
                     self.current_closure_or_async_block_count += 1;
                     let expr = fold::fold_expr_closure(self, e);
                     self.current_closure_or_async_block_count -= 1;

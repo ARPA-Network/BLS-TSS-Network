@@ -1,4 +1,8 @@
-node_rpc_endpoint: "[::1]:50060"
+node_committer_rpc_endpoint: "[::1]:50060"
+
+node_management_rpc_endpoint: "[::1]:50099"
+
+node_management_rpc_token: "for_test"
 
 provider_endpoint: "[::1]:50052"
 
@@ -10,9 +14,6 @@ account:
     password: env
     path: test.keystore
 
-adapters:
-  - id: 1
-    name: eth
-    endpoint: "[::1]:50053"
-    account:
-      private_key: "4c0883a69102937d6231471b5dbb6204fe5129617082792ae468d01a3f362318"
+listeners:
+  - Block
+  - NewRandomnessTask

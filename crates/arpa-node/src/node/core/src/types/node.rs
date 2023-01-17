@@ -8,7 +8,7 @@ pub trait Task {
     fn index(&self) -> usize;
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct BLSTask<T: Task> {
     pub task: T,
     pub state: bool,
@@ -105,7 +105,7 @@ impl Group {
 pub struct Member {
     pub index: usize,
     pub id_address: Address,
-    pub rpc_endpint: Option<String>,
+    pub rpc_endpoint: Option<String>,
     pub partial_public_key: Option<G1>,
 }
 
@@ -192,7 +192,7 @@ impl From<i32> for TaskType {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Hash, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Hash, Eq, Serialize, Deserialize)]
 pub enum DKGStatus {
     None,
     InPhase,

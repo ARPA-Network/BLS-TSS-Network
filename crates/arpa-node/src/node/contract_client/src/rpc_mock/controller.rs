@@ -22,7 +22,7 @@ use log::{debug, error};
 use tonic::{Code, Request};
 
 pub mod controller_stub {
-    include!("../../../../../rpc_stub/controller.rs");
+    include!("../../rpc_stub/controller.rs");
 }
 
 #[async_trait]
@@ -333,7 +333,7 @@ impl From<Member> for ModelMember {
         ModelMember {
             index: member.index as usize,
             id_address: member.id_address.parse().unwrap(),
-            rpc_endpint: None,
+            rpc_endpoint: None,
             partial_public_key,
         }
     }

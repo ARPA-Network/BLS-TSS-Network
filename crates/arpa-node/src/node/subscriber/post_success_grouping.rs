@@ -1,7 +1,7 @@
-use super::Subscriber;
+use super::{DebuggableEvent, DebuggableSubscriber, Subscriber};
 use crate::node::{
     error::NodeResult,
-    event::{dkg_success::DKGSuccess, types::Topic, Event},
+    event::{dkg_success::DKGSuccess, types::Topic},
     queue::{event_queue::EventQueue, EventSubscriber},
 };
 use arpa_node_dal::GroupInfoUpdater;
@@ -10,6 +10,7 @@ use log::debug;
 use std::sync::Arc;
 use tokio::sync::RwLock;
 
+#[derive(Debug)]
 pub struct PostSuccessGroupingSubscriber<G: GroupInfoUpdater + Sync + Send> {
     group_cache: Arc<RwLock<G>>,
     eq: Arc<RwLock<EventQueue>>,
@@ -22,8 +23,10 @@ impl<G: GroupInfoUpdater + Sync + Send> PostSuccessGroupingSubscriber<G> {
 }
 
 #[async_trait]
-impl<G: GroupInfoUpdater + Sync + Send + 'static> Subscriber for PostSuccessGroupingSubscriber<G> {
-    async fn notify(&self, topic: Topic, payload: &(dyn Event + Send + Sync)) -> NodeResult<()> {
+impl<G: GroupInfoUpdater + std::fmt::Debug + Sync + Send + 'static> Subscriber
+    for PostSuccessGroupingSubscriber<G>
+{
+    async fn notify(&self, topic: Topic, payload: &(dyn DebuggableEvent)) -> NodeResult<()> {
         debug!("{:?}", topic);
 
         let DKGSuccess { group } = payload
@@ -48,4 +51,9 @@ impl<G: GroupInfoUpdater + Sync + Send + 'static> Subscriber for PostSuccessGrou
 
         eq.write().await.subscribe(Topic::DKGSuccess, subscriber);
     }
+}
+
+impl<G: GroupInfoUpdater + std::fmt::Debug + Sync + Send + 'static> DebuggableSubscriber
+    for PostSuccessGroupingSubscriber<G>
+{
 }

@@ -1,4 +1,5 @@
 use crate::error::{DataAccessResult, GroupError, NodeInfoError};
+use crate::MdcContextUpdater;
 
 use super::{
     BLSTasksFetcher, BLSTasksUpdater, BlockInfoFetcher, BlockInfoUpdater, GroupInfoFetcher,
@@ -6,14 +7,15 @@ use super::{
     SignatureResultCacheUpdater,
 };
 use arpa_node_core::{
-    BLSTask, ContractGroup, DKGStatus, DKGTask, Group, GroupRelayConfirmation,
-    GroupRelayConfirmationTask, GroupRelayTask, Member, RandomnessTask, Task, TaskError,
+    BLSTask, BLSTaskError, ContractGroup, DKGStatus, DKGTask, Group, GroupRelayConfirmation,
+    GroupRelayConfirmationTask, GroupRelayTask, Member, RandomnessTask, Task,
     RANDOMNESS_TASK_EXCLUSIVE_WINDOW,
 };
 use async_trait::async_trait;
 use dkg_core::primitives::DKGOutput;
 use ethers_core::types::Address;
 use log::info;
+use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, HashMap};
 use threshold_bls::group::Element;
 use threshold_bls::{
@@ -21,7 +23,7 @@ use threshold_bls::{
     sig::Share,
 };
 
-#[derive(Default)]
+#[derive(Debug, Default)]
 pub struct InMemoryBlockInfoCache {
     block_height: usize,
 }
@@ -44,12 +46,23 @@ impl BlockInfoUpdater for InMemoryBlockInfoCache {
     }
 }
 
-#[derive(Debug)]
+#[derive(Clone, Serialize, Deserialize)]
 pub struct InMemoryNodeInfoCache {
     pub(crate) id_address: Address,
     pub(crate) node_rpc_endpoint: Option<String>,
     pub(crate) dkg_private_key: Option<Scalar>,
     pub(crate) dkg_public_key: Option<G1>,
+}
+
+impl std::fmt::Debug for InMemoryNodeInfoCache {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("InMemoryNodeInfoCache")
+            .field("id_address", &self.id_address)
+            .field("node_rpc_endpoint", &self.node_rpc_endpoint)
+            .field("dkg_private_key", &"ignored")
+            .field("dkg_public_key", &self.dkg_public_key)
+            .finish()
+    }
 }
 
 impl InMemoryNodeInfoCache {
@@ -77,10 +90,17 @@ impl InMemoryNodeInfoCache {
     }
 }
 
+impl MdcContextUpdater for InMemoryNodeInfoCache {
+    fn refresh_mdc_entry(&self) {
+        log_mdc::insert("node_info", serde_json::to_string(&self).unwrap());
+    }
+}
+
 #[async_trait]
 impl NodeInfoUpdater for InMemoryNodeInfoCache {
     async fn set_node_rpc_endpoint(&mut self, node_rpc_endpoint: String) -> DataAccessResult<()> {
         self.node_rpc_endpoint = Some(node_rpc_endpoint);
+        self.refresh_mdc_entry();
         Ok(())
     }
 
@@ -91,6 +111,7 @@ impl NodeInfoUpdater for InMemoryNodeInfoCache {
     ) -> DataAccessResult<()> {
         self.dkg_private_key = Some(dkg_private_key);
         self.dkg_public_key = Some(dkg_public_key);
+        self.refresh_mdc_entry();
         Ok(())
     }
 }
@@ -120,7 +141,7 @@ impl NodeInfoFetcher for InMemoryNodeInfoCache {
     }
 }
 
-#[derive(Debug)]
+#[derive(Clone, Serialize, Deserialize)]
 pub struct InMemoryGroupInfoCache {
     pub(crate) share: Option<Share<Scalar>>,
     pub(crate) group: Group,
@@ -132,6 +153,18 @@ pub struct InMemoryGroupInfoCache {
 impl Default for InMemoryGroupInfoCache {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+impl std::fmt::Debug for InMemoryGroupInfoCache {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("InMemoryGroupInfoCache")
+            .field("share", &"ignored")
+            .field("group", &self.group)
+            .field("dkg_status", &self.dkg_status)
+            .field("self_index", &self.self_index)
+            .field("dkg_start_block_height", &self.dkg_start_block_height)
+            .finish()
     }
 }
 
@@ -164,16 +197,18 @@ impl InMemoryGroupInfoCache {
         }
     }
 
-    pub fn get_group(&self) -> &Group {
-        &self.group
-    }
-
     fn only_has_group_task(&self) -> DataAccessResult<()> {
         if self.group.index == 0 {
             return Err(GroupError::NoGroupTask.into());
         }
 
         Ok(())
+    }
+}
+
+impl MdcContextUpdater for InMemoryGroupInfoCache {
+    fn refresh_mdc_entry(&self) {
+        log_mdc::insert("group_info", serde_json::to_string(&self).unwrap());
     }
 }
 
@@ -206,6 +241,8 @@ impl GroupInfoUpdater for InMemoryGroupInfoCache {
 
         self.dkg_status = dkg_status;
 
+        self.refresh_mdc_entry();
+
         Ok(true)
     }
 
@@ -234,11 +271,13 @@ impl GroupInfoUpdater for InMemoryGroupInfoCache {
             let member = Member {
                 index: *index,
                 id_address: *address,
-                rpc_endpint: None,
+                rpc_endpoint: None,
                 partial_public_key: None,
             };
             self.group.members.insert(*address, member);
         });
+
+        self.refresh_mdc_entry();
 
         Ok(())
     }
@@ -298,7 +337,7 @@ impl GroupInfoUpdater for InMemoryGroupInfoCache {
                 .find(|node| member.index == node.id() as usize)
             {
                 if let Some(rpc_endpoint) = node.get_rpc_endpoint() {
-                    member.rpc_endpint = Some(rpc_endpoint.to_string());
+                    member.rpc_endpoint = Some(rpc_endpoint.to_string());
                 }
             }
 
@@ -308,6 +347,8 @@ impl GroupInfoUpdater for InMemoryGroupInfoCache {
                 partial_public_key = member.partial_public_key.unwrap();
             }
         }
+
+        self.refresh_mdc_entry();
 
         Ok((public_key, partial_public_key, disqualified_nodes))
     }
@@ -336,11 +377,19 @@ impl GroupInfoUpdater for InMemoryGroupInfoCache {
 
         self.group.state = true;
 
+        self.refresh_mdc_entry();
+
         Ok(())
     }
 }
 
 impl GroupInfoFetcher for InMemoryGroupInfoCache {
+    fn get_group(&self) -> DataAccessResult<&Group> {
+        self.only_has_group_task()?;
+
+        Ok(&self.group)
+    }
+
     fn get_index(&self) -> DataAccessResult<usize> {
         self.only_has_group_task()?;
 
@@ -408,7 +457,7 @@ impl GroupInfoFetcher for InMemoryGroupInfoCache {
         self.group
             .members
             .get(&id_address)
-            .ok_or(GroupError::GroupNotExisted)
+            .ok_or(GroupError::MemberNotExisted)
             .map_err(|e| e.into())
     }
 
@@ -437,7 +486,7 @@ impl GroupInfoFetcher for InMemoryGroupInfoCache {
     }
 }
 
-#[derive(Default)]
+#[derive(Default, Debug, Clone)]
 pub struct InMemoryBLSTasksQueue<T: Task> {
     bls_tasks: Vec<BLSTask<T>>,
 }
@@ -463,7 +512,7 @@ impl<T: Task + Sync + Clone> BLSTasksFetcher<T> for InMemoryBLSTasksQueue<T> {
         self.bls_tasks
             .get(task_index)
             .map(|task| task.task.clone())
-            .ok_or_else(|| TaskError::TaskNotFound.into())
+            .ok_or_else(|| BLSTaskError::TaskNotFound.into())
     }
 
     async fn is_handled(&self, task_index: usize) -> DataAccessResult<bool> {
@@ -565,7 +614,7 @@ impl BLSTasksUpdater<GroupRelayConfirmationTask>
     }
 }
 
-#[derive(Default)]
+#[derive(Debug, Default)]
 pub struct InMemorySignatureResultCache<T: ResultCache> {
     signature_result_caches: HashMap<usize, BLSResultCache<T>>,
 }
@@ -604,12 +653,13 @@ impl ResultCache for GroupRelayConfirmationResultCache {
     type M = GroupRelayConfirmation;
 }
 
+#[derive(Debug)]
 pub struct BLSResultCache<T: ResultCache> {
     pub result_cache: T,
     pub state: bool,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct RandomnessResultCache {
     pub group_index: usize,
     pub randomness_task_index: usize,
@@ -618,7 +668,7 @@ pub struct RandomnessResultCache {
     pub partial_signatures: HashMap<Address, Vec<u8>>,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct GroupRelayResultCache {
     pub group_index: usize,
     pub group_relay_task_index: usize,
@@ -627,7 +677,7 @@ pub struct GroupRelayResultCache {
     pub partial_signatures: HashMap<Address, Vec<u8>>,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct GroupRelayConfirmationResultCache {
     pub group_index: usize,
     pub group_relay_confirmation_task_index: usize,
@@ -684,7 +734,7 @@ impl SignatureResultCacheUpdater<RandomnessResultCache>
         let signature_result_cache = self
             .signature_result_caches
             .get_mut(&signature_index)
-            .ok_or(TaskError::CommitterCacheNotExisted)?;
+            .ok_or(BLSTaskError::CommitterCacheNotExisted)?;
 
         signature_result_cache
             .result_cache
@@ -746,7 +796,7 @@ impl SignatureResultCacheUpdater<GroupRelayResultCache>
         let signature_result_cache = self
             .signature_result_caches
             .get_mut(&signature_index)
-            .ok_or(TaskError::CommitterCacheNotExisted)?;
+            .ok_or(BLSTaskError::CommitterCacheNotExisted)?;
 
         signature_result_cache
             .result_cache
@@ -808,7 +858,7 @@ impl SignatureResultCacheUpdater<GroupRelayConfirmationResultCache>
         let signature_result_cache = self
             .signature_result_caches
             .get_mut(&signature_index)
-            .ok_or(TaskError::CommitterCacheNotExisted)?;
+            .ok_or(BLSTaskError::CommitterCacheNotExisted)?;
 
         signature_result_cache
             .result_cache

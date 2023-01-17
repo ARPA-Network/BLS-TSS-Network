@@ -3,7 +3,7 @@ use ethers_signers::{LocalWallet, Signer};
 
 use super::ChainIdentity;
 
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub struct MockChainIdentity {
     id: usize,
     chain_id: usize,
@@ -58,7 +58,7 @@ impl ChainIdentity for MockChainIdentity {
     }
 }
 
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub struct GeneralChainIdentity {
     id: usize,
     chain_id: usize,

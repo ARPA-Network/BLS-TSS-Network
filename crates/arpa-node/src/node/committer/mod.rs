@@ -59,7 +59,7 @@ pub(crate) trait CommitterClientHandler<
                 .read()
                 .await
                 .get_member(committer)?
-                .rpc_endpint
+                .rpc_endpoint
                 .as_ref()
                 .unwrap()
                 .to_string();

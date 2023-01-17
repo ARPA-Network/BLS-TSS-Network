@@ -7,8 +7,8 @@ publish = false
 [dependencies]
 threshold-bls = { path = "../../../../threshold-bls", default-features = false, features = ["bls12_381"] }
 
-ethers-core = { git = "https://github.com/gakonst/ethers-rs"}
-ethers-signers = { git = "https://github.com/gakonst/ethers-rs"}
+ethers-core = "1.0.0"
+ethers-signers = "1.0.0"
 thiserror = "1.0.15"
 serde = "1.0.106"
 log = "0.4"

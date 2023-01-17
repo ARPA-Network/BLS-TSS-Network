@@ -1,8 +1,8 @@
+use super::{types::Topic, Event};
+use crate::node::subscriber::DebuggableEvent;
 use arpa_node_core::RandomnessTask;
 
-use super::{types::Topic, Event};
-
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct ReadyToHandleRandomnessTask {
     pub chain_id: usize,
     pub tasks: Vec<RandomnessTask>,
@@ -23,3 +23,4 @@ impl Event for ReadyToHandleRandomnessTask {
         self
     }
 }
+impl DebuggableEvent for ReadyToHandleRandomnessTask {}

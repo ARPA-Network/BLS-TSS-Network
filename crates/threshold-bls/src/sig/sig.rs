@@ -67,7 +67,7 @@ pub trait SignatureScheme: Scheme {
     fn aggregation_verify_on_the_same_msg(
         partial_publics: &[Self::Public],
         msg: &[u8],
-        sig_bytes: &[Self::Signature],
+        sig_bytes: &[&[u8]],
     ) -> Result<(), Self::Error>;
 }
 

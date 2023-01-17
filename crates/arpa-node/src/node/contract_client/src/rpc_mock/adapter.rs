@@ -24,7 +24,7 @@ use std::future::Future;
 use tonic::{Code, Request, Response};
 
 pub mod adapter_stub {
-    include!("../../../../../rpc_stub/adapter.rs");
+    include!("../../rpc_stub/adapter.rs");
 }
 
 #[async_trait]
@@ -448,7 +448,7 @@ impl From<Member> for ModelMember {
         ModelMember {
             index: member.index as usize,
             id_address: member.id_address.parse().unwrap(),
-            rpc_endpint: None,
+            rpc_endpoint: None,
             partial_public_key,
         }
     }

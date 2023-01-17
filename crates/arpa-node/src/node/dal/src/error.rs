@@ -1,4 +1,4 @@
-use arpa_node_core::TaskError;
+use arpa_node_core::BLSTaskError;
 use thiserror::Error;
 
 pub type DataAccessResult<A> = Result<A, DataAccessError>;
@@ -15,7 +15,7 @@ pub enum DataAccessError {
     RandomnessTaskError(#[from] RandomnessTaskError),
 
     #[error(transparent)]
-    TaskError(#[from] TaskError),
+    TaskError(#[from] BLSTaskError),
 
     #[error(transparent)]
     DBError(anyhow::Error),
@@ -28,6 +28,9 @@ pub enum GroupError {
 
     #[error("the group is not exist")]
     GroupNotExisted,
+
+    #[error("the member is not exist")]
+    MemberNotExisted,
 
     #[error("there is not an available DKG output")]
     GroupNotReady,

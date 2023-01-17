@@ -15,3 +15,5 @@ pub mod scheduler;
 pub mod algorithm;
 
 pub mod committer;
+
+pub mod management;

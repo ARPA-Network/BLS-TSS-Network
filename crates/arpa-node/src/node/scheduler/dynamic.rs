@@ -1,12 +1,13 @@
+use arpa_node_core::SchedulerResult;
 use futures::Future;
 use tokio::{
     sync::{oneshot::channel, oneshot::Receiver},
     task::JoinHandle,
 };
 
-use super::{DynamicTaskScheduler, TaskScheduler};
+use super::{DynamicTaskScheduler, TaskScheduler, TaskType};
 
-#[derive(Default)]
+#[derive(Debug, Default)]
 pub struct SimpleDynamicTaskScheduler {
     // TODO access control
     pub dynamic_tasks: Vec<(Receiver<()>, Option<JoinHandle<()>>)>,
@@ -21,19 +22,25 @@ impl SimpleDynamicTaskScheduler {
 }
 
 impl TaskScheduler for SimpleDynamicTaskScheduler {
-    fn add_task<T>(&mut self, future: T)
+    fn add_task<T>(&mut self, _: TaskType, future: T) -> SchedulerResult<()>
     where
         T: Future<Output = ()> + Send + 'static,
         T::Output: Send + 'static,
     {
         let (send, recv) = channel::<()>();
 
+        let mut mdc = vec![];
+        log_mdc::iter(|k, v| mdc.push((k.to_owned(), v.to_owned())));
+
         tokio::spawn(async move {
+            log_mdc::extend(mdc);
             future.await;
             drop(send);
         });
 
         self.dynamic_tasks.push((recv, None));
+
+        Ok(())
     }
 }
 

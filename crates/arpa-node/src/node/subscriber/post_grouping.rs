@@ -1,17 +1,19 @@
-use super::Subscriber;
+use super::{DebuggableEvent, DebuggableSubscriber, Subscriber};
 use crate::node::{
     error::NodeResult,
-    event::{dkg_post_process::DKGPostProcess, types::Topic, Event},
+    event::{dkg_post_process::DKGPostProcess, types::Topic},
     queue::{event_queue::EventQueue, EventSubscriber},
-    scheduler::{dynamic::SimpleDynamicTaskScheduler, TaskScheduler},
+    scheduler::{dynamic::SimpleDynamicTaskScheduler, SubscriberType, TaskScheduler, TaskType},
 };
 use arpa_node_contract_client::controller::{ControllerClientBuilder, ControllerTransactions};
 use arpa_node_core::ChainIdentity;
+use arpa_node_log::*;
 use async_trait::async_trait;
 use log::{debug, error, info};
 use std::sync::Arc;
 use tokio::sync::RwLock;
 
+#[derive(Debug)]
 pub struct PostGroupingSubscriber<I: ChainIdentity + ControllerClientBuilder> {
     main_chain_identity: Arc<RwLock<I>>,
     eq: Arc<RwLock<EventQueue>>,
@@ -45,6 +47,7 @@ pub struct GeneralDKGPostProcessHandler<I: ChainIdentity + ControllerClientBuild
 impl<I: ChainIdentity + ControllerClientBuilder + Sync + Send> DKGPostProcessHandler
     for GeneralDKGPostProcessHandler<I>
 {
+    #[log_function]
     async fn handle(&self, group_index: usize, group_epoch: usize) -> NodeResult<()> {
         let client = self
             .main_chain_identity
@@ -59,10 +62,11 @@ impl<I: ChainIdentity + ControllerClientBuilder + Sync + Send> DKGPostProcessHan
 }
 
 #[async_trait]
-impl<I: ChainIdentity + ControllerClientBuilder + Sync + Send + 'static> Subscriber
-    for PostGroupingSubscriber<I>
+impl<I: ChainIdentity + ControllerClientBuilder + std::fmt::Debug + Sync + Send + 'static>
+    Subscriber for PostGroupingSubscriber<I>
 {
-    async fn notify(&self, topic: Topic, payload: &(dyn Event + Send + Sync)) -> NodeResult<()> {
+    #[log_function]
+    async fn notify(&self, topic: Topic, payload: &(dyn DebuggableEvent)) -> NodeResult<()> {
         debug!("{:?}", topic);
 
         let &DKGPostProcess {
@@ -72,7 +76,7 @@ impl<I: ChainIdentity + ControllerClientBuilder + Sync + Send + 'static> Subscri
 
         let main_chain_identity = self.main_chain_identity.clone();
 
-        self.ts.write().await.add_task(async move {
+        self.ts.write().await.add_task(TaskType::Subscriber(SubscriberType::PostGrouping),async move {
                 let handler = GeneralDKGPostProcessHandler {
                     main_chain_identity
                 };
@@ -82,7 +86,7 @@ impl<I: ChainIdentity + ControllerClientBuilder + Sync + Send + 'static> Subscri
                 } else {
                     info!("-------------------------call post process successfully-------------------------");
                 }
-            });
+            })?;
 
         Ok(())
     }
@@ -96,4 +100,9 @@ impl<I: ChainIdentity + ControllerClientBuilder + Sync + Send + 'static> Subscri
             .await
             .subscribe(Topic::DKGPostProcess, subscriber);
     }
+}
+
+impl<I: ChainIdentity + ControllerClientBuilder + std::fmt::Debug + Sync + Send + 'static>
+    DebuggableSubscriber for PostGroupingSubscriber<I>
+{
 }

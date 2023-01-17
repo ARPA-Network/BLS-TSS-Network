@@ -1,8 +1,10 @@
 use arpa_node_core::DKGTask;
 
+use crate::node::subscriber::DebuggableEvent;
+
 use super::{types::Topic, Event};
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct RunDKG {
     pub dkg_task: DKGTask,
 }
@@ -22,3 +24,5 @@ impl Event for RunDKG {
         self
     }
 }
+
+impl DebuggableEvent for RunDKG {}

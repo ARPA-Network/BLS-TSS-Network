@@ -2,13 +2,13 @@ use async_trait::async_trait;
 
 use super::{
     event::{types::Topic, Event},
-    subscriber::Subscriber,
+    subscriber::DebuggableSubscriber,
 };
 
 pub mod event_queue;
 
 pub trait EventSubscriber {
-    fn subscribe(&mut self, topic: Topic, subscriber: Box<dyn Subscriber + Send + Sync>);
+    fn subscribe(&mut self, topic: Topic, subscriber: Box<dyn DebuggableSubscriber>);
 }
 
 #[async_trait]

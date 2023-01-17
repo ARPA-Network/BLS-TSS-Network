@@ -2,7 +2,6 @@ use arpa_node::node::context::chain::types::GeneralMainChain;
 use arpa_node::node::context::types::{build_wallet_from_config, Config, GeneralContext};
 use arpa_node::node::context::{Context, TaskWaiter};
 use arpa_node_contract_client::controller::{ControllerClientBuilder, ControllerTransactions};
-use arpa_node_contract_client::rpc_mock::controller::MockControllerClient;
 use arpa_node_core::format_now_date;
 use arpa_node_core::GeneralChainIdentity;
 use arpa_node_core::MockChainIdentity;
@@ -18,7 +17,7 @@ use log::{info, LevelFilter};
 use log4rs::append::console::ConsoleAppender;
 use log4rs::append::file::FileAppender;
 use log4rs::config::{Appender, Root};
-use log4rs::encode::pattern::PatternEncoder;
+use log4rs::encode::json::JsonEncoder;
 use log4rs::filter::threshold::ThresholdFilter;
 use log4rs::Config as LogConfig;
 use std::fs::{self, read_to_string};
@@ -57,15 +56,17 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         String::from("running")
     };
 
-    let stdout = ConsoleAppender::builder().build();
+    let stdout = ConsoleAppender::builder()
+        .encoder(Box::new(JsonEncoder::new()))
+        .build();
 
     let file = FileAppender::builder()
-        .encoder(Box::new(PatternEncoder::new("{d} {l} - {m}{n}")))
+        .encoder(Box::new(JsonEncoder::new())) //PatternEncoder::new("{d} {l} - {m}{n}"))
         .build(format!("log/{}/node.log", node_id))
         .unwrap();
 
     let err_file = FileAppender::builder()
-        .encoder(Box::new(PatternEncoder::new("{d} {l} {t} - {m}{n}")))
+        .encoder(Box::new(JsonEncoder::new()))
         .build(format!("log/{}/node_err.log", node_id))
         .unwrap();
 
@@ -82,7 +83,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 .appender("stdout")
                 .appender("file")
                 .appender("err_file")
-                .build(LevelFilter::Info),
+                .build(LevelFilter::Debug),
         )
         .unwrap();
 
@@ -119,13 +120,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     if config.data_path.is_none() {
         config.data_path = Some(String::from("data.sqlite"));
     }
-    info!("{:?}", config);
 
-    let data_path = PathBuf::from(config.data_path.unwrap());
+    info!(target: "config", "{:?}", config);
+
+    let data_path = PathBuf::from(config.data_path.clone().unwrap());
 
     match opt.mode.as_str() {
         "new-run" => {
-            let wallet = build_wallet_from_config(config.account)?;
+            let wallet = build_wallet_from_config(&config.account)?;
 
             let id_address = wallet.address();
 
@@ -159,7 +161,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             node_cache
                 .save_node_info(
                     id_address,
-                    config.node_rpc_endpoint.clone(),
+                    config.node_committer_rpc_endpoint.clone(),
                     dkg_private_key,
                     dkg_public_key,
                 )
@@ -194,9 +196,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 randomness_tasks_cache,
             );
 
-            let context = GeneralContext::new(main_chain);
+            let context = GeneralContext::new(config, main_chain);
 
-            let handle = context.deploy().await;
+            let handle = context.deploy().await?;
 
             // TODO register node to randcast network, this should be moved to node_cmd_client(triggering manully to avoid accidental operation) in prod
             let client = main_chain_identity.build_controller_client();
@@ -208,7 +210,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             handle.wait_task().await;
         }
         "re-run" => {
-            let wallet = build_wallet_from_config(config.account)?;
+            let wallet = build_wallet_from_config(&config.account)?;
 
             let id_address = wallet.address();
 
@@ -262,9 +264,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 randomness_tasks_cache,
             );
 
-            let context = GeneralContext::new(main_chain);
+            let context = GeneralContext::new(config, main_chain);
 
-            let handle = context.deploy().await;
+            let handle = context.deploy().await?;
 
             handle.wait_task().await;
         }
@@ -284,7 +286,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             let mut node_cache = InMemoryNodeInfoCache::new(id_address);
 
             node_cache
-                .set_node_rpc_endpoint(config.node_rpc_endpoint.clone())
+                .set_node_rpc_endpoint(config.node_committer_rpc_endpoint.clone())
                 .await
                 .unwrap();
 
@@ -308,39 +310,20 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             >::new(
                 0,
                 "main chain".to_string(),
-                main_chain_identity,
+                main_chain_identity.clone(),
                 node_cache,
                 group_cache,
                 randomness_tasks_cache,
             );
 
-            let context = GeneralContext::new(main_chain);
+            let context = GeneralContext::new(config, main_chain);
 
-            // suspend handling adapters
-            // for adapter in config.adapters {
-            //     let chain_identity =
-            //         ChainIdentity::new(adapter.id, vec![], adapter.id_address, adapter.endpoint);
+            let handle = context.deploy().await?;
 
-            //     let randomness_tasks_cache = InMemoryBLSTasksQueue::<RandomnessTask>::new();
-
-            //     let chain = InMemoryAdapterChain::<
-            //         InMemoryNodeInfoCache,
-            //         InMemoryGroupInfoCache,
-            //         InMemoryBLSTasksQueue<RandomnessTask>,
-            //     >::new(
-            //         adapter.id,
-            //         adapter.name,
-            //         chain_identity,
-            //         randomness_tasks_cache,
-            //     );
-
-            //     context.add_adapter_chain(chain)?;
-            // }
-
-            let handle = context.deploy().await;
+            println!("finished!");
 
             // register node to randcast network
-            let client = MockControllerClient::new(config.provider_endpoint, id_address);
+            let client = main_chain_identity.build_controller_client();
 
             client
                 .node_register(bincode::serialize(&dkg_public_key).unwrap())

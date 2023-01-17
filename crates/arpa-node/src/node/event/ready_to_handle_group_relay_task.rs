@@ -1,8 +1,8 @@
+use super::{types::Topic, Event};
+use crate::node::subscriber::DebuggableEvent;
 use arpa_node_core::GroupRelayTask;
 
-use super::{types::Topic, Event};
-
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct ReadyToHandleGroupRelayTask {
     pub tasks: Vec<GroupRelayTask>,
 }
@@ -22,3 +22,4 @@ impl Event for ReadyToHandleGroupRelayTask {
         self
     }
 }
+impl DebuggableEvent for ReadyToHandleGroupRelayTask {}

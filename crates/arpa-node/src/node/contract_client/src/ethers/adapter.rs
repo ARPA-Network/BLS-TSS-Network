@@ -17,7 +17,7 @@ use std::{collections::HashMap, convert::TryFrom, future::Future, sync::Arc, tim
 
 #[allow(clippy::useless_conversion)]
 pub mod adapter_stub {
-    include!("../../../../../contract_stub/adapter.rs");
+    include!("../../contract_stub/adapter.rs");
 }
 
 #[allow(dead_code)]

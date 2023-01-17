@@ -1,4 +1,5 @@
 use arpa_node_contract_client::error::ContractClientError;
+use arpa_node_core::SchedulerError;
 use arpa_node_dal::error::DataAccessError;
 use arpa_node_sqlite_db::DBError;
 use dkg_core::{primitives::DKGError, NodeError as DKGNodeError};
@@ -39,11 +40,17 @@ pub enum NodeError {
     #[error("the message of the task is different from the committer")]
     InvalidTaskMessage,
 
+    #[error("not supported task type")]
+    InvalidTaskType,
+
     #[error("There is already this chain id in the context. Please check config.yml")]
     RepeatedChainId,
 
     #[error(transparent)]
     DataAccessError(#[from] DataAccessError),
+
+    #[error(transparent)]
+    SchedulerError(#[from] SchedulerError),
 
     #[error(transparent)]
     ContractClientError(#[from] ContractClientError),

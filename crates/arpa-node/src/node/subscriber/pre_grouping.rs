@@ -1,30 +1,37 @@
-use super::Subscriber;
+use super::{DebuggableEvent, DebuggableSubscriber, Subscriber};
 use crate::node::{
     error::NodeResult,
-    event::{new_dkg_task::NewDKGTask, run_dkg::RunDKG, types::Topic, Event},
+    event::{new_dkg_task::NewDKGTask, run_dkg::RunDKG, types::Topic},
     queue::{event_queue::EventQueue, EventPublisher, EventSubscriber},
 };
 use arpa_node_core::DKGStatus;
-use arpa_node_dal::{GroupInfoFetcher, GroupInfoUpdater};
+use arpa_node_dal::{GroupInfoFetcher, GroupInfoUpdater, MdcContextUpdater};
 use async_trait::async_trait;
 use log::{debug, info};
 use std::sync::Arc;
 use tokio::sync::RwLock;
 
-pub struct PreGroupingSubscriber<G: GroupInfoFetcher + GroupInfoUpdater + Sync + Send> {
+#[derive(Debug)]
+pub struct PreGroupingSubscriber<
+    G: GroupInfoFetcher + GroupInfoUpdater + MdcContextUpdater + std::fmt::Debug + Sync + Send,
+> {
     group_cache: Arc<RwLock<G>>,
     eq: Arc<RwLock<EventQueue>>,
 }
 
-impl<G: GroupInfoFetcher + GroupInfoUpdater + Sync + Send> PreGroupingSubscriber<G> {
+impl<
+        G: GroupInfoFetcher + GroupInfoUpdater + MdcContextUpdater + std::fmt::Debug + Sync + Send,
+    > PreGroupingSubscriber<G>
+{
     pub fn new(group_cache: Arc<RwLock<G>>, eq: Arc<RwLock<EventQueue>>) -> Self {
         PreGroupingSubscriber { group_cache, eq }
     }
 }
 
 #[async_trait]
-impl<G: GroupInfoFetcher + GroupInfoUpdater + Sync + Send> EventPublisher<RunDKG>
-    for PreGroupingSubscriber<G>
+impl<
+        G: GroupInfoFetcher + GroupInfoUpdater + MdcContextUpdater + std::fmt::Debug + Sync + Send,
+    > EventPublisher<RunDKG> for PreGroupingSubscriber<G>
 {
     async fn publish(&self, event: RunDKG) {
         self.eq.read().await.publish(event).await;
@@ -32,10 +39,17 @@ impl<G: GroupInfoFetcher + GroupInfoUpdater + Sync + Send> EventPublisher<RunDKG
 }
 
 #[async_trait]
-impl<G: GroupInfoFetcher + GroupInfoUpdater + Sync + Send + 'static> Subscriber
-    for PreGroupingSubscriber<G>
+impl<
+        G: GroupInfoFetcher
+            + GroupInfoUpdater
+            + MdcContextUpdater
+            + std::fmt::Debug
+            + Sync
+            + Send
+            + 'static,
+    > Subscriber for PreGroupingSubscriber<G>
 {
-    async fn notify(&self, topic: Topic, payload: &(dyn Event + Send + Sync)) -> NodeResult<()> {
+    async fn notify(&self, topic: Topic, payload: &(dyn DebuggableEvent)) -> NodeResult<()> {
         debug!("{:?}", topic);
 
         let NewDKGTask {
@@ -89,4 +103,16 @@ impl<G: GroupInfoFetcher + GroupInfoUpdater + Sync + Send + 'static> Subscriber
 
         eq.write().await.subscribe(Topic::NewDKGTask, subscriber);
     }
+}
+
+impl<
+        G: GroupInfoFetcher
+            + GroupInfoUpdater
+            + MdcContextUpdater
+            + std::fmt::Debug
+            + Sync
+            + Send
+            + 'static,
+    > DebuggableSubscriber for PreGroupingSubscriber<G>
+{
 }

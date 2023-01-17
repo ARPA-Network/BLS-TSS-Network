@@ -21,7 +21,7 @@ use threshold_bls::curve::bls12381::Curve;
 
 #[allow(clippy::useless_conversion)]
 pub mod coordinator_stub {
-    include!("../../../../../contract_stub/coordinator.rs");
+    include!("../../contract_stub/coordinator.rs");
 }
 
 pub struct CoordinatorClient {
@@ -239,7 +239,7 @@ pub mod coordinator_tests {
     use std::{convert::TryFrom, sync::Arc, time::Duration};
     use threshold_bls::schemes::bls12_381::G1Scheme;
 
-    include!("../../../../../contract_stub/coordinator.rs");
+    include!("../../contract_stub/coordinator.rs");
 
     #[test]
     fn test_cargo_manifest_parent_dir() {
@@ -253,7 +253,7 @@ pub mod coordinator_tests {
     const INDEX: u32 = 0;
 
     fn start_chain() -> AnvilInstance {
-        Anvil::new().mnemonic(PHRASE).spawn()
+        Anvil::new().chain_id(1u64).mnemonic(PHRASE).spawn()
     }
 
     async fn deploy_contract(anvil: &AnvilInstance) -> Coordinator<WalletSigner> {
@@ -314,8 +314,13 @@ pub mod coordinator_tests {
             .await
             .unwrap();
 
-        let main_chain_identity =
-            GeneralChainIdentity::new(0, 0, wallet, anvil.endpoint(), Address::random());
+        let main_chain_identity = GeneralChainIdentity::new(
+            0,
+            anvil.chain_id() as usize,
+            wallet,
+            anvil.endpoint(),
+            Address::random(),
+        );
 
         let client = CoordinatorClient::new(coordinator_contract.address(), &main_chain_identity);
 
@@ -328,7 +333,7 @@ pub mod coordinator_tests {
         let err = res.unwrap_err();
         assert!(err
             .to_string()
-            .contains("execution reverted: you have already published your shares"));
+            .contains("you have already published your shares"));
     }
 
     #[test]

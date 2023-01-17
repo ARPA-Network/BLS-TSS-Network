@@ -19,7 +19,7 @@ use threshold_bls::curve::bls12381::Curve;
 use tonic::Request;
 
 pub mod coordinator_stub {
-    include!("../../../../../rpc_stub/coordinator.rs");
+    include!("../../rpc_stub/coordinator.rs");
 }
 
 pub struct MockCoordinatorClient {
