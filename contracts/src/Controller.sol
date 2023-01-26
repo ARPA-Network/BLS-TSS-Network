@@ -372,7 +372,7 @@ contract Controller is Ownable {
         );
     }
 
-    function getMemberIndex(uint256 groupIndex, address nodeIdAddress)
+    function getMemberIndexByAddress(uint256 groupIndex, address nodeIdAddress)
         public
         view
         returns (int256 memberIndex)
@@ -384,6 +384,15 @@ contract Controller is Ownable {
             }
         }
         return -1;
+    }
+
+    function getMemberAddressByIndex(uint256 groupIndex, uint256 memberIndex)
+        public
+        view
+        returns (address nodeIdAddress)
+    {
+        Group storage g = groups[groupIndex];
+        return g.members[memberIndex].nodeIdAddress;
     }
 
     /// Check to see if a group has a partial public key registered for a given node.
@@ -437,7 +446,7 @@ contract Controller is Ownable {
         );
 
         require(
-            getMemberIndex(params.groupIndex, msg.sender) != -1, // -1 if node is not member of group
+            getMemberIndexByAddress(params.groupIndex, msg.sender) != -1, // -1 if node is not member of group
             "Node is not a member of the group"
         );
 
@@ -465,7 +474,9 @@ contract Controller is Ownable {
 
         // if consensus previously reached, update the partial public key of the given node's member entry in the group
         g
-            .members[uint256(getMemberIndex(params.groupIndex, msg.sender))]
+            .members[
+                uint256(getMemberIndexByAddress(params.groupIndex, msg.sender))
+            ]
             .partialPublicKey = params.partialPublicKey;
 
         // if not.. call getStrictlyMajorityIdenticalCommitmentResult for the group and check if consensus has been reached.
@@ -707,7 +718,7 @@ contract Controller is Ownable {
 
         // require calling node is in group
         require(
-            getMemberIndex(groupIndex, msg.sender) != -1, // -1 if node is not member of group
+            getMemberIndexByAddress(groupIndex, msg.sender) != -1, // -1 if node is not member of group
             "Node is not a member of the group"
         );
         // require correct epoch

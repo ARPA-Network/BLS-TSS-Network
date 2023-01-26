@@ -212,19 +212,22 @@ contract ControllerTest is Test {
         printGroupInfo(2);
     }
 
-    function testGetMemberIndex() public {
+    function testgetMemberIndexByAddress() public {
         uint256 groupIndex = 0;
 
-        int256 memberIndex = controller.getMemberIndex(groupIndex, node1);
+        int256 memberIndex = controller.getMemberIndexByAddress(
+            groupIndex,
+            node1
+        );
         assertEq(memberIndex, -1);
 
         testEmitGroupEvent();
 
-        memberIndex = controller.getMemberIndex(groupIndex, node1);
+        memberIndex = controller.getMemberIndexByAddress(groupIndex, node1);
         assertEq(memberIndex, 0);
-        memberIndex = controller.getMemberIndex(groupIndex, node2);
+        memberIndex = controller.getMemberIndexByAddress(groupIndex, node2);
         assertEq(memberIndex, 1);
-        memberIndex = controller.getMemberIndex(groupIndex, node3);
+        memberIndex = controller.getMemberIndexByAddress(groupIndex, node3);
         assertEq(memberIndex, 2);
     }
 
