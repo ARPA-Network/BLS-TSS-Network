@@ -335,7 +335,8 @@ contract Controller is Ownable {
     );
 
     function emitGroupEvent(uint256 groupIndex) internal {
-        require(groups[groupIndex].index < groupCount, "Group does not exist");
+        // require(groups[groupIndex].index < groupCount, "Group does not exist");
+        require(groupIndex < groupCount, "Group does not exist");
 
         epoch++; // increment adapter epoch
         Group storage g = groups[groupIndex]; // Grab group struct

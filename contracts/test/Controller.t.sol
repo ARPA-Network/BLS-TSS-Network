@@ -143,7 +143,7 @@ contract ControllerTest is Test {
     function testEmitGroupEvent() public {
         // * fail emit group event if group does not exist
         vm.expectRevert("Group does not exist");
-        controller.tNonexistantGroup(0);
+        controller.tNonexistantGroup(99999);
 
         // * Register Three nodes and see if group struct is well formed
         uint256 groupIndex = 0;
