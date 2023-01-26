@@ -43,8 +43,6 @@ contract ControllerTest is Test {
     bytes pubkey10 = hex"DECADE10";
     bytes pubkey11 = hex"DECADE11";
 
-    // uint256 registerCount; // track number of registered nodes for tests
-
     function setUp() public {
         // deal nodes
         vm.deal(node1, 1 * 10**18);
@@ -57,8 +55,6 @@ contract ControllerTest is Test {
         vm.deal(owner, 1 * 10**18);
         vm.prank(owner);
         controller = new Controller();
-
-        // registerCount = 0; // reset registered node count to 0
     }
 
     function testNodeRegister() public {
@@ -81,27 +77,27 @@ contract ControllerTest is Test {
 
     function testRemoveFromGroup() public {
         testCommitDkg();
-        printGroupInfo(1);
-        assertEq(controller.getGroup(1).size, 3);
-        controller.removeFromGroup(address(0x1), 1, false);
-        printGroupInfo(1);
-        assertEq(controller.getGroup(1).size, 2);
+        printGroupInfo(0);
+        assertEq(controller.getGroup(0).size, 3);
+        controller.removeFromGroup(address(0x1), 0, false);
+        printGroupInfo(0);
+        assertEq(controller.getGroup(0).size, 2);
     }
 
-    function testReblanceGroup() public {
+    function testRebalanceGroup() public {
         emit log_named_uint("groupCount", controller.groupCount());
         testCommitDkg();
         emit log_named_uint("groupCount", controller.groupCount());
-        printGroupInfo(1);
+        printGroupInfo(0);
 
         // Add 4th node, should create new group
         vm.prank(node4);
         controller.nodeRegister(pubkey4);
         emit log_named_uint("groupCount", controller.groupCount());
-        printGroupInfo(2);
+        printGroupInfo(1);
 
-        //! The below needs further testing
-        // Test needsReblance
+        // The below needs further testing
+        // Test needsRebalance
         vm.prank(node5);
         controller.nodeRegister(pubkey5);
         vm.prank(node6);
@@ -117,18 +113,18 @@ contract ControllerTest is Test {
         vm.prank(node11);
         controller.nodeRegister(pubkey11);
         emit log("+++++++++++++++++++++++");
+        printGroupInfo(0);
         printGroupInfo(1);
-        printGroupInfo(2);
-        emit log("++++++ Reblance 1 +++++++");
-        bool output = controller.rebalanceGroup(1, 2);
+        emit log("++++++ Rebalance 1 +++++++");
+        bool output = controller.rebalanceGroup(0, 1);
         assertEq(output, true);
+        printGroupInfo(0);
         printGroupInfo(1);
-        printGroupInfo(2);
-        emit log("++++++ Reblance 2 +++++++");
-        output = controller.rebalanceGroup(1, 2);
+        emit log("++++++ Rebalance 2 +++++++");
+        output = controller.rebalanceGroup(0, 1);
         assertEq(output, true);
+        printGroupInfo(0);
         printGroupInfo(1);
-        printGroupInfo(2);
     }
 
     function testMinimumThreshold() public {
@@ -150,7 +146,7 @@ contract ControllerTest is Test {
         controller.tNonexistantGroup(0);
 
         // * Register Three nodes and see if group struct is well formed
-        uint256 groupIndex = 1;
+        uint256 groupIndex = 0;
         // printGroupInfo(groupIndex);
         // printNodeInfo(node1);
 
@@ -172,7 +168,7 @@ contract ControllerTest is Test {
 
         // check group struct is correct
         Controller.Group memory g = controller.getGroup(groupIndex);
-        assertEq(g.index, 1);
+        assertEq(g.index, 0);
         assertEq(g.epoch, 1);
         assertEq(g.size, 3);
         assertEq(g.threshold, 3);
@@ -181,7 +177,6 @@ contract ControllerTest is Test {
         // Verify node2 info is recorded in group.members[1]
         Controller.Member memory m = g.members[1];
         // printMemberInfo(groupIndex, 1);
-        // assertEq(m.index, 1);
         assertEq(m.nodeIdAddress, node2);
         // assertEq(m.partialPublicKey, TODO);
 
@@ -218,7 +213,7 @@ contract ControllerTest is Test {
     }
 
     function testGetMemberIndex() public {
-        uint256 groupIndex = 1;
+        uint256 groupIndex = 0;
 
         int256 memberIndex = controller.getMemberIndex(groupIndex, node1);
         assertEq(memberIndex, -1);
@@ -227,11 +222,15 @@ contract ControllerTest is Test {
 
         memberIndex = controller.getMemberIndex(groupIndex, node1);
         assertEq(memberIndex, 0);
+        memberIndex = controller.getMemberIndex(groupIndex, node2);
+        assertEq(memberIndex, 1);
+        memberIndex = controller.getMemberIndex(groupIndex, node3);
+        assertEq(memberIndex, 2);
     }
 
     function testCoordinatorPhase() public {
         testEmitGroupEvent();
-        uint256 groupIndex = 1;
+        uint256 groupIndex = 0;
         address coordinatorAddress = controller.getCoordinator(groupIndex);
         ICoordinator coordinator = ICoordinator(coordinatorAddress);
         uint256 startBlock = coordinator.startBlock();
@@ -258,7 +257,7 @@ contract ControllerTest is Test {
     function testCommitDkg() public {
         testEmitGroupEvent();
 
-        uint256 groupIndex = 1;
+        uint256 groupIndex = 0;
         uint256 groupEpoch = 1;
         bytes memory partialPublicKey = hex"DECADE";
         bytes memory publicKey = hex"C0FFEE";
@@ -303,8 +302,7 @@ contract ControllerTest is Test {
         controller.commitDkg(params);
 
         assertEq(checkIsStrictlyMajorityConsensusReached(groupIndex), false);
-
-        // printGroupInfo(groupIndex); // ! Print
+        // printGroupInfo(groupIndex);
 
         // Succesful Commit: Node 1
         vm.prank(node1);
@@ -317,7 +315,7 @@ contract ControllerTest is Test {
         );
         controller.commitDkg(params);
         assertEq(checkIsStrictlyMajorityConsensusReached(groupIndex), false);
-        // printGroupInfo(groupIndex); // ! Print
+        // printGroupInfo(groupIndex);
 
         //  Fail if CommitCache already contains PartialKey for this node
         vm.prank(node1);
@@ -345,7 +343,7 @@ contract ControllerTest is Test {
         );
         controller.commitDkg(params);
         assertEq(checkIsStrictlyMajorityConsensusReached(groupIndex), false);
-        // printGroupInfo(groupIndex); // ! Print
+        // printGroupInfo(groupIndex);
 
         // Succesful Commit: Node 3
         vm.prank(node3);
@@ -358,7 +356,7 @@ contract ControllerTest is Test {
         );
         controller.commitDkg(params);
         assertEq(checkIsStrictlyMajorityConsensusReached(groupIndex), true);
-        // printGroupInfo(groupIndex); // ! Print
+        // printGroupInfo(groupIndex);
     }
 
     function testChooseRandomlyFromIndices() public {
@@ -402,11 +400,6 @@ contract ControllerTest is Test {
     function testIsPartialKeyRegistered() public {
         testEmitGroupEvent();
         uint256 groupIndex = 1;
-        // bytes memory sampleKey = hex"DECADE";
-        // assertEq(
-        //   .  controller.PartialKeyRegistered(groupIndex, node1, sampleKey),
-        //     false
-        // );
         assertEq(controller.partialKeyRegistered(groupIndex, node1), false);
     }
 
@@ -421,14 +414,17 @@ contract ControllerTest is Test {
 
     function testPostProccessDkg() public {
         testEmitGroupEvent();
-        uint256 groupIndex = 1;
+        uint256 groupIndex = 0;
         uint256 groupEpoch = 1;
         address coordinatorAddress = controller.getCoordinator(groupIndex);
         ICoordinator coordinator = ICoordinator(coordinatorAddress);
         uint256 startBlock = coordinator.startBlock();
 
+        // emit group count
+        emit log_named_uint("group count", controller.groupCount());
+
         vm.expectRevert("Group does not exist");
-        controller.postProcessDkg(0, 0); //(groupIndex, groupEpoch))
+        controller.postProcessDkg(99999, 0); //(groupIndex, groupEpoch))
 
         vm.prank(node4);
         vm.expectRevert("Node is not a member of the group");
@@ -457,14 +453,6 @@ contract ControllerTest is Test {
 
     // ! Helper function for debugging below
     function printGroupInfo(uint256 groupIndex) public {
-        // emit log(
-        //     string.concat(
-        //         "\n",
-        //         Strings.toString(registerCount++),
-        //         " Nodes Registered:"
-        //     )
-        // );
-
         Controller.Group memory g = controller.getGroup(groupIndex);
 
         uint256 groupCount = controller.groupCount();
@@ -542,13 +530,11 @@ contract ControllerTest is Test {
     }
 
     function printNodeInfo(address nodeAddress) public {
-        // emit log(
-        //     string.concat(
-        //         "\n",
-        //         Strings.toString(registerCount++),
-        //         " Nodes Registered:"
-        //     )
-        // );
+        // print node address
+        emit log("\n");
+        emit log("--------------------");
+        emit log_named_address("printing info for node", nodeAddress);
+        emit log("--------------------");
 
         Controller.Node memory n = controller.getNode(nodeAddress);
 

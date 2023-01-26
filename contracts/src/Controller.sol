@@ -26,12 +26,8 @@ contract Controller is Ownable {
     // Group State Variables
     uint256 public groupCount; // Number of groups
     mapping(uint256 => Group) public groups; // group_index => Group struct
-    // uint256 [] groupIndexes;  // Needed if groups can be deleted.
-    // Coordinators
     mapping(uint256 => address) public coordinators; // maps group index to coordinator address
-
-    // Global last output
-    uint64 lastOutput = 0x2222222222222222;
+    uint64 lastOutput = 0x2222222222222222; // global last output
 
     // * Structs
     struct Node {
@@ -54,7 +50,6 @@ contract Controller is Ownable {
     }
 
     struct Member {
-        // uint256 index;
         address nodeIdAddress;
         bytes partialPublicKey;
     }
@@ -93,16 +88,15 @@ contract Controller is Ownable {
         // * get groupIndex from findOrCreateTargetGroup -> addGroup
         (uint256 groupIndex, bool needsRebalance) = findOrCreateTargetGroup();
 
-        require(groupIndex != 0, "Group index cannot be 0"); // remove?
-
         addToGroup(idAddress, groupIndex, true); // * add to group
 
-        // Get list of all group indicies exclusing the current group index.
-        uint256[] memory groupIndices = new uint256[](groupCount - 1);
+        // Get list of all group indicies excluding the current group index.
+        uint256[] memory groupIndices = new uint256[](groupCount - 1); // nah this is good...
+
         uint256 index = 0;
         for (uint256 i = 0; i < groupCount; i++) {
-            if (groupIndex != i + 1) {
-                groupIndices[index] = i + 1;
+            if (groupIndex != i) {
+                groupIndices[index] = i;
                 index++;
             }
         }
@@ -179,7 +173,6 @@ contract Controller is Ownable {
     }
 
     function removeFromGroup(
-        // Needs further testing
         address nodeIdAddress,
         uint256 groupIndex,
         bool emitEventInstantly
@@ -191,14 +184,6 @@ contract Controller is Ownable {
         if (group.size == 0) {
             return false;
         }
-
-        //// Delete Mthod
-        // for (uint i = 0; i < group.members.length; i++) {
-        //     if (group.members[i].nodeIdAddress == nodeIdAddress) {
-        //         delete group.members[i];
-        //         break;
-        //     }
-        // }
 
         // code to pop and resize array instead of delete
         uint256 foundIndex;
@@ -231,7 +216,6 @@ contract Controller is Ownable {
     function findOrCreateTargetGroup()
         public
         returns (
-            // Needs further testing
             uint256, //groupIndex
             bool // needsRebalance
         )
@@ -246,10 +230,10 @@ contract Controller is Ownable {
         uint256 indexOfMinSize;
         uint256 minSize = GROUP_MAX_CAPACITY;
         for (uint256 i = 0; i < groupCount; i++) {
-            Group memory g = groups[i + 1]; // because groupCount starts at 1
+            Group memory g = groups[i];
             if (g.size < minSize) {
                 minSize = g.size;
-                indexOfMinSize = i + 1; // because groupCount starts at 1
+                indexOfMinSize = i;
             }
         }
 
@@ -259,9 +243,9 @@ contract Controller is Ownable {
         // check if valid group count < ideal_number_of_groups || minSize == group_max_capacity
         // If either condition is met and the number of valid groups == group count, call add group and return (index of new group, true)
         if (
-            (validGroupCount < IDEAL_NUMBER_OF_GROUPS ||
-                minSize == GROUP_MAX_CAPACITY) &&
-            (validGroupCount == groupCount)
+            (validGroupCount < IDEAL_NUMBER_OF_GROUPS &&
+                validGroupCount == groupCount) ||
+            (minSize == GROUP_MAX_CAPACITY)
         ) {
             uint256 groupIndex = addGroup();
             return (groupIndex, true); // NEEDS REBALANCE
@@ -276,9 +260,9 @@ contract Controller is Ownable {
         uint256[] memory groupIndices = new uint256[](groupCount); //max length is group count
         uint256 index = 0;
         for (uint256 i = 0; i < groupCount; i++) {
-            Group memory g = groups[i + 1];
+            Group memory g = groups[i];
             if (g.isStrictlyMajorityConsensusReached) {
-                groupIndices[index] = i + 1; // because groupCount starts at 1
+                groupIndices[index] = i;
                 index++;
             }
         }
@@ -293,12 +277,15 @@ contract Controller is Ownable {
     }
 
     function addGroup() internal returns (uint256) {
-        groupCount++; // count starts  at 1, not 0
-        Group storage g = groups[groupCount];
-        g.index = groupCount; // index starts at 1, not 0
+        uint256 groupIndex = groupCount; // groupIndex starts at 0. groupCount is index of next group to be added
+        groupCount++;
+
+        Group storage g = groups[groupIndex];
+        g.index = groupIndex;
         g.size = 0;
         g.threshold = DEFAULT_MINIMUM_THRESHOLD;
-        return groupCount;
+
+        return groupIndex;
     }
 
     function addToGroup(
@@ -311,7 +298,6 @@ contract Controller is Ownable {
 
         // Add Member Struct to group at group index
         Member memory m;
-        // m.index = g.size;
         m.nodeIdAddress = idAddress;
 
         // insert (node id address - > member) into group.members
@@ -349,7 +335,7 @@ contract Controller is Ownable {
     );
 
     function emitGroupEvent(uint256 groupIndex) internal {
-        require(groups[groupIndex].index != 0, "Group does not exist");
+        require(groups[groupIndex].index < groupCount, "Group does not exist");
 
         epoch++; // increment adapter epoch
         Group storage g = groups[groupIndex]; // Grab group struct
@@ -358,7 +344,6 @@ contract Controller is Ownable {
 
         delete g.committers; // set commiters to empty
         delete g.commitCacheList; // Set commit_cache to empty
-        // g.committers.push(address(5)); // ! Need to run experiments here.
 
         // Deploy coordinator, add to coordinators mapping
         Coordinator coordinator;
@@ -428,10 +413,9 @@ contract Controller is Ownable {
     }
 
     function commitDkg(CommitDkgParams memory params) external {
-        // require group exists
-        require(groups[params.groupIndex].index != 0, "Group does not exist");
+        require(params.groupIndex < groupCount, "Group does not exist");
 
-        // require publickey and partial public key are not empty  / are the right format
+        // Todo: require publickey and partial public key are not empty  / are the right format
 
         // require coordinator exists
         require(
@@ -443,7 +427,6 @@ contract Controller is Ownable {
         ICoordinator coordinator = ICoordinator(
             coordinators[params.groupIndex]
         );
-        // require(coordinator.inPhase() != -1, "DKG still in progress!"); // require coordinator to be in phase -1 (dkg end)
         require(coordinator.inPhase() != -1, "DKG has ended"); // require coordinator to still be in DKG Phase
 
         // Ensure Eopch is correct,  Node is in group, and has not already submitted a partial key
@@ -481,11 +464,9 @@ contract Controller is Ownable {
         }
 
         // if consensus previously reached, update the partial public key of the given node's member entry in the group
-        // if (g.isStrictlyMajorityConsensusReached) {
         g
             .members[uint256(getMemberIndex(params.groupIndex, msg.sender))]
             .partialPublicKey = params.partialPublicKey;
-        // }
 
         // if not.. call getStrictlyMajorityIdenticalCommitmentResult for the group and check if consensus has been reached.
         if (!g.isStrictlyMajorityConsensusReached) {
@@ -507,9 +488,23 @@ contract Controller is Ownable {
                         identicalCommits.nodeIdAddress,
                         disqualifiedNodes
                     );
-                // address[] memory majorityMembers = identicalCommits.nodeIdAddress;
 
                 if (majorityMembers.length >= g.threshold) {
+                    // Remove all members from group where member.nodeIdAddress is in the disqualified nodes.
+                    for (uint256 i = 0; i < disqualifiedNodes.length; i++) {
+                        for (uint256 j = 0; j < g.members.length; j++) {
+                            if (
+                                g.members[j].nodeIdAddress ==
+                                disqualifiedNodes[i]
+                            ) {
+                                g.members[j] = g.members[g.members.length - 1];
+                                g.members.pop();
+                                break;
+                            }
+                        }
+                    }
+
+                    // Update group with new values
                     g.isStrictlyMajorityConsensusReached = true;
                     g.size -= identicalCommits
                         .commitResult
@@ -523,12 +518,13 @@ contract Controller is Ownable {
                         majorityMembers.length
                     );
 
-                    for (uint256 i = 0; i < g.members.length; i++) {
-                        for (uint256 j = 0; j < majorityMembers.length; j++) {
+                    for (uint256 j = 0; j < majorityMembers.length; j++) {
+                        for (uint256 i = 0; i < g.members.length; i++) {
                             if (
                                 g.members[i].nodeIdAddress == majorityMembers[j]
                             ) {
                                 qualifiedIndices[j] = i;
+                                break;
                             }
                         }
                     }
@@ -547,19 +543,6 @@ contract Controller is Ownable {
                         g.committers[i] = g
                             .members[committerIndices[i]]
                             .nodeIdAddress;
-                    }
-
-                    // Remove all members from group where member.nodeIdAddress is in the disqualified nodes.
-                    for (uint256 i = 0; i < disqualifiedNodes.length; i++) {
-                        for (uint256 j = 0; j < g.members.length; j++) {
-                            if (
-                                g.members[j].nodeIdAddress ==
-                                disqualifiedNodes[i]
-                            ) {
-                                g.members[j] = g.members[g.members.length - 1];
-                                g.members.pop();
-                            }
-                        }
                     }
 
                     // Iterate over disqualified nodes and call slashNode on each.
@@ -639,7 +622,7 @@ contract Controller is Ownable {
         }
 
         bool isStrictlyMajorityExist = true;
-        CommitCache memory majorityCommitCache = g.commitCacheList[0];
+        CommitCache memory majorityCommitCache = g.commitCacheList[1];
         for (uint256 i = 0; i < g.commitCacheList.length; i++) {
             CommitCache memory commitCache = g.commitCacheList[i];
             if (
@@ -719,7 +702,8 @@ contract Controller is Ownable {
     // and rewards trigger (sender)
     function postProcessDkg(uint256 groupIndex, uint256 groupEpoch) public {
         // require group exists
-        require(groups[groupIndex].index != 0, "Group does not exist");
+        // require(groups[groupIndex].index != 0, "Group does not exist");
+        require(groupIndex < groupCount, "Group does not exist"); // Is this okay?
 
         // require calling node is in group
         require(
