@@ -85,24 +85,24 @@ contract Controller is Ownable {
     }
 
     function nodeJoin(address idAddress) internal {
-        // * get groupIndex from findOrCreateTargetGroup -> addGroup
+        // get groupIndex from findOrCreateTargetGroup -> addGroup
         (uint256 groupIndex, bool needsRebalance) = findOrCreateTargetGroup();
 
-        addToGroup(idAddress, groupIndex, true); // * add to group
+        addToGroup(idAddress, groupIndex, true); // add node to group
 
-        // Get list of all group indicies excluding the current group index.
-        uint256[] memory groupIndices = new uint256[](groupCount - 1); // nah this is good...
-
-        uint256 index = 0;
-        for (uint256 i = 0; i < groupCount; i++) {
-            if (groupIndex != i) {
-                groupIndices[index] = i;
-                index++;
-            }
-        }
-
-        // If needs rebalance, iterate over group indices and attempt to rebalance group, break as soon as success
+        // If needs rebalance,
         if (needsRebalance) {
+            // Get list of all group indicies excluding the current group index.
+            uint256[] memory groupIndices = new uint256[](groupCount - 1);
+            uint256 index = 0;
+            for (uint256 i = 0; i < groupCount; i++) {
+                if (groupIndex != i) {
+                    groupIndices[index] = i;
+                    index++;
+                }
+            }
+
+            // iterate over group indices and attempt to rebalance group, break as soon as success
             // Rebalance group. Group A Index = iterate over each group other than Group B Index.
             for (uint256 i = 0; i < groupIndices.length; i++) {
                 if (rebalanceGroup(groupIndices[i], groupIndex)) {
@@ -120,15 +120,8 @@ contract Controller is Ownable {
         Group memory groupB = groups[groupBIndex];
 
         if (groupB.size > groupA.size) {
-            // Swap groupA and groupB
-            Group memory temp = groupA;
-            groupA = groupB;
-            groupB = temp;
-
-            // Swap groupAIndex and groupBIndex
-            uint256 tempIndex = groupAIndex;
-            groupAIndex = groupBIndex;
-            groupBIndex = tempIndex;
+            (groupA, groupB) = (groupB, groupA); // Swap groupA and groupB
+            (groupAIndex, groupBIndex) = (groupBIndex, groupAIndex); // Swap groupAIndex and groupBIndex
         }
 
         uint256 expectedSizeToMove = groupA.size -
@@ -153,15 +146,14 @@ contract Controller is Ownable {
             qualifiedIndices,
             expectedSizeToMove
         );
+
+        // Move members from group A to group B
         for (uint256 i = 0; i < membersToMove.length; i++) {
             uint256 memberIndex = membersToMove[i];
-            address idAddress;
-            for (uint256 j = 0; j < groupA.members.length; j++) {
-                if (j == memberIndex) {
-                    idAddress = groupA.members[j].nodeIdAddress;
-                    break;
-                }
-            }
+            address idAddress = getMemberAddressByIndex(
+                groupAIndex,
+                memberIndex
+            );
             removeFromGroup(idAddress, groupAIndex, false);
             addToGroup(idAddress, groupBIndex, false);
         }
@@ -601,7 +593,13 @@ contract Controller is Ownable {
         uint256 count
     ) public pure returns (uint256[] memory) {
         uint256[] memory chosenIndices = new uint256[](count);
-        uint256[] memory remainingIndices = indices;
+
+        // Create copy of indices to avoid modifying original array.
+        uint256[] memory remainingIndices = new uint256[](indices.length);
+        for (uint256 i = 0; i < indices.length; i++) {
+            remainingIndices[i] = indices[i];
+        }
+
         uint256 remainingCount = remainingIndices.length;
         for (uint256 i = 0; i < count; i++) {
             uint256 index = uint256(keccak256(abi.encodePacked(seed, i))) %
@@ -624,18 +622,21 @@ contract Controller is Ownable {
             CommitResult(0, "", new address[](0))
         );
 
+        // If there are no commit caches, return empty commit cache.
         Group memory g = groups[groupIndex];
         if (g.commitCacheList.length == 0) {
             return (emptyCache);
         }
 
+        // If there is only one commit cache, return it.
         if (g.commitCacheList.length == 1) {
             return (g.commitCacheList[0]);
         }
 
+        // If there are multiple commit caches, check if there is a majority.
         bool isStrictlyMajorityExist = true;
-        CommitCache memory majorityCommitCache = g.commitCacheList[1];
-        for (uint256 i = 0; i < g.commitCacheList.length; i++) {
+        CommitCache memory majorityCommitCache = g.commitCacheList[0];
+        for (uint256 i = 1; i < g.commitCacheList.length; i++) {
             CommitCache memory commitCache = g.commitCacheList[i];
             if (
                 commitCache.nodeIdAddress.length >
@@ -651,12 +652,12 @@ contract Controller is Ownable {
             }
         }
 
+        // If no majority, return empty commit cache.
         if (!isStrictlyMajorityExist) {
-            // If no majority, return empty commit cache
             return (emptyCache);
         }
-
-        return (majorityCommitCache); // If majority, return majority commit cache
+        // If majority, return majority commit cache
+        return (majorityCommitCache);
     }
 
     // function getNonDisqualifiedMajorityMembers iterates through list of members and remove disqualified nodes.
