@@ -16,6 +16,7 @@ contract Controller is Ownable {
     uint256 public constant GROUP_MAX_CAPACITY = 10;
     uint256 public constant IDEAL_NUMBER_OF_GROUPS = 5;
     uint256 public constant PENDING_BLOCK_AFTER_QUIT = 100;
+    uint256 public constant DKG_POST_PROCESS_REWARD = 100;
 
     uint256 epoch = 0; // self.epoch, previously ined in adapter
 
@@ -308,6 +309,7 @@ contract Controller is Ownable {
         }
     }
 
+    // returns the minimum threshold for a group of size groupSize
     function minimumThreshold(uint256 groupSize)
         internal
         pure
@@ -563,27 +565,6 @@ contract Controller is Ownable {
         }
     } // end commitDkg
 
-    function slashNode(
-        address nodeIdAddress,
-        uint256 stakingPenalty,
-        uint256 pendingBlock,
-        bool handleGroup
-    ) internal {
-        Node storage node = nodes[nodeIdAddress];
-        node.staking -= stakingPenalty;
-        if (node.staking < NODE_STAKING_AMOUNT || pendingBlock > 0) {
-            freezeNode(nodeIdAddress, pendingBlock, handleGroup);
-        }
-    }
-
-    function freezeNode(
-        address nodeIdAddress,
-        uint256 pendingBlock,
-        bool handleGroup
-    ) internal {
-        // TODO
-    }
-
     // temporarily public for testing. This should be internal.
 
     // Choose "count" random indices from "indices" array.
@@ -707,6 +688,13 @@ contract Controller is Ownable {
         }
     }
 
+    event groupRelayTask(
+        uint256 index,
+        uint256 relayedGroupIndex,
+        uint256 relayedGroupEpoch,
+        uint256 assignmentBlockHeight
+    );
+
     // Post Proccess DKG
     // Called by nodes after last phase of dkg ends (success or failure)
     // handles coordinator selfdestruct if it reaches DKG timeout, then
@@ -740,21 +728,205 @@ contract Controller is Ownable {
         ICoordinator coordinator = ICoordinator(coordinators[groupIndex]);
         require(coordinator.inPhase() == -1, "DKG still in progress"); // require DKG Phase End.
 
-        // Coordinator Self Destruct
-        coordinator.selfDestruct();
+        // delete coordinator
+        coordinator.selfDestruct(); // coordinator self destruct // ! might be deprecated
+        coordinators[groupIndex] = address(0); // remove coordinator from mapping
 
-        coordinators[groupIndex] = address(0);
-
+        // check if majority consensus reached
         bool isStrictlyMajorityConsensusReached = g
             .isStrictlyMajorityConsensusReached;
 
-        if (isStrictlyMajorityConsensusReached) {
-            // TODO: Group relay task
+        // get strictly majority identical commitment result
+        CommitCache
+            memory majorityMembers = getStrictlyMajorityIdenticalCommitmentResult(
+                groupIndex
+            );
+
+        if (!isStrictlyMajorityConsensusReached) {
+            if (groupCount > 1) {
+                emit groupRelayTask( //! does this look okay?
+                    epoch,
+                    groupIndex,
+                    groupEpoch,
+                    block.number
+                );
+            }
         } else {
-            // (
-            //     bool consensusReached,
-            //     address[] memory majority_members
-            // ) = getStrictlyMajorityIdenticalCommitmentResult(groupIndex);
+            if (majorityMembers.nodeIdAddress.length == 0) {
+                // if empty cache: zero out group
+                g.size = 0;
+                g.threshold = 0;
+
+                // for each member, slash node
+                for (uint256 i = 0; i < g.members.length; i++) {
+                    slashNode(
+                        g.members[i].nodeIdAddress,
+                        DISQUALIFIED_NODE_PENALTY_AMOUNT,
+                        0, //! should this be 0?
+                        false
+                    );
+                }
+
+                delete g.members; // Delete all members of the group
+            } else {
+                // get disqualified nodes
+                address[] memory disqualifiedNodes = majorityMembers
+                    .commitResult
+                    .disqualifiedNodes;
+                g.size -= disqualifiedNodes.length;
+                uint256 minimum = minimumThreshold(g.size);
+
+                // set g.threshold to max (default min threshold / minimum threshold)
+                g.threshold = g.threshold > minimum
+                    ? DEFAULT_MINIMUM_THRESHOLD
+                    : minimum;
+
+                // Delete disqualified members from group
+                for (uint256 i = 0; i < g.members.length; i++) {
+                    for (uint256 j = 0; j < disqualifiedNodes.length; j++) {
+                        if (
+                            g.members[i].nodeIdAddress == disqualifiedNodes[j]
+                        ) {
+                            delete g.members[i];
+                            break;
+                        }
+                    }
+                }
+
+                // for each disqualified node, slash node
+                for (uint256 i = 0; i < disqualifiedNodes.length; i++) {
+                    slashNode(
+                        disqualifiedNodes[i],
+                        DISQUALIFIED_NODE_PENALTY_AMOUNT,
+                        0, //! should this be 0?
+                        false
+                    );
+                }
+            }
+        }
+
+        // update rewards for calling node
+        rewards[msg.sender] += DKG_POST_PROCESS_REWARD;
+    }
+
+    function slashNode(
+        address nodeIdAddress,
+        uint256 stakingPenalty,
+        uint256 pendingBlock,
+        bool handleGroup
+    ) internal {
+        Node storage node = nodes[nodeIdAddress];
+        node.staking -= stakingPenalty;
+        if (node.staking < NODE_STAKING_AMOUNT || pendingBlock > 0) {
+            freezeNode(nodeIdAddress, pendingBlock, handleGroup);
+        }
+    }
+
+    // removes node from the group
+    function freezeNode(
+        address nodeIdAddress,
+        uint256 pendingBlock,
+        bool handleGroup
+    ) internal {
+        if (handleGroup) {
+            uint256 groupIndex;
+            bool groupFound = false;
+            // find group with member = nodeIdAddress
+            for (uint256 i = 0; i < groupCount; i++) {
+                if (getMemberIndexByAddress(i, nodeIdAddress) != -1) {
+                    groupIndex = i;
+                    groupFound = true;
+                    break;
+                }
+            }
+
+            if (groupFound) {
+                bool needsRebalance = removeFromGroup(
+                    nodeIdAddress,
+                    groupIndex,
+                    true
+                );
+                // TODO check if the group ready to dkg? //! what am I doing here?
+                if (needsRebalance) {
+                    // get all group indices excluding the current groupIndex
+                    uint256[] memory groupIndices = new uint256[](
+                        groupCount - 1
+                    );
+                    uint256 index = 0;
+                    for (uint256 i = 0; i < groupCount; i++) {
+                        if (i != groupIndex) {
+                            groupIndices[index] = i;
+                            index++;
+                        }
+                    }
+
+                    // try to reblance each group, if a any fail, set rebalanceFailure to true
+                    bool rebalanceFailure = false;
+                    for (uint256 i = 0; i < groupIndices.length; i++) {
+                        if (!rebalanceGroup(i, groupIndex)) {
+                            rebalanceFailure = true;
+                        }
+                    }
+                    // if rebalance failed, start DKG for groupIndex
+                    if (rebalanceFailure) {
+                        // collect idAddress of members in group
+                        address[] memory membersLeftInGroup;
+                        for (uint256 i = 0; i < groups[groupIndex].size; i++) {
+                            membersLeftInGroup[i] = groups[groupIndex]
+                                .members[i]
+                                .nodeIdAddress;
+                        }
+
+                        // for each membersLeftInGroup, call findOrCreateTargetGroup and then add that member to the new group.
+                        for (
+                            uint256 i = 0;
+                            i < membersLeftInGroup.length;
+                            i++
+                        ) {
+                            // find a suitable group for the member
+                            (
+                                uint256 targetGroupIndex,
+                                bool _needsRebalance
+                            ) = findOrCreateTargetGroup();
+
+                            delete (_needsRebalance); //! Used to supress "unused parameter" warning, should I just leave it out?
+
+                            // if the current group index is selected, break
+                            if (groupIndex == targetGroupIndex) {
+                                break;
+                            }
+
+                            // add member to target group
+                            addToGroup(
+                                membersLeftInGroup[i],
+                                targetGroupIndex,
+                                false
+                            );
+
+                            // if group at targetGroupIndex now has 3+ members, emit group event
+                            if (
+                                groups[targetGroupIndex].size >=
+                                DEFAULT_MINIMUM_THRESHOLD
+                            ) {
+                                emitGroupEvent(targetGroupIndex);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        // set node state to false for frozen node
+        nodes[nodeIdAddress].state = false;
+
+        uint256 currentBlock = block.number;
+        // if the node is already pending, add the pending block to the current pending block
+        if (nodes[nodeIdAddress].pendingUntilBlock > block.number) {
+            nodes[nodeIdAddress].pendingUntilBlock += pendingBlock;
+            // else set the pending block to the current block + pending block
+        } else {
+            nodes[nodeIdAddress].pendingUntilBlock =
+                currentBlock +
+                pendingBlock;
         }
     }
 
