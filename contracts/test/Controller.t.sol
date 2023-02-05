@@ -29,6 +29,7 @@ contract ControllerTest is Test {
     address public node9 = address(0x9);
     address public node10 = address(0xA);
     address public node11 = address(0xB);
+    address public node12 = address(0xC);
 
     // Node Public Keys
     bytes pubkey1 = hex"DECADE01";
@@ -42,6 +43,7 @@ contract ControllerTest is Test {
     bytes pubkey9 = hex"DECADE09";
     bytes pubkey10 = hex"DECADE10";
     bytes pubkey11 = hex"DECADE11";
+    bytes pubkey12 = hex"DECADE12";
 
     function setUp() public {
         // deal nodes
@@ -129,13 +131,13 @@ contract ControllerTest is Test {
 
     function testMinimumThreshold() public {
         uint256 min;
-        min = controller.tMinimumThreshold(3);
+        min = controller.minimumThreshold(3);
         emit log_named_uint("min 3", min);
         assertEq(min, 2);
-        min = controller.tMinimumThreshold(7);
+        min = controller.minimumThreshold(7);
         emit log_named_uint("min 7", min);
         assertEq(min, 4);
-        min = controller.tMinimumThreshold(100);
+        min = controller.minimumThreshold(100);
         emit log_named_uint("min 100", min);
         assertEq(min, 51);
     }
@@ -143,7 +145,7 @@ contract ControllerTest is Test {
     function testEmitGroupEvent() public {
         // * fail emit group event if group does not exist
         vm.expectRevert("Group does not exist");
-        controller.tNonexistantGroup(99999);
+        controller.emitGroupEvent(99999);
 
         // * Register Three nodes and see if group struct is well formed
         uint256 groupIndex = 0;
@@ -180,8 +182,8 @@ contract ControllerTest is Test {
         assertEq(m.nodeIdAddress, node2);
         // assertEq(m.partialPublicKey, TODO);
 
-        address coordinatorAddress = controller.getCoordinator(groupIndex);
-        emit log_named_address("\nCoordinator", coordinatorAddress);
+        // address coordinatorAddress = controller.getCoordinator(groupIndex);
+        // emit log_named_address("\nCoordinator", coordinatorAddress);
     }
 
     function testValidGroupIndices() public {
@@ -415,21 +417,20 @@ contract ControllerTest is Test {
         return g.isStrictlyMajorityConsensusReached;
     }
 
-    function testPostProccessDkg() public {
-        testEmitGroupEvent();
+    function testPostProcessDkg() public {
+        testCommitDkg();
+
+        uint256 expectedRewards = controller.DKG_POST_PROCESS_REWARD();
         uint256 groupIndex = 0;
         uint256 groupEpoch = 1;
         address coordinatorAddress = controller.getCoordinator(groupIndex);
         ICoordinator coordinator = ICoordinator(coordinatorAddress);
         uint256 startBlock = coordinator.startBlock();
 
-        // emit group count
-        emit log_named_uint("group count", controller.groupCount());
-
         vm.expectRevert("Group does not exist");
         controller.postProcessDkg(99999, 0); //(groupIndex, groupEpoch))
 
-        vm.prank(node4);
+        vm.prank(node12);
         vm.expectRevert("Node is not a member of the group");
         controller.postProcessDkg(groupIndex, 0); //(groupIndex, groupEpoch))
 
@@ -443,18 +444,134 @@ contract ControllerTest is Test {
         vm.expectRevert("DKG still in progress");
         controller.postProcessDkg(groupIndex, groupEpoch); //(groupIndex, groupEpoch))
 
-        // Succesful post proccess dkg
+        // Set the coordinator to completed phase
         vm.roll(startBlock + 1 + 4 * PHASE_DURATION); // Put the coordinator in phase
-        vm.prank(node1);
-        controller.postProcessDkg(groupIndex, groupEpoch); //(groupIndex, groupEpoch))
 
-        // Self destruct cannot be tested in foundry at the moment:
-        // https://github.com/foundry-rs/foundry/issues/1543
-        // https://github.com/foundry-rs/foundry/issues/2844
-        // assertEq(coordinator.inPhase(), -1);
+        // Succesful post process dkg: HAPPY PATH
+        vm.startPrank(node1);
+        controller.postProcessDkg(groupIndex, groupEpoch);
+        uint256 nodeRewards = controller.getRewards(node1);
+        emit log_named_uint("node1 rewards", nodeRewards);
+        assertEq(nodeRewards, expectedRewards);
+
+        // test self destruct worked properly
+        address emptyCoordinatorAddress = controller.getCoordinator(groupIndex);
+        assertEq(emptyCoordinatorAddress, address(0));
+
+        vm.expectRevert("Coordinator not found for groupIndex");
+        controller.postProcessDkg(groupIndex, groupEpoch); //(groupIndex, groupEpoch))
+        vm.stopPrank();
+        // assert that coordinator has self destructed (cant test this yet)
     }
 
-    // ! Helper function for debugging below
+    // TODO: Cannot figure out how to trigger commitdkg- > slashnode (line 555)
+    // TODO: When I put node4 in the disqualifedNodes array, it fails with "Integer overflow"
+    // TODO: Test coverage needed in getStraightMajorityIdenticalCommitmentResults
+    // TODO: Unsure how to test all the if statements in postProccessDkg directly? Not sure how to set up the node / group state.
+    // Todo: Node.staking used in slash_node. rewards mapping used in post proccess dkg... which to keep?
+    // function prepPostProcessDkgSadPath() public {
+    //     vm.prank(node1);
+    //     controller.nodeRegister(pubkey1);
+    //     vm.prank(node2);
+    //     controller.nodeRegister(pubkey2);
+    //     vm.prank(node3);
+    //     controller.nodeRegister(pubkey3);
+    //     // vm.prank(node4);
+    //     // controller.nodeRegister(pubkey4);
+
+    //     uint256 groupIndex = 0;
+    //     uint256 groupEpoch = 1;
+    //     bytes memory partialPublicKey = hex"DECADE";
+    //     bytes memory publicKey = hex"C0FFEE";
+    //     address[] memory disqualifiedNodes;
+
+    //     disqualifiedNodes = new address[](2); // disqualified nodes here
+    //     disqualifiedNodes[0] = node1; // node 4 here causes error
+    //     disqualifiedNodes[1] = node2;
+
+    //     vm.prank(node1);
+    //     Controller.CommitDkgParams memory params = Controller.CommitDkgParams(
+    //         groupIndex,
+    //         groupEpoch,
+    //         publicKey,
+    //         partialPublicKey,
+    //         disqualifiedNodes
+    //     );
+    //     controller.commitDkg(params);
+
+    //     vm.prank(node2);
+    //     params = Controller.CommitDkgParams(
+    //         groupIndex,
+    //         groupEpoch,
+    //         publicKey,
+    //         hex"DECADE22", // partial public key 2
+    //         disqualifiedNodes
+    //     );
+    //     controller.commitDkg(params);
+
+    //     vm.prank(node3);
+    //     params = Controller.CommitDkgParams(
+    //         groupIndex,
+    //         groupEpoch,
+    //         publicKey,
+    //         hex"DECADE33", // partial public key 2
+    //         disqualifiedNodes
+    //     );
+    //     controller.commitDkg(params);
+
+    //     printGroupInfo(0);
+    //     // printGroupInfo(1);
+
+    //     // Set the coordinator to completed phase
+
+    //     // address coordinatorAddress = controller.getCoordinator(groupIndex);
+    //     // ICoordinator coordinator = ICoordinator(coordinatorAddress);
+    //     // uint256 startBlock = coordinator.startBlock();
+    //     // vm.roll(startBlock + 1 + 4 * PHASE_DURATION); // Put the coordinator in phase
+    // }
+
+    // function testPostProcessDkgSadPath() public {
+    //     prepPostProcessDkgSadPath();
+
+    //     // uint256 groupIndex = 0;
+    //     // uint256 groupEpoch = 2;
+    //     // vm.prank(node1);
+    //     // controller.postProcessDkg(groupIndex, groupEpoch);
+    // }
+
+    function testSlashNode() public {
+        testPostProcessDkg();
+        Controller.Group memory g = controller.getGroup(0);
+        assertEq(g.members.length, 3);
+        assertEq(g.isStrictlyMajorityConsensusReached, true);
+        printGroupInfo(0);
+
+        // print node1 rewards before slashing
+        uint256 nodeRewards = controller.getRewards(node1);
+        uint256 expectedRewards = controller.DKG_POST_PROCESS_REWARD();
+        assertEq(nodeRewards, expectedRewards);
+        emit log_named_uint("node1 rewards before slash", nodeRewards);
+
+        // slash node1
+        uint256 penaltyAmount = controller.DISQUALIFIED_NODE_PENALTY_AMOUNT();
+        uint256 pendingBlock = 0;
+        bool handleGroup = true;
+        controller.slashNode(node1, penaltyAmount, pendingBlock, handleGroup);
+
+        // print node1 rewards after slashing
+        nodeRewards = controller.getRewards(node1);
+        assertEq(nodeRewards, 0);
+
+        // assert node1 has been removed from the group
+        g = controller.getGroup(0);
+        assertEq(g.members.length, 2);
+        assertEq(g.isStrictlyMajorityConsensusReached, false);
+
+        emit log_named_uint("node1 rewards after slash", nodeRewards);
+        printGroupInfo(0);
+    }
+
+    // * Helper function for debugging below
     function printGroupInfo(uint256 groupIndex) public {
         Controller.Group memory g = controller.getGroup(groupIndex);
 
@@ -504,7 +621,7 @@ contract ControllerTest is Test {
             g.commitCacheList.length
         );
         for (uint256 i = 0; i < g.commitCacheList.length; i++) {
-            // print commit result
+            // print commit result public key
             emit log_named_bytes(
                 string.concat(
                     "g.commitCacheList[",
@@ -513,6 +630,25 @@ contract ControllerTest is Test {
                 ),
                 g.commitCacheList[i].commitResult.publicKey
             );
+            // print commit result disqualified nodes
+            uint256 disqualifiedNodesLength = g
+                .commitCacheList[i]
+                .commitResult
+                .disqualifiedNodes
+                .length;
+            for (uint256 j = 0; j < disqualifiedNodesLength; j++) {
+                emit log_named_address(
+                    string.concat(
+                        "g.commitCacheList[",
+                        Strings.toString(i),
+                        "].commitResult.disqualifiedNodes[",
+                        Strings.toString(j),
+                        "].nodeIdAddress"
+                    ),
+                    g.commitCacheList[i].commitResult.disqualifiedNodes[j]
+                );
+            }
+
             for (
                 uint256 j = 0;
                 j < g.commitCacheList[i].nodeIdAddress.length;
@@ -530,6 +666,9 @@ contract ControllerTest is Test {
                 );
             }
         }
+        // print coordinator info
+        address coordinatorAddress = controller.getCoordinator(groupIndex);
+        emit log_named_address("\nCoordinator", coordinatorAddress);
     }
 
     function printNodeInfo(address nodeAddress) public {
@@ -568,54 +707,8 @@ contract ControllerTest is Test {
         emit log_named_address("m.nodeIdAddress", m.nodeIdAddress);
         emit log_named_bytes("m.partialPublicKey", m.partialPublicKey);
     }
-
-    ////// ! Solidity Playground
-
-    // function testDynamicArray() public {
-    //     uint256[] memory numbers = new uint256[](3);
-    //     numbers[0] = 1;
-    //     numbers[1] = 2;
-    //     numbers[2] = 3;
-
-    //     uint256[] memory badNumbers = new uint256[](1);
-    //     badNumbers[0] = 2;
-
-    //     uint256[] memory goodNumbers = new uint256[](numbers.length);
-
-    //     emit log_named_uint("numbers.length", numbers.length);
-    //     emit log_named_uint("badNumbers.length", badNumbers.length);
-    //     emit log_named_uint("goodNumbers.length (before)", goodNumbers.length);
-
-    //     uint256 goodNumbersLength = 0;
-
-    //     for (uint256 i = 0; i < numbers.length; i++) {
-    //         bool disqualified = false;
-    //         for (uint256 j = 0; j < badNumbers.length; j++) {
-    //             if (numbers[i] == badNumbers[j]) {
-    //                 disqualified = true;
-    //                 break;
-    //             }
-    //             else {
-    //                 goodNumbers[goodNumbersLength] = numbers[i];
-    //                 goodNumbersLength++;
-    //             }
-    //         }
-    //     }
-    //     // delete trailing zeros
-    //     uint256[] memory output = new uint256[](goodNumbersLength);
-    //     for (uint256 i = 0; i < goodNumbersLength; i++) {
-    //         output[i] = goodNumbers[i];
-    //     }
-
-    //     emit log_named_uint("output.length", output.length);
-
-    // }
 }
 
-//////////////////////////////////////////////////////////////////////////////////////////////////
-//////////////////////////////////////////////////////////////////////////////////////////////////
-//////////////////////////////////////////////////////////////////////////////////////////////////
-//////////////////////////////////////////////////////////////////////////////////////////////////
 // * Helper library for logging bool
 // EX : emit log_named_string("n.state", Bool.toText(n.state));
 library Bool {

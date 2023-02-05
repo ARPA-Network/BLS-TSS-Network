@@ -36,7 +36,7 @@ contract Controller is Ownable {
         bytes dkgPublicKey;
         bool state;
         uint256 pendingUntilBlock;
-        uint256 staking;
+        uint256 staking; // seems to be a duplicate here to the rewards mapping... which should I use?
     }
     struct Group {
         uint256 index; // group_index
@@ -310,11 +310,9 @@ contract Controller is Ownable {
     }
 
     // returns the minimum threshold for a group of size groupSize
-    function minimumThreshold(uint256 groupSize)
-        internal
-        pure
-        returns (uint256)
-    {
+    function minimumThreshold(
+        uint256 groupSize // set this to internal later
+    ) public pure returns (uint256) {
         return groupSize / 2 + 1;
     }
 
@@ -328,7 +326,8 @@ contract Controller is Ownable {
         address _coordinatorAddress
     );
 
-    function emitGroupEvent(uint256 groupIndex) internal {
+    function emitGroupEvent(uint256 groupIndex) public {
+        // Set to internal later
         // require(groups[groupIndex].index < groupCount, "Group does not exist");
         require(groupIndex < groupCount, "Group does not exist");
 
@@ -474,7 +473,7 @@ contract Controller is Ownable {
             ]
             .partialPublicKey = params.partialPublicKey;
 
-        // if not.. call getStrictlyMajorityIdenticalCommitmentResult for the group and check if consensus has been reached.
+        // if not.. call get StrictlyMajorityIdenticalCommitmentResult for the group and check if consensus has been reached.
         if (!g.isStrictlyMajorityConsensusReached) {
             CommitCache
                 memory identicalCommits = getStrictlyMajorityIdenticalCommitmentResult(
@@ -614,7 +613,7 @@ contract Controller is Ownable {
             return (g.commitCacheList[0]);
         }
 
-        // If there are multiple commit caches, check if there is a majority.
+        // If there are multiple commit caches, check if there is a majority.  (THIS NEEDS INVESTIGAGION...)
         bool isStrictlyMajorityExist = true;
         CommitCache memory majorityCommitCache = g.commitCacheList[0];
         for (uint256 i = 1; i < g.commitCacheList.length; i++) {
@@ -695,12 +694,6 @@ contract Controller is Ownable {
         uint256 assignmentBlockHeight
     );
 
-    // Post Proccess DKG
-    // Called by nodes after last phase of dkg ends (success or failure)
-    // handles coordinator selfdestruct if it reaches DKG timeout, then
-    // 1. emit GroupRelayTask if grouping successfully
-    // 2. arrange members if fail to group
-    // and rewards trigger (sender)
     function postProcessDkg(uint256 groupIndex, uint256 groupEpoch) public {
         // require group exists
         // require(groups[groupIndex].index != 0, "Group does not exist");
@@ -795,11 +788,12 @@ contract Controller is Ownable {
 
                 // for each disqualified node, slash node
                 for (uint256 i = 0; i < disqualifiedNodes.length; i++) {
+                    bool handleGroup = (i == disqualifiedNodes.length - 1);
                     slashNode(
                         disqualifiedNodes[i],
                         DISQUALIFIED_NODE_PENALTY_AMOUNT,
                         0, //! should this be 0?
-                        false
+                        handleGroup
                     );
                 }
             }
@@ -809,15 +803,31 @@ contract Controller is Ownable {
         rewards[msg.sender] += DKG_POST_PROCESS_REWARD;
     }
 
+    function getRewards(address nodeAddress) public view returns (uint256) {
+        return rewards[nodeAddress];
+    }
+
     function slashNode(
         address nodeIdAddress,
         uint256 stakingPenalty,
         uint256 pendingBlock,
-        bool handleGroup
-    ) internal {
-        Node storage node = nodes[nodeIdAddress];
-        node.staking -= stakingPenalty;
-        if (node.staking < NODE_STAKING_AMOUNT || pendingBlock > 0) {
+        bool handleGroup // flip to internal
+    ) public {
+        // Todo: Node.staking used in slash_node. rewards mapping used in post proccess dkg... which to keep?
+        // Node storage node = nodes[nodeIdAddress];
+        // node.staking -= stakingPenalty;
+        // if (node.staking < NODE_STAKING_AMOUNT || pendingBlock > 0) {
+        //     freezeNode(nodeIdAddress, pendingBlock, handleGroup);
+        // }
+
+        // reduce rewards
+        if (rewards[nodeIdAddress] < stakingPenalty) {
+            rewards[nodeIdAddress] = 0;
+        } else {
+            rewards[nodeIdAddress] -= stakingPenalty;
+        }
+        // freeze node if rewards balance too low
+        if (rewards[nodeIdAddress] < NODE_STAKING_AMOUNT || pendingBlock > 0) {
             freezeNode(nodeIdAddress, pendingBlock, handleGroup);
         }
     }
@@ -827,7 +837,8 @@ contract Controller is Ownable {
         address nodeIdAddress,
         uint256 pendingBlock,
         bool handleGroup
-    ) internal {
+    ) public {
+        // flip to internal
         if (handleGroup) {
             uint256 groupIndex;
             bool groupFound = false;
@@ -846,8 +857,12 @@ contract Controller is Ownable {
                     groupIndex,
                     true
                 );
-                // TODO check if the group ready to dkg? //! what am I doing here?
+                // TODO check if the group ready to dkg? (This was not yet implemented in commit dkg.)
                 if (needsRebalance) {
+                    // set isStrictlyMajorityConsensusReached to false
+                    groups[groupIndex]
+                        .isStrictlyMajorityConsensusReached = false;
+
                     // get all group indices excluding the current groupIndex
                     uint256[] memory groupIndices = new uint256[](
                         groupCount - 1
@@ -889,7 +904,7 @@ contract Controller is Ownable {
                                 bool _needsRebalance
                             ) = findOrCreateTargetGroup();
 
-                            delete (_needsRebalance); //! Used to supress "unused parameter" warning, should I just leave it out?
+                            delete (_needsRebalance); //! Used to supress "unused parameter" warning, should I just leave this out?
 
                             // if the current group index is selected, break
                             if (groupIndex == targetGroupIndex) {
@@ -934,18 +949,6 @@ contract Controller is Ownable {
     // * Public Test functions for testing private stuff
     // * DELETE LATER
     // ************************************************** //
-
-    function tNonexistantGroup(uint256 groupIndex) public {
-        emitGroupEvent(groupIndex);
-    }
-
-    function tMinimumThreshold(uint256 groupSize)
-        public
-        pure
-        returns (uint256)
-    {
-        return minimumThreshold(groupSize);
-    }
 
     function getNode(address nodeAddress) public view returns (Node memory) {
         return nodes[nodeAddress];
