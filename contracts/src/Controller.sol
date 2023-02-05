@@ -807,29 +807,60 @@ contract Controller is Ownable {
         return rewards[nodeAddress];
     }
 
+    function getStakedAmount(address nodeAddress)
+        public
+        view
+        returns (uint256)
+    {
+        Node storage node = nodes[nodeAddress];
+        require(node.idAddress == nodeAddress, "Node not registered.");
+        return node.staking;
+    }
+
+    function nodeStake(uint256 stakeAmount) public {
+        Node storage node = nodes[msg.sender];
+        require(node.idAddress == msg.sender, "Node not registered.");
+        node.staking += stakeAmount;
+    }
+
+    function nodeUnstake(uint256 unstakeAmount) public {
+        Node storage node = nodes[msg.sender];
+        require(node.idAddress == msg.sender, "Node not registered.");
+
+        if (node.state == true) {
+            require(
+                node.staking - unstakeAmount >= NODE_STAKING_AMOUNT,
+                "Node state is true, cannot unstake below staking threshold"
+            );
+        }
+
+        // require(node.staking - unstakeAmount >= 0, "Cannot unstake more than amount staked"); //need this?
+
+        node.staking -= unstakeAmount;
+    }
+
     function slashNode(
         address nodeIdAddress,
         uint256 stakingPenalty,
         uint256 pendingBlock,
         bool handleGroup // flip to internal
     ) public {
-        // Todo: Node.staking used in slash_node. rewards mapping used in post proccess dkg... which to keep?
-        // Node storage node = nodes[nodeIdAddress];
-        // node.staking -= stakingPenalty;
-        // if (node.staking < NODE_STAKING_AMOUNT || pendingBlock > 0) {
-        //     freezeNode(nodeIdAddress, pendingBlock, handleGroup);
-        // }
-
-        // reduce rewards
-        if (rewards[nodeIdAddress] < stakingPenalty) {
-            rewards[nodeIdAddress] = 0;
-        } else {
-            rewards[nodeIdAddress] -= stakingPenalty;
-        }
-        // freeze node if rewards balance too low
-        if (rewards[nodeIdAddress] < NODE_STAKING_AMOUNT || pendingBlock > 0) {
+        Node storage node = nodes[nodeIdAddress];
+        node.staking -= stakingPenalty;
+        if (node.staking < NODE_STAKING_AMOUNT || pendingBlock > 0) {
             freezeNode(nodeIdAddress, pendingBlock, handleGroup);
         }
+
+        // reduce rewards
+        // if (rewards[nodeIdAddress] < stakingPenalty) {
+        //     rewards[nodeIdAddress] = 0;
+        // } else {
+        //     rewards[nodeIdAddress] -= stakingPenalty;
+        // }
+        // // freeze node if rewards balance too low
+        // if (rewards[nodeIdAddress] < NODE_STAKING_AMOUNT || pendingBlock > 0) {
+        //     freezeNode(nodeIdAddress, pendingBlock, handleGroup);
+        // }
     }
 
     // removes node from the group

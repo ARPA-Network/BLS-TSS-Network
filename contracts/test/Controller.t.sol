@@ -546,29 +546,90 @@ contract ControllerTest is Test {
         assertEq(g.isStrictlyMajorityConsensusReached, true);
         printGroupInfo(0);
 
-        // print node1 rewards before slashing
-        uint256 nodeRewards = controller.getRewards(node1);
-        uint256 expectedRewards = controller.DKG_POST_PROCESS_REWARD();
-        assertEq(nodeRewards, expectedRewards);
-        emit log_named_uint("node1 rewards before slash", nodeRewards);
+        // Confirm node1 has correct initial stake amount
+        assertEq(
+            controller.NODE_STAKING_AMOUNT(),
+            controller.getStakedAmount(node1)
+        );
 
+        emit log_named_uint(
+            "node1 staked tokens before slash",
+            controller.getStakedAmount(node1)
+        );
         // slash node1
         uint256 penaltyAmount = controller.DISQUALIFIED_NODE_PENALTY_AMOUNT();
         uint256 pendingBlock = 0;
         bool handleGroup = true;
         controller.slashNode(node1, penaltyAmount, pendingBlock, handleGroup);
 
-        // print node1 rewards after slashing
-        nodeRewards = controller.getRewards(node1);
-        assertEq(nodeRewards, 0);
+        // Assert staking penalty applied to node1
+        assertEq(
+            controller.NODE_STAKING_AMOUNT() -
+                controller.DISQUALIFIED_NODE_PENALTY_AMOUNT(),
+            controller.getStakedAmount(node1)
+        );
 
         // assert node1 has been removed from the group
         g = controller.getGroup(0);
         assertEq(g.members.length, 2);
         assertEq(g.isStrictlyMajorityConsensusReached, false);
 
-        emit log_named_uint("node1 rewards after slash", nodeRewards);
+        emit log_named_uint(
+            "node1 staked tokens after slash",
+            controller.getStakedAmount(node1)
+        );
         printGroupInfo(0);
+    }
+
+    function testNodeStake() public {
+        // call node stake with unregistered node: Fail
+        vm.startPrank(node1);
+        vm.expectRevert("Node not registered.");
+        controller.nodeStake(100);
+
+        // register node, confirm initial stake amount
+        controller.nodeRegister(pubkey1);
+        assertEq(
+            controller.NODE_STAKING_AMOUNT(),
+            controller.getStakedAmount(node1)
+        );
+
+        // Stake 2000 tokens: Success
+        controller.nodeStake(100);
+        assertEq(
+            controller.NODE_STAKING_AMOUNT() + 100,
+            controller.getStakedAmount(node1)
+        );
+
+        vm.stopPrank();
+    }
+
+    function testNodeUnstake() public {
+        // call nodeUnstake with unregistered node: Fail
+        vm.startPrank(node1);
+        vm.expectRevert("Node not registered.");
+        controller.nodeUnstake(1000);
+
+        // register node, confirm initial stake amount()
+        controller.nodeRegister(pubkey1);
+        assertEq(
+            controller.NODE_STAKING_AMOUNT(),
+            controller.getStakedAmount(node1)
+        );
+
+        // stake and fall below the stake threshold: Fail
+        vm.expectRevert(
+            "Node state is true, cannot unstake below staking threshold"
+        );
+        controller.nodeUnstake(1);
+
+        // Stake 2000, then unstake 1000, staying above threshold: success
+        controller.nodeStake(100);
+        controller.nodeUnstake(1);
+        assertEq(
+            controller.NODE_STAKING_AMOUNT() + 99,
+            controller.getStakedAmount(node1)
+        );
     }
 
     // * Helper function for debugging below
