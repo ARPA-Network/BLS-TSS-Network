@@ -464,81 +464,6 @@ contract ControllerTest is Test {
         // assert that coordinator has self destructed (cant test this yet)
     }
 
-    // TODO: Cannot figure out how to trigger commitdkg- > slashnode (line 555)
-    // TODO: When I put node4 in the disqualifedNodes array, it fails with "Integer overflow"
-    // TODO: Test coverage needed in getStraightMajorityIdenticalCommitmentResults
-    // TODO: Unsure how to test all the if statements in postProccessDkg directly? Not sure how to set up the node / group state.
-    // Todo: Node.staking used in slash_node. rewards mapping used in post proccess dkg... which to keep?
-    // function prepPostProcessDkgSadPath() public {
-    //     vm.prank(node1);
-    //     controller.nodeRegister(pubkey1);
-    //     vm.prank(node2);
-    //     controller.nodeRegister(pubkey2);
-    //     vm.prank(node3);
-    //     controller.nodeRegister(pubkey3);
-    //     // vm.prank(node4);
-    //     // controller.nodeRegister(pubkey4);
-
-    //     uint256 groupIndex = 0;
-    //     uint256 groupEpoch = 1;
-    //     bytes memory partialPublicKey = hex"DECADE";
-    //     bytes memory publicKey = hex"C0FFEE";
-    //     address[] memory disqualifiedNodes;
-
-    //     disqualifiedNodes = new address[](2); // disqualified nodes here
-    //     disqualifiedNodes[0] = node1; // node 4 here causes error
-    //     disqualifiedNodes[1] = node2;
-
-    //     vm.prank(node1);
-    //     Controller.CommitDkgParams memory params = Controller.CommitDkgParams(
-    //         groupIndex,
-    //         groupEpoch,
-    //         publicKey,
-    //         partialPublicKey,
-    //         disqualifiedNodes
-    //     );
-    //     controller.commitDkg(params);
-
-    //     vm.prank(node2);
-    //     params = Controller.CommitDkgParams(
-    //         groupIndex,
-    //         groupEpoch,
-    //         publicKey,
-    //         hex"DECADE22", // partial public key 2
-    //         disqualifiedNodes
-    //     );
-    //     controller.commitDkg(params);
-
-    //     vm.prank(node3);
-    //     params = Controller.CommitDkgParams(
-    //         groupIndex,
-    //         groupEpoch,
-    //         publicKey,
-    //         hex"DECADE33", // partial public key 2
-    //         disqualifiedNodes
-    //     );
-    //     controller.commitDkg(params);
-
-    //     printGroupInfo(0);
-    //     // printGroupInfo(1);
-
-    //     // Set the coordinator to completed phase
-
-    //     // address coordinatorAddress = controller.getCoordinator(groupIndex);
-    //     // ICoordinator coordinator = ICoordinator(coordinatorAddress);
-    //     // uint256 startBlock = coordinator.startBlock();
-    //     // vm.roll(startBlock + 1 + 4 * PHASE_DURATION); // Put the coordinator in phase
-    // }
-
-    // function testPostProcessDkgSadPath() public {
-    //     prepPostProcessDkgSadPath();
-
-    //     // uint256 groupIndex = 0;
-    //     // uint256 groupEpoch = 2;
-    //     // vm.prank(node1);
-    //     // controller.postProcessDkg(groupIndex, groupEpoch);
-    // }
-
     function testSlashNode() public {
         testPostProcessDkg();
         Controller.Group memory g = controller.getGroup(0);
@@ -553,7 +478,7 @@ contract ControllerTest is Test {
         );
 
         emit log_named_uint(
-            "node1 staked tokens before slash",
+            "node1 staked tokens before` slash",
             controller.getStakedAmount(node1)
         );
         // slash node1

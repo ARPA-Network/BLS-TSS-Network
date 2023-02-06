@@ -850,17 +850,6 @@ contract Controller is Ownable {
         if (node.staking < NODE_STAKING_AMOUNT || pendingBlock > 0) {
             freezeNode(nodeIdAddress, pendingBlock, handleGroup);
         }
-
-        // reduce rewards
-        // if (rewards[nodeIdAddress] < stakingPenalty) {
-        //     rewards[nodeIdAddress] = 0;
-        // } else {
-        //     rewards[nodeIdAddress] -= stakingPenalty;
-        // }
-        // // freeze node if rewards balance too low
-        // if (rewards[nodeIdAddress] < NODE_STAKING_AMOUNT || pendingBlock > 0) {
-        //     freezeNode(nodeIdAddress, pendingBlock, handleGroup);
-        // }
     }
 
     // removes node from the group
