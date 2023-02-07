@@ -36,7 +36,7 @@ contract Controller is Ownable {
         bytes dkgPublicKey;
         bool state;
         uint256 pendingUntilBlock;
-        uint256 staking; // seems to be a duplicate here to the rewards mapping... which should I use?
+        uint256 staking;
     }
     struct Group {
         uint256 index; // group_index
