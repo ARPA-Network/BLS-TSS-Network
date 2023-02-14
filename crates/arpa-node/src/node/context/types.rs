@@ -429,7 +429,7 @@ mod tests {
 
     #[test]
     fn test_deserialization_from_config() {
-        let config_str = &read_to_string("config.yml").unwrap_or_else(|_| {
+        let config_str = &read_to_string("conf/config.yml").unwrap_or_else(|_| {
             panic!("Error loading configuration file, please check the configuration!")
         });
 
