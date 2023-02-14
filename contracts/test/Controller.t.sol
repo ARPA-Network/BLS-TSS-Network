@@ -6,7 +6,8 @@ import "forge-std/Test.sol";
 import {Coordinator} from "src/Coordinator.sol";
 import {Controller} from "src/Controller.sol";
 import "openzeppelin-contracts/contracts/utils/Strings.sol";
-import "src/ICoordinator.sol";
+import "src/interfaces/ICoordinator.sol";
+import "./MockArpaEthOracle.sol";
 
 // Suggested usage: forge test --match-contract Controller -vv
 
@@ -43,6 +44,9 @@ contract ControllerTest is Test {
     bytes pubkey10 = hex"DECADE10";
     bytes pubkey11 = hex"DECADE11";
 
+    // Arpa contract address
+    address public arpa = address(0x777);
+
     function setUp() public {
         // deal nodes
         vm.deal(node1, 1 * 10**18);
@@ -54,7 +58,9 @@ contract ControllerTest is Test {
         // deal owner and create controller
         vm.deal(owner, 1 * 10**18);
         vm.prank(owner);
-        controller = new Controller();
+
+        MockArpaEthOracle oracle = new MockArpaEthOracle();
+        controller = new Controller(arpa, address(oracle));
     }
 
     function testNodeRegister() public {

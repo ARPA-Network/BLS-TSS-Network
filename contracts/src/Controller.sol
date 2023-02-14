@@ -1,12 +1,14 @@
+// SPDX-License-Identifier: MIT
 pragma solidity ^0.8.15;
 
 import "openzeppelin-contracts/contracts/access/Ownable.sol";
 import "openzeppelin-contracts/contracts/utils/math/SafeMath.sol";
 
 import {Coordinator} from "src/Coordinator.sol";
-import "src/ICoordinator.sol";
+import "src/interfaces/ICoordinator.sol";
+import "src/Adapter.sol";
 
-contract Controller is Ownable {
+contract Controller is Adapter {
     uint256 public constant NODE_STAKING_AMOUNT = 50000;
     uint256 public constant DISQUALIFIED_NODE_PENALTY_AMOUNT = 1000;
     uint256 public constant COORDINATOR_STATE_TRIGGER_REWARD = 100;
@@ -21,13 +23,9 @@ contract Controller is Ownable {
 
     //  Node State Variables
     mapping(address => Node) public nodes; //maps node address to Node Struct
-    mapping(address => uint256) public rewards; // maps node address to reward amount
 
     // Group State Variables
-    uint256 public groupCount; // Number of groups
-    mapping(uint256 => Group) public groups; // group_index => Group struct
     mapping(uint256 => address) public coordinators; // maps group index to coordinator address
-    uint64 lastOutput = 0x2222222222222222; // global last output
 
     // * Structs
     struct Node {
@@ -37,33 +35,8 @@ contract Controller is Ownable {
         uint256 pendingUntilBlock;
         uint256 staking;
     }
-    struct Group {
-        uint256 index; // group_index
-        uint256 epoch; // 0
-        uint256 size; // 0
-        uint256 threshold; // DEFAULT_MINIMUM_THRESHOLD
-        Member[] members; // Map in rust mock contract
-        address[] committers;
-        CommitCache[] commitCacheList; // Map in rust mock contract
-        bool isStrictlyMajorityConsensusReached;
-        bytes publicKey;
-    }
 
-    struct Member {
-        address nodeIdAddress;
-        bytes partialPublicKey;
-    }
-
-    struct CommitResult {
-        uint256 groupEpoch;
-        bytes publicKey;
-        address[] disqualifiedNodes;
-    }
-
-    struct CommitCache {
-        address[] nodeIdAddress;
-        CommitResult commitResult;
-    }
+    constructor(address arpa, address arpaEthFeed) Adapter(arpa, arpaEthFeed) {}
 
     function nodeRegister(bytes calldata dkgPublicKey) public {
         require(
@@ -245,27 +218,6 @@ contract Controller is Ownable {
 
         // if none of the above conditions are met:
         return (indexOfMinSize, false);
-    }
-
-    // Get list of all group indexes where group.isStrictlyMajorityConsensusReached == true
-    function validGroupIndices() public view returns (uint256[] memory) {
-        uint256[] memory groupIndices = new uint256[](groupCount); //max length is group count
-        uint256 index = 0;
-        for (uint256 i = 0; i < groupCount; i++) {
-            Group memory g = groups[i];
-            if (g.isStrictlyMajorityConsensusReached) {
-                groupIndices[index] = i;
-                index++;
-            }
-        }
-
-        // create result array of correct size (remove possible trailing zero elements)
-        uint256[] memory result = new uint256[](index);
-        for (uint256 i = 0; i < index; i++) {
-            result[i] = groupIndices[i];
-        }
-
-        return result;
     }
 
     function addGroup() internal returns (uint256) {
@@ -588,7 +540,7 @@ contract Controller is Ownable {
 
     // Choose "count" random indices from "indices" array.
     function chooseRandomlyFromIndices(
-        uint64 seed,
+        uint256 seed,
         uint256[] memory indices,
         uint256 count
     ) public pure returns (uint256[] memory) {
