@@ -5,7 +5,7 @@ edition = "2021"
 publish = false
 
 [dependencies]
-threshold-bls = { path = "../../../../threshold-bls", default-features = false, features = ["bls12_381"] }
+threshold-bls = { path = "../../../../threshold-bls", default-features = false, features = ["bn254"] }
 
 ethers-core = "1.0.0"
 ethers-signers = "1.0.0"

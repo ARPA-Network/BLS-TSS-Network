@@ -19,7 +19,8 @@ use arpa_node_dal::{
 };
 use ethers::types::Address;
 use futures::Future;
-use std::sync::Arc;
+use std::{marker::PhantomData, sync::Arc};
+use threshold_bls::group::PairingCurve;
 use tokio::sync::RwLock;
 use tonic::{transport::Server, Request, Response, Status};
 
@@ -27,57 +28,63 @@ pub mod committer_stub {
     include!("../../../rpc_stub/committer.rs");
 }
 
+type NodeContext<N, G, T, I, PC> = Arc<RwLock<GeneralContext<N, G, T, I, PC>>>;
+
 pub(crate) struct BLSCommitterServiceServer<
-    N: NodeInfoFetcher + NodeInfoUpdater + MdcContextUpdater,
-    G: GroupInfoFetcher + GroupInfoUpdater + MdcContextUpdater,
+    N: NodeInfoFetcher<PC> + NodeInfoUpdater<PC> + MdcContextUpdater,
+    G: GroupInfoFetcher<PC> + GroupInfoUpdater<PC> + MdcContextUpdater,
     T: BLSTasksFetcher<RandomnessTask> + BLSTasksUpdater<RandomnessTask>,
     I: ChainIdentity
         + ControllerClientBuilder
         + CoordinatorClientBuilder
-        + AdapterClientBuilder
+        + AdapterClientBuilder<PC>
         + ChainProviderBuilder,
+    PC: PairingCurve,
 > {
     id_address: Address,
     group_cache: Arc<RwLock<G>>,
-    context: Arc<RwLock<GeneralContext<N, G, T, I>>>,
+    context: NodeContext<N, G, T, I, PC>,
+    c: PhantomData<PC>,
 }
 
 impl<
-        N: NodeInfoFetcher + NodeInfoUpdater + MdcContextUpdater,
-        G: GroupInfoFetcher + GroupInfoUpdater + MdcContextUpdater,
+        N: NodeInfoFetcher<PC> + NodeInfoUpdater<PC> + MdcContextUpdater,
+        G: GroupInfoFetcher<PC> + GroupInfoUpdater<PC> + MdcContextUpdater,
         T: BLSTasksFetcher<RandomnessTask> + BLSTasksUpdater<RandomnessTask>,
         I: ChainIdentity
             + ControllerClientBuilder
             + CoordinatorClientBuilder
-            + AdapterClientBuilder
+            + AdapterClientBuilder<PC>
             + ChainProviderBuilder,
-    > BLSCommitterServiceServer<N, G, T, I>
+        PC: PairingCurve,
+    > BLSCommitterServiceServer<N, G, T, I, PC>
 {
     pub fn new(
         id_address: Address,
         group_cache: Arc<RwLock<G>>,
-        context: Arc<RwLock<GeneralContext<N, G, T, I>>>,
+        context: NodeContext<N, G, T, I, PC>,
     ) -> Self {
         BLSCommitterServiceServer {
             id_address,
             group_cache,
             context,
+            c: PhantomData,
         }
     }
 }
 
 #[tonic::async_trait]
 impl<
-        N: NodeInfoFetcher
-            + NodeInfoUpdater
+        N: NodeInfoFetcher<PC>
+            + NodeInfoUpdater<PC>
             + MdcContextUpdater
             + std::fmt::Debug
             + Clone
             + Sync
             + Send
             + 'static,
-        G: GroupInfoFetcher
-            + GroupInfoUpdater
+        G: GroupInfoFetcher<PC>
+            + GroupInfoUpdater<PC>
             + MdcContextUpdater
             + std::fmt::Debug
             + Clone
@@ -94,14 +101,15 @@ impl<
         I: ChainIdentity
             + ControllerClientBuilder
             + CoordinatorClientBuilder
-            + AdapterClientBuilder
+            + AdapterClientBuilder<PC>
             + ChainProviderBuilder
             + std::fmt::Debug
             + Clone
             + Sync
             + Send
             + 'static,
-    > CommitterService for BLSCommitterServiceServer<N, G, T, I>
+        PC: PairingCurve + std::fmt::Debug + Clone + Sync + Send + 'static,
+    > CommitterService for BLSCommitterServiceServer<N, G, T, I, PC>
 {
     async fn commit_partial_signature(
         &self,
@@ -123,13 +131,14 @@ impl<
             .map_err(|_| Status::invalid_argument(NodeError::AddressFormatError.to_string()))?;
 
         if let Ok(member) = self.group_cache.read().await.get_member(req_id_address) {
-            let partial_public_key = member.partial_public_key.unwrap();
+            let partial_public_key = member.partial_public_key.clone().unwrap();
 
-            let bls_core = SimpleBLSCore {};
-
-            bls_core
-                .partial_verify(&partial_public_key, &req.message, &req.partial_signature)
-                .map_err(|e| Status::internal(e.to_string()))?;
+            SimpleBLSCore::<PC>::partial_verify(
+                &partial_public_key,
+                &req.message,
+                &req.partial_signature,
+            )
+            .map_err(|e| Status::internal(e.to_string()))?;
 
             let chain_id = req.chain_id as usize;
 
@@ -208,16 +217,16 @@ impl<
 
 pub async fn start_committer_server_with_shutdown<
     F: Future<Output = ()>,
-    N: NodeInfoFetcher
-        + NodeInfoUpdater
+    N: NodeInfoFetcher<PC>
+        + NodeInfoUpdater<PC>
         + MdcContextUpdater
         + std::fmt::Debug
         + Clone
         + Sync
         + Send
         + 'static,
-    G: GroupInfoFetcher
-        + GroupInfoUpdater
+    G: GroupInfoFetcher<PC>
+        + GroupInfoUpdater<PC>
         + MdcContextUpdater
         + std::fmt::Debug
         + Clone
@@ -234,16 +243,17 @@ pub async fn start_committer_server_with_shutdown<
     I: ChainIdentity
         + ControllerClientBuilder
         + CoordinatorClientBuilder
-        + AdapterClientBuilder
+        + AdapterClientBuilder<PC>
         + ChainProviderBuilder
         + std::fmt::Debug
         + Clone
         + Sync
         + Send
         + 'static,
+    PC: PairingCurve + std::fmt::Debug + Clone + Sync + Send + 'static,
 >(
     endpoint: String,
-    context: Arc<RwLock<GeneralContext<N, G, T, I>>>,
+    context: NodeContext<N, G, T, I, PC>,
     shutdown_signal: F,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let addr = endpoint.parse()?;
@@ -270,16 +280,16 @@ pub async fn start_committer_server_with_shutdown<
 }
 
 pub async fn start_committer_server<
-    N: NodeInfoFetcher
-        + NodeInfoUpdater
+    N: NodeInfoFetcher<PC>
+        + NodeInfoUpdater<PC>
         + MdcContextUpdater
         + std::fmt::Debug
         + Clone
         + Sync
         + Send
         + 'static,
-    G: GroupInfoFetcher
-        + GroupInfoUpdater
+    G: GroupInfoFetcher<PC>
+        + GroupInfoUpdater<PC>
         + MdcContextUpdater
         + std::fmt::Debug
         + Clone
@@ -296,16 +306,17 @@ pub async fn start_committer_server<
     I: ChainIdentity
         + ControllerClientBuilder
         + CoordinatorClientBuilder
-        + AdapterClientBuilder
+        + AdapterClientBuilder<PC>
         + ChainProviderBuilder
         + std::fmt::Debug
         + Clone
         + Sync
         + Send
         + 'static,
+    PC: PairingCurve + std::fmt::Debug + Clone + Sync + Send + 'static,
 >(
     endpoint: String,
-    context: Arc<RwLock<GeneralContext<N, G, T, I>>>,
+    context: NodeContext<N, G, T, I, PC>,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let addr = endpoint.parse()?;
 

@@ -7,31 +7,39 @@ use crate::node::{
 use arpa_node_dal::GroupInfoUpdater;
 use async_trait::async_trait;
 use log::debug;
-use std::sync::Arc;
+use std::{marker::PhantomData, sync::Arc};
+use threshold_bls::group::PairingCurve;
 use tokio::sync::RwLock;
 
 #[derive(Debug)]
-pub struct PostSuccessGroupingSubscriber<G: GroupInfoUpdater + Sync + Send> {
+pub struct PostSuccessGroupingSubscriber<G: GroupInfoUpdater<C> + Sync + Send, C: PairingCurve> {
     group_cache: Arc<RwLock<G>>,
     eq: Arc<RwLock<EventQueue>>,
+    c: PhantomData<C>,
 }
 
-impl<G: GroupInfoUpdater + Sync + Send> PostSuccessGroupingSubscriber<G> {
+impl<G: GroupInfoUpdater<C> + Sync + Send, C: PairingCurve> PostSuccessGroupingSubscriber<G, C> {
     pub fn new(group_cache: Arc<RwLock<G>>, eq: Arc<RwLock<EventQueue>>) -> Self {
-        PostSuccessGroupingSubscriber { group_cache, eq }
+        PostSuccessGroupingSubscriber {
+            group_cache,
+            eq,
+            c: PhantomData,
+        }
     }
 }
 
 #[async_trait]
-impl<G: GroupInfoUpdater + std::fmt::Debug + Sync + Send + 'static> Subscriber
-    for PostSuccessGroupingSubscriber<G>
+impl<
+        G: GroupInfoUpdater<C> + std::fmt::Debug + Sync + Send + 'static,
+        C: PairingCurve + std::fmt::Debug + Sync + Send + 'static,
+    > Subscriber for PostSuccessGroupingSubscriber<G, C>
 {
     async fn notify(&self, topic: Topic, payload: &(dyn DebuggableEvent)) -> NodeResult<()> {
         debug!("{:?}", topic);
 
         let DKGSuccess { group } = payload
             .as_any()
-            .downcast_ref::<DKGSuccess>()
+            .downcast_ref::<DKGSuccess<C>>()
             .unwrap()
             .clone();
 
@@ -53,7 +61,9 @@ impl<G: GroupInfoUpdater + std::fmt::Debug + Sync + Send + 'static> Subscriber
     }
 }
 
-impl<G: GroupInfoUpdater + std::fmt::Debug + Sync + Send + 'static> DebuggableSubscriber
-    for PostSuccessGroupingSubscriber<G>
+impl<
+        G: GroupInfoUpdater<C> + std::fmt::Debug + Sync + Send + 'static,
+        C: PairingCurve + std::fmt::Debug + Sync + Send + 'static,
+    > DebuggableSubscriber for PostSuccessGroupingSubscriber<G, C>
 {
 }

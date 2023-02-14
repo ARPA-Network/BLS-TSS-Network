@@ -28,10 +28,10 @@ arpa-node-dal = { path = "./src/node/dal" }
 arpa-node-sqlite-db = { path = "./src/node/dal/sqlite" }
 arpa-node-contract-client = { path = "./src/node/contract_client" }
 dkg-core = { path = "../dkg-core" }
-threshold-bls = { path = "../threshold-bls", default-features = false, features = ["bls12_381"] }
+threshold-bls = { path = "../threshold-bls", default-features = false, features = ["bn254"] }
 
 gumdrop = "0.7.0"
-rand = "0.7"
+rand = "0.8"
 bincode = "1.2.1"
 glob = "0.3.0"
 serde = "1.0.106"

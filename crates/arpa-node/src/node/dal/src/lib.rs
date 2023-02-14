@@ -1,16 +1,15 @@
 pub mod cache;
 pub mod error;
 
-use std::collections::BTreeMap;
-
 use arpa_node_core::{DKGStatus, DKGTask, Group, Member, Task};
 use async_trait::async_trait;
 use cache::BLSResultCache;
 pub use dkg_core::primitives::DKGOutput;
 use error::DataAccessResult;
 use ethers_core::types::Address;
+use std::collections::BTreeMap;
 use threshold_bls::{
-    curve::bls12381::{Curve, Scalar, G1},
+    group::{Curve, PairingCurve},
     sig::Share,
 };
 
@@ -27,36 +26,36 @@ pub trait MdcContextUpdater {
 }
 
 #[async_trait]
-pub trait NodeInfoUpdater {
+pub trait NodeInfoUpdater<C: PairingCurve> {
     async fn set_node_rpc_endpoint(&mut self, node_rpc_endpoint: String) -> DataAccessResult<()>;
 
     async fn set_dkg_key_pair(
         &mut self,
-        dkg_private_key: Scalar,
-        dkg_public_key: G1,
+        dkg_private_key: C::Scalar,
+        dkg_public_key: C::G2,
     ) -> DataAccessResult<()>;
 }
 
-pub trait NodeInfoFetcher {
+pub trait NodeInfoFetcher<C: PairingCurve> {
     fn get_id_address(&self) -> DataAccessResult<Address>;
 
     fn get_node_rpc_endpoint(&self) -> DataAccessResult<&str>;
 
-    fn get_dkg_private_key(&self) -> DataAccessResult<&Scalar>;
+    fn get_dkg_private_key(&self) -> DataAccessResult<&C::Scalar>;
 
-    fn get_dkg_public_key(&self) -> DataAccessResult<&G1>;
+    fn get_dkg_public_key(&self) -> DataAccessResult<&C::G2>;
 }
 
 #[async_trait]
-pub trait GroupInfoUpdater {
+pub trait GroupInfoUpdater<PC: PairingCurve> {
     async fn save_task_info(&mut self, self_index: usize, task: DKGTask) -> DataAccessResult<()>;
 
-    async fn save_output(
+    async fn save_output<C: Curve>(
         &mut self,
         index: usize,
         epoch: usize,
-        output: DKGOutput<Curve>,
-    ) -> DataAccessResult<(G1, G1, Vec<Address>)>;
+        output: DKGOutput<C>,
+    ) -> DataAccessResult<(PC::G2, PC::G2, Vec<Address>)>;
 
     async fn update_dkg_status(
         &mut self,
@@ -73,8 +72,8 @@ pub trait GroupInfoUpdater {
     ) -> DataAccessResult<()>;
 }
 
-pub trait GroupInfoFetcher {
-    fn get_group(&self) -> DataAccessResult<&Group>;
+pub trait GroupInfoFetcher<C: PairingCurve> {
+    fn get_group(&self) -> DataAccessResult<&Group<C>>;
 
     fn get_index(&self) -> DataAccessResult<usize>;
 
@@ -88,13 +87,13 @@ pub trait GroupInfoFetcher {
 
     fn get_self_index(&self) -> DataAccessResult<usize>;
 
-    fn get_public_key(&self) -> DataAccessResult<&G1>;
+    fn get_public_key(&self) -> DataAccessResult<&C::G2>;
 
-    fn get_secret_share(&self) -> DataAccessResult<&Share<Scalar>>;
+    fn get_secret_share(&self) -> DataAccessResult<&Share<C::Scalar>>;
 
-    fn get_members(&self) -> DataAccessResult<&BTreeMap<Address, Member>>;
+    fn get_members(&self) -> DataAccessResult<&BTreeMap<Address, Member<C>>>;
 
-    fn get_member(&self, id_address: Address) -> DataAccessResult<&Member>;
+    fn get_member(&self, id_address: Address) -> DataAccessResult<&Member<C>>;
 
     fn get_committers(&self) -> DataAccessResult<Vec<Address>>;
 

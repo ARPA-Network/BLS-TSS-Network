@@ -13,7 +13,7 @@ name = "adapter-server"
 path = "src/adapter_server.rs"
 
 [dependencies]
-threshold-bls = { path = "../threshold-bls", default-features = false, features = ["bls12_381"] }
+threshold-bls = { path = "../threshold-bls", default-features = false, features = ["bn254"] }
 
 gumdrop = "0.7.0"
 rand = "0.7.3"

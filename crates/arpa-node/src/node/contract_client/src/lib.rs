@@ -76,7 +76,7 @@ pub mod coordinator {
     use dkg_core::BoardPublisher;
     use ethers_core::types::Address;
     use thiserror::Error;
-    use threshold_bls::curve::bls12381::Curve;
+    use threshold_bls::{group::Curve, schemes::bn254::G2Curve};
 
     use crate::error::{ContractClientError, ContractClientResult};
 
@@ -120,12 +120,8 @@ pub mod coordinator {
         async fn in_phase(&self) -> ContractClientResult<usize>;
     }
 
-    pub trait CoordinatorClientBuilder {
-        type Service: CoordinatorTransactions
-            + CoordinatorViews
-            + BoardPublisher<Curve>
-            + Sync
-            + Send;
+    pub trait CoordinatorClientBuilder<C: Curve = G2Curve> {
+        type Service: CoordinatorTransactions + CoordinatorViews + BoardPublisher<C> + Sync + Send;
 
         fn build_coordinator_client(&self, contract_address: Address) -> Self::Service;
     }
@@ -138,6 +134,7 @@ pub mod adapter {
     use async_trait::async_trait;
     use ethers_core::types::Address;
     use std::{collections::HashMap, future::Future};
+    use threshold_bls::group::PairingCurve;
 
     use crate::error::ContractClientResult;
 
@@ -177,8 +174,8 @@ pub mod adapter {
     }
 
     #[async_trait]
-    pub trait AdapterViews {
-        async fn get_group(&self, group_index: usize) -> ContractClientResult<Group>;
+    pub trait AdapterViews<C: PairingCurve> {
+        async fn get_group(&self, group_index: usize) -> ContractClientResult<Group<C>>;
 
         async fn get_last_output(&self) -> ContractClientResult<u64>;
 
@@ -187,7 +184,8 @@ pub mod adapter {
             index: usize,
         ) -> ContractClientResult<bool>;
 
-        async fn get_group_relay_cache(&self, group_index: usize) -> ContractClientResult<Group>;
+        async fn get_group_relay_cache(&self, group_index: usize)
+            -> ContractClientResult<Group<C>>;
 
         async fn get_group_relay_confirmation_task_state(
             &self,
@@ -214,8 +212,8 @@ pub mod adapter {
         ) -> ContractClientResult<()>;
     }
 
-    pub trait AdapterClientBuilder {
-        type Service: AdapterTransactions + AdapterViews + AdapterLogs + Send + Sync;
+    pub trait AdapterClientBuilder<C: PairingCurve> {
+        type Service: AdapterTransactions + AdapterViews<C> + AdapterLogs + Send + Sync;
 
         fn build_adapter_client(&self, main_id_address: Address) -> Self::Service;
     }

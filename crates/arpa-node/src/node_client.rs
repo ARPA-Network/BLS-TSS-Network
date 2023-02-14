@@ -23,7 +23,8 @@ use log4rs::Config as LogConfig;
 use std::fs::{self, read_to_string};
 use std::path::PathBuf;
 use structopt::StructOpt;
-use threshold_bls::schemes::bls12_381::G1Scheme;
+use threshold_bls::curve::bn254::PairingCurve as BN254;
+use threshold_bls::schemes::bn254::G2Scheme;
 use threshold_bls::sig::Scheme;
 
 #[derive(StructOpt, Debug)]
@@ -41,7 +42,12 @@ pub struct Opt {
     demo_config_index: Option<u32>,
 
     /// Set the config path
-    #[structopt(short = "c", long, parse(from_os_str), default_value = "config.yml")]
+    #[structopt(
+        short = "c",
+        long,
+        parse(from_os_str),
+        default_value = "conf/config.yml"
+    )]
     config_path: PathBuf,
 }
 
@@ -89,8 +95,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     log4rs::init_config(log_config).unwrap();
 
-    // log4rs::init_file("config/log4rs.yaml", Default::default()).unwrap();
-
     let config_path_str = opt
         .config_path
         .clone()
@@ -106,12 +110,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     });
 
     let yaml_str = match node_id.as_str() {
-        "1" => include_str!("../config_test_1.yml"),
-        "2" => include_str!("../config_test_2.yml"),
-        "3" => include_str!("../config_test_3.yml"),
-        "4" => include_str!("../config_test_4.yml"),
-        "5" => include_str!("../config_test_5.yml"),
-        "6" => include_str!("../config_test_6.yml"),
+        "1" => include_str!("../conf/config_test_1.yml"),
+        "2" => include_str!("../conf/config_test_2.yml"),
+        "3" => include_str!("../conf/config_test_3.yml"),
+        "4" => include_str!("../conf/config_test_4.yml"),
+        "5" => include_str!("../conf/config_test_5.yml"),
+        "6" => include_str!("../conf/config_test_6.yml"),
         _ => config_str,
     };
 
@@ -150,7 +154,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
             let rng = &mut rand::thread_rng();
 
-            let (dkg_private_key, dkg_public_key) = G1Scheme::keypair(rng);
+            let (dkg_private_key, dkg_public_key) = G2Scheme::keypair(rng);
 
             info!("dkg private_key: {}", dkg_private_key);
             info!("dkg public_key: {}", dkg_public_key);
@@ -183,10 +187,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             );
 
             let main_chain = GeneralMainChain::<
-                NodeInfoDBClient,
-                GroupInfoDBClient,
-                BLSTasksDBClient<RandomnessTask>,
+                NodeInfoDBClient<BN254>,
+                GroupInfoDBClient<BN254>,
+                BLSTasksDBClient<RandomnessTask, BN254>,
                 GeneralChainIdentity,
+                BN254,
             >::new(
                 0,
                 "main chain".to_string(),
@@ -251,10 +256,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             );
 
             let main_chain = GeneralMainChain::<
-                NodeInfoDBClient,
-                GroupInfoDBClient,
-                BLSTasksDBClient<RandomnessTask>,
+                NodeInfoDBClient<BN254>,
+                GroupInfoDBClient<BN254>,
+                BLSTasksDBClient<RandomnessTask, BN254>,
                 GeneralChainIdentity,
+                BN254,
             >::new(
                 0,
                 "main chain".to_string(),
@@ -277,7 +283,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
             let rng = &mut rand::thread_rng();
 
-            let (dkg_private_key, dkg_public_key) = G1Scheme::keypair(rng);
+            let (dkg_private_key, dkg_public_key) = G2Scheme::keypair(rng);
 
             info!("dkg private_key: {}", dkg_private_key);
             info!("dkg public_key: {}", dkg_public_key);
@@ -303,10 +309,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             let randomness_tasks_cache = InMemoryBLSTasksQueue::<RandomnessTask>::new();
 
             let main_chain = GeneralMainChain::<
-                InMemoryNodeInfoCache,
-                InMemoryGroupInfoCache,
+                InMemoryNodeInfoCache<BN254>,
+                InMemoryGroupInfoCache<BN254>,
                 InMemoryBLSTasksQueue<RandomnessTask>,
                 MockChainIdentity,
+                BN254,
             >::new(
                 0,
                 "main chain".to_string(),

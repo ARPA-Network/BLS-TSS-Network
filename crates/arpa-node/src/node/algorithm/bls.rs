@@ -1,70 +1,79 @@
-use crate::node::error::NodeResult;
+use anyhow::Result;
+use std::marker::PhantomData;
 use threshold_bls::{
-    curve::bls12381::{PairingCurve as BLS12_381, Scalar, G1},
+    group::PairingCurve,
     poly::Eval,
-    sig::{G1Scheme, Share, SignatureScheme, ThresholdScheme},
+    sig::{G2Scheme, Scheme, Share, SignatureScheme, ThresholdScheme},
 };
 
-pub(crate) struct SimpleBLSCore {}
+pub(crate) struct SimpleBLSCore<C: PairingCurve> {
+    c: PhantomData<C>,
+}
 
-pub(crate) trait BLSCore {
+pub(crate) trait BLSCore<C: PairingCurve> {
     /// Partially signs a message with a share of the private key
-    fn partial_sign(&self, private: &Share<Scalar>, msg: &[u8]) -> NodeResult<Vec<u8>>;
+    fn partial_sign(
+        private: &Share<<G2Scheme<C> as Scheme>::Private>,
+        msg: &[u8],
+    ) -> Result<Vec<u8>>;
 
     /// Verifies a partial signature on a message against the public polynomial
-    fn partial_verify(&self, partial_public_key: &G1, msg: &[u8], partial: &[u8])
-        -> NodeResult<()>;
+    fn partial_verify(
+        partial_public_key: &<G2Scheme<C> as Scheme>::Public,
+        msg: &[u8],
+        partial: &[u8],
+    ) -> Result<()>;
 
     /// Aggregates all partials signature together. Note that this method does
     /// not verify if the partial signatures are correct or not; it only
     /// aggregates them.
-    fn aggregate(&self, threshold: usize, partials: &[Vec<u8>]) -> NodeResult<Vec<u8>>;
+    fn aggregate(threshold: usize, partials: &[Vec<u8>]) -> Result<Vec<u8>>;
 
     /// Verifies that the signature on the provided message was produced by the public key
-    fn verify(&self, public: &G1, msg: &[u8], sig: &[u8]) -> NodeResult<()>;
+    fn verify(public: &<G2Scheme<C> as Scheme>::Public, msg: &[u8], sig: &[u8]) -> Result<()>;
 
     fn verify_partial_sigs(
-        &self,
-        publics: &[G1],
+        publics: &[<G2Scheme<C> as Scheme>::Public],
         msg: &[u8],
         partial_sigs: &[&[u8]],
-    ) -> NodeResult<()>;
+    ) -> Result<()>;
 }
 
-impl BLSCore for SimpleBLSCore {
-    fn partial_sign(&self, private: &Share<Scalar>, msg: &[u8]) -> NodeResult<Vec<u8>> {
-        let partial_signature = G1Scheme::<BLS12_381>::partial_sign(private, msg)?;
+impl<C: PairingCurve + 'static> BLSCore<C> for SimpleBLSCore<C> {
+    fn partial_sign(
+        private: &Share<<G2Scheme<C> as Scheme>::Private>,
+        msg: &[u8],
+    ) -> Result<Vec<u8>> {
+        let partial_signature = G2Scheme::<C>::partial_sign(private, msg)?;
         Ok(partial_signature)
     }
 
     fn partial_verify(
-        &self,
-        partial_public_key: &G1,
+        partial_public_key: &<G2Scheme<C> as Scheme>::Public,
         msg: &[u8],
         partial: &[u8],
-    ) -> NodeResult<()> {
+    ) -> Result<()> {
         let partial: Eval<Vec<u8>> = bincode::deserialize(partial)?;
-        self.verify(partial_public_key, msg, &partial.value)?;
+        G2Scheme::<C>::verify(partial_public_key, msg, &partial.value)?;
         Ok(())
     }
 
-    fn aggregate(&self, threshold: usize, partials: &[Vec<u8>]) -> NodeResult<Vec<u8>> {
-        let signature = G1Scheme::<BLS12_381>::aggregate(threshold, partials)?;
+    fn aggregate(threshold: usize, partials: &[Vec<u8>]) -> Result<Vec<u8>> {
+        let signature = G2Scheme::<C>::aggregate(threshold, partials)?;
         Ok(signature)
     }
 
-    fn verify(&self, public: &G1, msg: &[u8], sig: &[u8]) -> NodeResult<()> {
-        G1Scheme::<BLS12_381>::verify(public, msg, sig)?;
+    fn verify(public: &<G2Scheme<C> as Scheme>::Public, msg: &[u8], sig: &[u8]) -> Result<()> {
+        G2Scheme::<C>::verify(public, msg, sig)?;
         Ok(())
     }
 
     fn verify_partial_sigs(
-        &self,
-        publics: &[G1],
+        publics: &[<G2Scheme<C> as Scheme>::Public],
         msg: &[u8],
         partial_sigs: &[&[u8]],
-    ) -> NodeResult<()> {
-        G1Scheme::<BLS12_381>::aggregation_verify_on_the_same_msg(publics, msg, partial_sigs)?;
+    ) -> Result<()> {
+        G2Scheme::<C>::aggregation_verify_on_the_same_msg(publics, msg, partial_sigs)?;
         Ok(())
     }
 }

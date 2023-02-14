@@ -9,17 +9,25 @@ use arpa_node_core::ChainIdentity;
 use arpa_node_dal::GroupInfoFetcher;
 use async_trait::async_trait;
 use log::error;
-use std::sync::Arc;
+use std::{marker::PhantomData, sync::Arc};
+use threshold_bls::group::PairingCurve;
 use tokio::sync::RwLock;
 use tokio_retry::{strategy::FixedInterval, RetryIf};
 
-pub struct PreGroupingListener<G: GroupInfoFetcher, I: ChainIdentity + ControllerClientBuilder> {
+pub struct PreGroupingListener<
+    G: GroupInfoFetcher<C>,
+    I: ChainIdentity + ControllerClientBuilder,
+    C: PairingCurve,
+> {
     main_chain_identity: Arc<RwLock<I>>,
     group_cache: Arc<RwLock<G>>,
     eq: Arc<RwLock<EventQueue>>,
+    c: PhantomData<C>,
 }
 
-impl<G: GroupInfoFetcher, I: ChainIdentity + ControllerClientBuilder> PreGroupingListener<G, I> {
+impl<G: GroupInfoFetcher<C>, I: ChainIdentity + ControllerClientBuilder, C: PairingCurve>
+    PreGroupingListener<G, I, C>
+{
     pub fn new(
         main_chain_identity: Arc<RwLock<I>>,
         group_cache: Arc<RwLock<G>>,
@@ -29,15 +37,17 @@ impl<G: GroupInfoFetcher, I: ChainIdentity + ControllerClientBuilder> PreGroupin
             main_chain_identity,
             group_cache,
             eq,
+            c: PhantomData,
         }
     }
 }
 
 #[async_trait]
 impl<
-        G: GroupInfoFetcher + Sync + Send,
+        G: GroupInfoFetcher<C> + Sync + Send,
         I: ChainIdentity + ControllerClientBuilder + Sync + Send,
-    > EventPublisher<NewDKGTask> for PreGroupingListener<G, I>
+        C: PairingCurve + Sync + Send,
+    > EventPublisher<NewDKGTask> for PreGroupingListener<G, I, C>
 {
     async fn publish(&self, event: NewDKGTask) {
         self.eq.read().await.publish(event).await;
@@ -46,9 +56,10 @@ impl<
 
 #[async_trait]
 impl<
-        G: GroupInfoFetcher + Sync + Send + 'static,
+        G: GroupInfoFetcher<C> + Sync + Send + 'static,
         I: ChainIdentity + ControllerClientBuilder + Sync + Send,
-    > Listener for PreGroupingListener<G, I>
+        C: PairingCurve + Sync + Send,
+    > Listener for PreGroupingListener<G, I, C>
 {
     async fn start(mut self) -> NodeResult<()> {
         let client = self

@@ -19,6 +19,9 @@ pub enum DataAccessError {
 
     #[error(transparent)]
     DBError(anyhow::Error),
+
+    #[error("could not deserialize: {0}")]
+    DeserializationError(#[from] bincode::Error),
 }
 
 #[derive(Debug, Error, PartialEq)]

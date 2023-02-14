@@ -12,19 +12,26 @@ use arpa_node_dal::cache::RandomnessResultCache;
 use async_trait::async_trait;
 use ethers::types::Address;
 use log::{debug, error, info};
-use std::{collections::HashMap, sync::Arc};
+use std::{collections::HashMap, marker::PhantomData, sync::Arc};
+use threshold_bls::group::PairingCurve;
 use tokio::sync::RwLock;
 
 #[derive(Debug)]
-pub struct RandomnessSignatureAggregationSubscriber<I: ChainIdentity + AdapterClientBuilder> {
+pub struct RandomnessSignatureAggregationSubscriber<
+    I: ChainIdentity + AdapterClientBuilder<C>,
+    C: PairingCurve,
+> {
     pub chain_id: usize,
     id_address: Address,
     chain_identity: Arc<RwLock<I>>,
     eq: Arc<RwLock<EventQueue>>,
     ts: Arc<RwLock<SimpleDynamicTaskScheduler>>,
+    c: PhantomData<C>,
 }
 
-impl<I: ChainIdentity + AdapterClientBuilder> RandomnessSignatureAggregationSubscriber<I> {
+impl<I: ChainIdentity + AdapterClientBuilder<C>, C: PairingCurve>
+    RandomnessSignatureAggregationSubscriber<I, C>
+{
     pub fn new(
         chain_id: usize,
         id_address: Address,
@@ -38,6 +45,7 @@ impl<I: ChainIdentity + AdapterClientBuilder> RandomnessSignatureAggregationSubs
             chain_identity,
             eq,
             ts,
+            c: PhantomData,
         }
     }
 }
@@ -53,14 +61,18 @@ pub trait FulfillRandomnessHandler {
     ) -> NodeResult<()>;
 }
 
-pub struct GeneralFulfillRandomnessHandler<I: ChainIdentity + AdapterClientBuilder> {
+pub struct GeneralFulfillRandomnessHandler<
+    I: ChainIdentity + AdapterClientBuilder<C>,
+    C: PairingCurve,
+> {
     id_address: Address,
     chain_identity: Arc<RwLock<I>>,
+    c: PhantomData<C>,
 }
 
 #[async_trait]
-impl<I: ChainIdentity + AdapterClientBuilder + Sync + Send> FulfillRandomnessHandler
-    for GeneralFulfillRandomnessHandler<I>
+impl<I: ChainIdentity + AdapterClientBuilder<C> + Sync + Send, C: PairingCurve + Sync + Send>
+    FulfillRandomnessHandler for GeneralFulfillRandomnessHandler<I, C>
 {
     async fn handle(
         &self,
@@ -103,8 +115,10 @@ impl<I: ChainIdentity + AdapterClientBuilder + Sync + Send> FulfillRandomnessHan
 }
 
 #[async_trait]
-impl<I: ChainIdentity + AdapterClientBuilder + std::fmt::Debug + Sync + Send + 'static> Subscriber
-    for RandomnessSignatureAggregationSubscriber<I>
+impl<
+        I: ChainIdentity + AdapterClientBuilder<C> + std::fmt::Debug + Sync + Send + 'static,
+        C: PairingCurve + std::fmt::Debug + Sync + Send + 'static,
+    > Subscriber for RandomnessSignatureAggregationSubscriber<I, C>
 {
     async fn notify(&self, topic: Topic, payload: &(dyn DebuggableEvent)) -> NodeResult<()> {
         debug!("{:?}", topic);
@@ -126,9 +140,7 @@ impl<I: ChainIdentity + AdapterClientBuilder + std::fmt::Debug + Sync + Send + '
                 partial_signatures,
             } = signature.clone();
 
-            let bls_core = SimpleBLSCore {};
-
-            let signature = bls_core.aggregate(
+            let signature = SimpleBLSCore::<C>::aggregate(
                 threshold,
                 &partial_signatures.values().cloned().collect::<Vec<_>>(),
             )?;
@@ -143,6 +155,7 @@ impl<I: ChainIdentity + AdapterClientBuilder + std::fmt::Debug + Sync + Send + '
                     let handler = GeneralFulfillRandomnessHandler {
                         id_address,
                         chain_identity,
+                        c: PhantomData,
                     };
 
                     if let Err(e) = handler
@@ -176,7 +189,9 @@ impl<I: ChainIdentity + AdapterClientBuilder + std::fmt::Debug + Sync + Send + '
     }
 }
 
-impl<I: ChainIdentity + AdapterClientBuilder + std::fmt::Debug + Sync + Send + 'static>
-    DebuggableSubscriber for RandomnessSignatureAggregationSubscriber<I>
+impl<
+        I: ChainIdentity + AdapterClientBuilder<C> + std::fmt::Debug + Sync + Send + 'static,
+        C: PairingCurve + std::fmt::Debug + Sync + Send + 'static,
+    > DebuggableSubscriber for RandomnessSignatureAggregationSubscriber<I, C>
 {
 }

@@ -4,6 +4,7 @@ use arpa_node_contract_client::{
 };
 use ethers::types::Address;
 use std::env;
+use threshold_bls::curve::bn254::PairingCurve as BN254;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -39,7 +40,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
         println!("request randomness successfully");
     } else if instruction == "last_output" {
-        let res = client.get_last_output().await?;
+        let res = AdapterViews::<BN254>::get_last_output(&client).await?;
 
         println!("last_randomness_output: {}", res);
     }

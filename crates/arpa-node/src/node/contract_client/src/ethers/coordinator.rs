@@ -17,7 +17,7 @@ use dkg_core::{
 use ethers::prelude::*;
 use log::info;
 use std::{convert::TryFrom, sync::Arc, time::Duration};
-use threshold_bls::curve::bls12381::Curve;
+use threshold_bls::group::Curve;
 
 #[allow(clippy::useless_conversion)]
 pub mod coordinator_stub {
@@ -51,7 +51,7 @@ impl CoordinatorClient {
     }
 }
 
-impl CoordinatorClientBuilder for GeneralChainIdentity {
+impl<C: Curve + 'static> CoordinatorClientBuilder<C> for GeneralChainIdentity {
     type Service = CoordinatorClient;
 
     fn build_coordinator_client(&self, contract_address: Address) -> CoordinatorClient {
@@ -199,10 +199,10 @@ impl CoordinatorViews for CoordinatorClient {
 }
 
 #[async_trait]
-impl BoardPublisher<Curve> for CoordinatorClient {
+impl<C: Curve + 'static> BoardPublisher<C> for CoordinatorClient {
     type Error = DKGContractError;
 
-    async fn publish_shares(&mut self, shares: BundledShares<Curve>) -> Result<(), Self::Error> {
+    async fn publish_shares(&mut self, shares: BundledShares<C>) -> Result<(), Self::Error> {
         info!("called publish_shares");
         let serialized = bincode::serialize(&shares)?;
         self.publish(serialized).await.map_err(|e| e.into())
@@ -216,7 +216,7 @@ impl BoardPublisher<Curve> for CoordinatorClient {
 
     async fn publish_justifications(
         &mut self,
-        justifications: BundledJustification<Curve>,
+        justifications: BundledJustification<C>,
     ) -> Result<(), Self::Error> {
         let serialized = bincode::serialize(&justifications)?;
         self.publish(serialized).await.map_err(|e| e.into())
@@ -237,7 +237,7 @@ pub mod coordinator_tests {
     use std::env;
     use std::path::PathBuf;
     use std::{convert::TryFrom, sync::Arc, time::Duration};
-    use threshold_bls::schemes::bls12_381::G1Scheme;
+    use threshold_bls::schemes::bn254::G2Scheme;
 
     include!("../../contract_stub/coordinator.rs");
 
@@ -303,7 +303,7 @@ pub mod coordinator_tests {
             .unwrap();
 
         // mock dkg key pair
-        let (_, dkg_public_key) = dkg_core::generate_keypair::<G1Scheme>();
+        let (_, dkg_public_key) = dkg_core::generate_keypair::<G2Scheme>();
 
         let nodes = vec![wallet.address()];
         let public_keys = vec![bincode::serialize(&dkg_public_key).unwrap().into()];

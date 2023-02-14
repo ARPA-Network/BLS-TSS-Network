@@ -5,7 +5,7 @@ use super::types::{
 };
 use super::utils::calculate_hash;
 use std::collections::HashMap;
-use threshold_bls::schemes::bls12_381::G1Scheme as SigScheme;
+use threshold_bls::schemes::bn254::G2Scheme as SigScheme;
 use threshold_bls::sig::SignatureScheme;
 
 pub const REWARD_PER_SIGNATURE: usize = 50;
@@ -204,7 +204,7 @@ impl AdapterTransactions for Adapter {
         let mut assigned_group_index = self.last_assigned_group_index;
 
         loop {
-            assigned_group_index = (assigned_group_index + 1) % (self.groups.len() + 1);
+            assigned_group_index = (assigned_group_index + 1) % (self.groups.len());
 
             if valid_group_indices.contains(&assigned_group_index) {
                 break;

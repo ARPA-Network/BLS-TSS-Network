@@ -7,22 +7,28 @@ use crate::node::{
 use arpa_node_dal::{cache::RandomnessResultCache, GroupInfoFetcher, SignatureResultCacheUpdater};
 use async_trait::async_trait;
 use ethers::types::Address;
-use std::sync::Arc;
+use std::{marker::PhantomData, sync::Arc};
+use threshold_bls::group::PairingCurve;
 use tokio::sync::RwLock;
 
 pub struct RandomnessSignatureAggregationListener<
-    G: GroupInfoFetcher,
+    G: GroupInfoFetcher<PC>,
     C: SignatureResultCacheUpdater<RandomnessResultCache>,
+    PC: PairingCurve,
 > {
     chain_id: usize,
     id_address: Address,
     group_cache: Arc<RwLock<G>>,
     randomness_signature_cache: Arc<RwLock<C>>,
     eq: Arc<RwLock<EventQueue>>,
+    c: PhantomData<PC>,
 }
 
-impl<G: GroupInfoFetcher, C: SignatureResultCacheUpdater<RandomnessResultCache>>
-    RandomnessSignatureAggregationListener<G, C>
+impl<
+        G: GroupInfoFetcher<PC>,
+        C: SignatureResultCacheUpdater<RandomnessResultCache>,
+        PC: PairingCurve,
+    > RandomnessSignatureAggregationListener<G, C, PC>
 {
     pub fn new(
         chain_id: usize,
@@ -37,16 +43,18 @@ impl<G: GroupInfoFetcher, C: SignatureResultCacheUpdater<RandomnessResultCache>>
             group_cache,
             randomness_signature_cache,
             eq,
+            c: PhantomData,
         }
     }
 }
 
 #[async_trait]
 impl<
-        G: GroupInfoFetcher + Sync + Send,
+        G: GroupInfoFetcher<PC> + Sync + Send,
         C: SignatureResultCacheUpdater<RandomnessResultCache> + Sync + Send,
+        PC: PairingCurve + Sync + Send,
     > EventPublisher<ReadyToFulfillRandomnessTask>
-    for RandomnessSignatureAggregationListener<G, C>
+    for RandomnessSignatureAggregationListener<G, C, PC>
 {
     async fn publish(&self, event: ReadyToFulfillRandomnessTask) {
         self.eq.read().await.publish(event).await;
@@ -55,9 +63,10 @@ impl<
 
 #[async_trait]
 impl<
-        G: GroupInfoFetcher + Sync + Send,
+        G: GroupInfoFetcher<PC> + Sync + Send,
         C: SignatureResultCacheUpdater<RandomnessResultCache> + Sync + Send,
-    > Listener for RandomnessSignatureAggregationListener<G, C>
+        PC: PairingCurve + Sync + Send,
+    > Listener for RandomnessSignatureAggregationListener<G, C, PC>
 {
     async fn start(mut self) -> NodeResult<()> {
         loop {

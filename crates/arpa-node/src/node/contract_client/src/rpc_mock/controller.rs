@@ -19,6 +19,7 @@ use arpa_node_core::{
 use async_trait::async_trait;
 use ethers::types::Address;
 use log::{debug, error};
+use threshold_bls::group::PairingCurve;
 use tonic::{Code, Request};
 
 pub mod controller_stub {
@@ -322,7 +323,7 @@ impl From<NodeReply> for Node {
     }
 }
 
-impl From<Member> for ModelMember {
+impl<C: PairingCurve> From<Member> for ModelMember<C> {
     fn from(member: Member) -> Self {
         let partial_public_key = if member.partial_public_key.is_empty() {
             None

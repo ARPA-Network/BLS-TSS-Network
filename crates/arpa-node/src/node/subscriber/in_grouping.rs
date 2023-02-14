@@ -18,27 +18,31 @@ use async_trait::async_trait;
 use core::fmt::Debug;
 use log::{debug, error};
 use rand::{prelude::ThreadRng, RngCore};
-use std::sync::Arc;
+use std::{marker::PhantomData, sync::Arc};
+use threshold_bls::{curve::bn254::Scalar, group::PairingCurve};
 use tokio::sync::RwLock;
 
 #[derive(Debug)]
 pub struct InGroupingSubscriber<
-    N: NodeInfoFetcher,
-    G: GroupInfoFetcher + GroupInfoUpdater,
+    N: NodeInfoFetcher<C>,
+    G: GroupInfoFetcher<C> + GroupInfoUpdater<C>,
     I: ChainIdentity + ControllerClientBuilder + CoordinatorClientBuilder + std::fmt::Debug,
+    C: PairingCurve,
 > {
     main_chain_identity: Arc<RwLock<I>>,
     node_cache: Arc<RwLock<N>>,
     group_cache: Arc<RwLock<G>>,
     eq: Arc<RwLock<EventQueue>>,
     ts: Arc<RwLock<SimpleDynamicTaskScheduler>>,
+    c: PhantomData<C>,
 }
 
 impl<
-        N: NodeInfoFetcher,
-        G: GroupInfoFetcher + GroupInfoUpdater,
+        N: NodeInfoFetcher<C>,
+        G: GroupInfoFetcher<C> + GroupInfoUpdater<C>,
         I: ChainIdentity + ControllerClientBuilder + CoordinatorClientBuilder + std::fmt::Debug,
-    > InGroupingSubscriber<N, G, I>
+        C: PairingCurve,
+    > InGroupingSubscriber<N, G, I, C>
 {
     pub fn new(
         main_chain_identity: Arc<RwLock<I>>,
@@ -53,6 +57,7 @@ impl<
             group_cache,
             eq,
             ts,
+            c: PhantomData,
         }
     }
 }
@@ -61,22 +66,25 @@ pub struct AllInOneDKGHandler<
     F: Fn() -> R,
     R: RngCore,
     I: ChainIdentity + ControllerClientBuilder + CoordinatorClientBuilder,
-    N: NodeInfoFetcher,
-    G: GroupInfoFetcher + GroupInfoUpdater,
+    N: NodeInfoFetcher<C>,
+    G: GroupInfoFetcher<C> + GroupInfoUpdater<C>,
+    C: PairingCurve,
 > {
     rng: F,
     main_chain_identity: Arc<RwLock<I>>,
     node_cache: Arc<RwLock<N>>,
     group_cache: Arc<RwLock<G>>,
+    c: PhantomData<C>,
 }
 
 impl<
         F: Fn() -> R,
         R: RngCore,
         I: ChainIdentity + ControllerClientBuilder + CoordinatorClientBuilder,
-        N: NodeInfoFetcher,
-        G: GroupInfoFetcher + GroupInfoUpdater,
-    > AllInOneDKGHandler<F, R, I, N, G>
+        N: NodeInfoFetcher<C>,
+        G: GroupInfoFetcher<C> + GroupInfoUpdater<C>,
+        C: PairingCurve,
+    > AllInOneDKGHandler<F, R, I, N, G, C>
 {
     pub fn new(
         rng: F,
@@ -89,6 +97,7 @@ impl<
             main_chain_identity,
             node_cache,
             group_cache,
+            c: PhantomData,
         }
     }
 }
@@ -106,9 +115,10 @@ impl<
         F: Fn() -> R + Debug + Send + Sync + Copy + 'static,
         R: RngCore + 'static,
         I: ChainIdentity + ControllerClientBuilder + CoordinatorClientBuilder + Sync + Send,
-        N: NodeInfoFetcher + Sync + Send,
-        G: GroupInfoFetcher + GroupInfoUpdater + Sync + Send,
-    > DKGHandler<F, R> for AllInOneDKGHandler<F, R, I, N, G>
+        N: NodeInfoFetcher<C> + Sync + Send,
+        G: GroupInfoFetcher<C> + GroupInfoUpdater<C> + Sync + Send,
+        C: PairingCurve + Sync + Send + 'static,
+    > DKGHandler<F, R> for AllInOneDKGHandler<F, R, I, N, G, C>
 {
     async fn handle(&mut self, task: DKGTask) -> NodeResult<()>
     where
@@ -128,7 +138,9 @@ impl<
             .await
             .build_controller_client();
 
-        let dkg_private_key = *self.node_cache.read().await.get_dkg_private_key()?;
+        let dkg_private_key = self.node_cache.read().await.get_dkg_private_key()?.clone();
+
+        let dkg_private_key: Scalar = bincode::deserialize(&bincode::serialize(&dkg_private_key)?)?;
 
         let task_group_index = task.group_index;
 
@@ -169,15 +181,15 @@ impl<
 
 #[async_trait]
 impl<
-        N: NodeInfoFetcher
-            + NodeInfoUpdater
+        N: NodeInfoFetcher<C>
+            + NodeInfoUpdater<C>
             + MdcContextUpdater
             + std::fmt::Debug
             + Sync
             + Send
             + 'static,
-        G: GroupInfoFetcher
-            + GroupInfoUpdater
+        G: GroupInfoFetcher<C>
+            + GroupInfoUpdater<C>
             + MdcContextUpdater
             + std::fmt::Debug
             + Sync
@@ -190,7 +202,8 @@ impl<
             + Sync
             + Send
             + 'static,
-    > Subscriber for InGroupingSubscriber<N, G, I>
+        C: PairingCurve + std::fmt::Debug + Sync + Send + 'static,
+    > Subscriber for InGroupingSubscriber<N, G, I, C>
 {
     async fn notify(&self, topic: Topic, payload: &(dyn DebuggableEvent)) -> NodeResult<()> {
         debug!("{:?}", topic);
@@ -258,15 +271,15 @@ impl<
 }
 
 impl<
-        N: NodeInfoFetcher
-            + NodeInfoUpdater
+        N: NodeInfoFetcher<C>
+            + NodeInfoUpdater<C>
             + MdcContextUpdater
             + std::fmt::Debug
             + Sync
             + Send
             + 'static,
-        G: GroupInfoFetcher
-            + GroupInfoUpdater
+        G: GroupInfoFetcher<C>
+            + GroupInfoUpdater<C>
             + MdcContextUpdater
             + std::fmt::Debug
             + Sync
@@ -279,6 +292,7 @@ impl<
             + Sync
             + Send
             + 'static,
-    > DebuggableSubscriber for InGroupingSubscriber<N, G, I>
+        C: PairingCurve + std::fmt::Debug + Sync + Send + 'static,
+    > DebuggableSubscriber for InGroupingSubscriber<N, G, I, C>
 {
 }

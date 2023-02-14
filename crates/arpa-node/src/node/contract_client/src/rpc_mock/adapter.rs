@@ -21,6 +21,8 @@ use ethers::types::Address;
 use log::{debug, error};
 use std::collections::{BTreeMap, HashMap};
 use std::future::Future;
+use std::marker::PhantomData;
+use threshold_bls::group::PairingCurve;
 use tonic::{Code, Request, Response};
 
 pub mod adapter_stub {
@@ -52,7 +54,7 @@ impl MockAdapterClient {
     }
 }
 
-impl AdapterClientBuilder for MockChainIdentity {
+impl<C: PairingCurve> AdapterClientBuilder<C> for MockChainIdentity {
     type Service = MockAdapterClient;
 
     fn build_adapter_client(&self, main_id_address: Address) -> MockAdapterClient {
@@ -350,8 +352,8 @@ impl AdapterMockHelper for MockAdapterClient {
 }
 
 #[async_trait]
-impl AdapterViews for MockAdapterClient {
-    async fn get_group(&self, group_index: usize) -> ContractClientResult<Group> {
+impl<C: PairingCurve> AdapterViews<C> for MockAdapterClient {
+    async fn get_group(&self, group_index: usize) -> ContractClientResult<Group<C>> {
         let request = Request::new(GetGroupRequest {
             index: group_index as u32,
         });
@@ -402,7 +404,7 @@ impl AdapterViews for MockAdapterClient {
             .map_err(|status| status.into())
     }
 
-    async fn get_group_relay_cache(&self, group_index: usize) -> ContractClientResult<Group> {
+    async fn get_group_relay_cache(&self, group_index: usize) -> ContractClientResult<Group<C>> {
         let request = Request::new(GetGroupRelayCacheRequest {
             index: group_index as u32,
         });
@@ -437,7 +439,7 @@ impl AdapterViews for MockAdapterClient {
     }
 }
 
-impl From<Member> for ModelMember {
+impl<C: PairingCurve> From<Member> for ModelMember<C> {
     fn from(member: Member) -> Self {
         let partial_public_key = if member.partial_public_key.is_empty() {
             None
@@ -454,7 +456,7 @@ impl From<Member> for ModelMember {
     }
 }
 
-fn parse_group_reply(reply: Response<GroupReply>) -> Group {
+fn parse_group_reply<C: PairingCurve>(reply: Response<GroupReply>) -> Group<C> {
     let GroupReply {
         index,
         epoch,
@@ -467,7 +469,7 @@ fn parse_group_reply(reply: Response<GroupReply>) -> Group {
         ..
     } = reply.into_inner();
 
-    let members: BTreeMap<Address, ModelMember> = members
+    let members: BTreeMap<Address, ModelMember<C>> = members
         .into_iter()
         .map(|(id_address, m)| (id_address.parse().unwrap(), m.into()))
         .collect();
@@ -489,5 +491,6 @@ fn parse_group_reply(reply: Response<GroupReply>) -> Group {
         public_key,
         members,
         committers,
+        c: PhantomData,
     }
 }

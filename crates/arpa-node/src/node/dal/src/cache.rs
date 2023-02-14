@@ -17,11 +17,8 @@ use ethers_core::types::Address;
 use log::info;
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, HashMap};
-use threshold_bls::group::Element;
-use threshold_bls::{
-    curve::bls12381::{Curve, Scalar, G1},
-    sig::Share,
-};
+use threshold_bls::group::{Curve, Element, PairingCurve};
+use threshold_bls::sig::Share;
 
 #[derive(Debug, Default)]
 pub struct InMemoryBlockInfoCache {
@@ -47,14 +44,14 @@ impl BlockInfoUpdater for InMemoryBlockInfoCache {
 }
 
 #[derive(Clone, Serialize, Deserialize)]
-pub struct InMemoryNodeInfoCache {
+pub struct InMemoryNodeInfoCache<C: PairingCurve> {
     pub(crate) id_address: Address,
     pub(crate) node_rpc_endpoint: Option<String>,
-    pub(crate) dkg_private_key: Option<Scalar>,
-    pub(crate) dkg_public_key: Option<G1>,
+    pub(crate) dkg_private_key: Option<C::Scalar>,
+    pub(crate) dkg_public_key: Option<C::G2>,
 }
 
-impl std::fmt::Debug for InMemoryNodeInfoCache {
+impl<C: PairingCurve> std::fmt::Debug for InMemoryNodeInfoCache<C> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("InMemoryNodeInfoCache")
             .field("id_address", &self.id_address)
@@ -65,7 +62,7 @@ impl std::fmt::Debug for InMemoryNodeInfoCache {
     }
 }
 
-impl InMemoryNodeInfoCache {
+impl<C: PairingCurve> InMemoryNodeInfoCache<C> {
     pub fn new(id_address: Address) -> Self {
         InMemoryNodeInfoCache {
             id_address,
@@ -78,8 +75,8 @@ impl InMemoryNodeInfoCache {
     pub fn rebuild(
         id_address: Address,
         node_rpc_endpoint: String,
-        dkg_private_key: Scalar,
-        dkg_public_key: G1,
+        dkg_private_key: C::Scalar,
+        dkg_public_key: C::G2,
     ) -> Self {
         InMemoryNodeInfoCache {
             id_address,
@@ -90,14 +87,14 @@ impl InMemoryNodeInfoCache {
     }
 }
 
-impl MdcContextUpdater for InMemoryNodeInfoCache {
+impl<C: PairingCurve> MdcContextUpdater for InMemoryNodeInfoCache<C> {
     fn refresh_mdc_entry(&self) {
         log_mdc::insert("node_info", serde_json::to_string(&self).unwrap());
     }
 }
 
 #[async_trait]
-impl NodeInfoUpdater for InMemoryNodeInfoCache {
+impl<C: PairingCurve> NodeInfoUpdater<C> for InMemoryNodeInfoCache<C> {
     async fn set_node_rpc_endpoint(&mut self, node_rpc_endpoint: String) -> DataAccessResult<()> {
         self.node_rpc_endpoint = Some(node_rpc_endpoint);
         self.refresh_mdc_entry();
@@ -106,8 +103,8 @@ impl NodeInfoUpdater for InMemoryNodeInfoCache {
 
     async fn set_dkg_key_pair(
         &mut self,
-        dkg_private_key: Scalar,
-        dkg_public_key: G1,
+        dkg_private_key: C::Scalar,
+        dkg_public_key: C::G2,
     ) -> DataAccessResult<()> {
         self.dkg_private_key = Some(dkg_private_key);
         self.dkg_public_key = Some(dkg_public_key);
@@ -116,7 +113,7 @@ impl NodeInfoUpdater for InMemoryNodeInfoCache {
     }
 }
 
-impl NodeInfoFetcher for InMemoryNodeInfoCache {
+impl<C: PairingCurve> NodeInfoFetcher<C> for InMemoryNodeInfoCache<C> {
     fn get_id_address(&self) -> DataAccessResult<Address> {
         Ok(self.id_address)
     }
@@ -128,13 +125,13 @@ impl NodeInfoFetcher for InMemoryNodeInfoCache {
             .ok_or_else(|| NodeInfoError::NoRpcEndpoint.into())
     }
 
-    fn get_dkg_private_key(&self) -> DataAccessResult<&Scalar> {
+    fn get_dkg_private_key(&self) -> DataAccessResult<&C::Scalar> {
         self.dkg_private_key
             .as_ref()
             .ok_or_else(|| NodeInfoError::NoDKGKeyPair.into())
     }
 
-    fn get_dkg_public_key(&self) -> DataAccessResult<&G1> {
+    fn get_dkg_public_key(&self) -> DataAccessResult<&C::G2> {
         self.dkg_public_key
             .as_ref()
             .ok_or_else(|| NodeInfoError::NoDKGKeyPair.into())
@@ -142,21 +139,21 @@ impl NodeInfoFetcher for InMemoryNodeInfoCache {
 }
 
 #[derive(Clone, Serialize, Deserialize)]
-pub struct InMemoryGroupInfoCache {
-    pub(crate) share: Option<Share<Scalar>>,
-    pub(crate) group: Group,
+pub struct InMemoryGroupInfoCache<C: PairingCurve> {
+    pub(crate) share: Option<Share<C::Scalar>>,
+    pub(crate) group: Group<C>,
     pub(crate) dkg_status: DKGStatus,
     pub(crate) self_index: usize,
     pub(crate) dkg_start_block_height: usize,
 }
 
-impl Default for InMemoryGroupInfoCache {
+impl<C: PairingCurve> Default for InMemoryGroupInfoCache<C> {
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl std::fmt::Debug for InMemoryGroupInfoCache {
+impl<C: PairingCurve> std::fmt::Debug for InMemoryGroupInfoCache<C> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("InMemoryGroupInfoCache")
             .field("share", &"ignored")
@@ -168,9 +165,9 @@ impl std::fmt::Debug for InMemoryGroupInfoCache {
     }
 }
 
-impl InMemoryGroupInfoCache {
+impl<C: PairingCurve> InMemoryGroupInfoCache<C> {
     pub fn new() -> Self {
-        let group: Group = Group::new();
+        let group: Group<C> = Group::new();
 
         InMemoryGroupInfoCache {
             share: None,
@@ -182,8 +179,8 @@ impl InMemoryGroupInfoCache {
     }
 
     pub fn rebuild(
-        share: Option<Share<Scalar>>,
-        group: Group,
+        share: Option<Share<C::Scalar>>,
+        group: Group<C>,
         dkg_status: DKGStatus,
         self_index: usize,
         dkg_start_block_height: usize,
@@ -206,14 +203,16 @@ impl InMemoryGroupInfoCache {
     }
 }
 
-impl MdcContextUpdater for InMemoryGroupInfoCache {
+impl<C: PairingCurve + Serialize> MdcContextUpdater for InMemoryGroupInfoCache<C> {
     fn refresh_mdc_entry(&self) {
         log_mdc::insert("group_info", serde_json::to_string(&self).unwrap());
     }
 }
 
 #[async_trait]
-impl GroupInfoUpdater for InMemoryGroupInfoCache {
+impl<PC: PairingCurve + Send + Sync + Serialize> GroupInfoUpdater<PC>
+    for InMemoryGroupInfoCache<PC>
+{
     async fn update_dkg_status(
         &mut self,
         index: usize,
@@ -282,12 +281,12 @@ impl GroupInfoUpdater for InMemoryGroupInfoCache {
         Ok(())
     }
 
-    async fn save_output(
+    async fn save_output<C: Curve>(
         &mut self,
         index: usize,
         epoch: usize,
-        output: DKGOutput<Curve>,
-    ) -> DataAccessResult<(G1, G1, Vec<Address>)> {
+        output: DKGOutput<C>,
+    ) -> DataAccessResult<(PC::G2, PC::G2, Vec<Address>)> {
         self.only_has_group_task()?;
 
         if self.group.index != index {
@@ -318,16 +317,19 @@ impl GroupInfoUpdater for InMemoryGroupInfoCache {
             .map(|(id_address, _)| *id_address)
             .collect::<Vec<_>>();
 
-        let public_key = *output.public.public_key();
+        let public_key: PC::G2 =
+            bincode::deserialize(&bincode::serialize(&output.public.public_key())?)?;
 
-        let mut partial_public_key = G1::new();
+        let mut partial_public_key = PC::G2::new();
 
-        self.share = Some(output.share);
+        let share = bincode::deserialize(&bincode::serialize(&output.share)?)?;
+
+        self.share = Some(share);
         self.group.size = qualified_node_indices.len();
         self.group
             .members
             .retain(|node, _| !disqualified_nodes.contains(node));
-        self.group.public_key = Some(public_key);
+        self.group.public_key = Some(public_key.clone());
 
         for (_, member) in self.group.members.iter_mut() {
             if let Some(node) = output
@@ -341,10 +343,13 @@ impl GroupInfoUpdater for InMemoryGroupInfoCache {
                 }
             }
 
-            member.partial_public_key = Some(output.public.eval(member.index as u32).value);
+            let member_partial_public_key = bincode::deserialize(&bincode::serialize(
+                &output.public.eval(member.index as u32).value,
+            )?)?;
+            member.partial_public_key = Some(member_partial_public_key);
 
             if self.self_index == member.index {
-                partial_public_key = member.partial_public_key.unwrap();
+                partial_public_key = member.partial_public_key.clone().unwrap();
             }
         }
 
@@ -383,8 +388,8 @@ impl GroupInfoUpdater for InMemoryGroupInfoCache {
     }
 }
 
-impl GroupInfoFetcher for InMemoryGroupInfoCache {
-    fn get_group(&self) -> DataAccessResult<&Group> {
+impl<C: PairingCurve> GroupInfoFetcher<C> for InMemoryGroupInfoCache<C> {
+    fn get_group(&self) -> DataAccessResult<&Group<C>> {
         self.only_has_group_task()?;
 
         Ok(&self.group)
@@ -426,7 +431,7 @@ impl GroupInfoFetcher for InMemoryGroupInfoCache {
         Ok(self.self_index)
     }
 
-    fn get_public_key(&self) -> DataAccessResult<&G1> {
+    fn get_public_key(&self) -> DataAccessResult<&C::G2> {
         self.only_has_group_task()?;
 
         self.group
@@ -436,7 +441,7 @@ impl GroupInfoFetcher for InMemoryGroupInfoCache {
             .map_err(|e| e.into())
     }
 
-    fn get_secret_share(&self) -> DataAccessResult<&Share<Scalar>> {
+    fn get_secret_share(&self) -> DataAccessResult<&Share<C::Scalar>> {
         self.only_has_group_task()?;
 
         self.share
@@ -445,13 +450,13 @@ impl GroupInfoFetcher for InMemoryGroupInfoCache {
             .map_err(|e| e.into())
     }
 
-    fn get_members(&self) -> DataAccessResult<&BTreeMap<Address, Member>> {
+    fn get_members(&self) -> DataAccessResult<&BTreeMap<Address, Member<C>>> {
         self.only_has_group_task()?;
 
         Ok(&self.group.members)
     }
 
-    fn get_member(&self, id_address: Address) -> DataAccessResult<&Member> {
+    fn get_member(&self, id_address: Address) -> DataAccessResult<&Member<C>> {
         self.only_has_group_task()?;
 
         self.group

@@ -1,8 +1,8 @@
 use crate::types::contract::ContractGroup;
 use ethers_core::types::{Address, Log};
 use serde::{Deserialize, Serialize};
-use std::collections::BTreeMap;
-use threshold_bls::curve::bls12381::G1;
+use std::{collections::BTreeMap, marker::PhantomData};
+use threshold_bls::group::PairingCurve;
 
 pub trait Task {
     fn index(&self) -> usize;
@@ -70,19 +70,20 @@ pub struct GroupRelayConfirmationTask {
 }
 
 #[derive(Debug, Default, Clone, Serialize, Deserialize)]
-pub struct Group {
+pub struct Group<C: PairingCurve> {
     pub index: usize,
     pub epoch: usize,
     pub size: usize,
     pub threshold: usize,
     pub state: bool,
-    pub public_key: Option<G1>,
-    pub members: BTreeMap<Address, Member>,
+    pub public_key: Option<C::G2>,
+    pub members: BTreeMap<Address, Member<C>>,
     pub committers: Vec<Address>,
+    pub c: PhantomData<C>,
 }
 
-impl Group {
-    pub fn new() -> Group {
+impl<C: PairingCurve> Group<C> {
+    pub fn new() -> Group<C> {
         Group {
             index: 0,
             epoch: 0,
@@ -92,6 +93,7 @@ impl Group {
             public_key: None,
             members: BTreeMap::new(),
             committers: vec![],
+            c: PhantomData,
         }
     }
 
@@ -102,11 +104,11 @@ impl Group {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct Member {
+pub struct Member<C: PairingCurve> {
     pub index: usize,
     pub id_address: Address,
     pub rpc_endpoint: Option<String>,
-    pub partial_public_key: Option<G1>,
+    pub partial_public_key: Option<C::G2>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

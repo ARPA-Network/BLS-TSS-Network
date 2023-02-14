@@ -16,7 +16,8 @@ use arpa_node_dal::{
 use async_trait::async_trait;
 use ethers::types::Address;
 use log::{debug, error};
-use std::sync::Arc;
+use std::{marker::PhantomData, sync::Arc};
+use threshold_bls::group::PairingCurve;
 use tokio::sync::RwLock;
 use tokio_retry::{strategy::FixedInterval, RetryIf};
 
@@ -24,9 +25,10 @@ use super::{DebuggableEvent, DebuggableSubscriber, Subscriber};
 
 #[derive(Debug)]
 pub struct ReadyToHandleRandomnessTaskSubscriber<
-    G: GroupInfoFetcher,
+    G: GroupInfoFetcher<PC>,
     C: SignatureResultCacheUpdater<RandomnessResultCache>
         + SignatureResultCacheFetcher<RandomnessResultCache>,
+    PC: PairingCurve,
 > {
     pub chain_id: usize,
     id_address: Address,
@@ -34,13 +36,15 @@ pub struct ReadyToHandleRandomnessTaskSubscriber<
     randomness_signature_cache: Arc<RwLock<C>>,
     eq: Arc<RwLock<EventQueue>>,
     ts: Arc<RwLock<SimpleDynamicTaskScheduler>>,
+    c: PhantomData<PC>,
 }
 
 impl<
-        G: GroupInfoFetcher,
+        G: GroupInfoFetcher<PC>,
         C: SignatureResultCacheUpdater<RandomnessResultCache>
             + SignatureResultCacheFetcher<RandomnessResultCache>,
-    > ReadyToHandleRandomnessTaskSubscriber<G, C>
+        PC: PairingCurve,
+    > ReadyToHandleRandomnessTaskSubscriber<G, C, PC>
 {
     pub fn new(
         chain_id: usize,
@@ -57,6 +61,7 @@ impl<
             randomness_signature_cache,
             eq,
             ts,
+            c: PhantomData,
         }
     }
 }
@@ -67,25 +72,28 @@ pub trait RandomnessHandler {
 }
 
 pub struct GeneralRandomnessHandler<
-    G: GroupInfoFetcher,
+    G: GroupInfoFetcher<PC>,
     C: SignatureResultCacheUpdater<RandomnessResultCache>
         + SignatureResultCacheFetcher<RandomnessResultCache>,
+    PC: PairingCurve,
 > {
     chain_id: usize,
     id_address: Address,
     tasks: Vec<RandomnessTask>,
     group_cache: Arc<RwLock<G>>,
     randomness_signature_cache: Arc<RwLock<C>>,
+    c: PhantomData<PC>,
 }
 
 #[async_trait]
 impl<
-        G: GroupInfoFetcher + Sync + Send,
+        G: GroupInfoFetcher<PC> + Sync + Send,
         C: SignatureResultCacheUpdater<RandomnessResultCache>
             + SignatureResultCacheFetcher<RandomnessResultCache>
             + Sync
             + Send,
-    > CommitterClientHandler<GeneralCommitterClient, G> for GeneralRandomnessHandler<G, C>
+        PC: PairingCurve + Sync + Send,
+    > CommitterClientHandler<GeneralCommitterClient, G, PC> for GeneralRandomnessHandler<G, C, PC>
 {
     async fn get_id_address(&self) -> Address {
         self.id_address
@@ -98,20 +106,19 @@ impl<
 
 #[async_trait]
 impl<
-        G: GroupInfoFetcher + Sync + Send,
+        G: GroupInfoFetcher<PC> + Sync + Send,
         C: SignatureResultCacheUpdater<RandomnessResultCache>
             + SignatureResultCacheFetcher<RandomnessResultCache>
             + Sync
             + Send,
-    > RandomnessHandler for GeneralRandomnessHandler<G, C>
+        PC: PairingCurve + Sync + Send + 'static,
+    > RandomnessHandler for GeneralRandomnessHandler<G, C, PC>
 {
     async fn handle(self) -> NodeResult<()> {
         let committers = self.prepare_committer_clients().await?;
 
         for task in self.tasks {
-            let bls_core = SimpleBLSCore {};
-
-            let partial_signature = bls_core.partial_sign(
+            let partial_signature = SimpleBLSCore::<PC>::partial_sign(
                 self.group_cache.read().await.get_secret_share()?,
                 task.message.as_bytes(),
             )?;
@@ -188,14 +195,15 @@ impl<
 
 #[async_trait]
 impl<
-        G: GroupInfoFetcher + std::fmt::Debug + Sync + Send + 'static,
+        G: GroupInfoFetcher<PC> + std::fmt::Debug + Sync + Send + 'static,
         C: SignatureResultCacheUpdater<RandomnessResultCache>
             + SignatureResultCacheFetcher<RandomnessResultCache>
             + std::fmt::Debug
             + Sync
             + Send
             + 'static,
-    > Subscriber for ReadyToHandleRandomnessTaskSubscriber<G, C>
+        PC: PairingCurve + std::fmt::Debug + Sync + Send + 'static,
+    > Subscriber for ReadyToHandleRandomnessTaskSubscriber<G, C, PC>
 {
     async fn notify(&self, topic: Topic, payload: &(dyn DebuggableEvent)) -> NodeResult<()> {
         debug!("{:?}", topic);
@@ -223,6 +231,7 @@ impl<
                     tasks,
                     group_cache: group_cache_for_handler,
                     randomness_signature_cache: randomness_signature_cache_for_handler,
+                    c: PhantomData::<PC>,
                 };
 
                 if let Err(e) = handler.handle().await {
@@ -248,13 +257,14 @@ impl<
 }
 
 impl<
-        G: GroupInfoFetcher + std::fmt::Debug + Sync + Send + 'static,
+        G: GroupInfoFetcher<PC> + std::fmt::Debug + Sync + Send + 'static,
         C: SignatureResultCacheUpdater<RandomnessResultCache>
             + SignatureResultCacheFetcher<RandomnessResultCache>
             + std::fmt::Debug
             + Sync
             + Send
             + 'static,
-    > DebuggableSubscriber for ReadyToHandleRandomnessTaskSubscriber<G, C>
+        PC: PairingCurve + std::fmt::Debug + Sync + Send + 'static,
+    > DebuggableSubscriber for ReadyToHandleRandomnessTaskSubscriber<G, C, PC>
 {
 }

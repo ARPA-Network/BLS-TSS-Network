@@ -32,12 +32,15 @@ use sea_orm::DbConn;
 use sea_orm::QueryResult;
 use sea_orm::Statement;
 use sea_orm::{ConnectOptions, DatabaseConnection, DbErr};
+use serde::Serialize;
 use std::collections::BTreeMap;
 use std::{marker::PhantomData, sync::Arc, time::Duration};
+use threshold_bls::group::Curve;
+use threshold_bls::group::PairingCurve;
+use threshold_bls::sig::Share;
 mod test_helper;
 use std::str;
 use thiserror::Error;
-use threshold_bls::curve::bls12381::{Scalar, G1};
 use threshold_bls::group::Element;
 
 pub type DBResult<A> = Result<A, DBError>;
@@ -59,11 +62,12 @@ impl From<DBError> for DataAccessError {
 }
 
 #[derive(Default, Debug, Clone)]
-pub struct SqliteDB {
+pub struct SqliteDB<C: PairingCurve> {
     connection: Arc<DatabaseConnection>,
+    c: PhantomData<C>,
 }
 
-impl SqliteDB {
+impl<C: PairingCurve> SqliteDB<C> {
     pub async fn build(
         db_path: &str,
         signing_key: &[u8],
@@ -81,6 +85,7 @@ impl SqliteDB {
 
         let db = SqliteDB {
             connection: Arc::new(connection),
+            c: PhantomData,
         };
 
         db.integrity_check().await?;
@@ -91,10 +96,13 @@ impl SqliteDB {
     }
 
     pub fn new(connection: Arc<DatabaseConnection>) -> Self {
-        SqliteDB { connection }
+        SqliteDB {
+            connection,
+            c: PhantomData,
+        }
     }
 
-    pub fn get_node_info_client(&self) -> NodeInfoDBClient {
+    pub fn get_node_info_client(&self) -> NodeInfoDBClient<C> {
         NodeInfoDBClient {
             db_client: Arc::new(self.clone()),
             node_info_cache: None,
@@ -102,7 +110,7 @@ impl SqliteDB {
         }
     }
 
-    pub fn get_group_info_client(&self) -> GroupInfoDBClient {
+    pub fn get_group_info_client(&self) -> GroupInfoDBClient<C> {
         GroupInfoDBClient {
             db_client: Arc::new(self.clone()),
             group_info_cache: None,
@@ -110,7 +118,7 @@ impl SqliteDB {
         }
     }
 
-    pub fn get_bls_tasks_client<T: Task>(&self) -> BLSTasksDBClient<T> {
+    pub fn get_bls_tasks_client<T: Task>(&self) -> BLSTasksDBClient<T, C> {
         BLSTasksDBClient {
             db_client: Arc::new(self.clone()),
             bls_tasks: PhantomData,
@@ -134,13 +142,13 @@ impl SqliteDB {
 }
 
 #[derive(Debug, Clone)]
-pub struct NodeInfoDBClient {
-    db_client: Arc<SqliteDB>,
+pub struct NodeInfoDBClient<C: PairingCurve> {
+    db_client: Arc<SqliteDB<C>>,
     node_info_cache_model: Option<node_info::Model>,
-    node_info_cache: Option<InMemoryNodeInfoCache>,
+    node_info_cache: Option<InMemoryNodeInfoCache<C>>,
 }
 
-impl NodeInfoDBClient {
+impl<C: PairingCurve> NodeInfoDBClient<C> {
     pub async fn refresh_current_node_info(&mut self) -> DBResult<()> {
         let conn = &self.db_client.connection;
         let node_info = NodeQuery::find_current_node_info(conn).await?.unwrap();
@@ -165,8 +173,8 @@ impl NodeInfoDBClient {
         &mut self,
         id_address: Address,
         node_rpc_endpoint: String,
-        dkg_private_key: Scalar,
-        dkg_public_key: G1,
+        dkg_private_key: C::Scalar,
+        dkg_public_key: C::G2,
     ) -> DBResult<()> {
         let conn = self.get_connection();
 
@@ -192,7 +200,7 @@ impl NodeInfoDBClient {
     }
 }
 
-impl MdcContextUpdater for NodeInfoDBClient {
+impl<C: PairingCurve> MdcContextUpdater for NodeInfoDBClient<C> {
     fn refresh_mdc_entry(&self) {
         if let Some(cache) = &self.node_info_cache {
             cache.refresh_mdc_entry();
@@ -201,13 +209,13 @@ impl MdcContextUpdater for NodeInfoDBClient {
 }
 
 #[derive(Debug, Clone)]
-pub struct GroupInfoDBClient {
-    db_client: Arc<SqliteDB>,
+pub struct GroupInfoDBClient<C: PairingCurve> {
+    db_client: Arc<SqliteDB<C>>,
     group_info_cache_model: Option<group_info::Model>,
-    group_info_cache: Option<InMemoryGroupInfoCache>,
+    group_info_cache: Option<InMemoryGroupInfoCache<C>>,
 }
 
-impl GroupInfoDBClient {
+impl<C: PairingCurve + Serialize> GroupInfoDBClient<C> {
     pub async fn refresh_current_group_info(&mut self) -> DBResult<()> {
         let conn = &self.db_client.connection;
         let group_info = GroupQuery::find_current_group_info(conn)
@@ -229,6 +237,7 @@ impl GroupInfoDBClient {
                 .committers
                 .as_ref()
                 .map_or(vec![], |str| serde_json::from_str(str).unwrap()),
+            c: PhantomData,
         };
 
         let group_info_cache = InMemoryGroupInfoCache::rebuild(
@@ -263,7 +272,7 @@ impl GroupInfoDBClient {
     }
 }
 
-impl MdcContextUpdater for GroupInfoDBClient {
+impl<C: PairingCurve + Serialize> MdcContextUpdater for GroupInfoDBClient<C> {
     fn refresh_mdc_entry(&self) {
         if let Some(cache) = &self.group_info_cache {
             cache.refresh_mdc_entry();
@@ -272,18 +281,18 @@ impl MdcContextUpdater for GroupInfoDBClient {
 }
 
 #[derive(Debug, Clone)]
-pub struct BLSTasksDBClient<T: Task> {
-    db_client: Arc<SqliteDB>,
+pub struct BLSTasksDBClient<T: Task, C: PairingCurve> {
+    db_client: Arc<SqliteDB<C>>,
     bls_tasks: PhantomData<T>,
 }
 
-impl BLSTasksDBClient<RandomnessTask> {
+impl<C: PairingCurve> BLSTasksDBClient<RandomnessTask, C> {
     pub fn get_connection(&self) -> &DbConn {
         &self.db_client.connection
     }
 }
 
-impl NodeInfoFetcher for NodeInfoDBClient {
+impl<C: PairingCurve> NodeInfoFetcher<C> for NodeInfoDBClient<C> {
     fn get_id_address(&self) -> DataAccessResult<Address> {
         self.node_info_cache.as_ref().unwrap().get_id_address()
     }
@@ -295,17 +304,17 @@ impl NodeInfoFetcher for NodeInfoDBClient {
             .get_node_rpc_endpoint()
     }
 
-    fn get_dkg_private_key(&self) -> DataAccessResult<&Scalar> {
+    fn get_dkg_private_key(&self) -> DataAccessResult<&C::Scalar> {
         self.node_info_cache.as_ref().unwrap().get_dkg_private_key()
     }
 
-    fn get_dkg_public_key(&self) -> DataAccessResult<&G1> {
+    fn get_dkg_public_key(&self) -> DataAccessResult<&C::G2> {
         self.node_info_cache.as_ref().unwrap().get_dkg_public_key()
     }
 }
 
 #[async_trait]
-impl NodeInfoUpdater for NodeInfoDBClient {
+impl<C: PairingCurve + Sync + Send> NodeInfoUpdater<C> for NodeInfoDBClient<C> {
     async fn set_node_rpc_endpoint(&mut self, node_rpc_endpoint: String) -> DataAccessResult<()> {
         NodeMutation::update_node_rpc_endpoint(
             self.get_connection(),
@@ -325,8 +334,8 @@ impl NodeInfoUpdater for NodeInfoDBClient {
 
     async fn set_dkg_key_pair(
         &mut self,
-        dkg_private_key: Scalar,
-        dkg_public_key: G1,
+        dkg_private_key: C::Scalar,
+        dkg_public_key: C::G2,
     ) -> DataAccessResult<()> {
         NodeMutation::update_node_dkg_key_pair(
             self.get_connection(),
@@ -346,8 +355,8 @@ impl NodeInfoUpdater for NodeInfoDBClient {
     }
 }
 
-impl GroupInfoFetcher for GroupInfoDBClient {
-    fn get_group(&self) -> DataAccessResult<&Group> {
+impl<C: PairingCurve + Serialize> GroupInfoFetcher<C> for GroupInfoDBClient<C> {
+    fn get_group(&self) -> DataAccessResult<&Group<C>> {
         self.only_has_group_task()?;
 
         let group_info = self.group_info_cache.as_ref().unwrap();
@@ -403,7 +412,7 @@ impl GroupInfoFetcher for GroupInfoDBClient {
         group_info.get_self_index()
     }
 
-    fn get_public_key(&self) -> DataAccessResult<&G1> {
+    fn get_public_key(&self) -> DataAccessResult<&C::G2> {
         self.only_has_group_task()?;
 
         let group_info = self.group_info_cache.as_ref().unwrap();
@@ -411,7 +420,7 @@ impl GroupInfoFetcher for GroupInfoDBClient {
         group_info.get_public_key()
     }
 
-    fn get_secret_share(&self) -> DataAccessResult<&threshold_bls::sig::Share<Scalar>> {
+    fn get_secret_share(&self) -> DataAccessResult<&Share<C::Scalar>> {
         self.only_has_group_task()?;
 
         let group_info = self.group_info_cache.as_ref().unwrap();
@@ -419,7 +428,7 @@ impl GroupInfoFetcher for GroupInfoDBClient {
         group_info.get_secret_share()
     }
 
-    fn get_members(&self) -> DataAccessResult<&BTreeMap<Address, Member>> {
+    fn get_members(&self) -> DataAccessResult<&BTreeMap<Address, Member<C>>> {
         self.only_has_group_task()?;
 
         let group_info = self.group_info_cache.as_ref().unwrap();
@@ -427,7 +436,7 @@ impl GroupInfoFetcher for GroupInfoDBClient {
         group_info.get_members()
     }
 
-    fn get_member(&self, id_address: Address) -> DataAccessResult<&arpa_node_core::Member> {
+    fn get_member(&self, id_address: Address) -> DataAccessResult<&arpa_node_core::Member<C>> {
         self.only_has_group_task()?;
 
         let group_info = self.group_info_cache.as_ref().unwrap();
@@ -469,13 +478,13 @@ impl GroupInfoFetcher for GroupInfoDBClient {
 }
 
 #[async_trait]
-impl GroupInfoUpdater for GroupInfoDBClient {
+impl<PC: PairingCurve + Serialize + Sync + Send> GroupInfoUpdater<PC> for GroupInfoDBClient<PC> {
     async fn save_task_info(
         &mut self,
         self_index: usize,
         task: arpa_node_core::DKGTask,
     ) -> DataAccessResult<()> {
-        let members: BTreeMap<Address, Member> = task
+        let members: BTreeMap<Address, Member<PC>> = task
             .members
             .iter()
             .map(|(address, index)| {
@@ -510,12 +519,12 @@ impl GroupInfoUpdater for GroupInfoDBClient {
         Ok(())
     }
 
-    async fn save_output(
+    async fn save_output<C: Curve>(
         &mut self,
         index: usize,
         epoch: usize,
-        output: DKGOutput<threshold_bls::schemes::bls12_381::G1Curve>,
-    ) -> DataAccessResult<(G1, G1, Vec<Address>)> {
+        output: DKGOutput<C>,
+    ) -> DataAccessResult<(PC::G2, PC::G2, Vec<Address>)> {
         self.only_has_group_task()?;
 
         let self_index = self.group_info_cache.as_ref().unwrap().get_self_index()?;
@@ -551,9 +560,10 @@ impl GroupInfoUpdater for GroupInfoDBClient {
 
         group.remove_disqualified_nodes(&disqualified_nodes);
 
-        let public_key = *output.public.public_key();
+        let public_key: PC::G2 =
+            bincode::deserialize(&bincode::serialize(&output.public.public_key())?)?;
 
-        let mut partial_public_key = G1::new();
+        let mut partial_public_key = PC::G2::new();
 
         for (_, member) in group.members.iter_mut() {
             if let Some(node) = output
@@ -567,10 +577,13 @@ impl GroupInfoUpdater for GroupInfoDBClient {
                 }
             }
 
-            member.partial_public_key = Some(output.public.eval(member.index as u32).value);
+            let member_partial_public_key = bincode::deserialize(&bincode::serialize(
+                &output.public.eval(member.index as u32).value,
+            )?)?;
+            member.partial_public_key = Some(member_partial_public_key);
 
             if self_index == member.index {
-                partial_public_key = member.partial_public_key.unwrap();
+                partial_public_key = member.partial_public_key.clone().unwrap();
             }
         }
 
@@ -673,7 +686,9 @@ impl GroupInfoUpdater for GroupInfoDBClient {
 }
 
 #[async_trait]
-impl BLSTasksFetcher<RandomnessTask> for BLSTasksDBClient<RandomnessTask> {
+impl<C: PairingCurve + Sync + Send> BLSTasksFetcher<RandomnessTask>
+    for BLSTasksDBClient<RandomnessTask, C>
+{
     async fn contains(&self, task_index: usize) -> DataAccessResult<bool> {
         let conn = &self.db_client.connection;
         let task = RandomnessTaskQuery::select_by_index(conn, task_index as i32)
@@ -717,7 +732,9 @@ impl BLSTasksFetcher<RandomnessTask> for BLSTasksDBClient<RandomnessTask> {
 }
 
 #[async_trait]
-impl BLSTasksUpdater<RandomnessTask> for BLSTasksDBClient<RandomnessTask> {
+impl<C: PairingCurve + Sync + Send> BLSTasksUpdater<RandomnessTask>
+    for BLSTasksDBClient<RandomnessTask, C>
+{
     async fn add(&mut self, task: RandomnessTask) -> DataAccessResult<()> {
         RandomnessTaskMutation::add_task(
             self.get_connection(),
@@ -783,8 +800,10 @@ pub mod sqlite_tests {
     use ethers_core::types::Address;
     use std::collections::BTreeMap;
     use std::{fs, path::PathBuf};
-    use threshold_bls::curve::bls12381;
-    use threshold_bls::schemes::bls12_381::G1Scheme;
+    use threshold_bls::curve::bn254::PairingCurve;
+    use threshold_bls::group::PairingCurve as PC;
+    use threshold_bls::schemes::bn254::G2Curve;
+    use threshold_bls::schemes::bn254::G2Scheme;
     use threshold_bls::sig::Scheme;
 
     const DB_PATH: &str = "test.sqlite";
@@ -801,7 +820,7 @@ pub mod sqlite_tests {
         fs::remove_file(DB_PATH).expect("could not remove file");
     }
 
-    pub async fn build_sqlite_db() -> Result<SqliteDB, Box<dyn std::error::Error>> {
+    pub async fn build_sqlite_db<C: PC>() -> Result<SqliteDB<C>, Box<dyn std::error::Error>> {
         SqliteDB::build(DB_PATH, CIPHER_KEY.as_bytes()).await
     }
 
@@ -809,7 +828,7 @@ pub mod sqlite_tests {
     async fn test_build_db() {
         setup();
 
-        let db = build_sqlite_db().await;
+        let db = build_sqlite_db::<PairingCurve>().await;
 
         assert!(db.is_ok());
 
@@ -820,7 +839,7 @@ pub mod sqlite_tests {
     async fn test_integrity_check() {
         setup();
 
-        let db = build_sqlite_db().await.unwrap();
+        let db = build_sqlite_db::<PairingCurve>().await.unwrap();
 
         let res = db.integrity_check().await.unwrap();
 
@@ -833,7 +852,7 @@ pub mod sqlite_tests {
     async fn test_save_node_info() {
         setup();
 
-        let db = build_sqlite_db().await.unwrap();
+        let db = build_sqlite_db::<PairingCurve>().await.unwrap();
 
         let mut db = db.get_node_info_client();
 
@@ -844,7 +863,7 @@ pub mod sqlite_tests {
 
         let rng = &mut rand::thread_rng();
 
-        let (private_key, public_key) = G1Scheme::keypair(rng);
+        let (private_key, public_key) = G2Scheme::keypair(rng);
 
         if let Err(e) = db
             .save_node_info(id_address, node_rpc_endpoint, private_key, public_key)
@@ -863,7 +882,7 @@ pub mod sqlite_tests {
     async fn test_save_node_rpc_endpoint() {
         setup();
 
-        let db = build_sqlite_db().await.unwrap();
+        let db = build_sqlite_db::<PairingCurve>().await.unwrap();
 
         let mut db = db.get_node_info_client();
 
@@ -874,7 +893,7 @@ pub mod sqlite_tests {
 
         let rng = &mut rand::thread_rng();
 
-        let (private_key, public_key) = G1Scheme::keypair(rng);
+        let (private_key, public_key) = G2Scheme::keypair(rng);
 
         if let Err(e) = db
             .save_node_info(id_address, node_rpc_endpoint, private_key, public_key)
@@ -898,7 +917,7 @@ pub mod sqlite_tests {
     async fn test_save_node_dkg_key_pair() {
         setup();
 
-        let db = build_sqlite_db().await.unwrap();
+        let db = build_sqlite_db::<PairingCurve>().await.unwrap();
 
         let mut db = db.get_node_info_client();
 
@@ -909,7 +928,7 @@ pub mod sqlite_tests {
 
         let rng = &mut rand::thread_rng();
 
-        let (private_key, public_key) = G1Scheme::keypair(rng);
+        let (private_key, public_key) = G2Scheme::keypair(rng);
 
         if let Err(e) = db
             .save_node_info(id_address, node_rpc_endpoint, private_key, public_key)
@@ -920,7 +939,7 @@ pub mod sqlite_tests {
 
         let rng = &mut rand::thread_rng();
 
-        let (private_key, public_key) = G1Scheme::keypair(rng);
+        let (private_key, public_key) = G2Scheme::keypair(rng);
 
         if let Err(e) = db.set_dkg_key_pair(private_key, public_key).await {
             println!("{:?}", e);
@@ -936,7 +955,7 @@ pub mod sqlite_tests {
     async fn test_get_current_group_info_when_no_task() {
         setup();
 
-        let db = build_sqlite_db().await.unwrap();
+        let db = build_sqlite_db::<PairingCurve>().await.unwrap();
 
         let mut db = db.get_group_info_client();
 
@@ -953,7 +972,7 @@ pub mod sqlite_tests {
     #[tokio::test]
     async fn test_save_grouping_task_info() {
         setup();
-        let db = build_sqlite_db().await.unwrap();
+        let db = build_sqlite_db::<PairingCurve>().await.unwrap();
 
         let mut db = db.get_group_info_client();
         let mut members: BTreeMap<Address, usize> = BTreeMap::new();
@@ -1001,7 +1020,7 @@ pub mod sqlite_tests {
     #[tokio::test]
     async fn test_update_dkg_status() {
         setup();
-        let db = build_sqlite_db().await.unwrap();
+        let db = build_sqlite_db::<PairingCurve>().await.unwrap();
 
         let mut db = db.get_group_info_client();
         let mut members: BTreeMap<Address, usize> = BTreeMap::new();
@@ -1049,7 +1068,7 @@ pub mod sqlite_tests {
     #[tokio::test]
     async fn test_save_output() {
         setup();
-        let db = build_sqlite_db().await.unwrap();
+        let db = build_sqlite_db::<PairingCurve>().await.unwrap();
 
         let mut db = db.get_group_info_client();
         let mut members: BTreeMap<Address, usize> = BTreeMap::new();
@@ -1088,10 +1107,9 @@ pub mod sqlite_tests {
 
         let rng = &mut rand::thread_rng();
 
-        let (mut board, phase0s) = test_helper::setup::<bls12381::Curve, G1Scheme, _>(n, t, rng);
+        let (mut board, phase0s) = test_helper::setup::<G2Curve, G2Scheme, _>(n, t, rng);
 
-        let mut outputs =
-            test_helper::run_dkg::<bls12381::Curve, G1Scheme>(&mut board, phase0s).await;
+        let mut outputs = test_helper::run_dkg::<G2Curve, G2Scheme>(&mut board, phase0s).await;
 
         let output = outputs.remove(0);
 
@@ -1125,7 +1143,7 @@ pub mod sqlite_tests {
     async fn test_add_and_get_randomness_task_with_assigned_group() {
         setup();
 
-        let db = build_sqlite_db().await.unwrap();
+        let db = build_sqlite_db::<PairingCurve>().await.unwrap();
 
         let mut db = db.get_bls_tasks_client::<RandomnessTask>();
 
@@ -1168,7 +1186,7 @@ pub mod sqlite_tests {
     async fn test_add_and_get_randomness_task_over_exclusive_window() {
         setup();
 
-        let db = build_sqlite_db().await.unwrap();
+        let db = build_sqlite_db::<PairingCurve>().await.unwrap();
 
         let mut db = db.get_bls_tasks_client::<RandomnessTask>();
 

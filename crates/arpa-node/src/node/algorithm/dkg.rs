@@ -9,50 +9,59 @@ use dkg_core::{
 use log::info;
 use rand::RngCore;
 use rustc_hex::ToHex;
-use std::io::{self, Write};
-use threshold_bls::{
-    curve::bls12381::{Curve, Scalar, G1},
-    poly::Idx,
+use std::{
+    io::{self, Write},
+    marker::PhantomData,
 };
+use threshold_bls::{group::Curve, poly::Idx};
 
 #[async_trait]
-pub(crate) trait DKGCore<F, R> {
+pub(crate) trait DKGCore<F, R, C> {
     async fn run_dkg(
         &mut self,
-        dkg_private_key: Scalar,
+        dkg_private_key: C::Scalar,
         node_rpc_endpoint: String,
         rng: F,
-    ) -> NodeResult<DKGOutput<Curve>>
+    ) -> NodeResult<DKGOutput<C>>
     where
         R: RngCore,
-        F: Fn() -> R + Send + Debug + 'async_trait;
+        F: Fn() -> R + Send + Debug + 'async_trait,
+        C: Curve;
 }
 
 pub(crate) struct AllPhasesDKGCore<
-    P: CoordinatorTransactions + CoordinatorViews + BoardPublisher<Curve>,
+    P: CoordinatorTransactions + CoordinatorViews + BoardPublisher<C>,
+    C: Curve,
 > {
     coordinator_client: P,
+    c: PhantomData<C>,
 }
 
-impl<P: CoordinatorTransactions + CoordinatorViews + BoardPublisher<Curve>> AllPhasesDKGCore<P> {
+impl<P: CoordinatorTransactions + CoordinatorViews + BoardPublisher<C>, C: Curve>
+    AllPhasesDKGCore<P, C>
+{
     pub fn new(coordinator_client: P) -> Self {
-        AllPhasesDKGCore { coordinator_client }
+        AllPhasesDKGCore {
+            coordinator_client,
+            c: PhantomData,
+        }
     }
 }
 
 #[async_trait]
-impl<F, R, P> DKGCore<F, R> for AllPhasesDKGCore<P>
+impl<F, R, P, C> DKGCore<F, R, C> for AllPhasesDKGCore<P, C>
 where
     R: RngCore,
     F: Fn() -> R,
-    P: CoordinatorTransactions + CoordinatorViews + BoardPublisher<Curve> + Sync + Send,
+    P: CoordinatorTransactions + CoordinatorViews + BoardPublisher<C> + Sync + Send,
+    C: Curve,
 {
     async fn run_dkg(
         &mut self,
-        dkg_private_key: Scalar,
+        dkg_private_key: C::Scalar,
         node_rpc_endpoint: String,
         rng: F,
-    ) -> NodeResult<DKGOutput<Curve>>
+    ) -> NodeResult<DKGOutput<C>>
     where
         F: Send + Debug + 'async_trait,
     {
@@ -81,8 +90,8 @@ where
             .filter(|pubkey| !pubkey.is_empty()) // skip users that did not register
             .enumerate()
             .map(|(i, pubkey)| {
-                let pubkey: G1 = bincode::deserialize(&pubkey)?;
-                Ok(Node::<Curve>::new(i as Idx, pubkey))
+                let pubkey = bincode::deserialize(&pubkey)?;
+                Ok(Node::<C>::new(i as Idx, pubkey))
             })
             .collect::<NodeResult<_>>()?;
 
@@ -185,7 +194,7 @@ fn parse_bundle<D: serde::de::DeserializeOwned>(bundle: &[Vec<u8>]) -> NodeResul
         .collect()
 }
 
-fn write_output(out: &DKGOutput<Curve>) -> NodeResult<()> {
+fn write_output<C: Curve>(out: &DKGOutput<C>) -> NodeResult<()> {
     let output = OutputJson {
         public_key: hex::encode(bincode::serialize(&out.public.public_key())?),
         public_polynomial: hex::encode(bincode::serialize(&out.public)?),

@@ -7,7 +7,7 @@ use ethers::{providers::ProviderError, signers::WalletError};
 use rustc_hex::FromHexError;
 use std::env::VarError;
 use thiserror::Error;
-use threshold_bls::sig::{BLSError, G1Scheme, ThresholdError};
+use threshold_bls::sig::BLSError;
 
 pub type NodeResult<A> = Result<A, NodeError>;
 
@@ -27,9 +27,6 @@ pub enum NodeError {
 
     #[error(transparent)]
     BLSError(#[from] BLSError),
-
-    #[error(transparent)]
-    ThresholdError(#[from] ThresholdError<G1Scheme<threshold_bls::curve::bls12381::PairingCurve>>),
 
     #[error("the node is not the committer of the group")]
     NotCommitter,

@@ -14,6 +14,7 @@ use async_trait::async_trait;
 use ethers::prelude::*;
 use ethers::utils::keccak256;
 use std::{collections::HashMap, convert::TryFrom, future::Future, sync::Arc, time::Duration};
+use threshold_bls::group::PairingCurve;
 
 #[allow(clippy::useless_conversion)]
 pub mod adapter_stub {
@@ -54,7 +55,7 @@ impl AdapterClient {
     }
 }
 
-impl AdapterClientBuilder for GeneralChainIdentity {
+impl<C: PairingCurve> AdapterClientBuilder<C> for GeneralChainIdentity {
     type Service = AdapterClient;
 
     fn build_adapter_client(&self, main_id_address: Address) -> AdapterClient {
@@ -123,8 +124,8 @@ impl AdapterTransactions for AdapterClient {
 
 #[allow(unused_variables)]
 #[async_trait]
-impl AdapterViews for AdapterClient {
-    async fn get_group(&self, group_index: usize) -> ContractClientResult<Group> {
+impl<C: PairingCurve> AdapterViews<C> for AdapterClient {
+    async fn get_group(&self, group_index: usize) -> ContractClientResult<Group<C>> {
         todo!()
     }
 
@@ -139,7 +140,7 @@ impl AdapterViews for AdapterClient {
         todo!()
     }
 
-    async fn get_group_relay_cache(&self, group_index: usize) -> ContractClientResult<Group> {
+    async fn get_group_relay_cache(&self, group_index: usize) -> ContractClientResult<Group<C>> {
         todo!()
     }
 

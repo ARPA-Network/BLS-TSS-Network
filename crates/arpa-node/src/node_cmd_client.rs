@@ -5,6 +5,7 @@ use arpa_node_contract_client::{
 use arpa_node_core::ContractGroup;
 use ethers::types::Address;
 use std::env;
+use threshold_bls::curve::bn254::PairingCurve as BN254;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -39,7 +40,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         let client = MockAdapterClient::new(contract_rpc_endpoint, id_address);
 
         if instruction == "set_initial_group" {
-            let group = client.get_group(1).await?;
+            let group = AdapterViews::<BN254>::get_group(&client, 1).await?;
 
             let group: ContractGroup = group.into();
 
@@ -63,9 +64,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 None => panic!("Didn't get a seed string"),
             };
 
-            let group = client
-                .get_group(group_index.parse::<usize>().unwrap())
-                .await?;
+            let group =
+                AdapterViews::<BN254>::get_group(&client, group_index.parse::<usize>().unwrap())
+                    .await?;
 
             println!("{:?}", group);
         }
@@ -79,9 +80,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 None => panic!("Didn't get a seed string"),
             };
 
-            let group = client
-                .get_group(group_index.parse::<usize>().unwrap())
-                .await?;
+            let group =
+                AdapterViews::<BN254>::get_group(&client, group_index.parse::<usize>().unwrap())
+                    .await?;
 
             println!("{:?}", group);
         }

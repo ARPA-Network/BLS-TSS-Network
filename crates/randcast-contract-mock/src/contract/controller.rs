@@ -11,7 +11,7 @@ use super::utils::{choose_randomly_from_indices, minimum_threshold};
 use std::cmp::{max, Ordering};
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::ops::{Deref, DerefMut};
-use threshold_bls::curve::bls12381::G1;
+use threshold_bls::curve::bn254::G2;
 
 pub const NODE_STAKING_AMOUNT: usize = 50000;
 
@@ -795,9 +795,9 @@ impl ControllerTransactions for Controller {
             return Err(ControllerError::GroupNotExisted);
         }
 
-        bincode::deserialize::<G1>(&public_key)?;
+        bincode::deserialize::<G2>(&public_key)?;
 
-        bincode::deserialize::<G1>(&partial_public_key)?;
+        bincode::deserialize::<G2>(&partial_public_key)?;
 
         let (_, coordinator) = self
             .coordinators
