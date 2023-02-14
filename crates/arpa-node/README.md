@@ -20,7 +20,7 @@ cargo run --bin node-client -- -h
 
 Management grpc server supports getting states and interacting with a running node. It can be used for scenario tests or DevOps.
 
-Please see `management.proto` for detailed apis.
+Please see [`management.proto`](proto/management.proto) for detailed apis.
 
 # Node-account-client bin(WIP)
 
@@ -46,7 +46,7 @@ cargo build
 
 # Node Config
 
-Configuration items in `config.yml` are listed here:
+Configuration items in [`conf/config.yml`](conf/config.yml) are listed here:
 
 - node_committer_rpc_endpoint: Config endpoint to expose committer grpc services. (example: "[::1]:50060")
 
