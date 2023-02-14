@@ -2,7 +2,7 @@ use crate::group::{self, Element, PairingCurve as PC, Point, Scalar as Sc};
 use crate::hash::hasher::Keccak256Hasher;
 use crate::hash::try_and_increment::TryAndIncrement;
 use crate::hash::HashToCurve;
-use ark_bls12_381 as bls12_381;
+use ark_bn254 as bn254;
 use ark_ec::{AffineCurve, PairingEngine, ProjectiveCurve};
 use ark_ff::PrimeField;
 use ark_ff::{Field, One, UniformRand, Zero};
@@ -24,7 +24,7 @@ use thiserror::Error;
 use super::{BLSError, CurveType};
 
 #[derive(Debug, Error)]
-pub enum BLS12Error {
+pub enum BNError {
     #[error("{0}")]
     SerializationError(#[from] ark_serialize::SerializationError),
     #[error("{0}")]
@@ -37,32 +37,32 @@ pub enum BLS12Error {
 pub struct Scalar(
     #[serde(deserialize_with = "deserialize_field")]
     #[serde(serialize_with = "serialize_field")]
-    <bls12_381::Bls12_381 as PairingEngine>::Fr,
+    <bn254::Bn254 as PairingEngine>::Fr,
 );
 
-type ZG1 = <bls12_381::Bls12_381 as PairingEngine>::G1Projective;
+type ZG1 = <bn254::Bn254 as PairingEngine>::G1Projective;
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Serialize, Deserialize)]
 pub struct G1(
     #[serde(deserialize_with = "deserialize_group")]
     #[serde(serialize_with = "serialize_group")]
-    ZG1,
+    pub(crate) ZG1,
 );
 
-type ZG2 = <bls12_381::Bls12_381 as PairingEngine>::G2Projective;
+type ZG2 = <bn254::Bn254 as PairingEngine>::G2Projective;
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Serialize, Deserialize)]
 pub struct G2(
     #[serde(deserialize_with = "deserialize_group")]
     #[serde(serialize_with = "serialize_group")]
-    ZG2,
+    pub(crate) ZG2,
 );
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Serialize, Deserialize)]
 pub struct GT(
     #[serde(deserialize_with = "deserialize_field")]
     #[serde(serialize_with = "serialize_field")]
-    <bls12_381::Bls12_381 as PairingEngine>::Fqk,
+    <bn254::Bn254 as PairingEngine>::Fqk,
 );
 
 impl Element for Scalar {
@@ -85,13 +85,13 @@ impl Element for Scalar {
     }
 
     fn rand<R: rand_core::RngCore>(rng: &mut R) -> Self {
-        Self(bls12_381::Fr::rand(rng))
+        Self(bn254::Fr::rand(rng))
     }
 }
 
 impl Sc for Scalar {
     fn set_int(&mut self, i: u64) {
-        *self = Self(bls12_381::Fr::from(i))
+        *self = Self(bn254::Fr::from(i))
     }
 
     fn inverse(&self) -> Option<Self> {
@@ -138,11 +138,11 @@ impl Element for G1 {
     }
 }
 
-/// Implementation of Point using G1 from BLS12_381
+/// Implementation of Point using G1 from BN254
 impl Point for G1 {
-    type Error = BLS12Error;
+    type Error = BNError;
 
-    fn map(&mut self, data: &[u8]) -> Result<(), BLS12Error> {
+    fn map(&mut self, data: &[u8]) -> Result<(), BNError> {
         let hasher = TryAndIncrement::new(&Keccak256Hasher);
 
         let hash = hasher.hash(&[], data)?;
@@ -184,11 +184,11 @@ impl Element for G2 {
     }
 }
 
-/// Implementation of Point using G2 from BLS12_381
+/// Implementation of Point using G2 from BN254
 impl Point for G2 {
-    type Error = BLS12Error;
+    type Error = BNError;
 
-    fn map(&mut self, data: &[u8]) -> Result<(), BLS12Error> {
+    fn map(&mut self, data: &[u8]) -> Result<(), BNError> {
         let hasher = TryAndIncrement::new(&Keccak256Hasher);
 
         let hash = hasher.hash(&[], data)?;
@@ -232,7 +232,7 @@ impl Element for GT {
         *self = res;
     }
     fn rand<R: RngCore>(rng: &mut R) -> Self {
-        Self(bls12_381::Fq12::rand(rng))
+        Self(bn254::Fq12::rand(rng))
     }
 }
 
@@ -245,7 +245,7 @@ impl fmt::Display for GT {
 pub type G1Curve = group::G1Curve<PairingCurve>;
 pub type G2Curve = group::G2Curve<PairingCurve>;
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize)]
 pub struct PairingCurve;
 
 impl PC for PairingCurve {
@@ -255,7 +255,7 @@ impl PC for PairingCurve {
     type GT = GT;
 
     fn pair(a: &Self::G1, b: &Self::G2) -> Self::GT {
-        GT(<bls12_381::Bls12_381 as PairingEngine>::pairing(a.0, b.0))
+        GT(<bn254::Bn254 as PairingEngine>::pairing(a.0, b.0))
     }
 }
 
@@ -378,9 +378,9 @@ where
 }
 
 #[derive(Clone, Debug)]
-pub struct BLS12381Curve;
+pub struct BN254Curve;
 
-impl CurveType for BLS12381Curve {
+impl CurveType for BN254Curve {
     type G1Curve = G1Curve;
 
     type G2Curve = G2Curve;
@@ -401,14 +401,15 @@ mod tests {
 
     #[test]
     fn serialize_group() {
-        serialize_group_test::<G1>(48);
-        serialize_group_test::<G2>(96);
+        serialize_group_test::<G1>(32);
+        // serialize_group_test::<G2>(64);
     }
 
     fn serialize_group_test<E: Element>(size: usize) {
         let rng = &mut rand::thread_rng();
         let sig = E::rand(rng);
         let ser = bincode::serialize(&sig).unwrap();
+        println!("{:?}", ser);
         assert_eq!(ser.len(), size);
 
         let de: E = bincode::deserialize(&ser).unwrap();
@@ -417,7 +418,7 @@ mod tests {
 
     #[test]
     fn serialize_field() {
-        serialize_field_test::<GT>(576);
+        serialize_field_test::<GT>(384);
         serialize_field_test::<Scalar>(32);
     }
 

@@ -75,7 +75,7 @@ pub trait Curve: Clone + Debug + Send + Sync {
 }
 
 /// A curve equipped with a bilinear pairing operation.
-pub trait PairingCurve: Debug {
+pub trait PairingCurve: Clone + Debug {
     type Scalar: Scalar<RHS = Self::Scalar>;
 
     type G1: Point<RHS = Self::Scalar>;
@@ -88,7 +88,7 @@ pub trait PairingCurve: Debug {
     fn pair(a: &Self::G1, b: &Self::G2) -> Self::GT;
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize)]
 /// Helper which binds together a scalar with a group type to form a curve
 pub struct CurveFrom<S: Scalar, P: Point> {
     s: PhantomData<S>,
