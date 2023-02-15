@@ -342,7 +342,7 @@ impl ControllerInternal for Controller {
     }
 
     fn add_group(&mut self) -> usize {
-        let group_index = self.groups.len() + 1;
+        let group_index = self.groups.len();
 
         let group = Group {
             index: group_index,
@@ -605,9 +605,6 @@ impl ControllerInternal for Controller {
                 let group_index = group.index;
 
                 let need_rebalance = self.remove_from_group(id_address, group_index, true)?;
-                // TODO check if the group ready to dkg
-                // if true, do dkg
-                // else try rebalance
 
                 if need_rebalance {
                     self.arrange_members_in_group(group_index)?;
