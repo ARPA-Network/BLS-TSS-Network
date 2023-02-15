@@ -3,6 +3,13 @@ pragma solidity ^0.8.15;
 
 import {BN256G2} from "./BN256G2.sol";
 
+/**
+ * @title BLS operations on bn254 curve
+ * @author ARPA-Network adapted from https://github.com/ChihChengLiang/bls_solidity_python
+ * @dev Homepage: https://github.com/ARPA-Network/BLS-TSS-Network
+ *      Signature and Point hashed to G1 are represented by affine coordinate in big-endian order, deserialized from compressed format.
+ *      Public key is represented and serialized by affine coordinate Q-x-re(x0), Q-x-im(x1), Q-y-re(y0), Q-y-im(y1) in big-endian order.
+ */
 library BLS {
     // Field order
     uint256 constant N =
@@ -147,6 +154,7 @@ library BLS {
         return out[0] != 0;
     }
 
+    // TODO a simple hash and increment implementation, can be improved later
     function hashToPoint(bytes memory data)
         internal
         view
@@ -163,6 +171,7 @@ library BLS {
         }
     }
 
+    //  we take the y-coordinate as the lexicographically largest of the two associated with the encoded x-coordinate
     function mapToPoint(bytes32 _x)
         internal
         view
@@ -224,6 +233,7 @@ library BLS {
         uint256 y0;
         uint256 y1;
         assembly {
+            // look the first 32 bytes of a bytes struct is its length
             x0 := mload(add(point, 32))
             x1 := mload(add(point, 64))
             y0 := mload(add(point, 96))
@@ -232,6 +242,7 @@ library BLS {
         pubkey = [x0, x1, y0, y1];
     }
 
+    // we don't need this because the gas is too high for executing computations over G2(which is not supported by precompile)
     // function pubkeyToUncompressed(uint256[2] memory compressed)
     //     internal
     //     pure
@@ -261,6 +272,11 @@ library BLS {
         returns (uint256[2] memory uncompressed)
     {
         uint256 x = compressed & FIELD_MASK;
+        // The most significant bit, when set, indicates that the y-coordinate of the point
+        // is the lexicographically largest of the two associated values.
+        // The second-most significant bit indicates that the point is at infinity. If this bit is set,
+        // the remaining bits of the group element's encoding should be set to zero.
+        // We don't accept infinity as valid signature.
         uint256 decision = compressed >> 254;
         if (decision & 1 == 1) {
             revert MustNotBeInfinity();
@@ -268,6 +284,9 @@ library BLS {
         uint256 y;
         (y, ) = deriveYOnG1(x);
 
+        // If the following two conditions or their negative forms are not met at the same time, get the negative y.
+        // 1. The most significant bit of compressed signature is set
+        // 2. The y we recovered first is the lexicographically largest
         if (((decision >> 1) ^ (y > N / 2 ? 1 : 0)) == 1) {
             y = N - y;
         }
@@ -573,6 +592,7 @@ library BLS {
             mstore(add(freemem, 0x20), 0x20)
             mstore(add(freemem, 0x40), 0x20)
             mstore(add(freemem, 0x60), xx)
+            // this is enabled by N % 4 = 3 and Fermat's little theorem
             // (N + 1) / 4 = 0xc19139cb84c680a6e14116da060561765e05aa45a1c72a34f082305b61f3f52
             mstore(
                 add(freemem, 0x80),
