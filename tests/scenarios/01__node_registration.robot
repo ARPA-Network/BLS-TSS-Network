@@ -15,5 +15,12 @@ My Test
     Get Group    0
     Node In Members    0    ${TEST_NODE_ADDRESS}
     Partial Key Registered    0    ${TEST_NODE_ADDRESS}
-    Get Member    0    0
+    #Get Member    0    0
     Get Coordinator    0
+    Get Coordinator Instance    0
+    Deploy Coordinator To Test
+    Get Shares
+    Get Justifications
+    Get Participants
+    Get DkgKeys
+    In Phase

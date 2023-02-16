@@ -17,6 +17,7 @@ ${PROXY_CONTRACT_ADDRESS}
 ${PROXY_OUTPUT}                          out/
 ${PROXY_CONTRACT}
 ${CONTROLLER_CONTRACT}
+${COORDINATOR_CONTRACT}
 
 # Test value:
 ${TEST_NODE_ADDRESS}                     0x70997970c51812dc3a010c7d01b50e0d17dc79c8
@@ -132,4 +133,52 @@ Get Coordinator
     ${result} =    Contract Function Call    ${CONTROLLER_CONTRACT}    getCoordinator    ${index}
     Log    Coordinator of Group ${index} : ${result}
     RETURN    ${result}
-    
+
+Get Coordinator Instance
+    [Documentation]    Get coordinator instance of a given group
+    [Arguments]    ${index}
+    ${address} =    Get Coordinator    ${index}
+    ${coordinator_contract} =    Get Contract    contracts/${PROXY_OUTPUT}Coordinator.sol/Coordinator.json    ${address}
+    Set Global Variable    $COORDINATOR_CONTRACT   ${coordinator_contract}
+    RETURN    ${coordinator_contract}
+
+Deploy Coordinator To Test
+    [Documentation]    Manualy deploy the coordinator contract to test, because the coordinator can't not be triggered without nodes
+    ${contract_output} =    Run    cd contracts/; forge create src/Coordinator.sol:Coordinator --private-key ${PROXY_CONTRACT_DEPLOYER_KEY} --constructor-args 3 10
+    Log    ${contract_output}
+    ${lines} =	Get Lines Containing String    ${contract_output}    Deployed to: 
+    ${address} =    Fetch From Right    ${lines}    Deployed to: 
+    ${address} =    Strip String    ${address}
+    Length Should Be    ${address}    42
+    ${coordinator_contract} =    Get Contract    contracts/${PROXY_OUTPUT}Coordinator.sol/Coordinator.json    ${address}
+    Set Global Variable    $COORDINATOR_CONTRACT   ${coordinator_contract}
+
+Get Shares
+    [Documentation]    Get Shares
+    ${result} =    Contract Function Call    ${COORDINATOR_CONTRACT}    getShares
+    Log    Shares: ${result}
+    RETURN    ${result}
+
+Get Justifications
+    [Documentation]    Get justifications
+    ${result} =    Contract Function Call    ${COORDINATOR_CONTRACT}    getJustifications
+    Log    Justifications: ${result}
+    RETURN    ${result}
+
+Get Participants
+    [Documentation]    Get Participants
+    ${result} =    Contract Function Call    ${COORDINATOR_CONTRACT}    getParticipants
+    Log    Participants: ${result}
+    RETURN    ${result}
+
+Get DkgKeys
+    [Documentation]    Get DkgKeys
+    ${result} =    Contract Function Call    ${COORDINATOR_CONTRACT}    getDkgKeys
+    Log    DkgKeys: ${result}
+    RETURN    ${result}
+
+In Phase
+    [Documentation]    get Phase
+    ${result} =    Contract Function Call    ${COORDINATOR_CONTRACT}    inPhase
+    Log    Phase: ${result}
+    RETURN    ${result}
