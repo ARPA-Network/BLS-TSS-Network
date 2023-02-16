@@ -28,6 +28,7 @@ ${ARGS_TRANSFER_ARPA}                   send ${ARPA_CONTRACT_ADDRESS}
 ...                                     --from=${ARPA_HOLDER_ADDRESS}
 ${ARGS_GET_ARPA_BALANCE}                call ${ARPA_CONTRACT_ADDRESS} balanceOf(address)
 
+${LOCAL_ETHEREUM_CHAIN_PROCESS_HANDLE}
 
 *** Keywords ***
 Setup Scenario Testing Environment
