@@ -7,7 +7,6 @@ use crate::node::{
 use arpa_node_core::DKGStatus;
 use arpa_node_dal::{BlockInfoFetcher, GroupInfoFetcher, GroupInfoUpdater};
 use async_trait::async_trait;
-use log::info;
 use std::{marker::PhantomData, sync::Arc};
 use threshold_bls::group::PairingCurve;
 use tokio::sync::RwLock;
@@ -76,8 +75,8 @@ impl<
 
                         let block_height = self.block_cache.read().await.get_block_height();
 
-                        info!("dkg_start_block_height: {},current_block_height: {}, timeuout_dkg_block_height:{}",
-                        dkg_start_block_height,block_height,dkg_start_block_height + DEFAULT_DKG_TIMEOUT_DURATION);
+                        // info!("dkg_start_block_height: {},current_block_height: {}, timeuout_dkg_block_height:{}",
+                        // dkg_start_block_height,block_height,dkg_start_block_height + DEFAULT_DKG_TIMEOUT_DURATION);
 
                         if block_height > dkg_start_block_height + DEFAULT_DKG_TIMEOUT_DURATION {
                             let group_index =

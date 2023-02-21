@@ -119,9 +119,7 @@ impl<
                         let mut tasks_to_process: Vec<RandomnessTask> = vec![];
 
                         for task in available_tasks {
-                            if let Ok(false) =
-                                client.get_signature_task_completion_state(task.index).await
-                            {
+                            if let Ok(true) = client.is_task_pending(&task.request_id).await {
                                 tasks_to_process.push(task);
                             }
                         }

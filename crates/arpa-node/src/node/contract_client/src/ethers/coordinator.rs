@@ -1,13 +1,12 @@
+use super::WalletSigner;
 use crate::{
+    contract_stub::coordinator::Coordinator,
     coordinator::{
         CoordinatorClientBuilder, CoordinatorTransactions, CoordinatorViews, DKGContractError,
     },
     error::{ContractClientError, ContractClientResult},
     ServiceClient,
 };
-
-use self::coordinator_stub::Coordinator;
-use super::WalletSigner;
 use arpa_node_core::{ChainIdentity, GeneralChainIdentity};
 use async_trait::async_trait;
 use dkg_core::{
@@ -18,11 +17,6 @@ use ethers::prelude::*;
 use log::info;
 use std::{convert::TryFrom, sync::Arc, time::Duration};
 use threshold_bls::group::Curve;
-
-#[allow(clippy::useless_conversion)]
-pub mod coordinator_stub {
-    include!("../../contract_stub/coordinator.rs");
-}
 
 pub struct CoordinatorClient {
     coordinator_address: Address,
@@ -225,9 +219,9 @@ impl<C: Curve + 'static> BoardPublisher<C> for CoordinatorClient {
 
 #[cfg(test)]
 pub mod coordinator_tests {
-    use crate::coordinator::CoordinatorTransactions;
-
     use super::{CoordinatorClient, WalletSigner};
+    use crate::contract_stub::coordinator::Coordinator;
+    use crate::coordinator::CoordinatorTransactions;
     use arpa_node_core::GeneralChainIdentity;
     use ethers::abi::Tokenize;
     use ethers::prelude::*;
@@ -238,8 +232,6 @@ pub mod coordinator_tests {
     use std::path::PathBuf;
     use std::{convert::TryFrom, sync::Arc, time::Duration};
     use threshold_bls::schemes::bn254::G2Scheme;
-
-    include!("../../contract_stub/coordinator.rs");
 
     #[test]
     fn test_cargo_manifest_parent_dir() {

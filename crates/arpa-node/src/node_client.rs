@@ -3,6 +3,7 @@ use arpa_node::node::context::types::{build_wallet_from_config, Config, GeneralC
 use arpa_node::node::context::{Context, TaskWaiter};
 use arpa_node_contract_client::controller::{ControllerClientBuilder, ControllerTransactions};
 use arpa_node_core::format_now_date;
+use arpa_node_core::log::encoder::JsonEncoder;
 use arpa_node_core::GeneralChainIdentity;
 use arpa_node_core::MockChainIdentity;
 use arpa_node_core::RandomnessTask;
@@ -17,7 +18,6 @@ use log::{info, LevelFilter};
 use log4rs::append::console::ConsoleAppender;
 use log4rs::append::file::FileAppender;
 use log4rs::config::{Appender, Root};
-use log4rs::encode::json::JsonEncoder;
 use log4rs::filter::threshold::ThresholdFilter;
 use log4rs::Config as LogConfig;
 use std::fs::{self, read_to_string};
@@ -25,6 +25,7 @@ use std::path::PathBuf;
 use structopt::StructOpt;
 use threshold_bls::curve::bn254::PairingCurve as BN254;
 use threshold_bls::schemes::bn254::G2Scheme;
+use threshold_bls::serialize::point_to_hex;
 use threshold_bls::sig::Scheme;
 
 #[derive(StructOpt, Debug)]
@@ -51,17 +52,7 @@ pub struct Opt {
     config_path: PathBuf,
 }
 
-#[tokio::main]
-async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let opt = Opt::from_args();
-    println!("{:#?}", opt);
-
-    let node_id = if let Some(id) = opt.demo_config_index {
-        id.to_string()
-    } else {
-        String::from("running")
-    };
-
+fn init_log(node_id: &str) {
     let stdout = ConsoleAppender::builder()
         .encoder(Box::new(JsonEncoder::new()))
         .build();
@@ -89,11 +80,25 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 .appender("stdout")
                 .appender("file")
                 .appender("err_file")
-                .build(LevelFilter::Debug),
+                .build(LevelFilter::Info),
         )
         .unwrap();
 
     log4rs::init_config(log_config).unwrap();
+}
+
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let opt = Opt::from_args();
+    println!("{:#?}", opt);
+
+    let node_id = if let Some(id) = opt.demo_config_index {
+        id.to_string()
+    } else {
+        String::from("running")
+    };
+
+    init_log(&node_id);
 
     let config_path_str = opt
         .config_path
@@ -125,7 +130,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         config.data_path = Some(String::from("data.sqlite"));
     }
 
-    info!(target: "config", "{:?}", config);
+    info!("{:?}", config);
 
     let data_path = PathBuf::from(config.data_path.clone().unwrap());
 
@@ -156,9 +161,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
             let (dkg_private_key, dkg_public_key) = G2Scheme::keypair(rng);
 
-            info!("dkg private_key: {}", dkg_private_key);
-            info!("dkg public_key: {}", dkg_public_key);
-            info!("-------------------------------------------------------");
+            info!("dkg public_key: {}", point_to_hex(&dkg_public_key));
 
             let mut node_cache = db.get_node_info_client();
 
@@ -285,9 +288,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
             let (dkg_private_key, dkg_public_key) = G2Scheme::keypair(rng);
 
-            info!("dkg private_key: {}", dkg_private_key);
-            info!("dkg public_key: {}", dkg_public_key);
-            info!("-------------------------------------------------------");
+            info!("dkg public_key: {}", point_to_hex(&dkg_public_key));
 
             let mut node_cache = InMemoryNodeInfoCache::new(id_address);
 
@@ -327,8 +328,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
             let handle = context.deploy().await?;
 
-            println!("finished!");
-
             // register node to randcast network
             let client = main_chain_identity.build_controller_client();
 
@@ -337,6 +336,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 .await?;
 
             handle.wait_task().await;
+
+            info!("client deployment finished!");
         }
         _ => panic!("unimplemented mode"),
     }

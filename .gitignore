@@ -27,4 +27,5 @@ solidity/build
 /log/
 
 **/contract_stub
-**/rpc_stub
+**/rpc_stub/*.rs
+!**/rpc_stub/mod.rs

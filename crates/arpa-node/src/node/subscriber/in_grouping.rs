@@ -12,7 +12,7 @@ use arpa_node_contract_client::{
 };
 use arpa_node_core::{ChainIdentity, DKGStatus, DKGTask};
 use arpa_node_dal::{
-    GroupInfoFetcher, GroupInfoUpdater, MdcContextUpdater, NodeInfoFetcher, NodeInfoUpdater,
+    ContextInfoUpdater, GroupInfoFetcher, GroupInfoUpdater, NodeInfoFetcher, NodeInfoUpdater,
 };
 use async_trait::async_trait;
 use core::fmt::Debug;
@@ -183,14 +183,14 @@ impl<
 impl<
         N: NodeInfoFetcher<C>
             + NodeInfoUpdater<C>
-            + MdcContextUpdater
+            + ContextInfoUpdater
             + std::fmt::Debug
             + Sync
             + Send
             + 'static,
         G: GroupInfoFetcher<C>
             + GroupInfoUpdater<C>
-            + MdcContextUpdater
+            + ContextInfoUpdater
             + std::fmt::Debug
             + Sync
             + Send
@@ -273,14 +273,14 @@ impl<
 impl<
         N: NodeInfoFetcher<C>
             + NodeInfoUpdater<C>
-            + MdcContextUpdater
+            + ContextInfoUpdater
             + std::fmt::Debug
             + Sync
             + Send
             + 'static,
         G: GroupInfoFetcher<C>
             + GroupInfoUpdater<C>
-            + MdcContextUpdater
+            + ContextInfoUpdater
             + std::fmt::Debug
             + Sync
             + Send

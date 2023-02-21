@@ -8,13 +8,16 @@ use crate::node::{
     queue::{event_queue::EventQueue, EventSubscriber},
     scheduler::{dynamic::SimpleDynamicTaskScheduler, SubscriberType, TaskScheduler, TaskType},
 };
-use arpa_node_core::{RandomnessTask, TaskType as BLSTaskType};
+use arpa_node_core::{address_to_string, RandomnessTask, TaskType as BLSTaskType};
 use arpa_node_dal::{
     cache::RandomnessResultCache, GroupInfoFetcher, SignatureResultCacheFetcher,
     SignatureResultCacheUpdater,
 };
 use async_trait::async_trait;
-use ethers::types::Address;
+use ethers::{
+    types::{Address, U256},
+    utils::keccak256,
+};
 use log::{debug, error};
 use std::{marker::PhantomData, sync::Arc};
 use threshold_bls::group::PairingCurve;
@@ -118,9 +121,15 @@ impl<
         let committers = self.prepare_committer_clients().await?;
 
         for task in self.tasks {
+            let mut seed_bytes = vec![0u8; 32];
+            task.seed.to_big_endian(&mut seed_bytes);
+            let mut block_num_bytes = vec![0u8; 32];
+            U256::from(task.assignment_block_height).to_big_endian(&mut block_num_bytes);
+            let actual_seed = keccak256([&seed_bytes[..], &block_num_bytes[..]].concat());
+
             let partial_signature = SimpleBLSCore::<PC>::partial_sign(
                 self.group_cache.read().await.get_secret_share()?,
-                task.message.as_bytes(),
+                &actual_seed,
             )?;
 
             let threshold = self.group_cache.read().await.get_threshold()?;
@@ -137,12 +146,12 @@ impl<
                     .randomness_signature_cache
                     .read()
                     .await
-                    .contains(task.index);
+                    .contains(&task.request_id);
                 if !contained_res {
                     self.randomness_signature_cache.write().await.add(
                         current_group_index,
-                        task.index,
-                        task.message.clone(),
+                        task.request_id.clone(),
+                        actual_seed.to_vec(),
                         threshold,
                     )?;
                 }
@@ -151,7 +160,7 @@ impl<
                     .write()
                     .await
                     .add_partial_signature(
-                        task.index,
+                        task.request_id.clone(),
                         self.id_address,
                         partial_signature.clone(),
                     )?;
@@ -168,15 +177,15 @@ impl<
                         committer.clone().commit_partial_signature(
                             chain_id,
                             BLSTaskType::Randomness,
-                            task.message.as_bytes().to_vec(),
-                            task.index,
+                            actual_seed.to_vec(),
+                            task.request_id.clone(),
                             partial_signature.clone(),
                         )
                     },
                     |e: &NodeError| {
                         error!(
                             "send partial signature to committer {0} failed. Retry... Error: {1:?}",
-                            committer.get_id_address(),
+                            address_to_string(committer.get_id_address()),
                             e
                         );
                         true

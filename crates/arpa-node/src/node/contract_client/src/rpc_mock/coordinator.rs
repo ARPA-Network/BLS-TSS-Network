@@ -4,9 +4,9 @@ use crate::coordinator::{
 use crate::error::ContractClientResult;
 use crate::ServiceClient;
 
-use self::coordinator_stub::transactions_client::TransactionsClient as CoordinatorTransactionsClient;
-use self::coordinator_stub::views_client::ViewsClient as CoordinatorViewsClient;
-use self::coordinator_stub::{BlsKeysReply, PublishRequest};
+use crate::rpc_stub::coordinator::transactions_client::TransactionsClient as CoordinatorTransactionsClient;
+use crate::rpc_stub::coordinator::views_client::ViewsClient as CoordinatorViewsClient;
+use crate::rpc_stub::coordinator::{BlsKeysReply, PublishRequest};
 use arpa_node_core::{address_to_string, ChainIdentity, MockChainIdentity};
 use async_trait::async_trait;
 use dkg_core::{
@@ -17,10 +17,6 @@ use ethers::types::Address;
 use log::info;
 use threshold_bls::group::Curve;
 use tonic::Request;
-
-pub mod coordinator_stub {
-    include!("../../rpc_stub/coordinator.rs");
-}
 
 pub struct MockCoordinatorClient {
     id_address: Address,

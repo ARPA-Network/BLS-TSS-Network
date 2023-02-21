@@ -1,7 +1,12 @@
-use self::management_stub::management_service_server::{
+use crate::node::context::types::GeneralContext;
+use crate::node::context::ContextFetcher;
+use crate::node::error::NodeError;
+use crate::node::management::ComponentService;
+use crate::node::scheduler::ListenerType;
+use crate::rpc_stub::management::management_service_server::{
     ManagementService, ManagementServiceServer,
 };
-use self::management_stub::{
+use crate::rpc_stub::management::{
     AggregatePartialSigsReply, AggregatePartialSigsRequest, FulfillRandomnessReply,
     FulfillRandomnessRequest, GetGroupInfoReply, GetGroupInfoRequest, GetNodeInfoReply,
     GetNodeInfoRequest, Group, ListFixedTasksReply, ListFixedTasksRequest, Member,
@@ -12,12 +17,6 @@ use self::management_stub::{
     StartListenerRequest, VerifyPartialSigsReply, VerifyPartialSigsRequest, VerifySigReply,
     VerifySigRequest,
 };
-use crate::node::context::chain::MainChainFetcher;
-use crate::node::context::types::GeneralContext;
-use crate::node::context::ContextFetcher;
-use crate::node::error::NodeError;
-use crate::node::management::ComponentService;
-use crate::node::scheduler::ListenerType;
 use arpa_node_contract_client::{
     adapter::AdapterClientBuilder, controller::ControllerClientBuilder,
     coordinator::CoordinatorClientBuilder, provider::ChainProviderBuilder,
@@ -28,7 +27,7 @@ use arpa_node_core::{
 };
 use arpa_node_dal::error::DataAccessError;
 use arpa_node_dal::{
-    BLSTasksFetcher, BLSTasksUpdater, GroupInfoFetcher, GroupInfoUpdater, MdcContextUpdater,
+    BLSTasksFetcher, BLSTasksUpdater, ContextInfoUpdater, GroupInfoFetcher, GroupInfoUpdater,
     NodeInfoFetcher, NodeInfoUpdater,
 };
 use arpa_node_log::debug;
@@ -49,15 +48,11 @@ use uuid::Uuid;
 
 use super::{BLSRandomnessService, DBService, DKGService, GroupInfo, NodeInfo, NodeService};
 
-pub mod management_stub {
-    include!("../../../rpc_stub/management.rs");
-}
-
 type NodeContext<N, G, T, I, C> = Arc<RwLock<GeneralContext<N, G, T, I, C>>>;
 
 pub(crate) struct NodeManagementServiceServer<
-    N: NodeInfoFetcher<C> + NodeInfoUpdater<C> + MdcContextUpdater,
-    G: GroupInfoFetcher<C> + GroupInfoUpdater<C> + MdcContextUpdater,
+    N: NodeInfoFetcher<C> + NodeInfoUpdater<C> + ContextInfoUpdater,
+    G: GroupInfoFetcher<C> + GroupInfoUpdater<C> + ContextInfoUpdater,
     T: BLSTasksFetcher<RandomnessTask> + BLSTasksUpdater<RandomnessTask>,
     I: ChainIdentity
         + ControllerClientBuilder
@@ -70,8 +65,8 @@ pub(crate) struct NodeManagementServiceServer<
 }
 
 impl<
-        N: NodeInfoFetcher<C> + NodeInfoUpdater<C> + MdcContextUpdater,
-        G: GroupInfoFetcher<C> + GroupInfoUpdater<C> + MdcContextUpdater,
+        N: NodeInfoFetcher<C> + NodeInfoUpdater<C> + ContextInfoUpdater,
+        G: GroupInfoFetcher<C> + GroupInfoUpdater<C> + ContextInfoUpdater,
         T: BLSTasksFetcher<RandomnessTask> + BLSTasksUpdater<RandomnessTask>,
         I: ChainIdentity
             + ControllerClientBuilder
@@ -90,7 +85,7 @@ impl<
 impl<
         N: NodeInfoFetcher<C>
             + NodeInfoUpdater<C>
-            + MdcContextUpdater
+            + ContextInfoUpdater
             + std::fmt::Debug
             + Clone
             + Sync
@@ -98,7 +93,7 @@ impl<
             + 'static,
         G: GroupInfoFetcher<C>
             + GroupInfoUpdater<C>
-            + MdcContextUpdater
+            + ContextInfoUpdater
             + std::fmt::Debug
             + Clone
             + Sync
@@ -279,14 +274,14 @@ impl<
         request: Request<PartialSignRequest>,
     ) -> Result<tonic::Response<PartialSignReply>, tonic::Status> {
         let req = request.into_inner();
-        let sig_index = req.sig_index as usize;
+        let request_id = req.request_id;
         let threshold = req.threshold as usize;
         let msg = req.msg;
         let partial_sig = self
             .context
             .write()
             .await
-            .partial_sign(sig_index, threshold, &msg)
+            .partial_sign(request_id, threshold, &msg)
             .await
             .map_err(|e: anyhow::Error| Status::failed_precondition(e.to_string()))?;
         return Ok(Response::new(PartialSignReply { partial_sig }));
@@ -359,13 +354,13 @@ impl<
             .parse()
             .map_err(|e: FromHexError| Status::invalid_argument(e.to_string()))?;
         let msg = req.msg;
-        let sig_index = req.sig_index as usize;
+        let request_id = req.request_id;
         let partial = req.partial_sig;
 
         self.context
             .write()
             .await
-            .send_partial_sig(member_id_address, msg, sig_index, partial)
+            .send_partial_sig(member_id_address, msg, request_id, partial)
             .await
             .map_err(|e: anyhow::Error| Status::unavailable(e.to_string()))?;
         return Ok(Response::new(SendPartialSigReply { res: true }));
@@ -377,7 +372,7 @@ impl<
     ) -> Result<tonic::Response<FulfillRandomnessReply>, tonic::Status> {
         let req = request.into_inner();
         let group_index = req.group_index as usize;
-        let sig_index = req.sig_index as usize;
+        let request_id = req.request_id;
         let sig = req.sig;
         let partial_sigs = req
             .partial_sigs
@@ -387,7 +382,7 @@ impl<
         self.context
             .write()
             .await
-            .fulfill_randomness(group_index, sig_index, sig, partial_sigs)
+            .fulfill_randomness(group_index, request_id, sig, partial_sigs)
             .await
             .map_err(|e: anyhow::Error| Status::failed_precondition(e.to_string()))?;
         return Ok(Response::new(FulfillRandomnessReply { res: true }));
@@ -471,7 +466,7 @@ impl<C: PairingCurve> From<ModelMember<C>> for Member {
 pub async fn start_management_server<
     N: NodeInfoFetcher<C>
         + NodeInfoUpdater<C>
-        + MdcContextUpdater
+        + ContextInfoUpdater
         + std::fmt::Debug
         + Clone
         + Sync
@@ -479,7 +474,7 @@ pub async fn start_management_server<
         + 'static,
     G: GroupInfoFetcher<C>
         + GroupInfoUpdater<C>
-        + MdcContextUpdater
+        + ContextInfoUpdater
         + std::fmt::Debug
         + Clone
         + Sync
@@ -530,8 +525,8 @@ pub async fn start_management_server<
 
 #[derive(Debug, Clone)]
 struct LogLayer<
-    N: NodeInfoFetcher<C> + NodeInfoUpdater<C> + MdcContextUpdater + Clone,
-    G: GroupInfoFetcher<C> + GroupInfoUpdater<C> + MdcContextUpdater + Clone,
+    N: NodeInfoFetcher<C> + NodeInfoUpdater<C> + ContextInfoUpdater + Clone,
+    G: GroupInfoFetcher<C> + GroupInfoUpdater<C> + ContextInfoUpdater + Clone,
     T: BLSTasksFetcher<RandomnessTask> + BLSTasksUpdater<RandomnessTask> + Clone,
     I: ChainIdentity
         + ControllerClientBuilder
@@ -545,8 +540,8 @@ struct LogLayer<
 }
 
 impl<
-        N: NodeInfoFetcher<C> + NodeInfoUpdater<C> + MdcContextUpdater + Clone,
-        G: GroupInfoFetcher<C> + GroupInfoUpdater<C> + MdcContextUpdater + Clone,
+        N: NodeInfoFetcher<C> + NodeInfoUpdater<C> + ContextInfoUpdater + Clone,
+        G: GroupInfoFetcher<C> + GroupInfoUpdater<C> + ContextInfoUpdater + Clone,
         T: BLSTasksFetcher<RandomnessTask> + BLSTasksUpdater<RandomnessTask> + Clone,
         I: ChainIdentity
             + ControllerClientBuilder
@@ -564,8 +559,8 @@ impl<
 
 impl<
         S,
-        N: NodeInfoFetcher<C> + NodeInfoUpdater<C> + MdcContextUpdater + Clone,
-        G: GroupInfoFetcher<C> + GroupInfoUpdater<C> + MdcContextUpdater + Clone,
+        N: NodeInfoFetcher<C> + NodeInfoUpdater<C> + ContextInfoUpdater + Clone,
+        G: GroupInfoFetcher<C> + GroupInfoUpdater<C> + ContextInfoUpdater + Clone,
         T: BLSTasksFetcher<RandomnessTask> + BLSTasksUpdater<RandomnessTask> + Clone,
         I: ChainIdentity
             + ControllerClientBuilder
@@ -589,8 +584,8 @@ impl<
 #[derive(Debug, Clone)]
 struct LogService<
     S,
-    N: NodeInfoFetcher<C> + NodeInfoUpdater<C> + MdcContextUpdater + Clone,
-    G: GroupInfoFetcher<C> + GroupInfoUpdater<C> + MdcContextUpdater + Clone,
+    N: NodeInfoFetcher<C> + NodeInfoUpdater<C> + ContextInfoUpdater + Clone,
+    G: GroupInfoFetcher<C> + GroupInfoUpdater<C> + ContextInfoUpdater + Clone,
     T: BLSTasksFetcher<RandomnessTask> + BLSTasksUpdater<RandomnessTask> + Clone,
     I: ChainIdentity
         + ControllerClientBuilder
@@ -608,7 +603,7 @@ impl<
         S,
         N: NodeInfoFetcher<C>
             + NodeInfoUpdater<C>
-            + MdcContextUpdater
+            + ContextInfoUpdater
             + std::fmt::Debug
             + Clone
             + Sync
@@ -616,7 +611,7 @@ impl<
             + 'static,
         G: GroupInfoFetcher<C>
             + GroupInfoUpdater<C>
-            + MdcContextUpdater
+            + ContextInfoUpdater
             + std::fmt::Debug
             + Clone
             + Sync
@@ -663,25 +658,7 @@ where
         let context = self.context.clone();
 
         Box::pin(async move {
-            log_mdc::insert("request_id", Uuid::new_v4().to_string());
-
-            context
-                .read()
-                .await
-                .get_main_chain()
-                .get_node_cache()
-                .read()
-                .await
-                .refresh_mdc_entry();
-
-            context
-                .read()
-                .await
-                .get_main_chain()
-                .get_group_cache()
-                .read()
-                .await
-                .refresh_mdc_entry();
+            log_mdc::insert("management_request_id", Uuid::new_v4().to_string());
 
             debug!("Intercepting management request: {:?}", req);
 
@@ -708,7 +685,7 @@ where
 
             let response = inner.call(req).await?;
 
-            log_mdc::remove("request_id");
+            log_mdc::remove("management_request_id");
 
             Ok(response)
         })

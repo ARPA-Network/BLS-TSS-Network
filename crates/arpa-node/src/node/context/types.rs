@@ -18,7 +18,7 @@ use arpa_node_contract_client::{
 };
 use arpa_node_core::{ChainIdentity, RandomnessTask, SchedulerResult};
 use arpa_node_dal::{
-    BLSTasksFetcher, BLSTasksUpdater, GroupInfoFetcher, GroupInfoUpdater, MdcContextUpdater,
+    BLSTasksFetcher, BLSTasksUpdater, ContextInfoUpdater, GroupInfoFetcher, GroupInfoUpdater,
     NodeInfoFetcher, NodeInfoUpdater,
 };
 use async_trait::async_trait;
@@ -87,8 +87,8 @@ pub struct HDWallet {
 
 #[derive(Debug)]
 pub struct GeneralContext<
-    N: NodeInfoFetcher<C> + NodeInfoUpdater<C> + MdcContextUpdater,
-    G: GroupInfoFetcher<C> + GroupInfoUpdater<C> + MdcContextUpdater,
+    N: NodeInfoFetcher<C> + NodeInfoUpdater<C> + ContextInfoUpdater,
+    G: GroupInfoFetcher<C> + GroupInfoUpdater<C> + ContextInfoUpdater,
     T: BLSTasksFetcher<RandomnessTask> + BLSTasksUpdater<RandomnessTask>,
     I: ChainIdentity + ControllerClientBuilder + CoordinatorClientBuilder + AdapterClientBuilder<C>,
     C: PairingCurve,
@@ -101,8 +101,8 @@ pub struct GeneralContext<
 }
 
 impl<
-        N: NodeInfoFetcher<C> + NodeInfoUpdater<C> + MdcContextUpdater + Sync + Send + 'static,
-        G: GroupInfoFetcher<C> + GroupInfoUpdater<C> + MdcContextUpdater + Sync + Send + 'static,
+        N: NodeInfoFetcher<C> + NodeInfoUpdater<C> + ContextInfoUpdater + Sync + Send + 'static,
+        G: GroupInfoFetcher<C> + GroupInfoUpdater<C> + ContextInfoUpdater + Sync + Send + 'static,
         T: BLSTasksFetcher<RandomnessTask> + BLSTasksUpdater<RandomnessTask> + Sync + Send + 'static,
         I: ChainIdentity
             + ControllerClientBuilder
@@ -129,7 +129,7 @@ impl<
 impl<
         N: NodeInfoFetcher<C>
             + NodeInfoUpdater<C>
-            + MdcContextUpdater
+            + ContextInfoUpdater
             + std::fmt::Debug
             + Clone
             + Sync
@@ -137,7 +137,7 @@ impl<
             + 'static,
         G: GroupInfoFetcher<C>
             + GroupInfoUpdater<C>
-            + MdcContextUpdater
+            + ContextInfoUpdater
             + std::fmt::Debug
             + Clone
             + Sync
@@ -200,7 +200,7 @@ impl<
 impl<
         N: NodeInfoFetcher<C>
             + NodeInfoUpdater<C>
-            + MdcContextUpdater
+            + ContextInfoUpdater
             + std::fmt::Debug
             + Clone
             + Sync
@@ -208,7 +208,7 @@ impl<
             + 'static,
         G: GroupInfoFetcher<C>
             + GroupInfoUpdater<C>
-            + MdcContextUpdater
+            + ContextInfoUpdater
             + std::fmt::Debug
             + Clone
             + Sync
@@ -281,7 +281,7 @@ impl TaskWaiter for ContextHandle {
 impl<
         N: NodeInfoFetcher<C>
             + NodeInfoUpdater<C>
-            + MdcContextUpdater
+            + ContextInfoUpdater
             + std::fmt::Debug
             + Clone
             + Sync
@@ -289,7 +289,7 @@ impl<
             + 'static,
         G: GroupInfoFetcher<C>
             + GroupInfoUpdater<C>
-            + MdcContextUpdater
+            + ContextInfoUpdater
             + std::fmt::Debug
             + Clone
             + Sync
@@ -331,7 +331,7 @@ impl<
 impl<
         N: NodeInfoFetcher<C>
             + NodeInfoUpdater<C>
-            + MdcContextUpdater
+            + ContextInfoUpdater
             + std::fmt::Debug
             + Clone
             + Sync
@@ -339,7 +339,7 @@ impl<
             + 'static,
         G: GroupInfoFetcher<C>
             + GroupInfoUpdater<C>
-            + MdcContextUpdater
+            + ContextInfoUpdater
             + std::fmt::Debug
             + Clone
             + Sync

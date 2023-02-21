@@ -1,9 +1,11 @@
 use async_trait::async_trait;
 use error::ContractClientResult;
 
+pub mod contract_stub;
 pub mod error;
 pub mod ethers;
 pub mod rpc_mock;
+pub mod rpc_stub;
 
 #[async_trait]
 pub trait ServiceClient<C> {
@@ -13,7 +15,7 @@ pub trait ServiceClient<C> {
 pub mod controller {
     use std::future::Future;
 
-    use arpa_node_core::{DKGTask, GroupRelayTask, Node};
+    use arpa_node_core::{DKGTask, Node};
 
     use async_trait::async_trait;
     use ethers_core::types::Address;
@@ -49,14 +51,6 @@ pub mod controller {
     pub trait ControllerLogs {
         async fn subscribe_dkg_task<
             C: FnMut(DKGTask) -> F + Send,
-            F: Future<Output = ContractClientResult<()>> + Send,
-        >(
-            &self,
-            cb: C,
-        ) -> ContractClientResult<()>;
-
-        async fn subscribe_group_relay_task<
-            C: FnMut(GroupRelayTask) -> F + Send,
             F: Future<Output = ContractClientResult<()>> + Send,
         >(
             &self,
@@ -128,10 +122,9 @@ pub mod coordinator {
 }
 
 pub mod adapter {
-    use arpa_node_core::{
-        Group, GroupRelayConfirmationTask, GroupRelayConfirmationTaskState, RandomnessTask,
-    };
+    use arpa_node_core::{Group, RandomnessTask};
     use async_trait::async_trait;
+    use ethers::types::U256;
     use ethers_core::types::Address;
     use std::{collections::HashMap, future::Future};
     use threshold_bls::group::PairingCurve;
@@ -140,71 +133,30 @@ pub mod adapter {
 
     #[async_trait]
     pub trait AdapterTransactions {
-        async fn request_randomness(&self, message: &str) -> ContractClientResult<()>;
+        async fn request_randomness(&self, seed: U256) -> ContractClientResult<()>;
 
         async fn fulfill_randomness(
             &self,
             group_index: usize,
-            signature_index: usize,
+            request_id: Vec<u8>,
             signature: Vec<u8>,
             partial_signatures: HashMap<Address, Vec<u8>>,
         ) -> ContractClientResult<()>;
-
-        async fn fulfill_relay(
-            &self,
-            relayer_group_index: usize,
-            task_index: usize,
-            signature: Vec<u8>,
-            group_as_bytes: Vec<u8>,
-        ) -> ContractClientResult<()>;
-
-        async fn cancel_invalid_relay_confirmation_task(
-            &self,
-            task_index: usize,
-        ) -> ContractClientResult<()>;
-
-        async fn confirm_relay(
-            &self,
-            task_index: usize,
-            group_relay_confirmation_as_bytes: Vec<u8>,
-            signature: Vec<u8>,
-        ) -> ContractClientResult<()>;
-
-        async fn set_initial_group(&self, group: Vec<u8>) -> ContractClientResult<()>;
     }
 
     #[async_trait]
     pub trait AdapterViews<C: PairingCurve> {
         async fn get_group(&self, group_index: usize) -> ContractClientResult<Group<C>>;
 
-        async fn get_last_output(&self) -> ContractClientResult<u64>;
+        async fn get_last_output(&self) -> ContractClientResult<U256>;
 
-        async fn get_signature_task_completion_state(
-            &self,
-            index: usize,
-        ) -> ContractClientResult<bool>;
-
-        async fn get_group_relay_cache(&self, group_index: usize)
-            -> ContractClientResult<Group<C>>;
-
-        async fn get_group_relay_confirmation_task_state(
-            &self,
-            task_index: usize,
-        ) -> ContractClientResult<GroupRelayConfirmationTaskState>;
+        async fn is_task_pending(&self, request_id: &[u8]) -> ContractClientResult<bool>;
     }
 
     #[async_trait]
     pub trait AdapterLogs {
         async fn subscribe_randomness_task<
             C: FnMut(RandomnessTask) -> F + Send,
-            F: Future<Output = ContractClientResult<()>> + Send,
-        >(
-            &self,
-            cb: C,
-        ) -> ContractClientResult<()>;
-
-        async fn subscribe_group_relay_confirmation_task<
-            C: FnMut(GroupRelayConfirmationTask) -> F + Send,
             F: Future<Output = ContractClientResult<()>> + Send,
         >(
             &self,

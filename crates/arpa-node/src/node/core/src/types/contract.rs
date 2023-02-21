@@ -1,6 +1,6 @@
 use crate::address_to_string;
 use crate::types::node::{Group as NodeGroup, Member as NodeMember};
-use ethers_core::types::Address;
+use ethers_core::types::{Address, U256};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use std::hash::{Hash, Hasher};
@@ -11,11 +11,11 @@ pub const GROUP_MAX_CAPACITY: usize = 10;
 pub const RANDOMNESS_TASK_EXCLUSIVE_WINDOW: usize = 30;
 
 pub struct Node {
-    pub id_address: String,
+    pub id_address: Address,
     pub id_public_key: Vec<u8>,
     pub state: bool,
     pub pending_until_block: usize,
-    pub staking: usize,
+    pub staking: U256,
 }
 
 impl<C: PairingCurve> From<NodeGroup<C>> for ContractGroup {

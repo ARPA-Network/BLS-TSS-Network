@@ -1,7 +1,7 @@
 use super::{DebuggableEvent, DebuggableSubscriber, Subscriber};
 use crate::node::{
     algorithm::bls::{BLSCore, SimpleBLSCore},
-    error::NodeResult,
+    error::{NodeError, NodeResult},
     event::{ready_to_fulfill_randomness_task::ReadyToFulfillRandomnessTask, types::Topic},
     queue::{event_queue::EventQueue, EventSubscriber},
     scheduler::{dynamic::SimpleDynamicTaskScheduler, SubscriberType, TaskScheduler, TaskType},
@@ -13,7 +13,7 @@ use async_trait::async_trait;
 use ethers::types::Address;
 use log::{debug, error, info};
 use std::{collections::HashMap, marker::PhantomData, sync::Arc};
-use threshold_bls::group::PairingCurve;
+use threshold_bls::{group::PairingCurve, poly::Eval};
 use tokio::sync::RwLock;
 
 #[derive(Debug)]
@@ -55,7 +55,7 @@ pub trait FulfillRandomnessHandler {
     async fn handle(
         &self,
         group_index: usize,
-        randomness_task_index: usize,
+        randomness_task_request_id: Vec<u8>,
         signature: Vec<u8>,
         partial_signatures: HashMap<Address, Vec<u8>>,
     ) -> NodeResult<()>;
@@ -77,7 +77,7 @@ impl<I: ChainIdentity + AdapterClientBuilder<C> + Sync + Send, C: PairingCurve +
     async fn handle(
         &self,
         group_index: usize,
-        randomness_task_index: usize,
+        randomness_task_request_id: Vec<u8>,
         signature: Vec<u8>,
         partial_signatures: HashMap<Address, Vec<u8>>,
     ) -> NodeResult<()> {
@@ -87,22 +87,19 @@ impl<I: ChainIdentity + AdapterClientBuilder<C> + Sync + Send, C: PairingCurve +
             .await
             .build_adapter_client(self.id_address);
 
-        if !client
-            .get_signature_task_completion_state(randomness_task_index)
-            .await?
-        {
+        if client.is_task_pending(&randomness_task_request_id).await? {
             match client
                 .fulfill_randomness(
                     group_index,
-                    randomness_task_index,
+                    randomness_task_request_id.clone(),
                     signature.clone(),
                     partial_signatures,
                 )
                 .await
             {
                 Ok(()) => {
-                    info!("fulfill randomness successfully! signature index: {}, group_index: {}, signature: {}",
-                        randomness_task_index, group_index, hex::encode(signature));
+                    info!("fulfill randomness successfully! task request id: {}, group_index: {}, signature: {}",
+                    format!("{:?}",hex::encode(randomness_task_request_id)), group_index, hex::encode(signature));
                 }
                 Err(e) => {
                     error!("{:?}", e);
@@ -134,16 +131,26 @@ impl<
         for signature in ready_signatures {
             let RandomnessResultCache {
                 group_index,
-                randomness_task_index,
+                randomness_task_request_id,
                 message: _,
                 threshold,
                 partial_signatures,
             } = signature.clone();
 
-            let signature = SimpleBLSCore::<C>::aggregate(
-                threshold,
-                &partial_signatures.values().cloned().collect::<Vec<_>>(),
-            )?;
+            let partials = partial_signatures
+                .values()
+                .cloned()
+                .collect::<Vec<Vec<u8>>>();
+
+            let signature = SimpleBLSCore::<C>::aggregate(threshold, &partials)?;
+
+            let partial_signatures = partial_signatures
+                .iter()
+                .map(|(addr, partial)| {
+                    let eval: Eval<Vec<u8>> = bincode::deserialize(partial)?;
+                    Ok((*addr, eval.value))
+                })
+                .collect::<Result<_, NodeError>>()?;
 
             let id_address = self.id_address;
 
@@ -161,7 +168,7 @@ impl<
                     if let Err(e) = handler
                         .handle(
                             group_index,
-                            randomness_task_index,
+                            randomness_task_request_id,
                             signature.clone(),
                             partial_signatures,
                         )

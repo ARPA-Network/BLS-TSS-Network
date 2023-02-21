@@ -1,34 +1,32 @@
-use self::adapter::{
+use crate::rpc_stub::adapter::{
     transactions_server::{
         Transactions as AdapterTransactions, TransactionsServer as AdapterTransactionsServer,
     },
     views_server::{Views as AdapterViews, ViewsServer as AdapterViewsServer},
-    GetGroupRequest, GroupReply, Member,
+    GetGroupRequest, GroupReply, IsTaskPendingReply, Member,
 };
-use crate::contract::{
-    adapter::{
-        AdapterMockHelper, AdapterTransactions as ModelAdapterTrxs,
-        AdapterViews as ModelAdapterViews,
+use crate::rpc_stub::adapter::{
+    FulfillRandomnessRequest, LastOutputReply, MineReply, MineRequest, RequestRandomnessRequest,
+    SignatureTaskReply,
+};
+use crate::{
+    contract::{
+        adapter::{
+            AdapterMockHelper, AdapterTransactions as ModelAdapterTrxs,
+            AdapterViews as ModelAdapterViews,
+        },
+        controller::Controller,
+        controller::ControllerMockHelper,
+        errors::ControllerError,
+        types::{Group, Member as ModelMember, SignatureTask},
+        utils::address_to_string,
     },
-    controller::Controller,
-    controller::ControllerMockHelper,
-    errors::ControllerError,
-    types::{Group, GroupRelayConfirmationTask, Member as ModelMember, SignatureTask},
+    rpc_stub::adapter::IsTaskPendingRequest,
 };
-use adapter::{
-    CancelInvalidRelayConfirmationTaskRequest, ConfirmRelayRequest, FulfillRandomnessRequest,
-    FulfillRelayRequest, GetGroupRelayCacheRequest, GetGroupRelayConfirmationTaskStateReply,
-    GetGroupRelayConfirmationTaskStateRequest, GetSignatureTaskCompletionStateReply,
-    GetSignatureTaskCompletionStateRequest, GroupRelayConfirmationTaskReply, LastOutputReply,
-    MineReply, MineRequest, RequestRandomnessRequest, SetInitialGroupRequest, SignatureTaskReply,
-};
+use ethers_core::types::{Address, U256};
 use parking_lot::RwLock;
 use std::{collections::BTreeMap, sync::Arc};
 use tonic::{transport::Server, Request, Response, Status};
-
-pub mod adapter {
-    include!("../../stub/adapter.rs");
-}
 
 pub struct MockAdapter {
     adapter: Arc<RwLock<Controller>>,
@@ -50,7 +48,7 @@ impl AdapterTransactions for MockAdapter {
 
         self.adapter
             .write()
-            .request_randomness(&req.message)
+            .request_randomness(U256::from_big_endian(&req.seed))
             .map(|()| Response::new(()))
             .map_err(|e| Status::internal(e.to_string()))
     }
@@ -61,14 +59,20 @@ impl AdapterTransactions for MockAdapter {
     ) -> Result<Response<()>, Status> {
         let req = request.into_inner();
 
+        let partial_signatures = req
+            .partial_signatures
+            .into_iter()
+            .map(|(id_address, signature)| (id_address.parse::<Address>().unwrap(), signature))
+            .collect();
+
         self.adapter
             .write()
             .fulfill_randomness(
-                &req.id_address,
+                &req.id_address.parse::<Address>().unwrap(),
                 req.group_index as usize,
-                req.signature_index as usize,
+                req.request_id,
                 req.signature,
-                req.partial_signatures,
+                partial_signatures,
             )
             .map(|()| Response::new(()))
             .map_err(|e| Status::internal(e.to_string()))
@@ -85,69 +89,6 @@ impl AdapterTransactions for MockAdapter {
                     block_number: block_number as u32,
                 })
             })
-            .map_err(|e| Status::internal(e.to_string()))
-    }
-
-    async fn fulfill_relay(
-        &self,
-        request: Request<FulfillRelayRequest>,
-    ) -> Result<Response<()>, Status> {
-        let req = request.into_inner();
-
-        self.adapter
-            .write()
-            .fulfill_relay(
-                &req.id_address,
-                req.relayer_group_index as usize,
-                req.task_index as usize,
-                req.signature,
-                req.group_as_bytes,
-            )
-            .map(|()| Response::new(()))
-            .map_err(|e| Status::internal(e.to_string()))
-    }
-
-    async fn set_initial_group(
-        &self,
-        request: Request<SetInitialGroupRequest>,
-    ) -> Result<Response<()>, Status> {
-        let req = request.into_inner();
-
-        self.adapter
-            .write()
-            .set_initial_group(&req.id_address, req.group)
-            .map(|()| Response::new(()))
-            .map_err(|e| Status::internal(e.to_string()))
-    }
-
-    async fn cancel_invalid_relay_confirmation_task(
-        &self,
-        request: Request<CancelInvalidRelayConfirmationTaskRequest>,
-    ) -> Result<Response<()>, Status> {
-        let req = request.into_inner();
-
-        self.adapter
-            .write()
-            .cancel_invalid_relay_confirmation_task(&req.id_address, req.task_index as usize)
-            .map(|()| Response::new(()))
-            .map_err(|e| Status::internal(e.to_string()))
-    }
-
-    async fn confirm_relay(
-        &self,
-        request: Request<ConfirmRelayRequest>,
-    ) -> Result<Response<()>, Status> {
-        let req = request.into_inner();
-
-        self.adapter
-            .write()
-            .confirm_relay(
-                &req.id_address,
-                req.task_index as usize,
-                req.group_relay_confirmation_as_bytes,
-                req.signature,
-            )
-            .map(|()| Response::new(()))
             .map_err(|e| Status::internal(e.to_string()))
     }
 }
@@ -177,8 +118,10 @@ impl AdapterViews for MockAdapter {
 
                 let members: BTreeMap<String, Member> = members
                     .into_iter()
-                    .map(|(id_address, m)| (id_address, m.into()))
+                    .map(|(id_address, m)| (address_to_string(id_address), m.into()))
                     .collect();
+
+                let committers = committers.into_iter().map(address_to_string).collect();
 
                 Ok(Response::new(GroupReply {
                     index: index as u32,
@@ -207,15 +150,18 @@ impl AdapterViews for MockAdapter {
             .emit_signature_task()
             .map(|signature_task| {
                 let SignatureTask {
-                    index,
-                    message,
+                    request_id,
+                    seed,
                     group_index,
                     assignment_block_height,
                 } = signature_task;
 
+                let mut seed_bytes = vec![0u8; 32];
+                seed.to_big_endian(&mut seed_bytes);
+
                 Response::new(SignatureTaskReply {
-                    index: index as u32,
-                    message,
+                    request_id,
+                    seed: seed_bytes,
                     group_index: group_index as u32,
                     assignment_block_height: assignment_block_height as u32,
                 })
@@ -228,116 +174,20 @@ impl AdapterViews for MockAdapter {
         _request: Request<()>,
     ) -> Result<Response<LastOutputReply>, Status> {
         let last_output = self.adapter.read().get_last_output();
-        return Ok(Response::new(LastOutputReply { last_output }));
+        let mut b1 = vec![0u8; 32];
+        last_output.to_big_endian(&mut b1);
+        return Ok(Response::new(LastOutputReply { last_output: b1 }));
     }
 
-    async fn get_signature_task_completion_state(
+    async fn is_task_pending(
         &self,
-        request: Request<GetSignatureTaskCompletionStateRequest>,
-    ) -> Result<Response<GetSignatureTaskCompletionStateReply>, Status> {
+        request: Request<IsTaskPendingRequest>,
+    ) -> Result<Response<IsTaskPendingReply>, Status> {
         let req = request.into_inner();
 
-        let state = self
-            .adapter
-            .read()
-            .get_signature_task_completion_state(req.index as usize);
+        let state = self.adapter.read().is_task_pending(&req.request_id);
 
-        return Ok(Response::new(GetSignatureTaskCompletionStateReply {
-            state,
-        }));
-    }
-
-    async fn get_group_relay_cache(
-        &self,
-        request: Request<GetGroupRelayCacheRequest>,
-    ) -> Result<Response<GroupReply>, Status> {
-        let req = request.into_inner();
-
-        match self
-            .adapter
-            .read()
-            .get_group_relay_cache(req.index as usize)
-        {
-            Some(group) => {
-                let Group {
-                    index,
-                    epoch,
-                    capacity,
-                    size,
-                    threshold,
-                    is_strictly_majority_consensus_reached,
-                    public_key,
-                    members,
-                    committers,
-                    ..
-                } = group.clone();
-
-                let members: BTreeMap<String, Member> = members
-                    .into_iter()
-                    .map(|(id_address, m)| (id_address, m.into()))
-                    .collect();
-
-                Ok(Response::new(GroupReply {
-                    index: index as u32,
-                    epoch: epoch as u32,
-                    capacity: capacity as u32,
-                    size: size as u32,
-                    threshold: threshold as u32,
-                    state: is_strictly_majority_consensus_reached,
-                    public_key,
-                    members,
-                    committers,
-                }))
-            }
-            None => Err(Status::not_found(
-                ControllerError::GroupNotExisted.to_string(),
-            )),
-        }
-    }
-
-    async fn emit_group_relay_confirmation_task(
-        &self,
-        _request: Request<()>,
-    ) -> Result<Response<GroupRelayConfirmationTaskReply>, Status> {
-        self.adapter
-            .read()
-            .emit_group_relay_confirmation_task()
-            .map(|group_relay_confirmation_task| {
-                let GroupRelayConfirmationTask {
-                    index,
-                    group_relay_cache_index,
-                    relayed_group_index,
-                    relayed_group_epoch,
-                    relayer_group_index,
-                    assignment_block_height,
-                } = group_relay_confirmation_task;
-
-                Response::new(GroupRelayConfirmationTaskReply {
-                    index: index as u32,
-                    group_relay_cache_index: group_relay_cache_index as u32,
-                    relayed_group_index: relayed_group_index as u32,
-                    relayed_group_epoch: relayed_group_epoch as u32,
-                    relayer_group_index: relayer_group_index as u32,
-                    assignment_block_height: assignment_block_height as u32,
-                })
-            })
-            .map_err(|e| Status::not_found(e.to_string()))
-    }
-
-    async fn get_group_relay_confirmation_task_state(
-        &self,
-        request: Request<GetGroupRelayConfirmationTaskStateRequest>,
-    ) -> Result<Response<GetGroupRelayConfirmationTaskStateReply>, Status> {
-        let req = request.into_inner();
-
-        let state = self
-            .adapter
-            .read()
-            .get_group_relay_confirmation_task_state(req.index as usize);
-
-        return Ok(Response::new(GetGroupRelayConfirmationTaskStateReply {
-            state,
-        }));
+        return Ok(Response::new(IsTaskPendingReply { state }));
     }
 }
 
@@ -345,7 +195,7 @@ impl From<ModelMember> for Member {
     fn from(member: ModelMember) -> Self {
         Member {
             index: member.index as u32,
-            id_address: member.id_address,
+            id_address: address_to_string(member.id_address),
             partial_public_key: member.partial_public_key,
         }
     }

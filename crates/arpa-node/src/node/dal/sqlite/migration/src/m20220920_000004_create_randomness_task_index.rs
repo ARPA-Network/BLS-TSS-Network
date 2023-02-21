@@ -12,8 +12,8 @@ impl MigrationTrait for Migration {
             .create_index(
                 Index::create()
                     .table(RandomnessTask::Table)
-                    .name("index")
-                    .col(RandomnessTask::Index)
+                    .name("request_id")
+                    .col(RandomnessTask::RequestId)
                     .unique()
                     .to_owned(),
             )
@@ -42,7 +42,7 @@ impl MigrationTrait for Migration {
 
     async fn down(&self, manager: &SchemaManager) -> Result<(), DbErr> {
         manager
-            .drop_index(Index::drop().name("index").to_owned())
+            .drop_index(Index::drop().name("request_id").to_owned())
             .await?;
 
         manager

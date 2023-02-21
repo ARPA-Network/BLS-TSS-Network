@@ -14,7 +14,7 @@ use arpa_node_dal::cache::InMemoryNodeInfoCache;
 use arpa_node_dal::error::DataAccessResult;
 use arpa_node_dal::error::GroupError;
 use arpa_node_dal::error::RandomnessTaskError;
-use arpa_node_dal::MdcContextUpdater;
+use arpa_node_dal::ContextInfoUpdater;
 use arpa_node_dal::NodeInfoUpdater;
 use arpa_node_dal::{
     error::DataAccessError, BLSTasksFetcher, BLSTasksUpdater, DKGOutput, GroupInfoFetcher,
@@ -24,6 +24,7 @@ use async_trait::async_trait;
 use entity::group_info;
 use entity::node_info;
 use ethers_core::types::Address;
+use ethers_core::types::U256;
 pub use migration::Migrator;
 use migration::MigratorTrait;
 use sea_orm::ConnectionTrait;
@@ -32,11 +33,11 @@ use sea_orm::DbConn;
 use sea_orm::QueryResult;
 use sea_orm::Statement;
 use sea_orm::{ConnectOptions, DatabaseConnection, DbErr};
-use serde::Serialize;
 use std::collections::BTreeMap;
 use std::{marker::PhantomData, sync::Arc, time::Duration};
 use threshold_bls::group::Curve;
 use threshold_bls::group::PairingCurve;
+use threshold_bls::serialize::point_to_hex;
 use threshold_bls::sig::Share;
 mod test_helper;
 use std::str;
@@ -141,11 +142,37 @@ impl<C: PairingCurve> SqliteDB<C> {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct NodeInfoDBClient<C: PairingCurve> {
     db_client: Arc<SqliteDB<C>>,
     node_info_cache_model: Option<node_info::Model>,
     node_info_cache: Option<InMemoryNodeInfoCache<C>>,
+}
+
+impl<C: PairingCurve> std::fmt::Debug for NodeInfoDBClient<C> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("NodeInfo")
+            .field(
+                "id_address",
+                &self.node_info_cache.as_ref().map(|e| e.get_id_address()),
+            )
+            .field(
+                "node_rpc_endpoint",
+                &self
+                    .node_info_cache
+                    .as_ref()
+                    .map(|e| e.get_node_rpc_endpoint()),
+            )
+            .field("dkg_private_key", &"ignored")
+            .field(
+                "dkg_public_key",
+                &self
+                    .node_info_cache
+                    .as_ref()
+                    .map(|e| e.get_dkg_public_key().ok().map(point_to_hex)),
+            )
+            .finish()
+    }
 }
 
 impl<C: PairingCurve> NodeInfoDBClient<C> {
@@ -160,7 +187,7 @@ impl<C: PairingCurve> NodeInfoDBClient<C> {
             bincode::deserialize(&node_info.dkg_public_key).unwrap(),
         );
 
-        node_info_cache.refresh_mdc_entry();
+        node_info_cache.refresh_context_entry();
 
         self.node_info_cache = Some(node_info_cache);
 
@@ -200,22 +227,49 @@ impl<C: PairingCurve> NodeInfoDBClient<C> {
     }
 }
 
-impl<C: PairingCurve> MdcContextUpdater for NodeInfoDBClient<C> {
-    fn refresh_mdc_entry(&self) {
+impl<C: PairingCurve> ContextInfoUpdater for NodeInfoDBClient<C> {
+    fn refresh_context_entry(&self) {
         if let Some(cache) = &self.node_info_cache {
-            cache.refresh_mdc_entry();
+            cache.refresh_context_entry();
         }
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct GroupInfoDBClient<C: PairingCurve> {
     db_client: Arc<SqliteDB<C>>,
     group_info_cache_model: Option<group_info::Model>,
     group_info_cache: Option<InMemoryGroupInfoCache<C>>,
 }
 
-impl<C: PairingCurve + Serialize> GroupInfoDBClient<C> {
+impl<C: PairingCurve> std::fmt::Debug for GroupInfoDBClient<C> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("GroupInfo")
+            .field("share", &"ignored")
+            .field(
+                "group",
+                &self.group_info_cache.as_ref().map(|e| e.get_group()),
+            )
+            .field(
+                "dkg_status",
+                &self.group_info_cache.as_ref().map(|e| e.get_dkg_status()),
+            )
+            .field(
+                "self_index",
+                &self.group_info_cache.as_ref().map(|e| e.get_self_index()),
+            )
+            .field(
+                "dkg_start_block_height",
+                &self
+                    .group_info_cache
+                    .as_ref()
+                    .map(|e| e.get_dkg_start_block_height()),
+            )
+            .finish()
+    }
+}
+
+impl<C: PairingCurve> GroupInfoDBClient<C> {
     pub async fn refresh_current_group_info(&mut self) -> DBResult<()> {
         let conn = &self.db_client.connection;
         let group_info = GroupQuery::find_current_group_info(conn)
@@ -251,7 +305,7 @@ impl<C: PairingCurve + Serialize> GroupInfoDBClient<C> {
             group_info.dkg_start_block_height as usize,
         );
 
-        group_info_cache.refresh_mdc_entry();
+        group_info_cache.refresh_context_entry();
 
         self.group_info_cache = Some(group_info_cache);
 
@@ -272,10 +326,10 @@ impl<C: PairingCurve + Serialize> GroupInfoDBClient<C> {
     }
 }
 
-impl<C: PairingCurve + Serialize> MdcContextUpdater for GroupInfoDBClient<C> {
-    fn refresh_mdc_entry(&self) {
+impl<C: PairingCurve> ContextInfoUpdater for GroupInfoDBClient<C> {
+    fn refresh_context_entry(&self) {
         if let Some(cache) = &self.group_info_cache {
-            cache.refresh_mdc_entry();
+            cache.refresh_context_entry();
         }
     }
 }
@@ -355,7 +409,7 @@ impl<C: PairingCurve + Sync + Send> NodeInfoUpdater<C> for NodeInfoDBClient<C> {
     }
 }
 
-impl<C: PairingCurve + Serialize> GroupInfoFetcher<C> for GroupInfoDBClient<C> {
+impl<C: PairingCurve> GroupInfoFetcher<C> for GroupInfoDBClient<C> {
     fn get_group(&self) -> DataAccessResult<&Group<C>> {
         self.only_has_group_task()?;
 
@@ -478,7 +532,7 @@ impl<C: PairingCurve + Serialize> GroupInfoFetcher<C> for GroupInfoDBClient<C> {
 }
 
 #[async_trait]
-impl<PC: PairingCurve + Serialize + Sync + Send> GroupInfoUpdater<PC> for GroupInfoDBClient<PC> {
+impl<PC: PairingCurve + Sync + Send> GroupInfoUpdater<PC> for GroupInfoDBClient<PC> {
     async fn save_task_info(
         &mut self,
         self_index: usize,
@@ -487,9 +541,10 @@ impl<PC: PairingCurve + Serialize + Sync + Send> GroupInfoUpdater<PC> for GroupI
         let members: BTreeMap<Address, Member<PC>> = task
             .members
             .iter()
-            .map(|(address, index)| {
+            .enumerate()
+            .map(|(index, address)| {
                 let member = Member {
-                    index: *index,
+                    index,
                     id_address: *address,
                     rpc_endpoint: None,
                     partial_public_key: None,
@@ -689,9 +744,9 @@ impl<PC: PairingCurve + Serialize + Sync + Send> GroupInfoUpdater<PC> for GroupI
 impl<C: PairingCurve + Sync + Send> BLSTasksFetcher<RandomnessTask>
     for BLSTasksDBClient<RandomnessTask, C>
 {
-    async fn contains(&self, task_index: usize) -> DataAccessResult<bool> {
+    async fn contains(&self, task_request_id: &[u8]) -> DataAccessResult<bool> {
         let conn = &self.db_client.connection;
-        let task = RandomnessTaskQuery::select_by_index(conn, task_index as i32)
+        let task = RandomnessTaskQuery::select_by_request_id(conn, task_request_id)
             .await
             .map_err(|e| {
                 let e: DBError = e.into();
@@ -700,9 +755,9 @@ impl<C: PairingCurve + Sync + Send> BLSTasksFetcher<RandomnessTask>
         Ok(task.is_some())
     }
 
-    async fn get(&self, task_index: usize) -> DataAccessResult<RandomnessTask> {
+    async fn get(&self, task_request_id: &[u8]) -> DataAccessResult<RandomnessTask> {
         let conn = &self.db_client.connection;
-        let task = RandomnessTaskQuery::select_by_index(conn, task_index as i32)
+        let task = RandomnessTaskQuery::select_by_request_id(conn, task_request_id)
             .await
             .map_err(|e| {
                 let e: DBError = e.into();
@@ -710,17 +765,19 @@ impl<C: PairingCurve + Sync + Send> BLSTasksFetcher<RandomnessTask>
             })?;
 
         task.map(|model| RandomnessTask {
-            index: model.index as usize,
-            message: model.message,
+            request_id: model.request_id,
+            seed: U256::from_big_endian(&model.message),
             group_index: model.group_index as usize,
             assignment_block_height: model.assignment_block_height as usize,
         })
-        .ok_or_else(|| RandomnessTaskError::NoRandomnessTask(task_index).into())
+        .ok_or_else(|| {
+            RandomnessTaskError::NoRandomnessTask(format!("{:?}", task_request_id)).into()
+        })
     }
 
-    async fn is_handled(&self, task_index: usize) -> DataAccessResult<bool> {
+    async fn is_handled(&self, task_request_id: &[u8]) -> DataAccessResult<bool> {
         let conn = &self.db_client.connection;
-        let task = RandomnessTaskQuery::select_by_index(conn, task_index as i32)
+        let task = RandomnessTaskQuery::select_by_request_id(conn, task_request_id)
             .await
             .map_err(|e| {
                 let e: DBError = e.into();
@@ -736,12 +793,15 @@ impl<C: PairingCurve + Sync + Send> BLSTasksUpdater<RandomnessTask>
     for BLSTasksDBClient<RandomnessTask, C>
 {
     async fn add(&mut self, task: RandomnessTask) -> DataAccessResult<()> {
+        let mut seed_bytes = vec![0u8; 32];
+        task.seed.to_big_endian(&mut seed_bytes);
+
         RandomnessTaskMutation::add_task(
             self.get_connection(),
-            task.index as i32,
+            task.request_id,
             task.group_index as i32,
             task.assignment_block_height as i32,
-            task.message,
+            seed_bytes,
         )
         .await
         .map_err(|e| {
@@ -767,8 +827,8 @@ impl<C: PairingCurve + Sync + Send> BLSTasksUpdater<RandomnessTask>
             models
                 .into_iter()
                 .map(|model| RandomnessTask {
-                    index: model.index as usize,
-                    message: model.message,
+                    request_id: model.request_id,
+                    seed: U256::from_big_endian(&model.message),
                     group_index: model.group_index as usize,
                     assignment_block_height: model.assignment_block_height as usize,
                 })
@@ -798,7 +858,7 @@ pub mod sqlite_tests {
     use arpa_node_dal::NodeInfoFetcher;
     use arpa_node_dal::NodeInfoUpdater;
     use ethers_core::types::Address;
-    use std::collections::BTreeMap;
+    use ethers_core::types::U256;
     use std::{fs, path::PathBuf};
     use threshold_bls::curve::bn254::PairingCurve;
     use threshold_bls::group::PairingCurve as PC;
@@ -975,7 +1035,6 @@ pub mod sqlite_tests {
         let db = build_sqlite_db::<PairingCurve>().await.unwrap();
 
         let mut db = db.get_group_info_client();
-        let mut members: BTreeMap<Address, usize> = BTreeMap::new();
         let member_1 = "0x0000000000000000000000000000000000000001"
             .parse()
             .unwrap();
@@ -985,9 +1044,7 @@ pub mod sqlite_tests {
         let member_3 = "0x0000000000000000000000000000000000000003"
             .parse()
             .unwrap();
-        members.insert(member_1, 0);
-        members.insert(member_2, 1);
-        members.insert(member_3, 2);
+        let members: Vec<Address> = [member_1, member_2, member_3].to_vec();
 
         let task = DKGTask {
             group_index: 1,
@@ -1023,7 +1080,6 @@ pub mod sqlite_tests {
         let db = build_sqlite_db::<PairingCurve>().await.unwrap();
 
         let mut db = db.get_group_info_client();
-        let mut members: BTreeMap<Address, usize> = BTreeMap::new();
         let member_1 = "0x0000000000000000000000000000000000000001"
             .parse()
             .unwrap();
@@ -1033,9 +1089,7 @@ pub mod sqlite_tests {
         let member_3 = "0x0000000000000000000000000000000000000003"
             .parse()
             .unwrap();
-        members.insert(member_1, 0);
-        members.insert(member_2, 1);
-        members.insert(member_3, 2);
+        let members: Vec<Address> = [member_1, member_2, member_3].to_vec();
 
         let task = DKGTask {
             group_index: 1,
@@ -1071,7 +1125,6 @@ pub mod sqlite_tests {
         let db = build_sqlite_db::<PairingCurve>().await.unwrap();
 
         let mut db = db.get_group_info_client();
-        let mut members: BTreeMap<Address, usize> = BTreeMap::new();
         let member_1 = "0x0000000000000000000000000000000000000001"
             .parse()
             .unwrap();
@@ -1081,9 +1134,7 @@ pub mod sqlite_tests {
         let member_3 = "0x0000000000000000000000000000000000000003"
             .parse()
             .unwrap();
-        members.insert(member_1, 0);
-        members.insert(member_2, 1);
-        members.insert(member_3, 2);
+        let members: Vec<Address> = [member_1, member_2, member_3].to_vec();
 
         let task = DKGTask {
             group_index: 1,
@@ -1147,9 +1198,13 @@ pub mod sqlite_tests {
 
         let mut db = db.get_bls_tasks_client::<RandomnessTask>();
 
+        let request_id = vec![1];
+
+        let seed = U256::from_big_endian(&String::from("test task").into_bytes());
+
         let task = RandomnessTask {
-            index: 1,
-            message: String::from("test task"),
+            request_id: request_id.clone(),
+            seed,
             group_index: 2,
             assignment_block_height: 100,
         };
@@ -1158,23 +1213,23 @@ pub mod sqlite_tests {
             println!("{:?}", e);
         }
 
-        assert_eq!(true, db.contains(1).await.unwrap());
-        assert_eq!(task, db.get(1).await.unwrap());
-        assert_eq!(false, db.is_handled(1).await.unwrap());
+        assert_eq!(true, db.contains(&request_id).await.unwrap());
+        assert_eq!(task, db.get(&request_id).await.unwrap());
+        assert_eq!(false, db.is_handled(&request_id).await.unwrap());
 
         let available_tasks = db.check_and_get_available_tasks(100, 1).await.unwrap();
         assert_eq!(0, available_tasks.len());
 
         let available_tasks = db.check_and_get_available_tasks(100, 2).await.unwrap();
         assert_eq!(1, available_tasks.len());
-        assert_eq!(1, available_tasks[0].index);
-        assert_eq!(String::from("test task"), available_tasks[0].message);
+        assert_eq!(request_id, available_tasks[0].request_id);
+        assert_eq!(seed, available_tasks[0].seed);
         assert_eq!(2, available_tasks[0].group_index);
         assert_eq!(100, available_tasks[0].assignment_block_height);
 
-        assert_eq!(true, db.contains(1).await.unwrap());
-        assert_eq!(task, db.get(1).await.unwrap());
-        assert_eq!(true, db.is_handled(1).await.unwrap());
+        assert_eq!(true, db.contains(&request_id).await.unwrap());
+        assert_eq!(task, db.get(&request_id).await.unwrap());
+        assert_eq!(true, db.is_handled(&request_id).await.unwrap());
 
         let available_tasks = db.check_and_get_available_tasks(100, 2).await.unwrap();
         assert_eq!(0, available_tasks.len());
@@ -1190,9 +1245,13 @@ pub mod sqlite_tests {
 
         let mut db = db.get_bls_tasks_client::<RandomnessTask>();
 
+        let request_id = vec![1];
+
+        let seed = U256::from_big_endian(&String::from("test task").into_bytes());
+
         let task = RandomnessTask {
-            index: 1,
-            message: String::from("test task"),
+            request_id: request_id.clone(),
+            seed,
             group_index: 2,
             assignment_block_height: 100,
         };
@@ -1201,23 +1260,23 @@ pub mod sqlite_tests {
             println!("{:?}", e);
         }
 
-        assert_eq!(true, db.contains(1).await.unwrap());
-        assert_eq!(task, db.get(1).await.unwrap());
-        assert_eq!(false, db.is_handled(1).await.unwrap());
+        assert_eq!(true, db.contains(&request_id).await.unwrap());
+        assert_eq!(task, db.get(&request_id).await.unwrap());
+        assert_eq!(false, db.is_handled(&request_id).await.unwrap());
 
         let available_tasks = db.check_and_get_available_tasks(130, 1).await.unwrap();
         assert_eq!(0, available_tasks.len());
 
         let available_tasks = db.check_and_get_available_tasks(131, 1).await.unwrap();
         assert_eq!(1, available_tasks.len());
-        assert_eq!(1, available_tasks[0].index);
-        assert_eq!(String::from("test task"), available_tasks[0].message);
+        assert_eq!(request_id, available_tasks[0].request_id);
+        assert_eq!(seed, available_tasks[0].seed);
         assert_eq!(2, available_tasks[0].group_index);
         assert_eq!(100, available_tasks[0].assignment_block_height);
 
-        assert_eq!(true, db.contains(1).await.unwrap());
-        assert_eq!(task, db.get(1).await.unwrap());
-        assert_eq!(true, db.is_handled(1).await.unwrap());
+        assert_eq!(true, db.contains(&request_id).await.unwrap());
+        assert_eq!(task, db.get(&request_id).await.unwrap());
+        assert_eq!(true, db.is_handled(&request_id).await.unwrap());
 
         let available_tasks = db.check_and_get_available_tasks(131, 1).await.unwrap();
         assert_eq!(0, available_tasks.len());

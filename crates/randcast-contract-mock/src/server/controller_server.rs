@@ -1,4 +1,19 @@
-use self::controller::{
+use super::adapter_server::MockAdapter;
+use crate::contract::{
+    controller::{
+        Controller, ControllerMockHelper, ControllerTransactions as ModelControllerTrxs,
+        ControllerViews as ModelControllerViews, COORDINATOR_ADDRESS_PREFIX,
+    },
+    coordinator::{Transactions, Views},
+    errors::ControllerError,
+    types::{DKGTask, Member as ModelMember, Node},
+    utils::address_to_string,
+};
+use crate::rpc_stub::adapter::{
+    transactions_server::TransactionsServer as AdapterTransactionsServer,
+    views_server::ViewsServer as AdapterViewsServer,
+};
+use crate::rpc_stub::controller::{
     transactions_server::{
         Transactions as ControllerTransactions, TransactionsServer as ControllerTransactionsServer,
     },
@@ -6,7 +21,8 @@ use self::controller::{
     CommitDkgRequest, GetNodeRequest, Member, NodeRegisterRequest, NodeReply,
     PostProcessDkgRequest,
 };
-use self::coordinator::{
+use crate::rpc_stub::controller::{DkgTaskReply, MineReply, MineRequest};
+use crate::rpc_stub::coordinator::{
     transactions_server::{
         Transactions as CoordinatorTransactions,
         TransactionsServer as CoordinatorTransactionsServer,
@@ -15,34 +31,10 @@ use self::coordinator::{
     BlsKeysReply, InPhaseReply, JustificationsReply, ParticipantsReply, PublishRequest,
     ResponsesReply, SharesReply,
 };
-use super::adapter_server::{
-    adapter::{
-        transactions_server::TransactionsServer as AdapterTransactionsServer,
-        views_server::ViewsServer as AdapterViewsServer,
-    },
-    MockAdapter,
-};
-use crate::contract::{
-    controller::{
-        Controller, ControllerMockHelper, ControllerTransactions as ModelControllerTrxs,
-        ControllerViews as ModelControllerViews, COORDINATOR_ADDRESS_PREFIX,
-    },
-    coordinator::{Transactions, Views},
-    errors::ControllerError,
-    types::{DKGTask, GroupRelayTask, Member as ModelMember, Node},
-};
-use controller::{DkgTaskReply, GroupRelayTaskReply, MineReply, MineRequest};
+use ethers_core::types::Address;
 use parking_lot::RwLock;
 use std::sync::Arc;
 use tonic::{transport::Server, Request, Response, Status};
-
-pub mod controller {
-    include!("../../stub/controller.rs");
-}
-
-pub mod coordinator {
-    include!("../../stub/coordinator.rs");
-}
 
 pub struct MockController {
     controller: Arc<RwLock<Controller>>,
@@ -97,9 +89,11 @@ impl ControllerTransactions for MockController {
     ) -> Result<Response<()>, Status> {
         let req = request.into_inner();
 
+        let id_address = req.id_address.parse::<Address>().unwrap();
+
         self.controller
             .write()
-            .node_register(req.id_address, req.id_public_key)
+            .node_register(id_address, req.id_public_key)
             .map(|()| Response::new(()))
             .map_err(|e| Status::internal(e.to_string()))
     }
@@ -107,15 +101,23 @@ impl ControllerTransactions for MockController {
     async fn commit_dkg(&self, request: Request<CommitDkgRequest>) -> Result<Response<()>, Status> {
         let req = request.into_inner();
 
+        let id_address = req.id_address.parse::<Address>().unwrap();
+
+        let disqualified_nodes = req
+            .disqualified_nodes
+            .into_iter()
+            .map(|i| i.parse::<Address>().unwrap())
+            .collect();
+
         self.controller
             .write()
             .commit_dkg(
-                req.id_address,
+                &id_address,
                 req.group_index as usize,
                 req.group_epoch as usize,
                 req.public_key,
                 req.partial_public_key,
-                req.disqualified_nodes,
+                disqualified_nodes,
             )
             .map(|()| Response::new(()))
             .map_err(|e| Status::internal(e.to_string()))
@@ -127,10 +129,12 @@ impl ControllerTransactions for MockController {
     ) -> Result<Response<()>, Status> {
         let req = request.into_inner();
 
+        let id_address = req.id_address.parse::<Address>().unwrap();
+
         self.controller
             .write()
             .post_process_dkg(
-                &req.id_address,
+                &id_address,
                 req.group_index as usize,
                 req.group_epoch as usize,
             )
@@ -161,7 +165,9 @@ impl ControllerViews for MockController {
     ) -> Result<Response<NodeReply>, Status> {
         let req = request.into_inner();
 
-        match self.controller.read().get_node(&req.id_address) {
+        let id_address = req.id_address.parse::<Address>().unwrap();
+
+        match self.controller.read().get_node(&id_address) {
             Some(node) => Ok(Response::new(node.clone().into())),
             None => Err(Status::not_found(
                 ControllerError::NodeNotExisted.to_string(),
@@ -186,7 +192,7 @@ impl ControllerViews for MockController {
 
                 let members = members
                     .into_iter()
-                    .map(|(address, index)| (address, index as u32))
+                    .map(|(address, index)| (address_to_string(address), index as u32))
                     .collect();
 
                 Response::new(DkgTaskReply {
@@ -196,32 +202,7 @@ impl ControllerViews for MockController {
                     threshold: threshold as u32,
                     members,
                     assignment_block_height: assignment_block_height as u32,
-                    coordinator_address,
-                })
-            })
-            .map_err(|e| Status::not_found(e.to_string()))
-    }
-
-    async fn emit_group_relay_task(
-        &self,
-        _request: Request<()>,
-    ) -> Result<Response<GroupRelayTaskReply>, Status> {
-        self.controller
-            .read()
-            .emit_group_relay_task()
-            .map(|group_relay_task| {
-                let GroupRelayTask {
-                    controller_global_epoch,
-                    relayed_group_index,
-                    relayed_group_epoch,
-                    assignment_block_height,
-                } = group_relay_task;
-
-                Response::new(GroupRelayTaskReply {
-                    controller_global_epoch: controller_global_epoch as u32,
-                    relayed_group_index: relayed_group_index as u32,
-                    relayed_group_epoch: relayed_group_epoch as u32,
-                    assignment_block_height: assignment_block_height as u32,
+                    coordinator_address: address_to_string(coordinator_address),
                 })
             })
             .map_err(|e| Status::not_found(e.to_string()))
@@ -235,13 +216,15 @@ impl CoordinatorTransactions for MockCoordinator {
 
         let req = request.into_inner();
 
+        let id_address = req.id_address.parse::<Address>().unwrap();
+
         self.controller
             .write()
             .coordinators
             .get_mut(&req_index)
             .unwrap()
             .1
-            .publish(req.id_address, req.value)
+            .publish(id_address, req.value)
             .map(|()| Response::new(()))
             .map_err(|e| Status::internal(e.to_string()))
     }
@@ -310,7 +293,11 @@ impl CoordinatorViews for MockCoordinator {
             .unwrap()
             .1
             .get_participants()
-            .map(|participants| Response::new(ParticipantsReply { participants }))
+            .map(|participants| {
+                let participants = participants.into_iter().map(address_to_string).collect();
+
+                Response::new(ParticipantsReply { participants })
+            })
             .map_err(|e| Status::internal(e.to_string()))
     }
 
@@ -357,12 +344,15 @@ impl CoordinatorViews for MockCoordinator {
 
 impl From<Node> for NodeReply {
     fn from(n: Node) -> Self {
+        let mut b1 = vec![0u8; 32];
+        n.staking.to_big_endian(&mut b1);
+
         NodeReply {
-            id_address: n.id_address,
+            id_address: address_to_string(n.id_address),
             id_public_key: n.id_public_key,
             state: n.state,
             pending_until_block: n.pending_until_block as u32,
-            staking: n.staking as u32,
+            staking: b1,
         }
     }
 }
@@ -371,7 +361,7 @@ impl From<ModelMember> for Member {
     fn from(member: ModelMember) -> Self {
         Member {
             index: member.index as u32,
-            id_address: member.id_address,
+            id_address: address_to_string(member.id_address),
             partial_public_key: member.partial_public_key,
         }
     }

@@ -130,9 +130,8 @@ cargo run --bin user-client 0x9000000000000000000000000000000000000001 "[::1]:50
 ## use node-cmd-client to get views or call some helper methods(1 - controller 2 - adapter):
 
 ```bash
-cargo run --bin node-cmd-client 0x90000000000000000000000000000000000000ad "[::1]:50052" "1" set_initial_group "[::1]:50053"
-cargo run --bin node-cmd-client 0x9000000000000000000000000000000000000001 "[::1]:50052" "1" get_group "1"
-cargo run --bin node-cmd-client 0x9000000000000000000000000000000000000001 "[::1]:50053" "2" get_group "1"
+cargo run --bin node-cmd-client 0x9000000000000000000000000000000000000001 "[::1]:50052" "1" get_group "0"
+cargo run --bin node-cmd-client 0x9000000000000000000000000000000000000001 "[::1]:50053" "2" get_group "0"
 ```
 
 ## 1 MainChain Demo(Happy Path) Example:
@@ -152,7 +151,7 @@ cargo run --bin node-client -- -m demo -i 3
 
 ```bash
 # check result by view get_group
-cargo run --bin node-cmd-client 0x9000000000000000000000000000000000000001 "[::1]:50052" "2" get_group "1"
+cargo run --bin node-cmd-client 0x9000000000000000000000000000000000000001 "[::1]:50052" "2" get_group "0"
 ```
 
 ```bash

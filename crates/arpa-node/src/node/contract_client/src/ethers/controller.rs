@@ -1,24 +1,16 @@
-use arpa_node_core::{ChainIdentity, DKGTask, GeneralChainIdentity, GroupRelayTask, Node};
-use async_trait::async_trait;
-use ethers::{prelude::*, utils::keccak256};
-use std::{convert::TryFrom, future::Future, sync::Arc, time::Duration};
-
+use super::WalletSigner;
 use crate::{
+    contract_stub::controller::{CommitDkgParams, Controller, DkgTaskFilter},
     controller::{
         ControllerClientBuilder, ControllerLogs, ControllerTransactions, ControllerViews,
     },
     error::{ContractClientError, ContractClientResult},
     ServiceClient,
 };
-
-use self::controller_stub::Controller;
-
-use super::WalletSigner;
-
-#[allow(clippy::useless_conversion)]
-pub mod controller_stub {
-    include!("../../contract_stub/controller.rs");
-}
+use arpa_node_core::{ChainIdentity, DKGTask, GeneralChainIdentity, Node};
+use async_trait::async_trait;
+use ethers::prelude::*;
+use std::{convert::TryFrom, future::Future, sync::Arc, time::Duration};
 
 pub struct ControllerClient {
     controller_address: Address,
@@ -66,10 +58,26 @@ impl ServiceClient<ControllerContract> for ControllerClient {
     }
 }
 
-#[allow(unused_variables)]
 #[async_trait]
 impl ControllerTransactions for ControllerClient {
     async fn node_register(&self, id_public_key: Vec<u8>) -> ContractClientResult<()> {
+        let controller_contract =
+            ServiceClient::<ControllerContract>::prepare_service_client(self).await?;
+
+        controller_contract
+            .node_register(id_public_key.into())
+            .send()
+            .await
+            .map_err(|e| {
+                let e: ContractClientError = e.into();
+                e
+            })?
+            .await
+            .map_err(|e| {
+                let e: ContractClientError = e.into();
+                e
+            })?;
+
         Ok(())
     }
 
@@ -81,6 +89,29 @@ impl ControllerTransactions for ControllerClient {
         partial_public_key: Vec<u8>,
         disqualified_nodes: Vec<Address>,
     ) -> ContractClientResult<()> {
+        let controller_contract =
+            ServiceClient::<ControllerContract>::prepare_service_client(self).await?;
+
+        controller_contract
+            .commit_dkg(CommitDkgParams {
+                group_index: group_index.into(),
+                group_epoch: group_epoch.into(),
+                public_key: public_key.into(),
+                partial_public_key: partial_public_key.into(),
+                disqualified_nodes,
+            })
+            .send()
+            .await
+            .map_err(|e| {
+                let e: ContractClientError = e.into();
+                e
+            })?
+            .await
+            .map_err(|e| {
+                let e: ContractClientError = e.into();
+                e
+            })?;
+
         Ok(())
     }
 
@@ -89,6 +120,23 @@ impl ControllerTransactions for ControllerClient {
         group_index: usize,
         group_epoch: usize,
     ) -> ContractClientResult<()> {
+        let controller_contract =
+            ServiceClient::<ControllerContract>::prepare_service_client(self).await?;
+
+        controller_contract
+            .post_process_dkg(group_index.into(), group_epoch.into())
+            .send()
+            .await
+            .map_err(|e| {
+                let e: ContractClientError = e.into();
+                e
+            })?
+            .await
+            .map_err(|e| {
+                let e: ContractClientError = e.into();
+                e
+            })?;
+
         Ok(())
     }
 }
@@ -97,7 +145,26 @@ impl ControllerTransactions for ControllerClient {
 #[async_trait]
 impl ControllerViews for ControllerClient {
     async fn get_node(&self, id_address: Address) -> ContractClientResult<Node> {
-        todo!()
+        let controller_contract =
+            ServiceClient::<ControllerContract>::prepare_service_client(self).await?;
+
+        let res = controller_contract
+            .get_node(id_address)
+            .call()
+            .await
+            .map(|n| Node {
+                id_address: n.id_address,
+                id_public_key: n.dkg_public_key.to_vec(),
+                state: n.state,
+                pending_until_block: n.pending_until_block.as_usize(),
+                staking: n.staking,
+            })
+            .map_err(|e| {
+                let e: ContractClientError = e.into();
+                e
+            })?;
+
+        Ok(res)
     }
 }
 
@@ -110,46 +177,40 @@ impl ControllerLogs for ControllerClient {
         &self,
         mut cb: C,
     ) -> ContractClientResult<()> {
-        let dkg_task_filter =
-            Filter::new()
-                .from_block(BlockNumber::Latest)
-                .topic0(ValueOrArray::Value(H256::from(keccak256(
-                    "DkgTask(address,address,uint256)",
-                ))));
-        let mut stream = self.signer.watch(&dkg_task_filter).await.map_err(|e| {
-            let e: ContractClientError = e.into();
-            e
-        })?;
-        while let Some(log) = stream.next().await {
-            cb(log.into()).await?;
+        let contract = Controller::new(self.controller_address, self.signer.clone());
+
+        let events: Event<WalletSigner, DkgTaskFilter> = contract
+            .event::<DkgTaskFilter>()
+            .from_block(BlockNumber::Latest);
+
+        // turn the stream into a stream of events
+        let mut stream = events.stream().await?.with_meta().take(1);
+
+        while let Some(Ok(evt)) = stream.next().await {
+            let (
+                DkgTaskFilter {
+                    group_index,
+                    epoch,
+                    size,
+                    threshold,
+                    members,
+                    assignment_block_height: _,
+                    coordinator_address,
+                },
+                meta,
+            ) = evt;
+
+            let task = DKGTask {
+                group_index: group_index.as_usize(),
+                epoch: epoch.as_usize(),
+                size: size.as_usize(),
+                threshold: threshold.as_usize(),
+                members,
+                assignment_block_height: meta.block_number.as_usize(),
+                coordinator_address,
+            };
+            cb(task).await?;
         }
         Err(ContractClientError::FetchingDkgTaskError)
-    }
-
-    async fn subscribe_group_relay_task<
-        C: FnMut(GroupRelayTask) -> F + Send,
-        F: Future<Output = ContractClientResult<()>> + Send,
-    >(
-        &self,
-        mut cb: C,
-    ) -> ContractClientResult<()> {
-        let group_relay_task_filter =
-            Filter::new()
-                .from_block(BlockNumber::Latest)
-                .topic0(ValueOrArray::Value(H256::from(keccak256(
-                    "GroupRelayTask(address,address,uint256)",
-                ))));
-        let mut stream = self
-            .signer
-            .watch(&group_relay_task_filter)
-            .await
-            .map_err(|e| {
-                let e: ContractClientError = e.into();
-                e
-            })?;
-        while let Some(log) = stream.next().await {
-            cb(log.into()).await?;
-        }
-        Err(ContractClientError::FetchingGroupRelayTaskError)
     }
 }

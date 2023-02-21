@@ -1,15 +1,16 @@
 use std::collections::BTreeMap;
 use std::hash::{Hash, Hasher};
 
+use ethers_core::types::{Address, U256};
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, PartialEq, Serialize, Deserialize)]
 pub struct Node {
-    pub id_address: String,
+    pub id_address: Address,
     pub id_public_key: Vec<u8>,
     pub state: bool,
     pub pending_until_block: usize,
-    pub staking: usize,
+    pub staking: U256,
 }
 
 #[derive(Clone, PartialEq, Serialize, Deserialize)]
@@ -22,14 +23,14 @@ pub struct Group {
     pub is_strictly_majority_consensus_reached: bool,
     pub public_key: Vec<u8>,
     pub fail_randomness_task_count: usize,
-    pub members: BTreeMap<String, Member>,
-    pub committers: Vec<String>,
-    pub commit_cache: BTreeMap<String, CommitCache>,
+    pub members: BTreeMap<Address, Member>,
+    pub committers: Vec<Address>,
+    pub commit_cache: BTreeMap<Address, CommitCache>,
 }
 
 #[derive(Clone, PartialEq, Serialize, Deserialize)]
 pub struct Member {
-    pub id_address: String,
+    pub id_address: Address,
     pub index: usize,
     pub partial_public_key: Vec<u8>,
 }
@@ -44,7 +45,7 @@ pub struct CommitCache {
 pub struct CommitResult {
     pub(crate) group_epoch: usize,
     pub(crate) public_key: Vec<u8>,
-    pub(crate) disqualified_nodes: Vec<String>,
+    pub(crate) disqualified_nodes: Vec<Address>,
 }
 
 impl PartialEq for CommitResult {
@@ -65,8 +66,8 @@ impl Hash for CommitResult {
 
 #[derive(Clone)]
 pub struct SignatureTask {
-    pub index: usize,
-    pub message: String,
+    pub request_id: Vec<u8>,
+    pub seed: U256,
     pub group_index: usize,
     pub assignment_block_height: usize,
 }
@@ -77,45 +78,9 @@ pub struct DKGTask {
     pub epoch: usize,
     pub size: usize,
     pub threshold: usize,
-    pub members: BTreeMap<String, usize>,
+    pub members: BTreeMap<Address, usize>,
     pub assignment_block_height: usize,
-    pub coordinator_address: String,
-}
-
-#[derive(Clone)]
-pub struct UnresponsiveGroupEvent {
-    pub group_index: usize,
-    pub assignment_block_height: usize,
-}
-
-#[derive(Clone)]
-pub struct GroupRelayTask {
-    pub controller_global_epoch: usize,
-    pub relayed_group_index: usize,
-    pub relayed_group_epoch: usize,
-    pub assignment_block_height: usize,
-}
-
-#[derive(Clone)]
-pub struct GroupRelayConfirmationTask {
-    pub index: usize,
-    pub group_relay_cache_index: usize,
-    pub relayed_group_index: usize,
-    pub relayed_group_epoch: usize,
-    pub relayer_group_index: usize,
-    pub assignment_block_height: usize,
-}
-
-pub struct GroupRelayCache {
-    pub relayer_committer: String,
-    pub group: Group,
-    pub group_relay_confirmation_task_index: usize,
-}
-
-#[derive(Clone, Serialize, Deserialize)]
-pub struct GroupRelayConfirmation {
-    pub group: Group,
-    pub status: Status,
+    pub coordinator_address: Address,
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Hash, Eq)]
@@ -135,36 +100,10 @@ impl From<bool> for Status {
 }
 
 impl Status {
-    pub(crate) fn is_success(self) -> bool {
+    pub(crate) fn _is_success(self) -> bool {
         match self {
             Status::Success => true,
             Status::Complaint => false,
-        }
-    }
-}
-
-pub enum GroupRelayConfirmationTaskState {
-    NotExisted,
-    Available,
-    Invalid,
-}
-
-impl GroupRelayConfirmationTaskState {
-    pub(crate) fn to_i32(&self) -> i32 {
-        match self {
-            GroupRelayConfirmationTaskState::NotExisted => 0,
-            GroupRelayConfirmationTaskState::Available => 1,
-            GroupRelayConfirmationTaskState::Invalid => 2,
-        }
-    }
-}
-
-impl From<i32> for GroupRelayConfirmationTaskState {
-    fn from(b: i32) -> Self {
-        match b {
-            1 => GroupRelayConfirmationTaskState::Available,
-            2 => GroupRelayConfirmationTaskState::Invalid,
-            _ => GroupRelayConfirmationTaskState::NotExisted,
         }
     }
 }

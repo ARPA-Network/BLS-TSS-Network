@@ -21,8 +21,8 @@ pub trait BlockInfoUpdater {
     fn set_block_height(&mut self, block_height: usize);
 }
 
-pub trait MdcContextUpdater {
-    fn refresh_mdc_entry(&self);
+pub trait ContextInfoUpdater: std::fmt::Debug {
+    fn refresh_context_entry(&self);
 }
 
 #[async_trait]
@@ -106,11 +106,11 @@ pub trait GroupInfoFetcher<C: PairingCurve> {
 
 #[async_trait]
 pub trait BLSTasksFetcher<T> {
-    async fn contains(&self, task_index: usize) -> DataAccessResult<bool>;
+    async fn contains(&self, task_request_id: &[u8]) -> DataAccessResult<bool>;
 
-    async fn get(&self, task_index: usize) -> DataAccessResult<T>;
+    async fn get(&self, task_request_id: &[u8]) -> DataAccessResult<T>;
 
-    async fn is_handled(&self, task_index: usize) -> DataAccessResult<bool>;
+    async fn is_handled(&self, task_request_id: &[u8]) -> DataAccessResult<bool>;
 }
 
 #[async_trait]
@@ -125,9 +125,9 @@ pub trait BLSTasksUpdater<T: Task> {
 }
 
 pub trait SignatureResultCacheFetcher<T: ResultCache> {
-    fn contains(&self, signature_index: usize) -> bool;
+    fn contains(&self, task_request_id: &[u8]) -> bool;
 
-    fn get(&self, signature_index: usize) -> Option<&BLSResultCache<T>>;
+    fn get(&self, task_request_id: &[u8]) -> Option<&BLSResultCache<T>>;
 }
 
 pub trait SignatureResultCacheUpdater<T: ResultCache> {
@@ -136,14 +136,14 @@ pub trait SignatureResultCacheUpdater<T: ResultCache> {
     fn add(
         &mut self,
         group_index: usize,
-        signature_index: usize,
+        task_request_id: Vec<u8>,
         message: T::M,
         threshold: usize,
     ) -> DataAccessResult<bool>;
 
     fn add_partial_signature(
         &mut self,
-        signature_index: usize,
+        task_request_id: Vec<u8>,
         member_address: Address,
         partial_signature: Vec<u8>,
     ) -> DataAccessResult<bool>;

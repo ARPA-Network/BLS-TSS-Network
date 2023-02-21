@@ -31,12 +31,12 @@ impl GroupQuery {
 pub struct RandomnessTaskQuery;
 
 impl RandomnessTaskQuery {
-    pub async fn select_by_index(
+    pub async fn select_by_request_id(
         db: &DbConn,
-        index: i32,
+        request_id: &[u8],
     ) -> Result<Option<randomness_task::Model>, DbErr> {
         RandomnessTask::find()
-            .filter(randomness_task::Column::Index.eq(index))
+            .filter(randomness_task::Column::RequestId.eq(request_id))
             .one(db)
             .await
     }

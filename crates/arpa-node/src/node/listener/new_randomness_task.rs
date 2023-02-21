@@ -96,7 +96,7 @@ impl<
                             let contained_res = randomness_tasks_cache
                                 .read()
                                 .await
-                                .contains(randomness_task.index)
+                                .contains(&randomness_task.request_id)
                                 .await;
                             if let Ok(false) = contained_res {
                                 info!("received new randomness task. {:?}", randomness_task);

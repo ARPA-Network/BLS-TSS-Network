@@ -1,12 +1,12 @@
-use self::committer_stub::{
-    committer_service_server::{CommitterService, CommitterServiceServer},
-    CommitPartialSignatureReply, CommitPartialSignatureRequest,
-};
 use crate::node::context::chain::MainChainFetcher;
 use crate::node::{
     algorithm::bls::{BLSCore, SimpleBLSCore},
     context::{chain::ChainFetcher, types::GeneralContext, ContextFetcher},
     error::NodeError,
+};
+use crate::rpc_stub::committer::{
+    committer_service_server::{CommitterService, CommitterServiceServer},
+    CommitPartialSignatureReply, CommitPartialSignatureRequest,
 };
 use arpa_node_contract_client::{
     adapter::AdapterClientBuilder, controller::ControllerClientBuilder,
@@ -14,7 +14,7 @@ use arpa_node_contract_client::{
 };
 use arpa_node_core::{BLSTaskError, ChainIdentity, RandomnessTask, TaskType};
 use arpa_node_dal::{
-    BLSTasksFetcher, BLSTasksUpdater, GroupInfoFetcher, GroupInfoUpdater, MdcContextUpdater,
+    BLSTasksFetcher, BLSTasksUpdater, ContextInfoUpdater, GroupInfoFetcher, GroupInfoUpdater,
     NodeInfoFetcher, NodeInfoUpdater, SignatureResultCacheFetcher, SignatureResultCacheUpdater,
 };
 use ethers::types::Address;
@@ -24,15 +24,11 @@ use threshold_bls::group::PairingCurve;
 use tokio::sync::RwLock;
 use tonic::{transport::Server, Request, Response, Status};
 
-pub mod committer_stub {
-    include!("../../../rpc_stub/committer.rs");
-}
-
 type NodeContext<N, G, T, I, PC> = Arc<RwLock<GeneralContext<N, G, T, I, PC>>>;
 
 pub(crate) struct BLSCommitterServiceServer<
-    N: NodeInfoFetcher<PC> + NodeInfoUpdater<PC> + MdcContextUpdater,
-    G: GroupInfoFetcher<PC> + GroupInfoUpdater<PC> + MdcContextUpdater,
+    N: NodeInfoFetcher<PC> + NodeInfoUpdater<PC> + ContextInfoUpdater,
+    G: GroupInfoFetcher<PC> + GroupInfoUpdater<PC> + ContextInfoUpdater,
     T: BLSTasksFetcher<RandomnessTask> + BLSTasksUpdater<RandomnessTask>,
     I: ChainIdentity
         + ControllerClientBuilder
@@ -48,8 +44,8 @@ pub(crate) struct BLSCommitterServiceServer<
 }
 
 impl<
-        N: NodeInfoFetcher<PC> + NodeInfoUpdater<PC> + MdcContextUpdater,
-        G: GroupInfoFetcher<PC> + GroupInfoUpdater<PC> + MdcContextUpdater,
+        N: NodeInfoFetcher<PC> + NodeInfoUpdater<PC> + ContextInfoUpdater,
+        G: GroupInfoFetcher<PC> + GroupInfoUpdater<PC> + ContextInfoUpdater,
         T: BLSTasksFetcher<RandomnessTask> + BLSTasksUpdater<RandomnessTask>,
         I: ChainIdentity
             + ControllerClientBuilder
@@ -77,7 +73,7 @@ impl<
 impl<
         N: NodeInfoFetcher<PC>
             + NodeInfoUpdater<PC>
-            + MdcContextUpdater
+            + ContextInfoUpdater
             + std::fmt::Debug
             + Clone
             + Sync
@@ -85,7 +81,7 @@ impl<
             + 'static,
         G: GroupInfoFetcher<PC>
             + GroupInfoUpdater<PC>
-            + MdcContextUpdater
+            + ContextInfoUpdater
             + std::fmt::Debug
             + Clone
             + Sync
@@ -161,7 +157,7 @@ impl<
                     if !randomness_result_cache
                         .read()
                         .await
-                        .contains(req.signature_index as usize)
+                        .contains(&req.request_id)
                     {
                         return Err(Status::invalid_argument(
                             BLSTaskError::CommitterCacheNotExisted.to_string(),
@@ -173,16 +169,13 @@ impl<
                     let committer_cache_message = randomness_result_cache
                         .read()
                         .await
-                        .get(req.signature_index as usize)
+                        .get(&req.request_id)
                         .unwrap()
                         .result_cache
                         .message
-                        .to_string();
+                        .clone();
 
-                    let req_message = String::from_utf8(req.message)
-                        .map_err(|e| Status::internal(e.to_string()))?;
-
-                    if req_message != committer_cache_message {
+                    if req.message != committer_cache_message {
                         return Err(Status::invalid_argument(
                             NodeError::InvalidTaskMessage.to_string(),
                         ));
@@ -192,7 +185,7 @@ impl<
                         .write()
                         .await
                         .add_partial_signature(
-                            req.signature_index as usize,
+                            req.request_id,
                             req_id_address,
                             req.partial_signature,
                         )
@@ -219,7 +212,7 @@ pub async fn start_committer_server_with_shutdown<
     F: Future<Output = ()>,
     N: NodeInfoFetcher<PC>
         + NodeInfoUpdater<PC>
-        + MdcContextUpdater
+        + ContextInfoUpdater
         + std::fmt::Debug
         + Clone
         + Sync
@@ -227,7 +220,7 @@ pub async fn start_committer_server_with_shutdown<
         + 'static,
     G: GroupInfoFetcher<PC>
         + GroupInfoUpdater<PC>
-        + MdcContextUpdater
+        + ContextInfoUpdater
         + std::fmt::Debug
         + Clone
         + Sync
@@ -282,7 +275,7 @@ pub async fn start_committer_server_with_shutdown<
 pub async fn start_committer_server<
     N: NodeInfoFetcher<PC>
         + NodeInfoUpdater<PC>
-        + MdcContextUpdater
+        + ContextInfoUpdater
         + std::fmt::Debug
         + Clone
         + Sync
@@ -290,7 +283,7 @@ pub async fn start_committer_server<
         + 'static,
     G: GroupInfoFetcher<PC>
         + GroupInfoUpdater<PC>
-        + MdcContextUpdater
+        + ContextInfoUpdater
         + std::fmt::Debug
         + Clone
         + Sync

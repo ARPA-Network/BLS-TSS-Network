@@ -22,7 +22,7 @@ pub(crate) trait CommitterService {
         chain_id: usize,
         task_type: TaskType,
         message: Vec<u8>,
-        signature_index: usize,
+        request_id: Vec<u8>,
         partial_signature: Vec<u8>,
     ) -> NodeResult<bool>;
 }

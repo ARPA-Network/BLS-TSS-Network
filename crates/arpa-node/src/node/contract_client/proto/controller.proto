@@ -46,8 +46,6 @@ service Views {
   rpc GetNode(GetNodeRequest) returns (NodeReply);
 
   rpc EmitDkgTask(google.protobuf.Empty) returns (DkgTaskReply);
-
-  rpc EmitGroupRelayTask(google.protobuf.Empty) returns (GroupRelayTaskReply);
 }
 
 message GetNodeRequest {
@@ -59,7 +57,7 @@ message NodeReply {
   bytes id_public_key = 2;
   bool state = 3;
   uint32 pending_until_block = 4;
-  uint32 staking = 5;
+  bytes staking = 5;
 }
 
 message Member {
@@ -76,11 +74,4 @@ message DkgTaskReply {
   map<string, uint32> members = 5;
   uint32 assignment_block_height = 6;
   string coordinator_address = 7;
-}
-
-message GroupRelayTaskReply {
-  uint32 controller_global_epoch = 1;
-  uint32 relayed_group_index = 2;
-  uint32 relayed_group_epoch = 3;
-  uint32 assignment_block_height = 4;
 }

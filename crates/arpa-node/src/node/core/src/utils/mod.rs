@@ -15,7 +15,7 @@ pub mod util_tests {
 
     use ethers_core::types::Address;
 
-    use crate::format_now_date;
+    use crate::{address_to_string, format_now_date};
 
     #[test]
     fn test_format_now_date() {
@@ -28,6 +28,9 @@ pub mod util_tests {
         let good_address_in_str = "0x0000000000000000000000000000000000000001";
         let address = good_address_in_str.parse::<Address>();
         assert!(address.is_ok());
+        let address_as_str = address_to_string(address.unwrap());
+        assert_eq!(address.unwrap(), address_as_str.parse::<Address>().unwrap());
+
         let bad_address_in_str = "0x1";
         let address = bad_address_in_str.parse::<Address>();
         assert!(address.is_err());

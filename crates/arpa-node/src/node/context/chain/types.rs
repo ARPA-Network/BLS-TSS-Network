@@ -22,22 +22,20 @@ use arpa_node_contract_client::{
     coordinator::CoordinatorClientBuilder, provider::ChainProviderBuilder,
 };
 use arpa_node_core::{
-    ChainIdentity, GeneralChainIdentity, GroupRelayTask, MockChainIdentity, RandomnessTask,
-    SchedulerError, SchedulerResult,
+    ChainIdentity, GeneralChainIdentity, MockChainIdentity, RandomnessTask, SchedulerError,
+    SchedulerResult,
 };
 use arpa_node_dal::{
     cache::{
-        GroupRelayResultCache, InMemoryBLSTasksQueue, InMemoryBlockInfoCache,
-        InMemoryGroupInfoCache, InMemoryNodeInfoCache, InMemorySignatureResultCache,
-        RandomnessResultCache,
+        InMemoryBLSTasksQueue, InMemoryBlockInfoCache, InMemoryGroupInfoCache,
+        InMemoryNodeInfoCache, InMemorySignatureResultCache, RandomnessResultCache,
     },
-    MdcContextUpdater, NodeInfoUpdater,
+    ContextInfoUpdater, NodeInfoUpdater,
     {BLSTasksFetcher, BLSTasksUpdater, GroupInfoFetcher, GroupInfoUpdater, NodeInfoFetcher},
 };
 use arpa_node_sqlite_db::{BLSTasksDBClient, GroupInfoDBClient, NodeInfoDBClient};
 use async_trait::async_trait;
 use log::error;
-use serde::Serialize;
 use std::{marker::PhantomData, sync::Arc};
 use threshold_bls::group::PairingCurve;
 use tokio::sync::RwLock;
@@ -46,8 +44,8 @@ use super::{Chain, ChainFetcher, ContextFetcher, MainChain, MainChainFetcher};
 
 #[derive(Debug)]
 pub struct GeneralMainChain<
-    N: NodeInfoFetcher<PC> + NodeInfoUpdater<PC> + MdcContextUpdater,
-    G: GroupInfoFetcher<PC> + GroupInfoUpdater<PC> + MdcContextUpdater,
+    N: NodeInfoFetcher<PC> + NodeInfoUpdater<PC> + ContextInfoUpdater,
+    G: GroupInfoFetcher<PC> + GroupInfoUpdater<PC> + ContextInfoUpdater,
     T: BLSTasksFetcher<RandomnessTask> + BLSTasksUpdater<RandomnessTask>,
     I: ChainIdentity + ControllerClientBuilder + CoordinatorClientBuilder + AdapterClientBuilder<PC>,
     PC: PairingCurve,
@@ -64,7 +62,7 @@ pub struct GeneralMainChain<
     c: PhantomData<PC>,
 }
 
-impl<PC: PairingCurve + Serialize + Send + Sync + 'static>
+impl<PC: PairingCurve + Send + Sync + 'static>
     GeneralMainChain<
         InMemoryNodeInfoCache<PC>,
         InMemoryGroupInfoCache<PC>,
@@ -97,7 +95,7 @@ impl<PC: PairingCurve + Serialize + Send + Sync + 'static>
     }
 }
 
-impl<PC: PairingCurve + Serialize + Send + Sync + 'static>
+impl<PC: PairingCurve + Send + Sync + 'static>
     GeneralMainChain<
         NodeInfoDBClient<PC>,
         GroupInfoDBClient<PC>,
@@ -134,7 +132,7 @@ impl<PC: PairingCurve + Serialize + Send + Sync + 'static>
 impl<
         N: NodeInfoFetcher<PC>
             + NodeInfoUpdater<PC>
-            + MdcContextUpdater
+            + ContextInfoUpdater
             + std::fmt::Debug
             + Clone
             + Sync
@@ -142,7 +140,7 @@ impl<
             + 'static,
         G: GroupInfoFetcher<PC>
             + GroupInfoUpdater<PC>
-            + MdcContextUpdater
+            + ContextInfoUpdater
             + std::fmt::Debug
             + Clone
             + Sync
@@ -354,7 +352,7 @@ impl<
 impl<
         N: NodeInfoFetcher<PC>
             + NodeInfoUpdater<PC>
-            + MdcContextUpdater
+            + ContextInfoUpdater
             + std::fmt::Debug
             + Clone
             + Sync
@@ -362,7 +360,7 @@ impl<
             + 'static,
         G: GroupInfoFetcher<PC>
             + GroupInfoUpdater<PC>
-            + MdcContextUpdater
+            + ContextInfoUpdater
             + std::fmt::Debug
             + Clone
             + Sync
@@ -391,10 +389,6 @@ impl<
     type NodeInfoCache = N;
 
     type GroupInfoCache = G;
-
-    type GroupRelayTasksQueue = InMemoryBLSTasksQueue<GroupRelayTask>;
-
-    type GroupRelayResultCaches = InMemorySignatureResultCache<GroupRelayResultCache>;
 
     async fn init_block_listeners(&self, context: &Self::Context) -> SchedulerResult<()> {
         self.init_listener(
@@ -524,7 +518,7 @@ impl<
 impl<
         N: NodeInfoFetcher<PC>
             + NodeInfoUpdater<PC>
-            + MdcContextUpdater
+            + ContextInfoUpdater
             + std::fmt::Debug
             + Clone
             + Sync
@@ -532,7 +526,7 @@ impl<
             + 'static,
         G: GroupInfoFetcher<PC>
             + GroupInfoUpdater<PC>
-            + MdcContextUpdater
+            + ContextInfoUpdater
             + std::fmt::Debug
             + Clone
             + Sync
@@ -594,7 +588,7 @@ impl<
 impl<
         N: NodeInfoFetcher<PC>
             + NodeInfoUpdater<PC>
-            + MdcContextUpdater
+            + ContextInfoUpdater
             + std::fmt::Debug
             + Clone
             + Sync
@@ -602,7 +596,7 @@ impl<
             + 'static,
         G: GroupInfoFetcher<PC>
             + GroupInfoUpdater<PC>
-            + MdcContextUpdater
+            + ContextInfoUpdater
             + Clone
             + std::fmt::Debug
             + Sync

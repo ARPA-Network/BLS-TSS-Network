@@ -19,13 +19,12 @@ use arpa_node_contract_client::{
     provider::ChainProviderBuilder,
 };
 use arpa_node_core::{
-    BLSTaskError, ChainIdentity, DKGStatus, Group, RandomnessTask, SchedulerResult,
-    TaskType as BLSTaskType,
+    ChainIdentity, DKGStatus, Group, RandomnessTask, SchedulerResult, TaskType as BLSTaskType,
 };
 use arpa_node_dal::{
-    error::{DataAccessError, DataAccessResult},
-    BLSTasksFetcher, BLSTasksUpdater, GroupInfoFetcher, GroupInfoUpdater, MdcContextUpdater,
-    NodeInfoFetcher, NodeInfoUpdater, SignatureResultCacheFetcher, SignatureResultCacheUpdater,
+    error::DataAccessResult, BLSTasksFetcher, BLSTasksUpdater, ContextInfoUpdater,
+    GroupInfoFetcher, GroupInfoUpdater, NodeInfoFetcher, NodeInfoUpdater,
+    SignatureResultCacheFetcher, SignatureResultCacheUpdater,
 };
 use ethers::types::Address;
 use threshold_bls::{group::PairingCurve, sig::Share};
@@ -75,8 +74,12 @@ pub trait DKGService {
 }
 
 pub trait BLSRandomnessService<C: PairingCurve> {
-    async fn partial_sign(&self, sig_index: usize, threshold: usize, msg: &[u8])
-        -> Result<Vec<u8>>;
+    async fn partial_sign(
+        &self,
+        randomness_task_request_id: Vec<u8>,
+        threshold: usize,
+        msg: &[u8],
+    ) -> Result<Vec<u8>>;
 
     fn aggregate_partial_sigs(&self, threshold: usize, partial_sigs: &[Vec<u8>])
         -> Result<Vec<u8>>;
@@ -94,14 +97,14 @@ pub trait BLSRandomnessService<C: PairingCurve> {
         &self,
         member_id_address: Address,
         msg: Vec<u8>,
-        sig_index: usize,
+        randomness_task_request_id: Vec<u8>,
         partial: Vec<u8>,
     ) -> Result<()>;
 
     async fn fulfill_randomness(
         &self,
         group_index: usize,
-        sig_index: usize,
+        randomness_task_request_id: Vec<u8>,
         sig: Vec<u8>,
         partial_sigs: HashMap<Address, Vec<u8>>,
     ) -> Result<()>;
@@ -110,7 +113,7 @@ pub trait BLSRandomnessService<C: PairingCurve> {
 impl<
         N: NodeInfoFetcher<C>
             + NodeInfoUpdater<C>
-            + MdcContextUpdater
+            + ContextInfoUpdater
             + std::fmt::Debug
             + Clone
             + Sync
@@ -118,7 +121,7 @@ impl<
             + 'static,
         G: GroupInfoFetcher<C>
             + GroupInfoUpdater<C>
-            + MdcContextUpdater
+            + ContextInfoUpdater
             + std::fmt::Debug
             + Clone
             + Sync
@@ -184,7 +187,7 @@ impl<
 impl<
         N: NodeInfoFetcher<C>
             + NodeInfoUpdater<C>
-            + MdcContextUpdater
+            + ContextInfoUpdater
             + std::fmt::Debug
             + Clone
             + Sync
@@ -192,7 +195,7 @@ impl<
             + 'static,
         G: GroupInfoFetcher<C>
             + GroupInfoUpdater<C>
-            + MdcContextUpdater
+            + ContextInfoUpdater
             + std::fmt::Debug
             + Clone
             + Sync
@@ -251,7 +254,7 @@ impl<
 impl<
         N: NodeInfoFetcher<C>
             + NodeInfoUpdater<C>
-            + MdcContextUpdater
+            + ContextInfoUpdater
             + std::fmt::Debug
             + Clone
             + Sync
@@ -259,7 +262,7 @@ impl<
             + 'static,
         G: GroupInfoFetcher<C>
             + GroupInfoUpdater<C>
-            + MdcContextUpdater
+            + ContextInfoUpdater
             + std::fmt::Debug
             + Clone
             + Sync
@@ -371,7 +374,7 @@ impl<
 impl<
         N: NodeInfoFetcher<C>
             + NodeInfoUpdater<C>
-            + MdcContextUpdater
+            + ContextInfoUpdater
             + std::fmt::Debug
             + Clone
             + Sync
@@ -379,7 +382,7 @@ impl<
             + 'static,
         G: GroupInfoFetcher<C>
             + GroupInfoUpdater<C>
-            + MdcContextUpdater
+            + ContextInfoUpdater
             + std::fmt::Debug
             + Clone
             + Sync
@@ -436,7 +439,7 @@ impl<
 impl<
         N: NodeInfoFetcher<C>
             + NodeInfoUpdater<C>
-            + MdcContextUpdater
+            + ContextInfoUpdater
             + std::fmt::Debug
             + Clone
             + Sync
@@ -444,7 +447,7 @@ impl<
             + 'static,
         G: GroupInfoFetcher<C>
             + GroupInfoUpdater<C>
-            + MdcContextUpdater
+            + ContextInfoUpdater
             + std::fmt::Debug
             + Clone
             + Sync
@@ -472,7 +475,7 @@ impl<
 {
     async fn partial_sign(
         &self,
-        sig_index: usize,
+        randomness_task_request_id: Vec<u8>,
         threshold: usize,
         msg: &[u8],
     ) -> Result<Vec<u8>> {
@@ -504,7 +507,7 @@ impl<
                 .get_randomness_result_cache()
                 .read()
                 .await
-                .contains(sig_index);
+                .contains(&randomness_task_request_id);
 
             if !contained_res {
                 let group_index = self
@@ -520,12 +523,8 @@ impl<
                     .await
                     .add(
                         group_index,
-                        sig_index,
-                        String::from_utf8(msg.to_vec()).map_err(|e| {
-                            let e: BLSTaskError = e.into();
-                            let e: DataAccessError = e.into();
-                            e
-                        })?,
+                        randomness_task_request_id.clone(),
+                        msg.to_vec(),
                         threshold,
                     )?;
             }
@@ -534,7 +533,11 @@ impl<
                 .get_randomness_result_cache()
                 .write()
                 .await
-                .add_partial_signature(sig_index, id_address, partial_signature.clone())?;
+                .add_partial_signature(
+                    randomness_task_request_id.clone(),
+                    id_address,
+                    partial_signature.clone(),
+                )?;
         }
 
         Ok(partial_signature)
@@ -565,7 +568,7 @@ impl<
         &self,
         member_id_address: Address,
         msg: Vec<u8>,
-        sig_index: usize,
+        randomness_task_request_id: Vec<u8>,
         partial: Vec<u8>,
     ) -> Result<()> {
         let id_address = self
@@ -596,7 +599,13 @@ impl<
             .get_chain_id();
 
         committer_client
-            .commit_partial_signature(chain_id, BLSTaskType::Randomness, msg, sig_index, partial)
+            .commit_partial_signature(
+                chain_id,
+                BLSTaskType::Randomness,
+                msg,
+                randomness_task_request_id,
+                partial,
+            )
             .await?;
 
         Ok(())
@@ -605,7 +614,7 @@ impl<
     async fn fulfill_randomness(
         &self,
         group_index: usize,
-        sig_index: usize,
+        randomness_task_request_id: Vec<u8>,
         sig: Vec<u8>,
         partial_sigs: HashMap<Address, Vec<u8>>,
     ) -> Result<()> {
@@ -624,7 +633,7 @@ impl<
             .build_adapter_client(id_address);
 
         client
-            .fulfill_randomness(group_index, sig_index, sig, partial_sigs)
+            .fulfill_randomness(group_index, randomness_task_request_id, sig, partial_sigs)
             .await?;
 
         Ok(())

@@ -83,10 +83,11 @@ impl<
                         let eq = eq.clone();
 
                         async move {
-                            if let Some((_, node_index)) = dkg_task
+                            if let Some((node_index, _)) = dkg_task
                                 .members
                                 .iter()
-                                .find(|(id_address, _)| **id_address == self_id_address)
+                                .enumerate()
+                                .find(|(_, id_address)| **id_address == self_id_address)
                             {
                                 let cache_index = group_cache.read().await.get_index().unwrap_or(0);
 
@@ -95,7 +96,7 @@ impl<
                                 if cache_index != dkg_task.group_index
                                     || cache_epoch != dkg_task.epoch
                                 {
-                                    let self_index = *node_index;
+                                    let self_index = node_index;
 
                                     eq.read()
                                         .await
