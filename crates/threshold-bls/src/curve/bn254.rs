@@ -2,11 +2,11 @@ use crate::group::{self, Element, PairingCurve as PC, Point, Scalar as Sc};
 use crate::hash::hasher::Keccak256Hasher;
 use crate::hash::try_and_increment::TryAndIncrement;
 use crate::hash::HashToCurve;
+use crate::serialize::ContractSerialize;
 use ark_bn254 as bn254;
-use ark_ec::{AffineCurve, PairingEngine, ProjectiveCurve};
+use ark_ec::{PairingEngine, ProjectiveCurve};
 use ark_ff::PrimeField;
 use ark_ff::{Field, One, UniformRand, Zero};
-use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
 use rand_core::RngCore;
 use serde::{
     de::{Error as DeserializeError, SeqAccess, Visitor},
@@ -31,8 +31,6 @@ pub enum BNError {
     BLSError(#[from] BLSError),
 }
 
-// TODO(gakonst): Make this work with any PairingEngine.
-
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Deserialize, Serialize)]
 pub struct Scalar(
     #[serde(deserialize_with = "deserialize_field")]
@@ -42,21 +40,115 @@ pub struct Scalar(
 
 type ZG1 = <bn254::Bn254 as PairingEngine>::G1Projective;
 
-#[derive(Debug, Clone, Copy, Eq, PartialEq, Serialize, Deserialize)]
-pub struct G1(
-    #[serde(deserialize_with = "deserialize_group")]
-    #[serde(serialize_with = "serialize_group")]
-    pub(crate) ZG1,
-);
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+pub struct G1(pub(crate) ZG1);
 
 type ZG2 = <bn254::Bn254 as PairingEngine>::G2Projective;
 
-#[derive(Debug, Clone, Copy, Eq, PartialEq, Serialize, Deserialize)]
-pub struct G2(
-    #[serde(deserialize_with = "deserialize_group")]
-    #[serde(serialize_with = "serialize_group")]
-    pub(crate) ZG2,
-);
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+pub struct G2(pub(crate) ZG2);
+
+impl Serialize for G1 {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        let bytes = self
+            .serialize_to_contract_form()
+            .map_err(SerializationError::custom)?;
+
+        let mut tup = serializer.serialize_tuple(32)?;
+        for byte in &bytes {
+            tup.serialize_element(byte)?;
+        }
+        tup.end()
+    }
+}
+impl<'de> Deserialize<'de> for G1 {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        struct G1Visitor;
+
+        impl<'de> Visitor<'de> for G1Visitor {
+            type Value = G1;
+
+            fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+                formatter.write_str("a valid group element")
+            }
+
+            fn visit_seq<S>(self, mut seq: S) -> Result<Self::Value, S::Error>
+            where
+                S: SeqAccess<'de>,
+            {
+                let bytes: Vec<u8> = (0..32)
+                    .map(|_| {
+                        seq.next_element()?
+                            .ok_or_else(|| DeserializeError::custom("could not read bytes"))
+                    })
+                    .collect::<Result<Vec<_>, _>>()?;
+
+                let ele =
+                    G1::deserialize_from_contract_form(&bytes).map_err(DeserializeError::custom)?;
+                Ok(ele)
+            }
+        }
+
+        deserializer.deserialize_tuple(32, G1Visitor)
+    }
+}
+
+impl Serialize for G2 {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        let bytes = self
+            .serialize_to_contract_form()
+            .map_err(SerializationError::custom)?;
+
+        let mut tup = serializer.serialize_tuple(128)?;
+        for byte in &bytes {
+            tup.serialize_element(byte)?;
+        }
+        tup.end()
+    }
+}
+impl<'de> Deserialize<'de> for G2 {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        struct G2Visitor;
+
+        impl<'de> Visitor<'de> for G2Visitor {
+            type Value = G2;
+
+            fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+                formatter.write_str("a valid group element")
+            }
+
+            fn visit_seq<S>(self, mut seq: S) -> Result<Self::Value, S::Error>
+            where
+                S: SeqAccess<'de>,
+            {
+                let bytes: Vec<u8> = (0..128)
+                    .map(|_| {
+                        seq.next_element()?
+                            .ok_or_else(|| DeserializeError::custom("could not read bytes"))
+                    })
+                    .collect::<Result<Vec<_>, _>>()?;
+
+                let ele =
+                    G2::deserialize_from_contract_form(&bytes).map_err(DeserializeError::custom)?;
+                Ok(ele)
+            }
+        }
+
+        deserializer.deserialize_tuple(128, G2Visitor)
+    }
+}
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Serialize, Deserialize)]
 pub struct GT(
@@ -205,8 +297,6 @@ impl fmt::Display for G2 {
     }
 }
 
-//TODO (michael) : This interface should be refactored, GT is multiplicative subgroup of extension field
-// so using elliptic curve additive notation for it doesn't make sense
 impl Element for GT {
     type RHS = Scalar;
 
@@ -316,67 +406,6 @@ where
     tup.end()
 }
 
-fn deserialize_group<'de, D, C>(deserializer: D) -> Result<C, D::Error>
-where
-    D: Deserializer<'de>,
-    C: ProjectiveCurve,
-    C::Affine: CanonicalDeserialize + CanonicalSerialize,
-{
-    struct GroupVisitor<C>(PhantomData<C>);
-
-    impl<'de, C> Visitor<'de> for GroupVisitor<C>
-    where
-        C: ProjectiveCurve,
-        //C::Affine: CanonicalDeserialize + CanonicalSerialize,
-    {
-        type Value = C;
-
-        fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
-            formatter.write_str("a valid group element")
-        }
-
-        fn visit_seq<S>(self, mut seq: S) -> Result<C, S::Error>
-        where
-            S: SeqAccess<'de>,
-        {
-            let len = C::Affine::zero().serialized_size(); //C::Affine::SERIALIZED_SIZE;
-            let bytes: Vec<u8> = (0..len)
-                .map(|_| {
-                    seq.next_element()?
-                        .ok_or_else(|| DeserializeError::custom("could not read bytes"))
-                })
-                .collect::<Result<Vec<_>, _>>()?;
-
-            let affine =
-                C::Affine::deserialize(&mut &bytes[..]).map_err(DeserializeError::custom)?;
-            Ok(affine.into_projective())
-        }
-    }
-
-    let visitor = GroupVisitor(PhantomData);
-    deserializer.deserialize_tuple(C::Affine::zero().serialized_size(), visitor)
-}
-
-fn serialize_group<S, C>(c: &C, s: S) -> Result<S::Ok, S::Error>
-where
-    S: Serializer,
-    C: ProjectiveCurve,
-    C::Affine: CanonicalSerialize,
-{
-    let affine = c.into_affine();
-    let len = affine.serialized_size();
-    let mut bytes = Vec::with_capacity(len);
-    affine
-        .serialize(&mut bytes)
-        .map_err(SerializationError::custom)?;
-
-    let mut tup = s.serialize_tuple(len)?;
-    for byte in &bytes {
-        tup.serialize_element(byte)?;
-    }
-    tup.end()
-}
-
 #[derive(Clone, Debug)]
 pub struct BN254Curve;
 
@@ -401,15 +430,16 @@ mod tests {
 
     #[test]
     fn serialize_group() {
-        serialize_group_test::<G1>(32);
-        // serialize_group_test::<G2>(64);
+        for _ in 0..100 {
+            serialize_group_test::<G1>(32);
+            serialize_group_test::<G2>(128);
+        }
     }
 
     fn serialize_group_test<E: Element>(size: usize) {
         let rng = &mut rand::thread_rng();
         let sig = E::rand(rng);
         let ser = bincode::serialize(&sig).unwrap();
-        println!("{:?}", ser);
         assert_eq!(ser.len(), size);
 
         let de: E = bincode::deserialize(&ser).unwrap();

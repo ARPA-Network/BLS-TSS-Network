@@ -186,6 +186,8 @@ pub mod sig;
 
 pub mod hash;
 
+pub mod serialize;
+
 /// Pre-instantiated signature schemes for each curve
 pub mod schemes {
     use crate::sig::{G1Scheme, G2Scheme};

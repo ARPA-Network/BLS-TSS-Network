@@ -48,9 +48,16 @@ pub enum BLSError {
     #[error("there must be the same number of keys and messages")]
     UnevenNumKeysMessages,
 
-    /// Serialization error in Zexe
+    /// Serialization error in the underlying library
     #[error(transparent)]
     SerializationError(#[from] ark_serialize::SerializationError),
+
+    /// Serialization error when transform to/from contract form
+    #[error("serialization error when transform to/from contract form")]
+    ContractSerializationError,
+
+    #[error("not a valid group element")]
+    NotValidPoint,
 }
 
 pub trait CurveType {
