@@ -177,7 +177,7 @@ async fn wait_for_phase(dkg: &impl CoordinatorViews, num: usize) -> NodeResult<(
         if phase == -1 {
             return Err(NodeError::DKGEnded);
         }
-        if phase - 1 >= num as i8 {
+        if phase > num as i8 {
             break;
         }
 

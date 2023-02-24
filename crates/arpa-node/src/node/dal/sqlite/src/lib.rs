@@ -83,7 +83,7 @@ impl<C: PairingCurve> SqliteDB<C> {
             .max_lifetime(Duration::from_secs(8))
             .sqlx_logging(true)
             .sqlx_logging_level(LevelFilter::Debug)
-            .sqlcipher_key(format!("\"x'{}'\"", hex::encode(signing_key.to_vec())));
+            .sqlcipher_key(format!("\"x'{}'\"", hex::encode(signing_key)));
 
         let connection = sea_orm::Database::connect(opt).await?;
 

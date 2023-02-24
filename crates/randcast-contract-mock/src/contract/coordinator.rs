@@ -221,6 +221,6 @@ impl Views for Coordinator {
             return Ok(4);
         }
 
-        return Ok(-1);
+        Ok(-1)
     }
 }

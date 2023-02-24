@@ -6,6 +6,8 @@ node_management_rpc_token: "for_test"
 
 provider_endpoint: "localhost:8545"
 
+chain_id: 0
+
 controller_address: "0x9fe46736679d2d9a65f0992f2272de9f3c7fa6e0"
 
 data_path: "data1.sqlite"
