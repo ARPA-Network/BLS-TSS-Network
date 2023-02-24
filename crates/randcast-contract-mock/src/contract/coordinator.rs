@@ -77,7 +77,7 @@ pub trait Views {
     fn get_dkg_keys(&self) -> CoordinatorResult<(usize, Vec<Vec<u8>>)>;
 
     /// Returns the current phase of the DKG.
-    fn in_phase(&self) -> CoordinatorResult<isize>;
+    fn in_phase(&self) -> CoordinatorResult<i8>;
 }
 
 pub trait Internal {
@@ -199,7 +199,7 @@ impl Views for Coordinator {
         Ok((self.threshold, keys))
     }
 
-    fn in_phase(&self) -> CoordinatorResult<isize> {
+    fn in_phase(&self) -> CoordinatorResult<i8> {
         if self.start_block == 0 {
             return Ok(0);
         }

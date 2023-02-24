@@ -233,7 +233,7 @@ impl AdapterTransactions for Adapter {
         let mut block_num_bytes = vec![0u8; 32];
         U256::from(signature_task.assignment_block_height).to_big_endian(&mut block_num_bytes);
 
-        let message = keccak256([&seed_bytes[..], &block_num_bytes[..]].concat());
+        let message = [&seed_bytes[..], &block_num_bytes[..]].concat();
 
         let group_public_key = bincode::deserialize(&group.public_key)?;
 

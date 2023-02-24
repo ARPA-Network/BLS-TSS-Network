@@ -334,8 +334,9 @@ impl CoordinatorViews for MockCoordinator {
             .1
             .in_phase()
             .map(|phase| {
+                println!("in_phase: {:?}", phase);
                 Response::new(InPhaseReply {
-                    phase: phase as u32,
+                    phase: phase as i32,
                 })
             })
             .map_err(|e| Status::internal(e.to_string()))
