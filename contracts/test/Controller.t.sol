@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity ^0.8.15;
+
 pragma experimental ABIEncoderV2;
 
 import "forge-std/Test.sol";
@@ -47,14 +48,14 @@ contract ControllerTest is Test {
 
     function setUp() public {
         // deal nodes
-        vm.deal(node1, 1 * 10**18);
-        vm.deal(node2, 1 * 10**18);
-        vm.deal(node3, 1 * 10**18);
-        vm.deal(node4, 1 * 10**18);
-        vm.deal(node5, 1 * 10**18);
+        vm.deal(node1, 1 * 10 ** 18);
+        vm.deal(node2, 1 * 10 ** 18);
+        vm.deal(node3, 1 * 10 ** 18);
+        vm.deal(node4, 1 * 10 ** 18);
+        vm.deal(node5, 1 * 10 ** 18);
 
         // deal owner and create controller
-        vm.deal(owner, 1 * 10**18);
+        vm.deal(owner, 1 * 10 ** 18);
         vm.prank(owner);
         controller = new Controller();
     }
@@ -217,10 +218,7 @@ contract ControllerTest is Test {
     function testgetMemberIndexByAddress() public {
         uint256 groupIndex = 0;
 
-        int256 memberIndex = controller.getMemberIndexByAddress(
-            groupIndex,
-            node1
-        );
+        int256 memberIndex = controller.getMemberIndexByAddress(groupIndex, node1);
         assertEq(memberIndex, -1);
 
         testEmitGroupEvent();
@@ -282,9 +280,7 @@ contract ControllerTest is Test {
 
         // Fail if group does not match Controller Group Epoch
         vm.prank(node1);
-        vm.expectRevert(
-            "Caller Group epoch does not match controller Group epoch"
-        );
+        vm.expectRevert("Caller Group epoch does not match controller Group epoch");
         params = Controller.CommitDkgParams(
             groupIndex,
             999, //  wrong epoch
@@ -297,13 +293,7 @@ contract ControllerTest is Test {
         // Fail if node is not a member of the group
         vm.prank(node5);
         vm.expectRevert("Node is not a member of the group");
-        params = Controller.CommitDkgParams(
-            groupIndex,
-            groupEpoch,
-            publicKey,
-            partialPublicKey,
-            disqualifiedNodes
-        );
+        params = Controller.CommitDkgParams(groupIndex, groupEpoch, publicKey, partialPublicKey, disqualifiedNodes);
         controller.commitDkg(params);
 
         assertEq(checkIsStrictlyMajorityConsensusReached(groupIndex), false);
@@ -311,29 +301,15 @@ contract ControllerTest is Test {
 
         // Succesful Commit: Node 1
         vm.prank(node1);
-        params = Controller.CommitDkgParams(
-            groupIndex,
-            groupEpoch,
-            publicKey,
-            partialPublicKey,
-            disqualifiedNodes
-        );
+        params = Controller.CommitDkgParams(groupIndex, groupEpoch, publicKey, partialPublicKey, disqualifiedNodes);
         controller.commitDkg(params);
         assertEq(checkIsStrictlyMajorityConsensusReached(groupIndex), false);
         // printGroupInfo(groupIndex);
 
         //  Fail if CommitCache already contains PartialKey for this node
         vm.prank(node1);
-        vm.expectRevert(
-            "CommitCache already contains PartialKey for this node"
-        );
-        params = Controller.CommitDkgParams(
-            groupIndex,
-            groupEpoch,
-            publicKey,
-            partialPublicKey,
-            disqualifiedNodes
-        );
+        vm.expectRevert("CommitCache already contains PartialKey for this node");
+        params = Controller.CommitDkgParams(groupIndex, groupEpoch, publicKey, partialPublicKey, disqualifiedNodes);
         controller.commitDkg(params);
         assertEq(checkIsStrictlyMajorityConsensusReached(groupIndex), false);
 
@@ -374,11 +350,7 @@ contract ControllerTest is Test {
         indices[3] = 3;
         indices[4] = 4;
 
-        uint256[] memory chosenIndices = controller.chooseRandomlyFromIndices(
-            lastOutput,
-            indices,
-            3
-        );
+        uint256[] memory chosenIndices = controller.chooseRandomlyFromIndices(lastOutput, indices, 3);
 
         for (uint256 i = 0; i < chosenIndices.length; i++) {
             emit log_named_uint("chosenIndices", chosenIndices[i]);
@@ -396,8 +368,7 @@ contract ControllerTest is Test {
         address[] memory disqualifedNodes = new address[](1);
         disqualifedNodes[0] = node2;
 
-        address[] memory majorityMembers = controller
-            .getNonDisqualifiedMajorityMembers(nodes, disqualifedNodes);
+        address[] memory majorityMembers = controller.getNonDisqualifiedMajorityMembers(nodes, disqualifedNodes);
 
         assertEq(majorityMembers.length, 2);
     }
@@ -408,11 +379,7 @@ contract ControllerTest is Test {
         assertEq(controller.partialKeyRegistered(groupIndex, node1), false);
     }
 
-    function checkIsStrictlyMajorityConsensusReached(uint256 groupIndex)
-        public
-        view
-        returns (bool)
-    {
+    function checkIsStrictlyMajorityConsensusReached(uint256 groupIndex) public view returns (bool) {
         Controller.Group memory g = controller.getGroup(groupIndex);
         return g.isStrictlyMajorityConsensusReached;
     }
@@ -435,9 +402,7 @@ contract ControllerTest is Test {
         controller.postProcessDkg(groupIndex, 0); //(groupIndex, groupEpoch))
 
         vm.prank(node1);
-        vm.expectRevert(
-            "Caller Group epoch does not match Controller Group epoch"
-        );
+        vm.expectRevert("Caller Group epoch does not match Controller Group epoch");
         controller.postProcessDkg(groupIndex, 0); //(groupIndex, groupEpoch))
 
         vm.prank(node1);
@@ -472,15 +437,9 @@ contract ControllerTest is Test {
         printGroupInfo(0);
 
         // Confirm node1 has correct initial stake amount
-        assertEq(
-            controller.NODE_STAKING_AMOUNT(),
-            controller.getStakedAmount(node1)
-        );
+        assertEq(controller.NODE_STAKING_AMOUNT(), controller.getStakedAmount(node1));
 
-        emit log_named_uint(
-            "node1 staked tokens before` slash",
-            controller.getStakedAmount(node1)
-        );
+        emit log_named_uint("node1 staked tokens before` slash", controller.getStakedAmount(node1));
         // slash node1
         uint256 penaltyAmount = controller.DISQUALIFIED_NODE_PENALTY_AMOUNT();
         uint256 pendingBlock = 0;
@@ -489,8 +448,7 @@ contract ControllerTest is Test {
 
         // Assert staking penalty applied to node1
         assertEq(
-            controller.NODE_STAKING_AMOUNT() -
-                controller.DISQUALIFIED_NODE_PENALTY_AMOUNT(),
+            controller.NODE_STAKING_AMOUNT() - controller.DISQUALIFIED_NODE_PENALTY_AMOUNT(),
             controller.getStakedAmount(node1)
         );
 
@@ -499,10 +457,7 @@ contract ControllerTest is Test {
         assertEq(g.members.length, 2);
         assertEq(g.isStrictlyMajorityConsensusReached, false);
 
-        emit log_named_uint(
-            "node1 staked tokens after slash",
-            controller.getStakedAmount(node1)
-        );
+        emit log_named_uint("node1 staked tokens after slash", controller.getStakedAmount(node1));
         printGroupInfo(0);
     }
 
@@ -514,17 +469,11 @@ contract ControllerTest is Test {
 
         // register node, confirm initial stake amount
         controller.nodeRegister(pubkey1);
-        assertEq(
-            controller.NODE_STAKING_AMOUNT(),
-            controller.getStakedAmount(node1)
-        );
+        assertEq(controller.NODE_STAKING_AMOUNT(), controller.getStakedAmount(node1));
 
         // Stake 2000 tokens: Success
         controller.nodeStake(100);
-        assertEq(
-            controller.NODE_STAKING_AMOUNT() + 100,
-            controller.getStakedAmount(node1)
-        );
+        assertEq(controller.NODE_STAKING_AMOUNT() + 100, controller.getStakedAmount(node1));
 
         vm.stopPrank();
     }
@@ -537,27 +486,43 @@ contract ControllerTest is Test {
 
         // register node, confirm initial stake amount()
         controller.nodeRegister(pubkey1);
-        assertEq(
-            controller.NODE_STAKING_AMOUNT(),
-            controller.getStakedAmount(node1)
-        );
+        assertEq(controller.NODE_STAKING_AMOUNT(), controller.getStakedAmount(node1));
 
         // stake and fall below the stake threshold: Fail
-        vm.expectRevert(
-            "Node state is true, cannot unstake below staking threshold"
-        );
+        vm.expectRevert("Node state is true, cannot unstake below staking threshold");
         controller.nodeUnstake(1);
 
         // Stake 2000, then unstake 1000, staying above threshold: success
         controller.nodeStake(100);
         controller.nodeUnstake(1);
-        assertEq(
-            controller.NODE_STAKING_AMOUNT() + 99,
-            controller.getStakedAmount(node1)
-        );
+        assertEq(controller.NODE_STAKING_AMOUNT() + 99, controller.getStakedAmount(node1));
     }
 
-    // * Helper function for debugging below
+    function testNodeQuit() public {
+        // call nodeQuit with unregistered node: Fail
+        vm.prank(node1);
+        vm.expectRevert("Node not registered.");
+        controller.nodeQuit();
+
+        // register node, confirm initial stake amount
+        vm.prank(node1);
+        controller.nodeRegister(pubkey1);
+        assertEq(1, controller.getGroup(0).members.length);
+        assertEq(controller.NODE_STAKING_AMOUNT(), controller.getStakedAmount(node1));
+        printGroupInfo(0);
+        // printNodeInfo(node1);
+
+        // Quit node: Success
+        vm.prank(node1);
+        controller.nodeQuit();
+        // assert member length is 0
+        assertEq(0, controller.getGroup(0).members.length);
+        assertEq(0, controller.getStakedAmount(node1));
+        // printGroupInfo(0);
+        // printNodeInfo(node1);
+    }
+
+    // ****************** HELPER FUNCTIONS ***********************************
     function printGroupInfo(uint256 groupIndex) public {
         Controller.Group memory g = controller.getGroup(groupIndex);
 
@@ -571,57 +536,30 @@ contract ControllerTest is Test {
         emit log_named_uint("g.size", g.size);
         emit log_named_uint("g.threshold", g.threshold);
         emit log_named_uint("g.members.length", g.members.length);
-        emit log_named_uint(
-            "g.isStrictlyMajorityConsensusReached",
-            g.isStrictlyMajorityConsensusReached ? 1 : 0
-        );
+        emit log_named_uint("g.isStrictlyMajorityConsensusReached", g.isStrictlyMajorityConsensusReached ? 1 : 0);
         for (uint256 i = 0; i < g.members.length; i++) {
             emit log_named_address(
-                string.concat(
-                    "g.members[",
-                    Strings.toString(i),
-                    "].nodeIdAddress"
-                ),
-                g.members[i].nodeIdAddress
-            );
+                string.concat("g.members[", Strings.toString(i), "].nodeIdAddress"), g.members[i].nodeIdAddress
+                );
             emit log_named_bytes(
-                string.concat(
-                    "g.members[",
-                    Strings.toString(i),
-                    "].partialPublicKey"
-                ),
-                g.members[i].partialPublicKey
-            );
+                string.concat("g.members[", Strings.toString(i), "].partialPublicKey"), g.members[i].partialPublicKey
+                );
         }
         // print committers
         emit log_named_uint("g.committers.length", g.committers.length);
         for (uint256 i = 0; i < g.committers.length; i++) {
-            emit log_named_address(
-                string.concat("g.committers[", Strings.toString(i), "]"),
-                g.committers[i]
-            );
+            emit log_named_address(string.concat("g.committers[", Strings.toString(i), "]"), g.committers[i]);
         }
         // print commit cache info
-        emit log_named_uint(
-            "g.commitCacheList.length",
-            g.commitCacheList.length
-        );
+        emit log_named_uint("g.commitCacheList.length", g.commitCacheList.length);
         for (uint256 i = 0; i < g.commitCacheList.length; i++) {
             // print commit result public key
             emit log_named_bytes(
-                string.concat(
-                    "g.commitCacheList[",
-                    Strings.toString(i),
-                    "].commitResult.publicKey"
-                ),
+                string.concat("g.commitCacheList[", Strings.toString(i), "].commitResult.publicKey"),
                 g.commitCacheList[i].commitResult.publicKey
-            );
+                );
             // print commit result disqualified nodes
-            uint256 disqualifiedNodesLength = g
-                .commitCacheList[i]
-                .commitResult
-                .disqualifiedNodes
-                .length;
+            uint256 disqualifiedNodesLength = g.commitCacheList[i].commitResult.disqualifiedNodes.length;
             for (uint256 j = 0; j < disqualifiedNodesLength; j++) {
                 emit log_named_address(
                     string.concat(
@@ -632,14 +570,10 @@ contract ControllerTest is Test {
                         "].nodeIdAddress"
                     ),
                     g.commitCacheList[i].commitResult.disqualifiedNodes[j]
-                );
+                    );
             }
 
-            for (
-                uint256 j = 0;
-                j < g.commitCacheList[i].nodeIdAddress.length;
-                j++
-            ) {
+            for (uint256 j = 0; j < g.commitCacheList[i].nodeIdAddress.length; j++) {
                 emit log_named_address(
                     string.concat(
                         "g.commitCacheList[",
@@ -649,7 +583,7 @@ contract ControllerTest is Test {
                         "].nodeIdAddress"
                     ),
                     g.commitCacheList[i].nodeIdAddress[j]
-                );
+                    );
             }
         }
         // print coordinator info
@@ -676,18 +610,11 @@ contract ControllerTest is Test {
     function printMemberInfo(uint256 groupIndex, uint256 memberIndex) public {
         emit log(
             string.concat(
-                "\nGroupIndex: ",
-                Strings.toString(groupIndex),
-                " MemberIndex: ",
-                Strings.toString(memberIndex),
-                ":"
+                "\nGroupIndex: ", Strings.toString(groupIndex), " MemberIndex: ", Strings.toString(memberIndex), ":"
             )
-        );
+            );
 
-        Controller.Member memory m = controller.getMember(
-            groupIndex,
-            memberIndex
-        );
+        Controller.Member memory m = controller.getMember(groupIndex, memberIndex);
 
         // emit log_named_uint("m.index", m.index);
         emit log_named_address("m.nodeIdAddress", m.nodeIdAddress);
