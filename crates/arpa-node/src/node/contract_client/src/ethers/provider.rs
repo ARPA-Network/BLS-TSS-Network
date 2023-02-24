@@ -17,7 +17,7 @@ impl ChainProvider {
     pub fn new(identity: &GeneralChainIdentity) -> Self {
         let provider = Provider::<Http>::try_from(identity.get_provider_rpc_endpoint())
             .unwrap()
-            .interval(Duration::from_millis(10u64));
+            .interval(Duration::from_millis(3000));
 
         ChainProvider { provider }
     }

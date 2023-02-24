@@ -78,6 +78,12 @@ pub enum NodeError {
 
     #[error("you are not contained in the group")]
     MemberNotExisted,
+
+    #[error("DKG has not started yet")]
+    DKGNotStarted,
+
+    #[error("DKG has ended")]
+    DKGEnded,
 }
 
 #[derive(Debug, Error)]

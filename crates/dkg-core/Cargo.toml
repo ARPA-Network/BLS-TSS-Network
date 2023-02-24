@@ -18,6 +18,7 @@ rand = "0.8"
 static_assertions = "1.1.0"
 serde = {version = "1.0.106", features = ["derive"] }
 thiserror = "1.0.15"
+log = "0.4"
 
 [dev-dependencies]
 threshold-bls = { path = "../threshold-bls", default-features = false, features = ["bn254"] }

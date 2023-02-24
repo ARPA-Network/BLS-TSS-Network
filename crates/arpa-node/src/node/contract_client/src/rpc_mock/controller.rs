@@ -16,7 +16,7 @@ use arpa_node_core::{
     address_to_string, ChainIdentity, DKGTask, Member as ModelMember, MockChainIdentity, Node,
 };
 use async_trait::async_trait;
-use ethers::types::{Address, U256};
+use ethers::types::{Address, H256, U256};
 use log::{debug, error};
 use threshold_bls::group::PairingCurve;
 use tonic::{Code, Request};
@@ -108,7 +108,7 @@ impl ControllerLogs for MockControllerClient {
 
 #[async_trait]
 impl ControllerTransactions for MockControllerClient {
-    async fn node_register(&self, id_public_key: Vec<u8>) -> ContractClientResult<()> {
+    async fn node_register(&self, id_public_key: Vec<u8>) -> ContractClientResult<H256> {
         let request = Request::new(NodeRegisterRequest {
             id_address: address_to_string(self.id_address),
             id_public_key,
@@ -121,7 +121,12 @@ impl ControllerTransactions for MockControllerClient {
             .node_register(request)
             .await
             .map(|r| r.into_inner())
-            .map_err(|status| status.into())
+            .map_err(|status| {
+                let e: ContractClientError = status.into();
+                e
+            })?;
+
+        Ok(H256::zero())
     }
 
     async fn commit_dkg(
@@ -131,7 +136,7 @@ impl ControllerTransactions for MockControllerClient {
         public_key: Vec<u8>,
         partial_public_key: Vec<u8>,
         disqualified_nodes: Vec<Address>,
-    ) -> ContractClientResult<()> {
+    ) -> ContractClientResult<H256> {
         let disqualified_nodes = disqualified_nodes
             .into_iter()
             .map(address_to_string)
@@ -153,14 +158,19 @@ impl ControllerTransactions for MockControllerClient {
             .commit_dkg(request)
             .await
             .map(|r| r.into_inner())
-            .map_err(|status| status.into())
+            .map_err(|status| {
+                let e: ContractClientError = status.into();
+                e
+            })?;
+
+        Ok(H256::zero())
     }
 
     async fn post_process_dkg(
         &self,
         group_index: usize,
         group_epoch: usize,
-    ) -> ContractClientResult<()> {
+    ) -> ContractClientResult<H256> {
         let request = Request::new(PostProcessDkgRequest {
             id_address: address_to_string(self.id_address),
             group_index: group_index as u32,
@@ -174,7 +184,12 @@ impl ControllerTransactions for MockControllerClient {
             .post_process_dkg(request)
             .await
             .map(|r| r.into_inner())
-            .map_err(|status| status.into())
+            .map_err(|status| {
+                let e: ContractClientError = status.into();
+                e
+            })?;
+
+        Ok(H256::zero())
     }
 }
 

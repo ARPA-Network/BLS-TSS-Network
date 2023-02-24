@@ -13,7 +13,7 @@ threshold-bls = { path = "../../../../../threshold-bls", default-features = fals
 dkg-core = { path = "../../../../../dkg-core"}
 
 sea-orm = { version = "^0.9.0", features = [ "sqlx-sqlite", "runtime-tokio-native-tls", "macros", "debug-print"]}
-libsqlite3-sys = { version = "0.24.1",  default-features = false, features = [
+libsqlite3-sys = { version = "0.24.2",  default-features = false, features = [
       "pkg-config",
       "vcpkg",
       "bundled-sqlcipher",

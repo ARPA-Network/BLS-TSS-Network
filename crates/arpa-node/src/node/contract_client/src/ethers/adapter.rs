@@ -10,7 +10,8 @@ use crate::{
 };
 use arpa_node_core::{ChainIdentity, GeneralChainIdentity, Group, Member, RandomnessTask};
 use async_trait::async_trait;
-use ethers::prelude::*;
+use ethers::{prelude::*, utils::hex};
+use log::info;
 use std::{
     collections::{BTreeMap, HashMap},
     convert::TryFrom,
@@ -36,7 +37,7 @@ impl AdapterClient {
     ) -> Self {
         let provider = Provider::<Http>::try_from(identity.get_provider_rpc_endpoint())
             .unwrap()
-            .interval(Duration::from_millis(10u64));
+            .interval(Duration::from_millis(3000));
 
         // instantiate the client with the wallet
         let signer = Arc::new(SignerMiddleware::new(
@@ -77,8 +78,8 @@ impl ServiceClient<AdapterContract> for AdapterClient {
 #[allow(unused_variables)]
 #[async_trait]
 impl AdapterTransactions for AdapterClient {
-    async fn request_randomness(&self, seed: U256) -> ContractClientResult<()> {
-        Ok(())
+    async fn request_randomness(&self, seed: U256) -> ContractClientResult<H256> {
+        Ok(H256::zero())
     }
 
     async fn fulfill_randomness(
@@ -87,7 +88,7 @@ impl AdapterTransactions for AdapterClient {
         request_id: Vec<u8>,
         signature: Vec<u8>,
         partial_signatures: HashMap<Address, Vec<u8>>,
-    ) -> ContractClientResult<()> {
+    ) -> ContractClientResult<H256> {
         let adapter_contract =
             ServiceClient::<AdapterContract>::prepare_service_client(self).await?;
 
@@ -106,7 +107,7 @@ impl AdapterTransactions for AdapterClient {
             })
             .collect();
 
-        adapter_contract
+        let receipt = adapter_contract
             .fulfill_randomness(group_index.into(), r_id, sig, ps)
             .send()
             .await
@@ -118,9 +119,15 @@ impl AdapterTransactions for AdapterClient {
             .map_err(|e| {
                 let e: ContractClientError = e.into();
                 e
-            })?;
+            })?
+            .ok_or(ContractClientError::NoTransactionReceipt)?;
 
-        Ok(())
+        info!(
+            "Fulfill randomness transaction hash: {:?}",
+            receipt.transaction_hash
+        );
+
+        Ok(receipt.transaction_hash)
     }
 }
 
@@ -192,27 +199,31 @@ impl AdapterLogs for AdapterClient {
             .from_block(BlockNumber::Latest);
 
         // turn the stream into a stream of events
-        let mut stream = events.stream().await?.with_meta().take(1);
+        let mut stream = events.stream().await?.with_meta();
 
         while let Some(Ok(evt)) = stream.next().await {
             let (
                 RandomnessRequestFilter {
                     group_index,
                     request_id,
-                    sender: _,
-                    sub_id: _,
+                    sender,
+                    sub_id,
                     seed,
-                    request_confirmations: _,
-                    callback_gas_limit: _,
-                    callback_max_gas_price: _,
+                    request_confirmations,
+                    callback_gas_limit,
+                    callback_max_gas_price,
                 },
                 meta,
             ) = evt;
+
+            info!( "Received randomness task: group_index: {}, request_id: {}, sender: {:?}, sub_id: {}, seed: {}, request_confirmations: {}, callback_gas_limit: {}, callback_max_gas_price: {}, block_number: {}",
+                group_index, hex::encode(request_id), sender, sub_id, seed, request_confirmations, callback_gas_limit, callback_max_gas_price, meta.block_number);
 
             let task = RandomnessTask {
                 request_id: request_id.to_vec(),
                 seed,
                 group_index: group_index.as_usize(),
+                request_confirmations: request_confirmations as usize,
                 assignment_block_height: meta.block_number.as_usize(),
             };
             cb(task).await?;

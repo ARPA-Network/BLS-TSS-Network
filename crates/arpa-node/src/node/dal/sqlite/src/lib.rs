@@ -25,6 +25,8 @@ use entity::group_info;
 use entity::node_info;
 use ethers_core::types::Address;
 use ethers_core::types::U256;
+use ethers_core::utils::hex;
+use log::LevelFilter;
 pub use migration::Migrator;
 use migration::MigratorTrait;
 use sea_orm::ConnectionTrait;
@@ -80,7 +82,8 @@ impl<C: PairingCurve> SqliteDB<C> {
             .idle_timeout(Duration::from_secs(8))
             .max_lifetime(Duration::from_secs(8))
             .sqlx_logging(true)
-            .sqlcipher_key(String::from_utf8(signing_key.to_vec())?);
+            .sqlx_logging_level(LevelFilter::Debug)
+            .sqlcipher_key(format!("\"x'{}'\"", hex::encode(signing_key.to_vec())));
 
         let connection = sea_orm::Database::connect(opt).await?;
 
@@ -768,6 +771,7 @@ impl<C: PairingCurve + Sync + Send> BLSTasksFetcher<RandomnessTask>
             request_id: model.request_id,
             seed: U256::from_big_endian(&model.message),
             group_index: model.group_index as usize,
+            request_confirmations: model.request_confirmations as usize,
             assignment_block_height: model.assignment_block_height as usize,
         })
         .ok_or_else(|| {
@@ -800,6 +804,7 @@ impl<C: PairingCurve + Sync + Send> BLSTasksUpdater<RandomnessTask>
             self.get_connection(),
             task.request_id,
             task.group_index as i32,
+            task.request_confirmations as i32,
             task.assignment_block_height as i32,
             seed_bytes,
         )
@@ -830,6 +835,7 @@ impl<C: PairingCurve + Sync + Send> BLSTasksUpdater<RandomnessTask>
                     request_id: model.request_id,
                     seed: U256::from_big_endian(&model.message),
                     group_index: model.group_index as usize,
+                    request_confirmations: model.request_confirmations as usize,
                     assignment_block_height: model.assignment_block_height as usize,
                 })
                 .collect::<Vec<_>>()
@@ -1206,6 +1212,7 @@ pub mod sqlite_tests {
             request_id: request_id.clone(),
             seed,
             group_index: 2,
+            request_confirmations: 0,
             assignment_block_height: 100,
         };
 
@@ -1253,6 +1260,7 @@ pub mod sqlite_tests {
             request_id: request_id.clone(),
             seed,
             group_index: 2,
+            request_confirmations: 0,
             assignment_block_height: 100,
         };
 

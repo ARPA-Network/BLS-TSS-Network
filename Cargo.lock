@@ -1310,6 +1310,7 @@ dependencies = [
  "async-trait",
  "bincode",
  "bitvec 0.17.4",
+ "log",
  "rand 0.8.5",
  "rand_core 0.6.3",
  "serde",

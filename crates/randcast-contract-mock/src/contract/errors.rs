@@ -127,6 +127,9 @@ pub enum CoordinatorError {
     #[error("DKG has already started")]
     AlreadyStarted,
 
+    #[error("DKG has not started yet")]
+    DKGNotStarted,
+
     #[error("DKG has already ended")]
     DKGEnded,
 

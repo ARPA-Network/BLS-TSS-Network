@@ -1,4 +1,4 @@
-use crate::node::error::NodeResult;
+use crate::node::error::{NodeError, NodeResult};
 use arpa_node_contract_client::coordinator::{CoordinatorTransactions, CoordinatorViews};
 use async_trait::async_trait;
 use core::fmt::Debug;
@@ -71,7 +71,7 @@ where
         wait_for_phase(&self.coordinator_client, 0).await?;
 
         // Get the group info
-        let group = self.coordinator_client.get_bls_keys().await?;
+        let group = self.coordinator_client.get_dkg_keys().await?;
         let participants = self.coordinator_client.get_participants().await?;
 
         // print some debug info
@@ -170,7 +170,14 @@ async fn wait_for_phase(dkg: &impl CoordinatorViews, num: usize) -> NodeResult<(
     loop {
         let phase = dkg.in_phase().await?;
 
-        if phase >= num {
+        if phase == 0 {
+            return Err(NodeError::DKGNotStarted);
+        }
+
+        if phase == -1 {
+            return Err(NodeError::DKGEnded);
+        }
+        if phase - 1 >= num as i8 {
             break;
         }
 

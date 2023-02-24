@@ -15,7 +15,7 @@ use arpa_node_core::{
     RandomnessTask,
 };
 use async_trait::async_trait;
-use ethers::types::{Address, U256};
+use ethers::types::{Address, H256, U256};
 use log::{debug, error};
 use std::collections::{BTreeMap, HashMap};
 use std::future::Future;
@@ -110,7 +110,7 @@ impl AdapterLogs for MockAdapterClient {
 
 #[async_trait]
 impl AdapterTransactions for MockAdapterClient {
-    async fn request_randomness(&self, seed: U256) -> ContractClientResult<()> {
+    async fn request_randomness(&self, seed: U256) -> ContractClientResult<H256> {
         let mut seed_bytes = vec![0u8; 32];
         seed.to_big_endian(&mut seed_bytes);
 
@@ -123,7 +123,12 @@ impl AdapterTransactions for MockAdapterClient {
             .request_randomness(request)
             .await
             .map(|r| r.into_inner())
-            .map_err(|status| status.into())
+            .map_err(|status| {
+                let e: ContractClientError = status.into();
+                e
+            })?;
+
+        Ok(H256::zero())
     }
 
     async fn fulfill_randomness(
@@ -132,7 +137,7 @@ impl AdapterTransactions for MockAdapterClient {
         request_id: Vec<u8>,
         signature: Vec<u8>,
         partial_signatures: HashMap<Address, Vec<u8>>,
-    ) -> ContractClientResult<()> {
+    ) -> ContractClientResult<H256> {
         let partial_signatures: HashMap<String, Vec<u8>> = partial_signatures
             .into_iter()
             .map(|(id_address, sig)| (address_to_string(id_address), sig))
@@ -153,7 +158,12 @@ impl AdapterTransactions for MockAdapterClient {
             .fulfill_randomness(request)
             .await
             .map(|r| r.into_inner())
-            .map_err(|status| status.into())
+            .map_err(|status| {
+                let e: ContractClientError = status.into();
+                e
+            })?;
+
+        Ok(H256::zero())
     }
 }
 
@@ -196,6 +206,7 @@ impl AdapterMockHelper for MockAdapterClient {
                     request_id,
                     seed,
                     group_index: group_index as usize,
+                    request_confirmations: 0,
                     assignment_block_height: assignment_block_height as usize,
                 }
             })

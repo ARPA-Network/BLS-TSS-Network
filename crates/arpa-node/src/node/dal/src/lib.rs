@@ -8,6 +8,7 @@ pub use dkg_core::primitives::DKGOutput;
 use error::DataAccessResult;
 use ethers_core::types::Address;
 use std::collections::BTreeMap;
+use std::fmt::Debug;
 use threshold_bls::{
     group::{Curve, PairingCurve},
     sig::Share,
@@ -131,12 +132,12 @@ pub trait SignatureResultCacheFetcher<T: ResultCache> {
 }
 
 pub trait SignatureResultCacheUpdater<T: ResultCache> {
-    fn get_ready_to_commit_signatures(&mut self) -> Vec<T>;
+    fn get_ready_to_commit_signatures(&mut self, current_block_height: usize) -> Vec<T>;
 
     fn add(
         &mut self,
         group_index: usize,
-        task_request_id: Vec<u8>,
+        task: T::Task,
         message: T::M,
         threshold: usize,
     ) -> DataAccessResult<bool>;
@@ -150,5 +151,6 @@ pub trait SignatureResultCacheUpdater<T: ResultCache> {
 }
 
 pub trait ResultCache: Task {
+    type Task: Debug;
     type M;
 }

@@ -143,12 +143,14 @@ impl RandomnessTaskMutation {
         db: &DbConn,
         request_id: Vec<u8>,
         group_index: i32,
+        request_confirmations: i32,
         assignment_block_height: i32,
         message: Vec<u8>,
     ) -> Result<randomness_task::ActiveModel, DbErr> {
         randomness_task::ActiveModel {
             request_id: Set(request_id),
             group_index: Set(group_index),
+            request_confirmations: Set(request_confirmations),
             assignment_block_height: Set(assignment_block_height),
             message: Set(message),
             create_at: Set(format_now_date()),

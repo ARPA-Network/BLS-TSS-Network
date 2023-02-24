@@ -517,16 +517,19 @@ impl<
                     .await
                     .get_index()?;
 
+                let task = self
+                    .get_main_chain()
+                    .get_randomness_tasks_cache()
+                    .read()
+                    .await
+                    .get(&randomness_task_request_id)
+                    .await?;
+
                 self.get_main_chain()
                     .get_randomness_result_cache()
                     .write()
                     .await
-                    .add(
-                        group_index,
-                        randomness_task_request_id.clone(),
-                        msg.to_vec(),
-                        threshold,
-                    )?;
+                    .add(group_index, task, msg.to_vec(), threshold)?;
             }
 
             self.get_main_chain()

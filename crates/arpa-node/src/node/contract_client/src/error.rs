@@ -39,4 +39,6 @@ pub enum ContractClientError {
     NoTaskAvailable,
     #[error(transparent)]
     HandlingLogSubscriptionError(#[from] anyhow::Error),
+    #[error("can't fetch transaction receipt")]
+    NoTransactionReceipt,
 }

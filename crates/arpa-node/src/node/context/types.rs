@@ -38,11 +38,13 @@ pub struct Config {
     pub node_management_rpc_endpoint: String,
     pub node_management_rpc_token: String,
     pub provider_endpoint: String,
+    pub chain_id: usize,
     pub controller_address: String,
     // Data file for persistence
     pub data_path: Option<String>,
     pub account: Account,
     pub listeners: Option<Vec<ListenerType>>,
+    pub context_logging: bool,
 }
 
 impl Config {

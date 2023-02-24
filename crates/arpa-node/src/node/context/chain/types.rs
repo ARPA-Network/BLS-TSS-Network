@@ -293,6 +293,7 @@ impl<
                         RandomnessSignatureAggregationListener::new(
                             self.id(),
                             id_address,
+                            self.get_block_cache(),
                             self.get_group_cache(),
                             self.get_randomness_result_cache(),
                             eq,
@@ -489,12 +490,14 @@ impl<
 
         let s_ready_to_handle_randomness_task = ReadyToHandleRandomnessTaskSubscriber::<
             G,
+            T,
             InMemorySignatureResultCache<RandomnessResultCache>,
             PC,
         >::new(
             self.id(),
             id_address,
             self.get_group_cache(),
+            self.get_randomness_tasks_cache(),
             self.get_randomness_result_cache(),
             context.get_event_queue(),
             context.get_dynamic_task_handler(),

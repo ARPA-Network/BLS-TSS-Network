@@ -22,7 +22,7 @@ service Views {
 
   rpc GetParticipants(google.protobuf.Empty) returns (ParticipantsReply);
 
-  rpc GetBlsKeys(google.protobuf.Empty) returns (BlsKeysReply);
+  rpc GetDkgKeys(google.protobuf.Empty) returns (DkgKeysReply);
 
   rpc InPhase(google.protobuf.Empty) returns (InPhaseReply);
 }
@@ -43,9 +43,9 @@ message ParticipantsReply {
   repeated string participants = 1;
 }
 
-message BlsKeysReply {
+message DkgKeysReply {
   uint32 threshold = 1;
-  repeated bytes bls_keys = 2;
+  repeated bytes dkg_keys = 2;
 }
 
 message InPhaseReply {

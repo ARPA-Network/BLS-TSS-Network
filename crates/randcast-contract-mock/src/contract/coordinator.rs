@@ -74,10 +74,10 @@ pub trait Views {
     fn get_participants(&self) -> CoordinatorResult<Vec<Address>>;
 
     /// Gets the participants' BLS keys along with the thershold of the DKG
-    fn get_bls_keys(&self) -> CoordinatorResult<(usize, Vec<Vec<u8>>)>;
+    fn get_dkg_keys(&self) -> CoordinatorResult<(usize, Vec<Vec<u8>>)>;
 
     /// Returns the current phase of the DKG.
-    fn in_phase(&self) -> CoordinatorResult<usize>;
+    fn in_phase(&self) -> CoordinatorResult<isize>;
 }
 
 pub trait Internal {
@@ -189,7 +189,7 @@ impl Views for Coordinator {
         Ok(self.participants.clone())
     }
 
-    fn get_bls_keys(&self) -> CoordinatorResult<(usize, Vec<Vec<u8>>)> {
+    fn get_dkg_keys(&self) -> CoordinatorResult<(usize, Vec<Vec<u8>>)> {
         let keys = self
             .participants
             .iter()
@@ -199,25 +199,28 @@ impl Views for Coordinator {
         Ok((self.threshold, keys))
     }
 
-    fn in_phase(&self) -> CoordinatorResult<usize> {
+    fn in_phase(&self) -> CoordinatorResult<isize> {
+        if self.start_block == 0 {
+            return Ok(0);
+        }
         let blocks_since_start = self.block_height - self.start_block;
 
         if blocks_since_start <= self.phase_duration {
-            return Ok(0);
-        }
-
-        if blocks_since_start <= 2 * self.phase_duration {
             return Ok(1);
         }
 
-        if blocks_since_start <= 3 * self.phase_duration {
+        if blocks_since_start <= 2 * self.phase_duration {
             return Ok(2);
         }
 
-        if blocks_since_start <= 4 * self.phase_duration {
+        if blocks_since_start <= 3 * self.phase_duration {
             return Ok(3);
         }
 
-        Err(CoordinatorError::DKGEnded)
+        if blocks_since_start <= 4 * self.phase_duration {
+            return Ok(4);
+        }
+
+        return Ok(-1);
     }
 }

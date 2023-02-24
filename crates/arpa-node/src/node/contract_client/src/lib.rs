@@ -18,13 +18,14 @@ pub mod controller {
     use arpa_node_core::{DKGTask, Node};
 
     use async_trait::async_trait;
+    use ethers::types::H256;
     use ethers_core::types::Address;
 
     use crate::error::ContractClientResult;
 
     #[async_trait]
     pub trait ControllerTransactions {
-        async fn node_register(&self, id_public_key: Vec<u8>) -> ContractClientResult<()>;
+        async fn node_register(&self, id_public_key: Vec<u8>) -> ContractClientResult<H256>;
 
         async fn commit_dkg(
             &self,
@@ -33,13 +34,13 @@ pub mod controller {
             public_key: Vec<u8>,
             partial_public_key: Vec<u8>,
             disqualified_nodes: Vec<Address>,
-        ) -> ContractClientResult<()>;
+        ) -> ContractClientResult<H256>;
 
         async fn post_process_dkg(
             &self,
             group_index: usize,
             group_epoch: usize,
-        ) -> ContractClientResult<()>;
+        ) -> ContractClientResult<H256>;
     }
 
     #[async_trait]
@@ -68,6 +69,7 @@ pub mod controller {
 pub mod coordinator {
     use async_trait::async_trait;
     use dkg_core::BoardPublisher;
+    use ethers::types::H256;
     use ethers_core::types::Address;
     use thiserror::Error;
     use threshold_bls::{group::Curve, schemes::bn254::G2Curve};
@@ -87,7 +89,7 @@ pub mod coordinator {
         /// Participant publishes their data and depending on the phase the data gets inserted
         /// in the shares, responses or justifications mapping. Reverts if the participant
         /// has already published their data for a phase or if the DKG has ended.
-        async fn publish(&self, value: Vec<u8>) -> ContractClientResult<()>;
+        async fn publish(&self, value: Vec<u8>) -> ContractClientResult<H256>;
     }
 
     #[async_trait]
@@ -108,10 +110,10 @@ pub mod coordinator {
         async fn get_participants(&self) -> ContractClientResult<Vec<Address>>;
 
         /// Gets the participants' BLS keys along with the thershold of the DKG
-        async fn get_bls_keys(&self) -> ContractClientResult<(usize, Vec<Vec<u8>>)>;
+        async fn get_dkg_keys(&self) -> ContractClientResult<(usize, Vec<Vec<u8>>)>;
 
         /// Returns the current phase of the DKG.
-        async fn in_phase(&self) -> ContractClientResult<usize>;
+        async fn in_phase(&self) -> ContractClientResult<i8>;
     }
 
     pub trait CoordinatorClientBuilder<C: Curve = G2Curve> {
@@ -124,7 +126,7 @@ pub mod coordinator {
 pub mod adapter {
     use arpa_node_core::{Group, RandomnessTask};
     use async_trait::async_trait;
-    use ethers::types::U256;
+    use ethers::types::{H256, U256};
     use ethers_core::types::Address;
     use std::{collections::HashMap, future::Future};
     use threshold_bls::group::PairingCurve;
@@ -133,7 +135,7 @@ pub mod adapter {
 
     #[async_trait]
     pub trait AdapterTransactions {
-        async fn request_randomness(&self, seed: U256) -> ContractClientResult<()>;
+        async fn request_randomness(&self, seed: U256) -> ContractClientResult<H256>;
 
         async fn fulfill_randomness(
             &self,
@@ -141,7 +143,7 @@ pub mod adapter {
             request_id: Vec<u8>,
             signature: Vec<u8>,
             partial_signatures: HashMap<Address, Vec<u8>>,
-        ) -> ContractClientResult<()>;
+        ) -> ContractClientResult<H256>;
     }
 
     #[async_trait]

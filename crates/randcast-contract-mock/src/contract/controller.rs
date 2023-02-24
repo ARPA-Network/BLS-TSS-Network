@@ -520,6 +520,8 @@ impl ControllerInternal for Controller {
         group.size -= 1;
 
         if group.size == 0 {
+            group.members.clear();
+            group.threshold = 0;
             return Ok(false);
         }
 
@@ -612,6 +614,9 @@ impl ControllerInternal for Controller {
         });
 
         if rebalance_failure.is_some() {
+            let group = self.groups.get_mut(&group_index).unwrap();
+            group.is_strictly_majority_consensus_reached = false;
+
             let members_left_in_group = self
                 .groups
                 .get(&group_index)

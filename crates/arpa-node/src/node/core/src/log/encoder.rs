@@ -47,12 +47,19 @@ lazy_static! {
 
 /// An `Encode`r which writes a JSON object.
 #[derive(Clone, Debug, Default)]
-pub struct JsonEncoder {}
+pub struct JsonEncoder {
+    show_context: bool,
+}
 
 impl JsonEncoder {
     /// Returns a new `JsonEncoder` with a default configuration.
     pub fn new() -> Self {
         JsonEncoder::default()
+    }
+
+    pub fn context_logging(mut self, show_context: bool) -> Self {
+        self.show_context = show_context;
+        self
     }
 }
 
@@ -64,6 +71,17 @@ impl JsonEncoder {
         record: &Record,
     ) -> anyhow::Result<()> {
         let thread = thread::current();
+        let node_info = if self.show_context {
+            CONTEXT_INFO.read()[0].clone()
+        } else {
+            "".to_string()
+        };
+        let group_info = if self.show_context {
+            CONTEXT_INFO.read()[1].clone()
+        } else {
+            "".to_string()
+        };
+
         let message = Message {
             time: time.format_with_items(Some(Item::Fixed(Fixed::RFC3339)).into_iter()),
             message: record.args(),
@@ -75,8 +93,8 @@ impl JsonEncoder {
             thread: thread.name(),
             thread_id: thread_id::get(),
             mdc: Mdc,
-            node_info: &CONTEXT_INFO.read()[0],
-            group_info: &CONTEXT_INFO.read()[1],
+            node_info: &node_info,
+            group_info: &group_info,
         };
         message.serialize(&mut serde_json::Serializer::new(&mut *w))?;
         w.write_all("\n".as_bytes())?;

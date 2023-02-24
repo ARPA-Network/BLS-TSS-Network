@@ -27,7 +27,7 @@ impl CoordinatorClient {
     pub fn new(coordinator_address: Address, identity: &GeneralChainIdentity) -> Self {
         let provider = Provider::<Http>::try_from(identity.get_provider_rpc_endpoint())
             .unwrap()
-            .interval(Duration::from_millis(10u64));
+            .interval(Duration::from_millis(3000));
 
         // instantiate the client with the wallet
         let signer = Arc::new(SignerMiddleware::new(
@@ -66,11 +66,11 @@ impl ServiceClient<CoordinatorContract> for CoordinatorClient {
 
 #[async_trait]
 impl CoordinatorTransactions for CoordinatorClient {
-    async fn publish(&self, value: Vec<u8>) -> ContractClientResult<()> {
+    async fn publish(&self, value: Vec<u8>) -> ContractClientResult<H256> {
         let coordinator_contract =
             ServiceClient::<CoordinatorContract>::prepare_service_client(self).await?;
 
-        coordinator_contract
+        let receipt = coordinator_contract
             .publish(value.into())
             .send()
             .await
@@ -82,9 +82,15 @@ impl CoordinatorTransactions for CoordinatorClient {
             .map_err(|e| {
                 let e: ContractClientError = e.into();
                 e
-            })?;
+            })?
+            .ok_or(ContractClientError::NoTransactionReceipt)?;
 
-        Ok(())
+        info!(
+            "Published to coordinator transaction hash: {:?}",
+            receipt.transaction_hash
+        );
+
+        Ok(receipt.transaction_hash)
     }
 }
 
@@ -157,12 +163,12 @@ impl CoordinatorViews for CoordinatorClient {
         Ok(res)
     }
 
-    async fn get_bls_keys(&self) -> ContractClientResult<(usize, Vec<Vec<u8>>)> {
+    async fn get_dkg_keys(&self) -> ContractClientResult<(usize, Vec<Vec<u8>>)> {
         let coordinator_contract =
             ServiceClient::<CoordinatorContract>::prepare_service_client(self).await?;
 
         let res = coordinator_contract
-            .get_bls_keys()
+            .get_dkg_keys()
             .call()
             .await
             .map(|(t, keys)| {
@@ -179,7 +185,7 @@ impl CoordinatorViews for CoordinatorClient {
         Ok(res)
     }
 
-    async fn in_phase(&self) -> ContractClientResult<usize> {
+    async fn in_phase(&self) -> ContractClientResult<i8> {
         let coordinator_contract =
             ServiceClient::<CoordinatorContract>::prepare_service_client(self).await?;
 
@@ -188,7 +194,7 @@ impl CoordinatorViews for CoordinatorClient {
             e
         })?;
 
-        Ok(res.as_usize())
+        Ok(res)
     }
 }
 
@@ -199,13 +205,15 @@ impl<C: Curve + 'static> BoardPublisher<C> for CoordinatorClient {
     async fn publish_shares(&mut self, shares: BundledShares<C>) -> Result<(), Self::Error> {
         info!("called publish_shares");
         let serialized = bincode::serialize(&shares)?;
-        self.publish(serialized).await.map_err(|e| e.into())
+        self.publish(serialized).await?;
+        Ok(())
     }
 
     async fn publish_responses(&mut self, responses: BundledResponses) -> Result<(), Self::Error> {
         info!("called publish_responses");
         let serialized = bincode::serialize(&responses)?;
-        self.publish(serialized).await.map_err(|e| e.into())
+        self.publish(serialized).await?;
+        Ok(())
     }
 
     async fn publish_justifications(
@@ -213,7 +221,8 @@ impl<C: Curve + 'static> BoardPublisher<C> for CoordinatorClient {
         justifications: BundledJustification<C>,
     ) -> Result<(), Self::Error> {
         let serialized = bincode::serialize(&justifications)?;
-        self.publish(serialized).await.map_err(|e| e.into())
+        self.publish(serialized).await?;
+        Ok(())
     }
 }
 
@@ -255,7 +264,7 @@ pub mod coordinator_tests {
         // 3. connect to the network
         let provider = Provider::<Http>::try_from(anvil.endpoint())
             .unwrap()
-            .interval(Duration::from_millis(10u64));
+            .interval(Duration::from_millis(3000));
 
         // 4. instantiate the client with the wallet
         let client = Arc::new(SignerMiddleware::new(

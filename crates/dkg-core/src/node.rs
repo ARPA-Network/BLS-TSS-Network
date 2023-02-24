@@ -1,3 +1,4 @@
+use log::error;
 use rand::RngCore;
 use thiserror::Error;
 
@@ -69,10 +70,10 @@ where
         self.set_rpc_endpoint();
         let (next, shares) = self.encrypt_shares(rng)?;
         if let Some(sh) = shares {
-            board
-                .publish_shares(sh)
-                .await
-                .map_err(|_| NodeError::PublisherError)?;
+            board.publish_shares(sh).await.map_err(|e| {
+                error!("{:?}", e);
+                NodeError::PublisherError
+            })?;
         }
 
         Ok(next)
@@ -100,10 +101,10 @@ where
         let (next, bundle) = self.process_shares(shares, true)?;
 
         if let Some(bundle) = bundle {
-            board
-                .publish_responses(bundle)
-                .await
-                .map_err(|_| NodeError::PublisherError)?;
+            board.publish_responses(bundle).await.map_err(|e| {
+                error!("{:?}", e);
+                NodeError::PublisherError
+            })?;
         }
 
         Ok(next)
@@ -141,7 +142,10 @@ where
                             board
                                 .publish_justifications(justifications)
                                 .await
-                                .map_err(|_| NodeError::PublisherError)?;
+                                .map_err(|e| {
+                                    error!("{:?}", e);
+                                    NodeError::PublisherError
+                                })?;
                         }
 
                         Ok(Phase2Result::GoToPhase3(next))

@@ -28,6 +28,11 @@ impl MigrationTrait for Migration {
                             .not_null(),
                     )
                     .col(
+                        ColumnDef::new(RandomnessTask::RequestConfirmations)
+                            .integer()
+                            .not_null(),
+                    )
+                    .col(
                         ColumnDef::new(RandomnessTask::AssignmentBlockHeight)
                             .integer()
                             .not_null(),
@@ -66,6 +71,7 @@ pub(crate) enum RandomnessTask {
     Id,
     RequestId,
     GroupIndex,
+    RequestConfirmations,
     AssignmentBlockHeight,
     Message,
     State,

@@ -97,9 +97,9 @@ impl<I: ChainIdentity + AdapterClientBuilder<C> + Sync + Send, C: PairingCurve +
                 )
                 .await
             {
-                Ok(()) => {
-                    info!("fulfill randomness successfully! task request id: {}, group_index: {}, signature: {}",
-                    format!("{:?}",hex::encode(randomness_task_request_id)), group_index, hex::encode(signature));
+                Ok(tx_hash) => {
+                    info!("fulfill randomness successfully! tx_hash:{:?}, task request id: {}, group_index: {}, signature: {}",
+                    tx_hash, format!("{:?}",hex::encode(randomness_task_request_id)), group_index, hex::encode(signature));
                 }
                 Err(e) => {
                     error!("{:?}", e);

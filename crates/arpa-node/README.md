@@ -54,7 +54,9 @@ Configuration items in [`conf/config.yml`](conf/config.yml) are listed here:
 
 - node_management_rpc_token: Config token phrase for authenticaing management grpc requests by `authorization` header. (example: "arpa_network")
 
-- provider_endpoint: Config endpoint to interact with chain provider. (example: "[::1]:50052")
+- provider_endpoint: Config endpoint to interact with chain provider. (example: "http://127.0.0.1:8545")
+
+- chain_id: Config chain id of main chain. (example: 31337)
 
 - controller_address: Config on-chain arpa network controller contract address. (example: "0x0000000000000000000000000000000000000001")
 
@@ -161,4 +163,54 @@ cargo run --bin user-client 0x9000000000000000000000000000000000000001 "[::1]:50
 cargo run --bin user-client 0x9000000000000000000000000000000000000001 "[::1]:50052" request bar
 cargo run --bin user-client 0x9000000000000000000000000000000000000001 "[::1]:50052" last_output
 # verify result by view last_output and node logs
+```
+
+# Local Test
+
+## start the local testnet by anvil:
+
+```bash
+# produces a new block every 1 second and ignores contract size for now
+anvil --block-time 1 --code-size-limit 80000
+```
+
+## deploy the controller and the adapter contract:
+
+```bash
+cd contracts
+# controller address 0x9fE46736679d2D9a65F0992F2272dE9f3c7fa6e0
+# user contract address 0x70997970C51812dc3A010C7d01b50e0d17dc79C8
+forge script script/ControllerLocalTest.s.sol:ControllerLocalTestScript --fork-url http://localhost:8545 --broadcast
+```
+
+## run 3 nodes to make a group:
+
+```bash
+cd crates/arpa-node
+cargo run --bin node-client -- -m new-run -c conf/config_test_1.yml
+cargo run --bin node-client -- -m new-run -c conf/config_test_2.yml
+cargo run --bin node-client -- -m new-run -c conf/config_test_3.yml
+```
+
+## deploy the user contract([`GetRandomNumberExample`](../../contracts/src/user/examples/GetRandomNumberExample.sol)) and request a randomness:
+
+```bash
+cd contracts
+# this should be executed after we have an available group as logging "Success. Your share and threshold pubkey are ready." in node terminal
+forge script script/GetRandomNumberLocalTest.s.sol:GetRandomNumberLocalTestScript --fork-url http://localhost:8545 --broadcast
+```
+
+## the nodes should sign the randomness and one of the committers in the group will fulfill the result
+
+## check the results by cast:
+
+```bash
+# check the randomness result recorded by the adapter and the user contract respectively
+cast call 0x9fE46736679d2D9a65F0992F2272dE9f3c7fa6e0 \
+  "lastOutput()(uint256)"
+
+cast call 0x8464135c8f25da09e49bc8782676a84730c318bc \
+  "lastRandomnessResult()(uint256)"
+
+# the above two outputs of uint256 type should be identical
 ```

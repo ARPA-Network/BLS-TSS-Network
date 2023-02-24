@@ -28,7 +28,7 @@ use crate::rpc_stub::coordinator::{
         TransactionsServer as CoordinatorTransactionsServer,
     },
     views_server::{Views as CoordinatorViews, ViewsServer as CoordinatorViewsServer},
-    BlsKeysReply, InPhaseReply, JustificationsReply, ParticipantsReply, PublishRequest,
+    DkgKeysReply, InPhaseReply, JustificationsReply, ParticipantsReply, PublishRequest,
     ResponsesReply, SharesReply,
 };
 use ethers_core::types::Address;
@@ -301,10 +301,10 @@ impl CoordinatorViews for MockCoordinator {
             .map_err(|e| Status::internal(e.to_string()))
     }
 
-    async fn get_bls_keys(
+    async fn get_dkg_keys(
         &self,
         request: Request<()>,
-    ) -> Result<Response<BlsKeysReply>, tonic::Status> {
+    ) -> Result<Response<DkgKeysReply>, tonic::Status> {
         let req_index = self.check_and_fetch_coordinator_group_index_from_request(&request)?;
 
         self.controller
@@ -313,11 +313,11 @@ impl CoordinatorViews for MockCoordinator {
             .get(&req_index)
             .unwrap()
             .1
-            .get_bls_keys()
-            .map(|(threshold, bls_keys)| {
-                Response::new(BlsKeysReply {
+            .get_dkg_keys()
+            .map(|(threshold, dkg_keys)| {
+                Response::new(DkgKeysReply {
                     threshold: threshold as u32,
-                    bls_keys,
+                    dkg_keys,
                 })
             })
             .map_err(|e| Status::internal(e.to_string()))

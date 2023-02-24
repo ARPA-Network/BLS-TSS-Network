@@ -10,6 +10,7 @@ use crate::{
 use arpa_node_core::{ChainIdentity, DKGTask, GeneralChainIdentity, Node};
 use async_trait::async_trait;
 use ethers::prelude::*;
+use log::info;
 use std::{convert::TryFrom, future::Future, sync::Arc, time::Duration};
 
 pub struct ControllerClient {
@@ -21,7 +22,7 @@ impl ControllerClient {
     pub fn new(controller_address: Address, identity: &GeneralChainIdentity) -> Self {
         let provider = Provider::<Http>::try_from(identity.get_provider_rpc_endpoint())
             .unwrap()
-            .interval(Duration::from_millis(10u64));
+            .interval(Duration::from_millis(3000));
 
         // instantiate the client with the wallet
         let signer = Arc::new(SignerMiddleware::new(
@@ -60,11 +61,11 @@ impl ServiceClient<ControllerContract> for ControllerClient {
 
 #[async_trait]
 impl ControllerTransactions for ControllerClient {
-    async fn node_register(&self, id_public_key: Vec<u8>) -> ContractClientResult<()> {
+    async fn node_register(&self, id_public_key: Vec<u8>) -> ContractClientResult<H256> {
         let controller_contract =
             ServiceClient::<ControllerContract>::prepare_service_client(self).await?;
 
-        controller_contract
+        let receipt = controller_contract
             .node_register(id_public_key.into())
             .send()
             .await
@@ -76,9 +77,15 @@ impl ControllerTransactions for ControllerClient {
             .map_err(|e| {
                 let e: ContractClientError = e.into();
                 e
-            })?;
+            })?
+            .ok_or(ContractClientError::NoTransactionReceipt)?;
 
-        Ok(())
+        info!(
+            "Node register transaction hash: {:?}",
+            receipt.transaction_hash
+        );
+
+        Ok(receipt.transaction_hash)
     }
 
     async fn commit_dkg(
@@ -88,11 +95,11 @@ impl ControllerTransactions for ControllerClient {
         public_key: Vec<u8>,
         partial_public_key: Vec<u8>,
         disqualified_nodes: Vec<Address>,
-    ) -> ContractClientResult<()> {
+    ) -> ContractClientResult<H256> {
         let controller_contract =
             ServiceClient::<ControllerContract>::prepare_service_client(self).await?;
 
-        controller_contract
+        let receipt = controller_contract
             .commit_dkg(CommitDkgParams {
                 group_index: group_index.into(),
                 group_epoch: group_epoch.into(),
@@ -110,20 +117,26 @@ impl ControllerTransactions for ControllerClient {
             .map_err(|e| {
                 let e: ContractClientError = e.into();
                 e
-            })?;
+            })?
+            .ok_or(ContractClientError::NoTransactionReceipt)?;
 
-        Ok(())
+        info!(
+            "Commit DKG transaction hash: {:?}",
+            receipt.transaction_hash
+        );
+
+        Ok(receipt.transaction_hash)
     }
 
     async fn post_process_dkg(
         &self,
         group_index: usize,
         group_epoch: usize,
-    ) -> ContractClientResult<()> {
+    ) -> ContractClientResult<H256> {
         let controller_contract =
             ServiceClient::<ControllerContract>::prepare_service_client(self).await?;
 
-        controller_contract
+        let receipt = controller_contract
             .post_process_dkg(group_index.into(), group_epoch.into())
             .send()
             .await
@@ -135,9 +148,15 @@ impl ControllerTransactions for ControllerClient {
             .map_err(|e| {
                 let e: ContractClientError = e.into();
                 e
-            })?;
+            })?
+            .ok_or(ContractClientError::NoTransactionReceipt)?;
 
-        Ok(())
+        info!(
+            "Post process DKG transaction hash: {:?}",
+            receipt.transaction_hash
+        );
+
+        Ok(receipt.transaction_hash)
     }
 }
 
@@ -184,7 +203,7 @@ impl ControllerLogs for ControllerClient {
             .from_block(BlockNumber::Latest);
 
         // turn the stream into a stream of events
-        let mut stream = events.stream().await?.with_meta().take(1);
+        let mut stream = events.stream().await?.with_meta();
 
         while let Some(Ok(evt)) = stream.next().await {
             let (
@@ -199,6 +218,11 @@ impl ControllerLogs for ControllerClient {
                 },
                 meta,
             ) = evt;
+
+            info!(
+                "Received DKG task: group_index: {}, epoch: {}, size: {}, threshold: {}, members: {:?}, coordinator_address: {}, block_number: {}",
+                group_index, epoch, size, threshold, members, coordinator_address, meta.block_number
+            );
 
             let task = DKGTask {
                 group_index: group_index.as_usize(),

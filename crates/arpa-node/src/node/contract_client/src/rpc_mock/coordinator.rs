@@ -1,19 +1,19 @@
 use crate::coordinator::{
     CoordinatorClientBuilder, CoordinatorTransactions, CoordinatorViews, DKGContractError,
 };
-use crate::error::ContractClientResult;
+use crate::error::{ContractClientError, ContractClientResult};
 use crate::ServiceClient;
 
 use crate::rpc_stub::coordinator::transactions_client::TransactionsClient as CoordinatorTransactionsClient;
 use crate::rpc_stub::coordinator::views_client::ViewsClient as CoordinatorViewsClient;
-use crate::rpc_stub::coordinator::{BlsKeysReply, PublishRequest};
+use crate::rpc_stub::coordinator::{DkgKeysReply, PublishRequest};
 use arpa_node_core::{address_to_string, ChainIdentity, MockChainIdentity};
 use async_trait::async_trait;
 use dkg_core::{
     primitives::{BundledJustification, BundledResponses, BundledShares},
     BoardPublisher,
 };
-use ethers::types::Address;
+use ethers::types::{Address, H256};
 use log::info;
 use threshold_bls::group::Curve;
 use tonic::Request;
@@ -75,7 +75,7 @@ impl ServiceClient<ViewsClient> for MockCoordinatorClient {
 
 #[async_trait]
 impl CoordinatorTransactions for MockCoordinatorClient {
-    async fn publish(&self, value: Vec<u8>) -> ContractClientResult<()> {
+    async fn publish(&self, value: Vec<u8>) -> ContractClientResult<H256> {
         let mut request = Request::new(PublishRequest {
             id_address: address_to_string(self.id_address),
             value,
@@ -90,7 +90,12 @@ impl CoordinatorTransactions for MockCoordinatorClient {
             .publish(request)
             .await
             .map(|r| r.into_inner())
-            .map_err(|status| status.into())
+            .map_err(|status| {
+                let e: ContractClientError = status.into();
+                e
+            })?;
+
+        Ok(H256::zero())
     }
 }
 
@@ -158,7 +163,7 @@ impl CoordinatorViews for MockCoordinatorClient {
             .map_err(|status| status.into())
     }
 
-    async fn get_bls_keys(&self) -> ContractClientResult<(usize, Vec<Vec<u8>>)> {
+    async fn get_dkg_keys(&self) -> ContractClientResult<(usize, Vec<Vec<u8>>)> {
         let mut request: Request<()> = Request::new(());
 
         self.set_metadata(&mut request);
@@ -166,19 +171,19 @@ impl CoordinatorViews for MockCoordinatorClient {
         let mut views_client = ServiceClient::<ViewsClient>::prepare_service_client(self).await?;
 
         views_client
-            .get_bls_keys(request)
+            .get_dkg_keys(request)
             .await
             .map(|r| {
-                let BlsKeysReply {
+                let DkgKeysReply {
                     threshold,
-                    bls_keys,
+                    dkg_keys,
                 } = r.into_inner();
-                (threshold as usize, bls_keys)
+                (threshold as usize, dkg_keys)
             })
             .map_err(|status| status.into())
     }
 
-    async fn in_phase(&self) -> ContractClientResult<usize> {
+    async fn in_phase(&self) -> ContractClientResult<i8> {
         let mut request: Request<()> = Request::new(());
 
         self.set_metadata(&mut request);
@@ -188,7 +193,7 @@ impl CoordinatorViews for MockCoordinatorClient {
         views_client
             .in_phase(request)
             .await
-            .map(|r| r.into_inner().phase as usize)
+            .map(|r| r.into_inner().phase as i8)
             .map_err(|status| status.into())
     }
 }
@@ -200,13 +205,15 @@ impl<C: Curve + 'static> BoardPublisher<C> for MockCoordinatorClient {
     async fn publish_shares(&mut self, shares: BundledShares<C>) -> Result<(), Self::Error> {
         info!("called publish_shares");
         let serialized = bincode::serialize(&shares)?;
-        self.publish(serialized).await.map_err(|e| e.into())
+        self.publish(serialized).await?;
+        Ok(())
     }
 
     async fn publish_responses(&mut self, responses: BundledResponses) -> Result<(), Self::Error> {
         info!("called publish_responses");
         let serialized = bincode::serialize(&responses)?;
-        self.publish(serialized).await.map_err(|e| e.into())
+        self.publish(serialized).await?;
+        Ok(())
     }
 
     async fn publish_justifications(
@@ -214,6 +221,7 @@ impl<C: Curve + 'static> BoardPublisher<C> for MockCoordinatorClient {
         justifications: BundledJustification<C>,
     ) -> Result<(), Self::Error> {
         let serialized = bincode::serialize(&justifications)?;
-        self.publish(serialized).await.map_err(|e| e.into())
+        self.publish(serialized).await?;
+        Ok(())
     }
 }

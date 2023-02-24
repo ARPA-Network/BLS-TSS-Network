@@ -28,6 +28,7 @@ pub struct RandomnessTask {
     pub request_id: Vec<u8>,
     pub seed: U256,
     pub group_index: usize,
+    pub request_confirmations: usize,
     pub assignment_block_height: usize,
 }
 

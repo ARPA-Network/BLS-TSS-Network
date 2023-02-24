@@ -1,4 +1,4 @@
-node_committer_rpc_endpoint: "[::1]:50064"
+node_committer_rpc_endpoint: "[::1]:50065"
 
 node_management_rpc_endpoint: "[::1]:50099"
 
@@ -6,7 +6,11 @@ node_management_rpc_token: "for_test"
 
 provider_endpoint: "[::1]:50052"
 
+chain_id: 0
+
 controller_address: "0x0000000000000000000000000000000000000000"
 
 account:
-  private_key: "0000000000000000000000000000000000000000000000000000000000000004"
+  private_key: "0000000000000000000000000000000000000000000000000000000000000005"
+
+context_logging: false

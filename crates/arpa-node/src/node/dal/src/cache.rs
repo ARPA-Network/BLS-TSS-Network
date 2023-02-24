@@ -583,12 +583,14 @@ impl Task for RandomnessResultCache {
 }
 
 impl ResultCache for RandomnessResultCache {
+    type Task = RandomnessTask;
     type M = Vec<u8>;
 }
 
 #[derive(Debug)]
 pub struct BLSResultCache<T: ResultCache> {
     pub result_cache: T,
+    pub task: T::Task,
     pub state: bool,
 }
 
@@ -617,22 +619,23 @@ impl SignatureResultCacheUpdater<RandomnessResultCache>
     fn add(
         &mut self,
         group_index: usize,
-        task_request_id: Vec<u8>,
+        task: RandomnessTask,
         message: Vec<u8>,
         threshold: usize,
     ) -> DataAccessResult<bool> {
         let signature_result_cache = RandomnessResultCache {
             group_index,
-            randomness_task_request_id: task_request_id.clone(),
+            randomness_task_request_id: task.request_id.clone(),
             message,
             threshold,
             partial_signatures: HashMap::new(),
         };
 
         self.signature_result_caches.insert(
-            task_request_id,
+            task.request_id.clone(),
             BLSResultCache {
                 result_cache: signature_result_cache,
+                task,
                 state: false,
             },
         );
@@ -659,11 +662,17 @@ impl SignatureResultCacheUpdater<RandomnessResultCache>
         Ok(true)
     }
 
-    fn get_ready_to_commit_signatures(&mut self) -> Vec<RandomnessResultCache> {
+    fn get_ready_to_commit_signatures(
+        &mut self,
+        current_block_height: usize,
+    ) -> Vec<RandomnessResultCache> {
         self.signature_result_caches
             .values_mut()
             .filter(|v| {
-                !v.state && v.result_cache.partial_signatures.len() >= v.result_cache.threshold
+                (current_block_height
+                    >= v.task.assignment_block_height + v.task.request_confirmations)
+                    && !v.state
+                    && v.result_cache.partial_signatures.len() >= v.result_cache.threshold
             })
             .map(|v| {
                 v.state = true;

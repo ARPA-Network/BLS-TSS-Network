@@ -9,6 +9,7 @@ pub struct Model {
     pub id: i32,
     pub request_id: Vec<u8>,
     pub group_index: i32,
+    pub request_confirmations: i32,
     pub assignment_block_height: i32,
     pub message: Vec<u8>,
     pub state: i32,

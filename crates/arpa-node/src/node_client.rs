@@ -52,18 +52,24 @@ pub struct Opt {
     config_path: PathBuf,
 }
 
-fn init_log(node_id: &str) {
+fn init_log(node_id: &str, context_logging: bool) {
     let stdout = ConsoleAppender::builder()
-        .encoder(Box::new(JsonEncoder::new()))
+        .encoder(Box::new(
+            JsonEncoder::default().context_logging(context_logging),
+        ))
         .build();
 
     let file = FileAppender::builder()
-        .encoder(Box::new(JsonEncoder::new())) //PatternEncoder::new("{d} {l} - {m}{n}"))
+        .encoder(Box::new(
+            JsonEncoder::default().context_logging(context_logging),
+        ))
         .build(format!("log/{}/node.log", node_id))
         .unwrap();
 
     let err_file = FileAppender::builder()
-        .encoder(Box::new(JsonEncoder::new()))
+        .encoder(Box::new(
+            JsonEncoder::default().context_logging(context_logging),
+        ))
         .build(format!("log/{}/node_err.log", node_id))
         .unwrap();
 
@@ -98,8 +104,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         String::from("running")
     };
 
-    init_log(&node_id);
-
     let config_path_str = opt
         .config_path
         .clone()
@@ -115,12 +119,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     });
 
     let yaml_str = match node_id.as_str() {
-        "1" => include_str!("../conf/config_test_1.yml"),
-        "2" => include_str!("../conf/config_test_2.yml"),
-        "3" => include_str!("../conf/config_test_3.yml"),
-        "4" => include_str!("../conf/config_test_4.yml"),
-        "5" => include_str!("../conf/config_test_5.yml"),
-        "6" => include_str!("../conf/config_test_6.yml"),
+        "1" => include_str!("../conf/config_demo_1.yml"),
+        "2" => include_str!("../conf/config_demo_2.yml"),
+        "3" => include_str!("../conf/config_demo_3.yml"),
+        "4" => include_str!("../conf/config_demo_4.yml"),
+        "5" => include_str!("../conf/config_demo_5.yml"),
+        "6" => include_str!("../conf/config_demo_6.yml"),
         _ => config_str,
     };
 
@@ -129,6 +133,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     if config.data_path.is_none() {
         config.data_path = Some(String::from("data.sqlite"));
     }
+
+    init_log(&node_id, config.context_logging);
 
     info!("{:?}", config);
 
@@ -143,10 +149,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             if data_path.exists() {
                 fs::rename(
                     data_path.clone(),
-                    data_path
-                        .parent()
-                        .unwrap()
-                        .join(format!("bak_{}.sqlite", format_now_date())),
+                    data_path.parent().unwrap().join(format!(
+                        "bak_{}_{}",
+                        format_now_date(),
+                        data_path.file_name().unwrap().to_str().unwrap(),
+                    )),
                 )?;
                 info!("Existing data file found. Renamed to the directory of data_path.",);
             }
@@ -180,7 +187,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
             let main_chain_identity = GeneralChainIdentity::new(
                 0,
-                0,
+                config.chain_id,
                 wallet,
                 config.provider_endpoint.clone(),
                 config
@@ -249,7 +256,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
             let main_chain_identity = GeneralChainIdentity::new(
                 0,
-                0,
+                config.chain_id,
                 wallet,
                 config.provider_endpoint.clone(),
                 config
@@ -304,8 +311,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
             let group_cache = InMemoryGroupInfoCache::new();
 
-            let main_chain_identity =
-                MockChainIdentity::new(0, 0, id_address, config.provider_endpoint.clone());
+            let main_chain_identity = MockChainIdentity::new(
+                0,
+                config.chain_id,
+                id_address,
+                config.provider_endpoint.clone(),
+            );
 
             let randomness_tasks_cache = InMemoryBLSTasksQueue::<RandomnessTask>::new();
 
