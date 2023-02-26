@@ -28,3 +28,6 @@ solidity/build
 
 **/contract_stub
 **/rpc_stub
+
+# Custom
+contracts/test/Test.t.sol

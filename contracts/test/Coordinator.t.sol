@@ -13,7 +13,7 @@ contract CoordinatorTest is Test {
     Coordinator coordinator;
 
     // Constructor Args
-    uint256 PHASE_DURATION = 10;
+    uint256 public PHASE_DURATION = 10;
     uint256 THRESHOLD = 3;
 
     // Create 3 members for initialize()
