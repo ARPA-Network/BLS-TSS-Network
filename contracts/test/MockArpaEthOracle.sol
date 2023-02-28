@@ -16,13 +16,7 @@ contract MockArpaEthOracle {
     function latestRoundData()
         external
         view
-        returns (
-            uint80 roundId,
-            int256,
-            uint256 startedAt,
-            uint256,
-            uint80 answeredInRound
-        )
+        returns (uint80 roundId, int256, uint256 startedAt, uint256, uint80 answeredInRound)
     {
         return (0, weiPerUnitArpa, 0, updatedAt, 0);
     }

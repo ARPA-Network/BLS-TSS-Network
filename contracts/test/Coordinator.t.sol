@@ -32,11 +32,10 @@ contract CoordinatorTest is Test {
 
     // Each phase's data is just an opaque blob of data from the smart contract's
     // perspective, so we'll just use a dummy data object
-    bytes data =
-        "0x2222222222222222222222222222222222222222222222222222222222222222";
+    bytes data = "0x2222222222222222222222222222222222222222222222222222222222222222";
 
     function setUp() public {
-        vm.deal(controller, 1 * 10**18);
+        vm.deal(controller, 1 * 10 ** 18);
         vm.prank(controller);
         coordinator = new Coordinator(THRESHOLD, PHASE_DURATION);
     }

@@ -3,52 +3,19 @@ pragma solidity ^0.8.15;
 
 pragma experimental ABIEncoderV2;
 
-import "forge-std/Test.sol";
 import {Coordinator} from "src/Coordinator.sol";
 import {Controller} from "src/Controller.sol";
 import "openzeppelin-contracts/contracts/utils/Strings.sol";
 import "src/interfaces/ICoordinator.sol";
 import "./MockArpaEthOracle.sol";
+import "./RandcastTestHelper.sol";
 
 // Suggested usage: forge test --match-contract Controller -vv
 
-contract ControllerTest is Test {
-    Controller controller;
-
+contract ControllerTest is RandcastTestHelper {
     uint256 PHASE_DURATION = 10;
 
     address public owner = address(0xC0FF33);
-
-    // Nodes: To be Registered
-    address public node1 = address(0x1);
-    address public node2 = address(0x2);
-    address public node3 = address(0x3);
-    address public node4 = address(0x4);
-    address public node5 = address(0x5);
-    address public node6 = address(0x6);
-    address public node7 = address(0x7);
-    address public node8 = address(0x8);
-    address public node9 = address(0x9);
-    address public node10 = address(0xA);
-    address public node11 = address(0xB);
-    address public node12 = address(0xC);
-
-    // Node Public Keys
-    bytes pubkey1 = hex"DECADE01";
-    bytes pubkey2 = hex"DECADE02";
-    bytes pubkey3 = hex"DECADE03";
-    bytes pubkey4 = hex"DECADE04";
-    bytes pubkey5 = hex"DECADE05";
-    bytes pubkey6 = hex"DECADE06";
-    bytes pubkey7 = hex"DECADE07";
-    bytes pubkey8 = hex"DECADE08";
-    bytes pubkey9 = hex"DECADE09";
-    bytes pubkey10 = hex"DECADE10";
-    bytes pubkey11 = hex"DECADE11";
-    bytes pubkey12 = hex"DECADE12";
-
-    // Arpa contract address
-    address public arpa = address(0x777);
 
     function setUp() public {
         // deal nodes
@@ -62,26 +29,27 @@ contract ControllerTest is Test {
         vm.deal(owner, 1 * 10 ** 18);
         vm.prank(owner);
 
+        arpa = new ERC20("arpa token", "ARPA");
         MockArpaEthOracle oracle = new MockArpaEthOracle();
-        controller = new Controller(arpa, address(oracle));
+        controller = new Controller(address(arpa), address(oracle));
     }
 
     function testNodeRegister() public {
         // printNodeInfo(node1);
         vm.prank(node1);
-        controller.nodeRegister(pubkey1);
+        controller.nodeRegister(DKGPubkey1);
         // printNodeInfo(node1);
 
         Controller.Node memory n = controller.getNode(node1);
         assertEq(n.idAddress, node1);
-        assertEq(n.dkgPublicKey, pubkey1);
+        assertEq(n.dkgPublicKey, DKGPubkey1);
         assertEq(n.state, true);
         assertEq(n.pendingUntilBlock, 0);
         assertEq(n.staking, 50000);
 
         vm.expectRevert("Node is already registered");
         vm.prank(node1);
-        controller.nodeRegister(pubkey1);
+        controller.nodeRegister(DKGPubkey1);
     }
 
     function testRemoveFromGroup() public {
@@ -101,26 +69,26 @@ contract ControllerTest is Test {
 
         // Add 4th node, should create new group
         vm.prank(node4);
-        controller.nodeRegister(pubkey4);
+        controller.nodeRegister(DKGPubkey4);
         emit log_named_uint("groupCount", controller.groupCount());
         printGroupInfo(1);
 
         // The below needs further testing
         // Test needsRebalance
         vm.prank(node5);
-        controller.nodeRegister(pubkey5);
+        controller.nodeRegister(DKGPubkey5);
         vm.prank(node6);
-        controller.nodeRegister(pubkey6);
+        controller.nodeRegister(DKGPubkey6);
         vm.prank(node7);
-        controller.nodeRegister(pubkey7);
+        controller.nodeRegister(DKGPubkey7);
         vm.prank(node8);
-        controller.nodeRegister(pubkey8);
+        controller.nodeRegister(DKGPubkey8);
         vm.prank(node9);
-        controller.nodeRegister(pubkey9);
+        controller.nodeRegister(DKGPubkey9);
         vm.prank(node10);
-        controller.nodeRegister(pubkey10);
+        controller.nodeRegister(DKGPubkey10);
         vm.prank(node11);
-        controller.nodeRegister(pubkey11);
+        controller.nodeRegister(DKGPubkey11);
         emit log("+++++++++++++++++++++++");
         printGroupInfo(0);
         printGroupInfo(1);
@@ -161,18 +129,18 @@ contract ControllerTest is Test {
 
         // Register Node 1
         vm.prank(node1);
-        controller.nodeRegister(pubkey1);
+        controller.nodeRegister(DKGPubkey1);
         // printGroupInfo(groupIndex);
         // printNodeInfo(node1);
 
         // Register Node 2
         vm.prank(node2);
-        controller.nodeRegister(pubkey2);
+        controller.nodeRegister(DKGPubkey2);
         // printGroupInfo(groupIndex);
 
         // Register Node 3
         vm.prank(node3);
-        controller.nodeRegister(pubkey3);
+        controller.nodeRegister(DKGPubkey3);
         // printGroupInfo(groupIndex);
 
         // check group struct is correct
@@ -216,7 +184,7 @@ contract ControllerTest is Test {
 
         // Add 4th node, should create new group
         vm.prank(node4);
-        controller.nodeRegister(pubkey4);
+        controller.nodeRegister(DKGPubkey4);
         emit log_named_uint("groupCount", controller.groupCount());
         printGroupInfo(2);
     }
@@ -268,8 +236,8 @@ contract ControllerTest is Test {
 
         uint256 groupIndex = 0;
         uint256 groupEpoch = 1;
-        bytes memory partialPublicKey = hex"DECADE";
-        bytes memory publicKey = hex"C0FFEE";
+        bytes memory partialPublicKey = partialPublicKey1;
+        bytes memory publicKey = publicKey;
         address[] memory disqualifiedNodes = new address[](0);
 
         // Fail if group does not exist
@@ -325,7 +293,7 @@ contract ControllerTest is Test {
             groupIndex,
             groupEpoch,
             publicKey,
-            hex"DECADE22", // partial public key 2
+            partialPublicKey2, // partial public key 2
             disqualifiedNodes
         );
         controller.commitDkg(params);
@@ -338,7 +306,7 @@ contract ControllerTest is Test {
             groupIndex,
             groupEpoch,
             publicKey,
-            hex"DECADE33", // partial public key 2
+            partialPublicKey3, // partial public key 3
             disqualifiedNodes
         );
         controller.commitDkg(params);
@@ -474,7 +442,7 @@ contract ControllerTest is Test {
         controller.nodeStake(100);
 
         // register node, confirm initial stake amount
-        controller.nodeRegister(pubkey1);
+        controller.nodeRegister(DKGPubkey1);
         assertEq(controller.NODE_STAKING_AMOUNT(), controller.getStakedAmount(node1));
 
         // Stake 2000 tokens: Success
@@ -491,7 +459,7 @@ contract ControllerTest is Test {
         controller.nodeUnstake(1000);
 
         // register node, confirm initial stake amount()
-        controller.nodeRegister(pubkey1);
+        controller.nodeRegister(DKGPubkey1);
         assertEq(controller.NODE_STAKING_AMOUNT(), controller.getStakedAmount(node1));
 
         // stake and fall below the stake threshold: Fail
@@ -512,7 +480,7 @@ contract ControllerTest is Test {
 
         // register node, confirm initial stake amount
         vm.prank(node1);
-        controller.nodeRegister(pubkey1);
+        controller.nodeRegister(DKGPubkey1);
         assertEq(1, controller.getGroup(0).members.length);
         assertEq(controller.NODE_STAKING_AMOUNT(), controller.getStakedAmount(node1));
         printGroupInfo(0);
@@ -547,9 +515,12 @@ contract ControllerTest is Test {
             emit log_named_address(
                 string.concat("g.members[", Strings.toString(i), "].nodeIdAddress"), g.members[i].nodeIdAddress
                 );
-            emit log_named_bytes(
-                string.concat("g.members[", Strings.toString(i), "].partialPublicKey"), g.members[i].partialPublicKey
-                );
+            for (uint256 j = 0; j < g.members[i].partialPublicKey.length; j++) {
+                emit log_named_uint(
+                    string.concat("g.members[", Strings.toString(i), "].partialPublicKey[", Strings.toString(j), "]"),
+                    g.members[i].partialPublicKey[j]
+                    );
+            }
         }
         // print committers
         emit log_named_uint("g.committers.length", g.committers.length);
@@ -560,10 +531,14 @@ contract ControllerTest is Test {
         emit log_named_uint("g.commitCacheList.length", g.commitCacheList.length);
         for (uint256 i = 0; i < g.commitCacheList.length; i++) {
             // print commit result public key
-            emit log_named_bytes(
-                string.concat("g.commitCacheList[", Strings.toString(i), "].commitResult.publicKey"),
-                g.commitCacheList[i].commitResult.publicKey
-                );
+            for (uint256 j = 0; j < g.commitCacheList[i].commitResult.publicKey.length; j++) {
+                emit log_named_uint(
+                    string.concat(
+                        "g.commitCacheList[", Strings.toString(i), "].commitResult.publicKey[", Strings.toString(j), "]"
+                    ),
+                    g.commitCacheList[i].commitResult.publicKey[j]
+                    );
+            }
             // print commit result disqualified nodes
             uint256 disqualifiedNodesLength = g.commitCacheList[i].commitResult.disqualifiedNodes.length;
             for (uint256 j = 0; j < disqualifiedNodesLength; j++) {
@@ -624,7 +599,9 @@ contract ControllerTest is Test {
 
         // emit log_named_uint("m.index", m.index);
         emit log_named_address("m.nodeIdAddress", m.nodeIdAddress);
-        emit log_named_bytes("m.partialPublicKey", m.partialPublicKey);
+        for (uint256 i = 0; i < m.partialPublicKey.length; i++) {
+            emit log_named_uint(string.concat("m.partialPublicKey[", Strings.toString(i), "]"), m.partialPublicKey[i]);
+        }
     }
 }
 

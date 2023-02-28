@@ -13,14 +13,8 @@ contract BLSTest is Test {
         bool onCurve = BLS.isOnCurveG1([p[0], p[1]]);
 
         assertTrue(onCurve);
-        assertEq(
-            p[0],
-            8624054983400697718141956802447871958869122227252176640970531463441248681148
-        );
-        assertEq(
-            p[1],
-            4714976728303045455220568421558489936628555206298476747206964600484068714510
-        );
+        assertEq(p[0], 8624054983400697718141956802447871958869122227252176640970531463441248681148);
+        assertEq(p[1], 4714976728303045455220568421558489936628555206298476747206964600484068714510);
     }
 
     function testG2() public {
@@ -81,88 +75,58 @@ contract BLSTest is Test {
         uint256[2] memory msgPoint = BLS.hashToPoint(message);
         emit log_uint(msgPoint[0]);
         emit log_uint(msgPoint[1]);
-        bytes memory publicKey = abi.encodePacked(
-            params[2],
-            params[3],
-            params[4],
-            params[5]
-        );
+        bytes memory publicKey = abi.encodePacked(params[2], params[3], params[4], params[5]);
         uint256[2] memory sig = BLS.signatureToUncompressed(params[6]);
         emit log_uint(sig[0]);
         emit log_uint(sig[1]);
 
-        bool res = BLS.verifySingle(
-            sig,
-            BLS.fromBytesPublicKey(publicKey),
-            msgPoint
-        );
+        bool res = BLS.verifySingle(sig, BLS.fromBytesPublicKey(publicKey), msgPoint);
 
         emit log_uint(res ? 1 : 0);
+        assertTrue(res);
     }
 
-    // function testPubkeyToUncompressed1() public {
-    //     // GroupAffine(x=QuadExtField(Fp256 "(2DE3B4991C30EBB440627686A6795D964A1D01F981B156AB6ECECFA5B94B0478)" + Fp256 "(015DC0177643E0B9B7DC7FCCB6B1712A6F1730D5F7CCD04DCF25B3EDCBEC7A93)" * u), y=QuadExtField(Fp256 "(2F31D29885DD872DF059C8E12FCF9FECD73D71E65EC747FEC843A2C4A8F0C630)" + Fp256 "(0DDBCB3C55C052CF1FD7F54FD9B8A696A2CDA688B05092BF0BCC7D98A6A19F1F)" * u))
-    //     // x
-    //     // "2de3b4991c30ebb440627686a6795d964a1d01f981b156ab6ececfa5b94b0478" "015dc0177643e0b9b7dc7fccb6b1712a6f1730d5f7ccd04dcf25b3edcbec7a93"
-    //     // 20756398912134812078449497828567988906059620378438669533183980259985523934328 617955393439787001855353443017057339186294788049905168865177313479391738515
+    function testVerifyPartials() public {
+        uint256[2] memory message = [
+            0xde7c516e867a427226866fa41566ad0eb0ff69f54e4408babd2f59c54238fa86,
+            0x0000000000000000000000000000000000000000000000000000000000000001
+        ];
 
-    //     // y
-    //     // "2f31d29885dd872df059c8e12fcf9fecd73d71e65ec747fec843a2c4a8f0c630" "0ddbcb3c55c052cf1fd7f54fd9b8a696a2cda688b05092bf0bcc7d98a6a19f1f"
-    //     // 21346732868330046654697465256698294475282421912298539483778111376305406658096 6268409219904789810158462871372220706695311468722235895072814429772529639199
+        uint256 sig1 = 0x9b91156f3d3159a2f86c1105fe556e08853766cfa6487132f7f74a8a77692ac5;
+        uint256 sig2 = 0x927794d6470ed17d2e92feab2c1614c62fc43fe846ca2d1edb9deda274946a81;
+        uint256 sig3 = 0x1b44db4e542a498529ec1256d8829e6f9380cefd4741a8846ea7df6986c3a7e9;
 
-    //     // GroupAffine(x=QuadExtField(Fp256 "(1BBD0871250E76B5EA8E34F6D3F89BDC751AE6EF52DE3C43284C7019295EC379)" + Fp256 "(2CE2C646FE018F13F5E17262C76B6029C6018FE133B722F4A22DBE7735346A04)" * u), y=QuadExtField(Fp256 "(2750392B33CF5F52A1168D2655DAF0B52182AB0B64FC53608B66525C8C41ADD2)" + Fp256 "(2A1B2978C20305B07BBB640A2679F58E40CFF4D94BEADCEE48556AC058FA23D0)" * u))
-    //     // x
-    //     // "1bbd0871250e76b5ea8e34f6d3f89bdc751ae6ef52de3c43284c7019295ec379" "ace2c646fe018f13f5e17262c76b6029c6018fe133b722f4a22dbe7735346a04"
-    //     // 12546439271338559655186752642183721849120899305737352501820067857591789601657 78198485852684628268259372262537068333772691786148832411471909410233205942788
+        bytes memory pub1 =
+            hex"047b565c2e1724fda37d648746d778618f995f6635bb38a71be2f60c09ffbea011a8fe485a7a3a41c7eab1004bb1b5f90b49210173c24cb90dfe99f6c92970660b80428a38cff7734a4c853bd87b55dc2b3f850081323658326fd8468660aa170c74ee6c4fb599c426e4041fb7795164ea0dd1ac362437d3c82647705a5d13a1";
+        bytes memory pub2 =
+            hex"047da8ba9644377f4fd0fe43b2fd472479c144013ed7279b73c13c1cf7560c69034a73ce9107f377ba82581fe32c9ace62bb36b417c079096a4ee6cb6bec24cc2d8b5bc9d8147a73ae42c246f2250f0646b818cdf8eea116264516fbd71be0f4168bba7c6dfec34cc12f3a69d35c5b5ee635a3c1e5a1115a3c1778cd954e2939";
+        bytes memory pub3 =
+            hex"01989cbe9c28b6fe28b152c9654d052567e27778b5b520105b53543f183239de135b1253a42042b6a11bc70287faee74c4c6a2d0a3cc14d83ad12eb3f380be55053c30615fba4b4d09dddfab945841294b6e955777ce811d691d91c9e66f1cf72b2534eddac940455454fa797e6a7336738fa56f30742a95cb0ae7cd1a9ab883";
 
-    //     // y
-    //     // "2750392b33cf5f52a1168d2655daf0b52182ab0b64fc53608b66525c8c41add2" "2a1b2978c20305b07bbb640a2679f58e40cff4d94beadcee48556ac058fa23d0"
-    //     // 17781943424205368556263905344331399021295718771387565154585246754363639180754 19045130738471851014382535487809521049013715510792944134303223009484243346384
+        uint256[2][] memory partials = new uint256[2][](3);
+        partials[0] = BLS.signatureToUncompressed(sig1);
+        partials[1] = BLS.signatureToUncompressed(sig2);
+        partials[2] = BLS.signatureToUncompressed(sig3);
+        uint256[4][] memory pubkeys = new uint256[4][](3);
+        pubkeys[0] = BLS.fromBytesPublicKey(pub1);
+        pubkeys[1] = BLS.fromBytesPublicKey(pub2);
+        pubkeys[2] = BLS.fromBytesPublicKey(pub3);
 
-    //     uint256 cx1 = 20756398912134812078449497828567988906059620378438669533183980259985523934328;
-    //     uint256 cx2 = 617955393439787001855353443017057339186294788049905168865177313479391738515;
-    //     uint256 y1 = 21346732868330046654697465256698294475282421912298539483778111376305406658096;
-    //     uint256 y2 = 6268409219904789810158462871372220706695311468722235895072814429772529639199;
+        verifyPartials(partials, pubkeys, message);
+    }
 
-    //     uint256[2] memory c = [cx1, cx2];
-    //     uint256[4] memory uncompressed = BLS.pubkeyToUncompressed(c);
-    //     emit log_uint(uncompressed[0]);
-    //     emit log_uint(uncompressed[1]);
-    //     // assertEq(uncompressed[2], y1);
-    //     // assertEq(uncompressed[3], y2);
-    // }
+    function verifyPartials(uint256[2][] memory partials, uint256[4][] memory pubkeys, uint256[2] memory message)
+        public
+    {
+        bytes memory realSeed = abi.encodePacked(message[0], message[1]);
+        emit log_bytes(realSeed);
+        uint256[2] memory msgPoint = BLS.hashToPoint(realSeed);
+        emit log_uint(msgPoint[0]);
+        emit log_uint(msgPoint[1]);
 
-    // function testPubkeyToUncompressed2() public {
-    //     // GroupAffine(x=QuadExtField(Fp256 "(2DE3B4991C30EBB440627686A6795D964A1D01F981B156AB6ECECFA5B94B0478)" + Fp256 "(015DC0177643E0B9B7DC7FCCB6B1712A6F1730D5F7CCD04DCF25B3EDCBEC7A93)" * u), y=QuadExtField(Fp256 "(2F31D29885DD872DF059C8E12FCF9FECD73D71E65EC747FEC843A2C4A8F0C630)" + Fp256 "(0DDBCB3C55C052CF1FD7F54FD9B8A696A2CDA688B05092BF0BCC7D98A6A19F1F)" * u))
-    //     // x
-    //     // "2de3b4991c30ebb440627686a6795d964a1d01f981b156ab6ececfa5b94b0478" "015dc0177643e0b9b7dc7fccb6b1712a6f1730d5f7ccd04dcf25b3edcbec7a93"
-    //     // 20756398912134812078449497828567988906059620378438669533183980259985523934328 617955393439787001855353443017057339186294788049905168865177313479391738515
+        bool res = BLS.verifyPartials(partials, pubkeys, msgPoint);
 
-    //     // y
-    //     // "2f31d29885dd872df059c8e12fcf9fecd73d71e65ec747fec843a2c4a8f0c630" "0ddbcb3c55c052cf1fd7f54fd9b8a696a2cda688b05092bf0bcc7d98a6a19f1f"
-    //     // 21346732868330046654697465256698294475282421912298539483778111376305406658096 6268409219904789810158462871372220706695311468722235895072814429772529639199
-
-    //     // GroupAffine(x=QuadExtField(Fp256 "(1BBD0871250E76B5EA8E34F6D3F89BDC751AE6EF52DE3C43284C7019295EC379)" + Fp256 "(2CE2C646FE018F13F5E17262C76B6029C6018FE133B722F4A22DBE7735346A04)" * u), y=QuadExtField(Fp256 "(2750392B33CF5F52A1168D2655DAF0B52182AB0B64FC53608B66525C8C41ADD2)" + Fp256 "(2A1B2978C20305B07BBB640A2679F58E40CFF4D94BEADCEE48556AC058FA23D0)" * u))
-    //     // x
-    //     // "1bbd0871250e76b5ea8e34f6d3f89bdc751ae6ef52de3c43284c7019295ec379" "ace2c646fe018f13f5e17262c76b6029c6018fe133b722f4a22dbe7735346a04"
-    //     // 12546439271338559655186752642183721849120899305737352501820067857591789601657 78198485852684628268259372262537068333772691786148832411471909410233205942788
-
-    //     // y
-    //     // "2750392b33cf5f52a1168d2655daf0b52182ab0b64fc53608b66525c8c41add2" "2a1b2978c20305b07bbb640a2679f58e40cff4d94beadcee48556ac058fa23d0"
-    //     // 17781943424205368556263905344331399021295718771387565154585246754363639180754 19045130738471851014382535487809521049013715510792944134303223009484243346384
-
-    //     uint256 cx1 = 12546439271338559655186752642183721849120899305737352501820067857591789601657;
-    //     uint256 cx2 = 78198485852684628268259372262537068333772691786148832411471909410233205942788;
-    //     uint256 y1 = 17781943424205368556263905344331399021295718771387565154585246754363639180754;
-    //     uint256 y2 = 19045130738471851014382535487809521049013715510792944134303223009484243346384;
-
-    //     uint256[2] memory c = [cx1, cx2];
-    //     uint256[4] memory uncompressed = BLS.pubkeyToUncompressed(c);
-    //     // assertTrue(BLS.isValidCompressedPublicKey(c));
-    //     assertTrue(BLS.isValidPublicKey(uncompressed));
-    //     emit log_uint(uncompressed[0]);
-    //     emit log_uint(uncompressed[1]);
-    //     // assertEq(uncompressed[2], y1);
-    //     // assertEq(uncompressed[3], y2);
-    // }
+        emit log_uint(res ? 1 : 0);
+        assertTrue(res);
+    }
 }

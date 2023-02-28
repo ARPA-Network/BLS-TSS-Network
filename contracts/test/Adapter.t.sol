@@ -35,6 +35,9 @@ contract AdapterTest is RandcastTestHelper {
         arpa = new ERC20("arpa token", "ARPA");
         oracle = new MockArpaEthOracle();
         controller = new Controller(address(arpa), address(oracle));
+        getRandomNumberExample = new GetRandomNumberExample(
+            address(controller)
+        );
 
         controller.setConfig(
             minimumRequestConfirmations,
@@ -60,14 +63,7 @@ contract AdapterTest is RandcastTestHelper {
         deal(address(arpa), address(user), plentyOfArpaBalance);
         arpa.approve(address(controller), 3 * plentyOfArpaBalance);
 
-        getRandomNumberExample = new GetRandomNumberExample(
-            address(controller)
-        );
-
-        subId = prepareSubscription(
-            address(getRandomNumberExample),
-            plentyOfArpaBalance
-        );
+        subId = prepareSubscription(address(getRandomNumberExample), plentyOfArpaBalance);
     }
 
     function testControllerAddress() public {
@@ -77,7 +73,7 @@ contract AdapterTest is RandcastTestHelper {
 
     function testUserContractOwner() public {
         emit log_address(address(getRandomNumberExample));
-        assertEq(getRandomNumberExample.owner(), user);
+        assertEq(getRandomNumberExample.owner(), admin);
     }
 
     function testCannotRequestByEOA() public {
@@ -105,7 +101,7 @@ contract AdapterTest is RandcastTestHelper {
             bytes32 requestId = getRandomNumberExample.getRandomNumber();
             emit log_bytes32(requestId);
             vm.stopBroadcast();
-            (, uint96 inflightCost, , , ) = controller.getSubscription(subId);
+            (, uint96 inflightCost,,,) = controller.getSubscription(subId);
             emit log_uint(inflightCost);
 
             uint96 payment = controller.estimatePaymentAmount(
@@ -117,13 +113,8 @@ contract AdapterTest is RandcastTestHelper {
 
             assertEq(inflightCost, payment * (i + 1));
 
-            Controller.Callback memory callback = controller.getPendingRequest(
-                requestId
-            );
-            bytes memory actualSeed = abi.encodePacked(
-                callback.seed,
-                callback.blockNum
-            );
+            Controller.Callback memory callback = controller.getPendingRequest(requestId);
+            bytes memory actualSeed = abi.encodePacked(callback.seed, callback.blockNum);
 
             emit log_named_bytes("actualSeed", actualSeed);
 
@@ -134,21 +125,19 @@ contract AdapterTest is RandcastTestHelper {
     function testFulfillRandomness() public {
         prepareAnAvailableGroup();
         deal(user, 1 * 1e18);
-        deal(node, 1 * 1e18);
 
         uint32 times = 1;
 
-        vm.startBroadcast(user);
+        vm.broadcast(user);
         bytes32 requestId = getRandomNumberExample.getRandomNumber();
         emit log_bytes32(requestId);
-        vm.stopBroadcast();
 
         vm.startBroadcast(node1);
-        fulfillRequest(requestId);
+        fulfillRequest(requestId, 0);
         vm.stopBroadcast();
 
         vm.roll(block.number + 1);
-        emit log_uint(getRandomNumberExample.randomnessResults(0));
+        assertEq(getRandomNumberExample.randomnessResults(0), controller.lastOutput());
         assertEq(getRandomNumberExample.lengthOfRandomnessResults(), times);
     }
 }
