@@ -8,7 +8,7 @@ use threshold_bls::group::PairingCurve;
 
 pub const GROUP_MAX_CAPACITY: usize = 10;
 
-pub const RANDOMNESS_TASK_EXCLUSIVE_WINDOW: usize = 30;
+pub const RANDOMNESS_TASK_EXCLUSIVE_WINDOW: usize = 10;
 
 pub struct Node {
     pub id_address: Address,

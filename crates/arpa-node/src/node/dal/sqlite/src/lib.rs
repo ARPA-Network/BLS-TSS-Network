@@ -822,10 +822,16 @@ impl<C: PairingCurve + Sync + Send> BLSTasksUpdater<RandomnessTask>
         current_block_height: usize,
         current_group_index: usize,
     ) -> DataAccessResult<Vec<RandomnessTask>> {
+        let before_assignment_block_height =
+            if current_block_height > RANDOMNESS_TASK_EXCLUSIVE_WINDOW {
+                current_block_height - RANDOMNESS_TASK_EXCLUSIVE_WINDOW
+            } else {
+                0
+            };
         RandomnessTaskMutation::fetch_available_tasks(
             self.get_connection(),
             current_group_index as i32,
-            (current_block_height - RANDOMNESS_TASK_EXCLUSIVE_WINDOW) as i32,
+            before_assignment_block_height as i32,
         )
         .await
         .map(|models| {
