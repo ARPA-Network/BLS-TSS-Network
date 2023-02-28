@@ -171,6 +171,7 @@ cargo run --bin user-client 0x9000000000000000000000000000000000000001 "[::1]:50
 
 ```bash
 # produces a new block every 1 second and ignores contract size for now
+# evm errors can be reduced by increasing block-time properly
 anvil --block-time 1 --code-size-limit 90000
 ```
 

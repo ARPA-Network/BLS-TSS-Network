@@ -171,7 +171,7 @@ impl AdapterTransactions for Adapter {
         let raw_seed =
             U256::from_big_endian(&keccak256([&user_seed[..], &last_output[..]].concat()));
 
-        let request_id = keccak256(&u256_to_vec(&raw_seed)).to_vec();
+        let request_id = keccak256(u256_to_vec(&raw_seed)).to_vec();
 
         let signature_task = SignatureTask {
             request_id: request_id.clone(),
