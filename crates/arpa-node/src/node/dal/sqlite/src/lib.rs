@@ -862,6 +862,7 @@ pub mod sqlite_tests {
     use arpa_node_core::DKGStatus;
     use arpa_node_core::DKGTask;
     use arpa_node_core::RandomnessTask;
+    use arpa_node_core::RANDOMNESS_TASK_EXCLUSIVE_WINDOW;
     use arpa_node_dal::error::GroupError;
     use arpa_node_dal::BLSTasksFetcher;
     use arpa_node_dal::BLSTasksUpdater;
@@ -1278,10 +1279,16 @@ pub mod sqlite_tests {
         assert_eq!(task, db.get(&request_id).await.unwrap());
         assert_eq!(false, db.is_handled(&request_id).await.unwrap());
 
-        let available_tasks = db.check_and_get_available_tasks(130, 1).await.unwrap();
+        let available_tasks = db
+            .check_and_get_available_tasks(100 + RANDOMNESS_TASK_EXCLUSIVE_WINDOW, 1)
+            .await
+            .unwrap();
         assert_eq!(0, available_tasks.len());
 
-        let available_tasks = db.check_and_get_available_tasks(131, 1).await.unwrap();
+        let available_tasks = db
+            .check_and_get_available_tasks(100 + RANDOMNESS_TASK_EXCLUSIVE_WINDOW + 1, 1)
+            .await
+            .unwrap();
         assert_eq!(1, available_tasks.len());
         assert_eq!(request_id, available_tasks[0].request_id);
         assert_eq!(seed, available_tasks[0].seed);
@@ -1292,7 +1299,10 @@ pub mod sqlite_tests {
         assert_eq!(task, db.get(&request_id).await.unwrap());
         assert_eq!(true, db.is_handled(&request_id).await.unwrap());
 
-        let available_tasks = db.check_and_get_available_tasks(131, 1).await.unwrap();
+        let available_tasks = db
+            .check_and_get_available_tasks(100 + RANDOMNESS_TASK_EXCLUSIVE_WINDOW + 1, 1)
+            .await
+            .unwrap();
         assert_eq!(0, available_tasks.len());
 
         teardown();
