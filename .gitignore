@@ -29,3 +29,6 @@ solidity/build
 **/contract_stub
 **/rpc_stub/*.rs
 !**/rpc_stub/mod.rs
+
+# Custom
+contracts/test/Test.t.sol

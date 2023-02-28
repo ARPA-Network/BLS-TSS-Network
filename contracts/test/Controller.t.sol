@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity ^0.8.15;
+
 pragma experimental ABIEncoderV2;
 
 import "forge-std/Test.sol";
@@ -29,6 +30,7 @@ contract ControllerTest is Test {
     address public node9 = address(0x9);
     address public node10 = address(0xA);
     address public node11 = address(0xB);
+    address public node12 = address(0xC);
 
     // Node Public Keys
     bytes pubkey1 = hex"DECADE01";
@@ -42,17 +44,18 @@ contract ControllerTest is Test {
     bytes pubkey9 = hex"DECADE09";
     bytes pubkey10 = hex"DECADE10";
     bytes pubkey11 = hex"DECADE11";
+    bytes pubkey12 = hex"DECADE12";
 
     function setUp() public {
         // deal nodes
-        vm.deal(node1, 1 * 10**18);
-        vm.deal(node2, 1 * 10**18);
-        vm.deal(node3, 1 * 10**18);
-        vm.deal(node4, 1 * 10**18);
-        vm.deal(node5, 1 * 10**18);
+        vm.deal(node1, 1 * 10 ** 18);
+        vm.deal(node2, 1 * 10 ** 18);
+        vm.deal(node3, 1 * 10 ** 18);
+        vm.deal(node4, 1 * 10 ** 18);
+        vm.deal(node5, 1 * 10 ** 18);
 
         // deal owner and create controller
-        vm.deal(owner, 1 * 10**18);
+        vm.deal(owner, 1 * 10 ** 18);
         vm.prank(owner);
         controller = new Controller();
     }
@@ -129,13 +132,13 @@ contract ControllerTest is Test {
 
     function testMinimumThreshold() public {
         uint256 min;
-        min = controller.tMinimumThreshold(3);
+        min = controller.minimumThreshold(3);
         emit log_named_uint("min 3", min);
         assertEq(min, 2);
-        min = controller.tMinimumThreshold(7);
+        min = controller.minimumThreshold(7);
         emit log_named_uint("min 7", min);
         assertEq(min, 4);
-        min = controller.tMinimumThreshold(100);
+        min = controller.minimumThreshold(100);
         emit log_named_uint("min 100", min);
         assertEq(min, 51);
     }
@@ -143,7 +146,7 @@ contract ControllerTest is Test {
     function testEmitGroupEvent() public {
         // * fail emit group event if group does not exist
         vm.expectRevert("Group does not exist");
-        controller.tNonexistantGroup(99999);
+        controller.emitGroupEvent(99999);
 
         // * Register Three nodes and see if group struct is well formed
         uint256 groupIndex = 0;
@@ -180,8 +183,8 @@ contract ControllerTest is Test {
         assertEq(m.nodeIdAddress, node2);
         // assertEq(m.partialPublicKey, TODO);
 
-        address coordinatorAddress = controller.getCoordinator(groupIndex);
-        emit log_named_address("\nCoordinator", coordinatorAddress);
+        // address coordinatorAddress = controller.getCoordinator(groupIndex);
+        // emit log_named_address("\nCoordinator", coordinatorAddress);
     }
 
     function testValidGroupIndices() public {
@@ -215,10 +218,7 @@ contract ControllerTest is Test {
     function testgetMemberIndexByAddress() public {
         uint256 groupIndex = 0;
 
-        int256 memberIndex = controller.getMemberIndexByAddress(
-            groupIndex,
-            node1
-        );
+        int256 memberIndex = controller.getMemberIndexByAddress(groupIndex, node1);
         assertEq(memberIndex, -1);
 
         testEmitGroupEvent();
@@ -280,9 +280,7 @@ contract ControllerTest is Test {
 
         // Fail if group does not match Controller Group Epoch
         vm.prank(node1);
-        vm.expectRevert(
-            "Caller Group epoch does not match controller Group epoch"
-        );
+        vm.expectRevert("Caller Group epoch does not match controller Group epoch");
         params = Controller.CommitDkgParams(
             groupIndex,
             999, //  wrong epoch
@@ -295,13 +293,7 @@ contract ControllerTest is Test {
         // Fail if node is not a member of the group
         vm.prank(node5);
         vm.expectRevert("Node is not a member of the group");
-        params = Controller.CommitDkgParams(
-            groupIndex,
-            groupEpoch,
-            publicKey,
-            partialPublicKey,
-            disqualifiedNodes
-        );
+        params = Controller.CommitDkgParams(groupIndex, groupEpoch, publicKey, partialPublicKey, disqualifiedNodes);
         controller.commitDkg(params);
 
         assertEq(checkIsStrictlyMajorityConsensusReached(groupIndex), false);
@@ -309,29 +301,15 @@ contract ControllerTest is Test {
 
         // Succesful Commit: Node 1
         vm.prank(node1);
-        params = Controller.CommitDkgParams(
-            groupIndex,
-            groupEpoch,
-            publicKey,
-            partialPublicKey,
-            disqualifiedNodes
-        );
+        params = Controller.CommitDkgParams(groupIndex, groupEpoch, publicKey, partialPublicKey, disqualifiedNodes);
         controller.commitDkg(params);
         assertEq(checkIsStrictlyMajorityConsensusReached(groupIndex), false);
         // printGroupInfo(groupIndex);
 
         //  Fail if CommitCache already contains PartialKey for this node
         vm.prank(node1);
-        vm.expectRevert(
-            "CommitCache already contains PartialKey for this node"
-        );
-        params = Controller.CommitDkgParams(
-            groupIndex,
-            groupEpoch,
-            publicKey,
-            partialPublicKey,
-            disqualifiedNodes
-        );
+        vm.expectRevert("CommitCache already contains PartialKey for this node");
+        params = Controller.CommitDkgParams(groupIndex, groupEpoch, publicKey, partialPublicKey, disqualifiedNodes);
         controller.commitDkg(params);
         assertEq(checkIsStrictlyMajorityConsensusReached(groupIndex), false);
 
@@ -372,11 +350,7 @@ contract ControllerTest is Test {
         indices[3] = 3;
         indices[4] = 4;
 
-        uint256[] memory chosenIndices = controller.chooseRandomlyFromIndices(
-            lastOutput,
-            indices,
-            3
-        );
+        uint256[] memory chosenIndices = controller.chooseRandomlyFromIndices(lastOutput, indices, 3);
 
         for (uint256 i = 0; i < chosenIndices.length; i++) {
             emit log_named_uint("chosenIndices", chosenIndices[i]);
@@ -394,8 +368,7 @@ contract ControllerTest is Test {
         address[] memory disqualifedNodes = new address[](1);
         disqualifedNodes[0] = node2;
 
-        address[] memory majorityMembers = controller
-            .getNonDisqualifiedMajorityMembers(nodes, disqualifedNodes);
+        address[] memory majorityMembers = controller.getNonDisqualifiedMajorityMembers(nodes, disqualifedNodes);
 
         assertEq(majorityMembers.length, 2);
     }
@@ -406,55 +379,150 @@ contract ControllerTest is Test {
         assertEq(controller.partialKeyRegistered(groupIndex, node1), false);
     }
 
-    function checkIsStrictlyMajorityConsensusReached(uint256 groupIndex)
-        public
-        view
-        returns (bool)
-    {
+    function checkIsStrictlyMajorityConsensusReached(uint256 groupIndex) public view returns (bool) {
         Controller.Group memory g = controller.getGroup(groupIndex);
         return g.isStrictlyMajorityConsensusReached;
     }
 
-    function testPostProccessDkg() public {
-        testEmitGroupEvent();
+    function testPostProcessDkg() public {
+        testCommitDkg();
+
+        uint256 expectedRewards = controller.DKG_POST_PROCESS_REWARD();
         uint256 groupIndex = 0;
         uint256 groupEpoch = 1;
         address coordinatorAddress = controller.getCoordinator(groupIndex);
         ICoordinator coordinator = ICoordinator(coordinatorAddress);
         uint256 startBlock = coordinator.startBlock();
 
-        // emit group count
-        emit log_named_uint("group count", controller.groupCount());
-
         vm.expectRevert("Group does not exist");
         controller.postProcessDkg(99999, 0); //(groupIndex, groupEpoch))
 
-        vm.prank(node4);
+        vm.prank(node12);
         vm.expectRevert("Node is not a member of the group");
         controller.postProcessDkg(groupIndex, 0); //(groupIndex, groupEpoch))
 
         vm.prank(node1);
-        vm.expectRevert(
-            "Caller Group epoch does not match Controller Group epoch"
-        );
+        vm.expectRevert("Caller Group epoch does not match Controller Group epoch");
         controller.postProcessDkg(groupIndex, 0); //(groupIndex, groupEpoch))
 
         vm.prank(node1);
         vm.expectRevert("DKG still in progress");
         controller.postProcessDkg(groupIndex, groupEpoch); //(groupIndex, groupEpoch))
 
-        // Succesful post proccess dkg
+        // Set the coordinator to completed phase
         vm.roll(startBlock + 1 + 4 * PHASE_DURATION); // Put the coordinator in phase
-        vm.prank(node1);
-        controller.postProcessDkg(groupIndex, groupEpoch); //(groupIndex, groupEpoch))
 
-        // Self destruct cannot be tested in foundry at the moment:
-        // https://github.com/foundry-rs/foundry/issues/1543
-        // https://github.com/foundry-rs/foundry/issues/2844
-        // assertEq(coordinator.inPhase(), -1);
+        // Succesful post process dkg: HAPPY PATH
+        vm.startPrank(node1);
+        controller.postProcessDkg(groupIndex, groupEpoch);
+        uint256 nodeRewards = controller.getRewards(node1);
+        emit log_named_uint("node1 rewards", nodeRewards);
+        assertEq(nodeRewards, expectedRewards);
+
+        // test self destruct worked properly
+        address emptyCoordinatorAddress = controller.getCoordinator(groupIndex);
+        assertEq(emptyCoordinatorAddress, address(0));
+
+        vm.expectRevert("Coordinator not found for groupIndex");
+        controller.postProcessDkg(groupIndex, groupEpoch); //(groupIndex, groupEpoch))
+        vm.stopPrank();
+        // assert that coordinator has self destructed (cant test this yet)
     }
 
-    // ! Helper function for debugging below
+    function testSlashNode() public {
+        testPostProcessDkg();
+        Controller.Group memory g = controller.getGroup(0);
+        assertEq(g.members.length, 3);
+        assertEq(g.isStrictlyMajorityConsensusReached, true);
+        printGroupInfo(0);
+
+        // Confirm node1 has correct initial stake amount
+        assertEq(controller.NODE_STAKING_AMOUNT(), controller.getStakedAmount(node1));
+
+        emit log_named_uint("node1 staked tokens before` slash", controller.getStakedAmount(node1));
+        // slash node1
+        uint256 penaltyAmount = controller.DISQUALIFIED_NODE_PENALTY_AMOUNT();
+        uint256 pendingBlock = 0;
+        bool handleGroup = true;
+        controller.slashNode(node1, penaltyAmount, pendingBlock, handleGroup);
+
+        // Assert staking penalty applied to node1
+        assertEq(
+            controller.NODE_STAKING_AMOUNT() - controller.DISQUALIFIED_NODE_PENALTY_AMOUNT(),
+            controller.getStakedAmount(node1)
+        );
+
+        // assert node1 has been removed from the group
+        g = controller.getGroup(0);
+        assertEq(g.members.length, 2);
+        assertEq(g.isStrictlyMajorityConsensusReached, false);
+
+        emit log_named_uint("node1 staked tokens after slash", controller.getStakedAmount(node1));
+        printGroupInfo(0);
+    }
+
+    function testNodeStake() public {
+        // call node stake with unregistered node: Fail
+        vm.startPrank(node1);
+        vm.expectRevert("Node not registered.");
+        controller.nodeStake(100);
+
+        // register node, confirm initial stake amount
+        controller.nodeRegister(pubkey1);
+        assertEq(controller.NODE_STAKING_AMOUNT(), controller.getStakedAmount(node1));
+
+        // Stake 2000 tokens: Success
+        controller.nodeStake(100);
+        assertEq(controller.NODE_STAKING_AMOUNT() + 100, controller.getStakedAmount(node1));
+
+        vm.stopPrank();
+    }
+
+    function testNodeUnstake() public {
+        // call nodeUnstake with unregistered node: Fail
+        vm.startPrank(node1);
+        vm.expectRevert("Node not registered.");
+        controller.nodeUnstake(1000);
+
+        // register node, confirm initial stake amount()
+        controller.nodeRegister(pubkey1);
+        assertEq(controller.NODE_STAKING_AMOUNT(), controller.getStakedAmount(node1));
+
+        // stake and fall below the stake threshold: Fail
+        vm.expectRevert("Node state is true, cannot unstake below staking threshold");
+        controller.nodeUnstake(1);
+
+        // Stake 2000, then unstake 1000, staying above threshold: success
+        controller.nodeStake(100);
+        controller.nodeUnstake(1);
+        assertEq(controller.NODE_STAKING_AMOUNT() + 99, controller.getStakedAmount(node1));
+    }
+
+    function testNodeQuit() public {
+        // call nodeQuit with unregistered node: Fail
+        vm.prank(node1);
+        vm.expectRevert("Node not registered.");
+        controller.nodeQuit();
+
+        // register node, confirm initial stake amount
+        vm.prank(node1);
+        controller.nodeRegister(pubkey1);
+        assertEq(1, controller.getGroup(0).members.length);
+        assertEq(controller.NODE_STAKING_AMOUNT(), controller.getStakedAmount(node1));
+        printGroupInfo(0);
+        // printNodeInfo(node1);
+
+        // Quit node: Success
+        vm.prank(node1);
+        controller.nodeQuit();
+        // assert member length is 0
+        assertEq(0, controller.getGroup(0).members.length);
+        assertEq(0, controller.getStakedAmount(node1));
+        // printGroupInfo(0);
+        // printNodeInfo(node1);
+    }
+
+    // ****************** HELPER FUNCTIONS ***********************************
     function printGroupInfo(uint256 groupIndex) public {
         Controller.Group memory g = controller.getGroup(groupIndex);
 
@@ -468,56 +536,44 @@ contract ControllerTest is Test {
         emit log_named_uint("g.size", g.size);
         emit log_named_uint("g.threshold", g.threshold);
         emit log_named_uint("g.members.length", g.members.length);
-        emit log_named_uint(
-            "g.isStrictlyMajorityConsensusReached",
-            g.isStrictlyMajorityConsensusReached ? 1 : 0
-        );
+        emit log_named_uint("g.isStrictlyMajorityConsensusReached", g.isStrictlyMajorityConsensusReached ? 1 : 0);
         for (uint256 i = 0; i < g.members.length; i++) {
             emit log_named_address(
-                string.concat(
-                    "g.members[",
-                    Strings.toString(i),
-                    "].nodeIdAddress"
-                ),
-                g.members[i].nodeIdAddress
-            );
+                string.concat("g.members[", Strings.toString(i), "].nodeIdAddress"), g.members[i].nodeIdAddress
+                );
             emit log_named_bytes(
-                string.concat(
-                    "g.members[",
-                    Strings.toString(i),
-                    "].partialPublicKey"
-                ),
-                g.members[i].partialPublicKey
-            );
+                string.concat("g.members[", Strings.toString(i), "].partialPublicKey"), g.members[i].partialPublicKey
+                );
         }
         // print committers
         emit log_named_uint("g.committers.length", g.committers.length);
         for (uint256 i = 0; i < g.committers.length; i++) {
-            emit log_named_address(
-                string.concat("g.committers[", Strings.toString(i), "]"),
-                g.committers[i]
-            );
+            emit log_named_address(string.concat("g.committers[", Strings.toString(i), "]"), g.committers[i]);
         }
         // print commit cache info
-        emit log_named_uint(
-            "g.commitCacheList.length",
-            g.commitCacheList.length
-        );
+        emit log_named_uint("g.commitCacheList.length", g.commitCacheList.length);
         for (uint256 i = 0; i < g.commitCacheList.length; i++) {
-            // print commit result
+            // print commit result public key
             emit log_named_bytes(
-                string.concat(
-                    "g.commitCacheList[",
-                    Strings.toString(i),
-                    "].commitResult.publicKey"
-                ),
+                string.concat("g.commitCacheList[", Strings.toString(i), "].commitResult.publicKey"),
                 g.commitCacheList[i].commitResult.publicKey
-            );
-            for (
-                uint256 j = 0;
-                j < g.commitCacheList[i].nodeIdAddress.length;
-                j++
-            ) {
+                );
+            // print commit result disqualified nodes
+            uint256 disqualifiedNodesLength = g.commitCacheList[i].commitResult.disqualifiedNodes.length;
+            for (uint256 j = 0; j < disqualifiedNodesLength; j++) {
+                emit log_named_address(
+                    string.concat(
+                        "g.commitCacheList[",
+                        Strings.toString(i),
+                        "].commitResult.disqualifiedNodes[",
+                        Strings.toString(j),
+                        "].nodeIdAddress"
+                    ),
+                    g.commitCacheList[i].commitResult.disqualifiedNodes[j]
+                    );
+            }
+
+            for (uint256 j = 0; j < g.commitCacheList[i].nodeIdAddress.length; j++) {
                 emit log_named_address(
                     string.concat(
                         "g.commitCacheList[",
@@ -527,9 +583,12 @@ contract ControllerTest is Test {
                         "].nodeIdAddress"
                     ),
                     g.commitCacheList[i].nodeIdAddress[j]
-                );
+                    );
             }
         }
+        // print coordinator info
+        address coordinatorAddress = controller.getCoordinator(groupIndex);
+        emit log_named_address("\nCoordinator", coordinatorAddress);
     }
 
     function printNodeInfo(address nodeAddress) public {
@@ -551,71 +610,18 @@ contract ControllerTest is Test {
     function printMemberInfo(uint256 groupIndex, uint256 memberIndex) public {
         emit log(
             string.concat(
-                "\nGroupIndex: ",
-                Strings.toString(groupIndex),
-                " MemberIndex: ",
-                Strings.toString(memberIndex),
-                ":"
+                "\nGroupIndex: ", Strings.toString(groupIndex), " MemberIndex: ", Strings.toString(memberIndex), ":"
             )
-        );
+            );
 
-        Controller.Member memory m = controller.getMember(
-            groupIndex,
-            memberIndex
-        );
+        Controller.Member memory m = controller.getMember(groupIndex, memberIndex);
 
         // emit log_named_uint("m.index", m.index);
         emit log_named_address("m.nodeIdAddress", m.nodeIdAddress);
         emit log_named_bytes("m.partialPublicKey", m.partialPublicKey);
     }
-
-    ////// ! Solidity Playground
-
-    // function testDynamicArray() public {
-    //     uint256[] memory numbers = new uint256[](3);
-    //     numbers[0] = 1;
-    //     numbers[1] = 2;
-    //     numbers[2] = 3;
-
-    //     uint256[] memory badNumbers = new uint256[](1);
-    //     badNumbers[0] = 2;
-
-    //     uint256[] memory goodNumbers = new uint256[](numbers.length);
-
-    //     emit log_named_uint("numbers.length", numbers.length);
-    //     emit log_named_uint("badNumbers.length", badNumbers.length);
-    //     emit log_named_uint("goodNumbers.length (before)", goodNumbers.length);
-
-    //     uint256 goodNumbersLength = 0;
-
-    //     for (uint256 i = 0; i < numbers.length; i++) {
-    //         bool disqualified = false;
-    //         for (uint256 j = 0; j < badNumbers.length; j++) {
-    //             if (numbers[i] == badNumbers[j]) {
-    //                 disqualified = true;
-    //                 break;
-    //             }
-    //             else {
-    //                 goodNumbers[goodNumbersLength] = numbers[i];
-    //                 goodNumbersLength++;
-    //             }
-    //         }
-    //     }
-    //     // delete trailing zeros
-    //     uint256[] memory output = new uint256[](goodNumbersLength);
-    //     for (uint256 i = 0; i < goodNumbersLength; i++) {
-    //         output[i] = goodNumbers[i];
-    //     }
-
-    //     emit log_named_uint("output.length", output.length);
-
-    // }
 }
 
-//////////////////////////////////////////////////////////////////////////////////////////////////
-//////////////////////////////////////////////////////////////////////////////////////////////////
-//////////////////////////////////////////////////////////////////////////////////////////////////
-//////////////////////////////////////////////////////////////////////////////////////////////////
 // * Helper library for logging bool
 // EX : emit log_named_string("n.state", Bool.toText(n.state));
 library Bool {
