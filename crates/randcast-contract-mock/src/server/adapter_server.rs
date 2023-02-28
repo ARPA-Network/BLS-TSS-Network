@@ -1,13 +1,16 @@
 use crate::rpc_stub::adapter::{
-    transactions_server::{
-        Transactions as AdapterTransactions, TransactionsServer as AdapterTransactionsServer,
-    },
-    views_server::{Views as AdapterViews, ViewsServer as AdapterViewsServer},
-    GetGroupRequest, GroupReply, IsTaskPendingReply, Member,
-};
-use crate::rpc_stub::adapter::{
     FulfillRandomnessRequest, LastOutputReply, MineReply, MineRequest, RequestRandomnessRequest,
     SignatureTaskReply,
+};
+use crate::{
+    contract::utils::u256_to_vec,
+    rpc_stub::adapter::{
+        transactions_server::{
+            Transactions as AdapterTransactions, TransactionsServer as AdapterTransactionsServer,
+        },
+        views_server::{Views as AdapterViews, ViewsServer as AdapterViewsServer},
+        GetGroupRequest, GroupReply, IsTaskPendingReply, Member,
+    },
 };
 use crate::{
     contract::{
@@ -156,8 +159,7 @@ impl AdapterViews for MockAdapter {
                     assignment_block_height,
                 } = signature_task;
 
-                let mut seed_bytes = vec![0u8; 32];
-                seed.to_big_endian(&mut seed_bytes);
+                let seed_bytes = u256_to_vec(&seed);
 
                 Response::new(SignatureTaskReply {
                     request_id,
@@ -174,9 +176,11 @@ impl AdapterViews for MockAdapter {
         _request: Request<()>,
     ) -> Result<Response<LastOutputReply>, Status> {
         let last_output = self.adapter.read().get_last_output();
-        let mut b1 = vec![0u8; 32];
-        last_output.to_big_endian(&mut b1);
-        return Ok(Response::new(LastOutputReply { last_output: b1 }));
+        let last_output_bytes = u256_to_vec(&last_output);
+
+        return Ok(Response::new(LastOutputReply {
+            last_output: last_output_bytes,
+        }));
     }
 
     async fn is_task_pending(

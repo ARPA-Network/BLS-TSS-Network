@@ -7,7 +7,7 @@ use crate::node::{
     scheduler::{dynamic::SimpleDynamicTaskScheduler, SubscriberType, TaskScheduler, TaskType},
 };
 use arpa_node_contract_client::adapter::{AdapterClientBuilder, AdapterTransactions, AdapterViews};
-use arpa_node_core::ChainIdentity;
+use arpa_node_core::{ChainIdentity, PartialSignature};
 use arpa_node_dal::cache::RandomnessResultCache;
 use async_trait::async_trait;
 use ethers::types::Address;
@@ -57,7 +57,7 @@ pub trait FulfillRandomnessHandler {
         group_index: usize,
         randomness_task_request_id: Vec<u8>,
         signature: Vec<u8>,
-        partial_signatures: HashMap<Address, Vec<u8>>,
+        partial_signatures: HashMap<Address, PartialSignature>,
     ) -> NodeResult<()>;
 }
 
@@ -79,7 +79,7 @@ impl<I: ChainIdentity + AdapterClientBuilder<C> + Sync + Send, C: PairingCurve +
         group_index: usize,
         randomness_task_request_id: Vec<u8>,
         signature: Vec<u8>,
-        partial_signatures: HashMap<Address, Vec<u8>>,
+        partial_signatures: HashMap<Address, PartialSignature>,
     ) -> NodeResult<()> {
         let client = self
             .chain_identity
@@ -148,7 +148,11 @@ impl<
                 .iter()
                 .map(|(addr, partial)| {
                     let eval: Eval<Vec<u8>> = bincode::deserialize(partial)?;
-                    Ok((*addr, eval.value))
+                    let partial = PartialSignature {
+                        index: eval.index as usize,
+                        signature: eval.value,
+                    };
+                    Ok((*addr, partial))
                 })
                 .collect::<Result<_, NodeError>>()?;
 

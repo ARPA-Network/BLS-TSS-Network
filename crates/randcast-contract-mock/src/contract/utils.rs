@@ -10,13 +10,11 @@ pub fn choose_randomly_from_indices(seed: U256, indices: &[usize], count: usize)
 
     let mut remaining_count = remaining_indices.len();
 
-    let mut b1 = vec![0u8; 32];
-    seed.to_big_endian(&mut b1);
+    let seed_bytes = u256_to_vec(&seed);
     for (i, item) in chosen_indices.iter_mut().enumerate().take(count) {
-        let mut i_bytes = vec![0u8; 32];
-        U256::from(i).to_big_endian(&mut i_bytes);
+        let i_bytes = u256_to_vec(&U256::from(i));
 
-        let index = (U256::from_big_endian(&keccak256([&b1[..], &i_bytes[..]].concat()))
+        let index = (U256::from_big_endian(&keccak256([&seed_bytes[..], &i_bytes[..]].concat()))
             % remaining_count)
             .as_usize();
         *item = remaining_indices[index];
@@ -28,6 +26,12 @@ pub fn choose_randomly_from_indices(seed: U256, indices: &[usize], count: usize)
 
 pub fn address_to_string(address: Address) -> String {
     format!("{:?}", address)
+}
+
+pub fn u256_to_vec(x: &U256) -> Vec<u8> {
+    let mut x_bytes = vec![0u8; 32];
+    x.to_big_endian(&mut x_bytes);
+    x_bytes
 }
 
 /// The minimum allowed threshold is 51%

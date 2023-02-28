@@ -1,3 +1,5 @@
+use crate::ethers::WalletSigner;
+use ::ethers::{prelude::builders::ContractCall, types::H256};
 use async_trait::async_trait;
 use error::ContractClientResult;
 
@@ -10,6 +12,20 @@ pub mod rpc_stub;
 #[async_trait]
 pub trait ServiceClient<C> {
     async fn prepare_service_client(&self) -> ContractClientResult<C>;
+}
+
+#[async_trait]
+pub trait TransactionCaller {
+    async fn call_contract_function(
+        &self,
+        info: &str,
+        call: ContractCall<WalletSigner, ()>,
+    ) -> ContractClientResult<H256>;
+}
+
+#[async_trait]
+pub trait NonceManager {
+    async fn increment_or_initialize_nonce(&self) -> ContractClientResult<u64>;
 }
 
 pub mod controller {
@@ -124,7 +140,7 @@ pub mod coordinator {
 }
 
 pub mod adapter {
-    use arpa_node_core::{Group, RandomnessTask};
+    use arpa_node_core::{Group, PartialSignature, RandomnessTask};
     use async_trait::async_trait;
     use ethers::types::{H256, U256};
     use ethers_core::types::Address;
@@ -142,7 +158,7 @@ pub mod adapter {
             group_index: usize,
             request_id: Vec<u8>,
             signature: Vec<u8>,
-            partial_signatures: HashMap<Address, Vec<u8>>,
+            partial_signatures: HashMap<Address, PartialSignature>,
         ) -> ContractClientResult<H256>;
     }
 

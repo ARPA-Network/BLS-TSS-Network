@@ -21,6 +21,7 @@ tonic = "0.8"
 prost = "0.11"
 ethers = { version = "1.0.0", features = ["abigen"] }
 rustc-hex = "2.1.0"
+lazy_static = "1.4.0"
 
 [lib]
 name = "arpa_node_contract_client"

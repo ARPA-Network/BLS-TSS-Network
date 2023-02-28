@@ -1,16 +1,22 @@
-use super::WalletSigner;
+use super::{provider::NONCE, WalletSigner};
 use crate::{
     adapter::{AdapterClientBuilder, AdapterLogs, AdapterTransactions, AdapterViews},
     contract_stub::{
         adapter::{Adapter, RandomnessRequestFilter},
-        shared_types::{Group as ContractGroup, PartialSignature},
+        shared_types::{Group as ContractGroup, PartialSignature as ContractPartialSignature},
     },
     error::{ContractClientError, ContractClientResult},
-    ServiceClient,
+    NonceManager, ServiceClient, TransactionCaller,
 };
-use arpa_node_core::{ChainIdentity, GeneralChainIdentity, Group, Member, RandomnessTask};
+use arpa_node_core::{
+    u256_to_vec, ChainIdentity, GeneralChainIdentity, Group, Member, PartialSignature,
+    RandomnessTask,
+};
 use async_trait::async_trait;
-use ethers::{prelude::*, utils::hex};
+use ethers::{
+    prelude::{builders::ContractCall, *},
+    utils::hex,
+};
 use log::info;
 use std::{
     collections::{BTreeMap, HashMap},
@@ -75,11 +81,65 @@ impl ServiceClient<AdapterContract> for AdapterClient {
     }
 }
 
+#[async_trait]
+impl NonceManager for AdapterClient {
+    async fn increment_or_initialize_nonce(&self) -> ContractClientResult<u64> {
+        let mut nonce = NONCE.lock().await;
+        if *nonce == -1 {
+            let tx_count = self
+                .signer
+                .get_transaction_count(self.signer.address(), None)
+                .await?;
+            *nonce = tx_count.as_u64() as i64;
+        } else {
+            *nonce += 1;
+        }
+
+        Ok(*nonce as u64)
+    }
+}
+
+#[async_trait]
+impl TransactionCaller for AdapterClient {
+    async fn call_contract_function(
+        &self,
+        info: &str,
+        call: ContractCall<WalletSigner, ()>,
+    ) -> ContractClientResult<H256> {
+        let pending_tx = call.send().await.map_err(|e| {
+            let e: ContractClientError = e.into();
+            e
+        })?;
+
+        info!(
+            "Calling contract function {}: {:?}",
+            info,
+            pending_tx.tx_hash()
+        );
+
+        let receipt = pending_tx
+            .await
+            .map_err(|e| {
+                let e: ContractClientError = e.into();
+                e
+            })?
+            .ok_or(ContractClientError::NoTransactionReceipt)?;
+
+        if receipt.status == Some(U64::from(0)) {
+            return Err(ContractClientError::TransactionFailed);
+        } else {
+            info!("Transaction successful({}), receipt: {:?}", info, receipt);
+        }
+
+        Ok(receipt.transaction_hash)
+    }
+}
+
 #[allow(unused_variables)]
 #[async_trait]
 impl AdapterTransactions for AdapterClient {
     async fn request_randomness(&self, seed: U256) -> ContractClientResult<H256> {
-        Ok(H256::zero())
+        panic!("Not implemented");
     }
 
     async fn fulfill_randomness(
@@ -87,7 +147,7 @@ impl AdapterTransactions for AdapterClient {
         group_index: usize,
         request_id: Vec<u8>,
         signature: Vec<u8>,
-        partial_signatures: HashMap<Address, Vec<u8>>,
+        partial_signatures: HashMap<Address, PartialSignature>,
     ) -> ContractClientResult<H256> {
         let adapter_contract =
             ServiceClient::<AdapterContract>::prepare_service_client(self).await?;
@@ -96,38 +156,23 @@ impl AdapterTransactions for AdapterClient {
 
         let sig = U256::from(signature.as_slice());
 
-        let ps: Vec<PartialSignature> = partial_signatures
+        let ps: Vec<ContractPartialSignature> = partial_signatures
             .iter()
             .map(|(address, ps)| {
-                let sig: U256 = U256::from(ps.as_slice());
-                PartialSignature {
-                    node_address: *address,
+                let sig: U256 = U256::from(ps.signature.as_slice());
+                ContractPartialSignature {
+                    index: ps.index.into(),
                     partial_signature: sig,
                 }
             })
             .collect();
 
-        let receipt = adapter_contract
-            .fulfill_randomness(group_index.into(), r_id, sig, ps)
-            .send()
-            .await
-            .map_err(|e| {
-                let e: ContractClientError = e.into();
-                e
-            })?
-            .await
-            .map_err(|e| {
-                let e: ContractClientError = e.into();
-                e
-            })?
-            .ok_or(ContractClientError::NoTransactionReceipt)?;
+        let nonce = self.increment_or_initialize_nonce().await?;
+        let mut call = adapter_contract.fulfill_randomness(group_index.into(), r_id, sig, ps);
+        call.tx.set_nonce(nonce);
 
-        info!(
-            "Fulfill randomness transaction hash: {:?}",
-            receipt.transaction_hash
-        );
-
-        Ok(receipt.transaction_hash)
+        self.call_contract_function("fulfill_randomness", call)
+            .await
     }
 }
 
@@ -263,11 +308,21 @@ fn parse_contract_group<C: PairingCurve>(cg: ContractGroup) -> Group<C> {
         .into_iter()
         .enumerate()
         .map(|(index, cm)| {
-            let partial_public_key = if cm.partial_public_key.is_empty() {
-                None
-            } else {
-                Some(bincode::deserialize(&cm.partial_public_key).unwrap())
-            };
+            let partial_public_key =
+                if cm.partial_public_key.is_empty() || cm.partial_public_key[0] == U256::zero() {
+                    None
+                } else {
+                    let bytes = cm
+                        .partial_public_key
+                        .iter()
+                        .map(u256_to_vec)
+                        .reduce(|mut acc, mut e| {
+                            acc.append(&mut e);
+                            acc
+                        })
+                        .unwrap();
+                    Some(bincode::deserialize(&bytes).unwrap())
+                };
 
             let m = Member {
                 index,
@@ -279,10 +334,18 @@ fn parse_contract_group<C: PairingCurve>(cg: ContractGroup) -> Group<C> {
         })
         .collect();
 
-    let public_key = if public_key.is_empty() {
+    let public_key = if public_key.is_empty() || public_key[0] == U256::zero() {
         None
     } else {
-        Some(bincode::deserialize(&public_key).unwrap())
+        let bytes = public_key
+            .iter()
+            .map(u256_to_vec)
+            .reduce(|mut acc, mut e| {
+                acc.append(&mut e);
+                acc
+            })
+            .unwrap();
+        Some(bincode::deserialize(&bytes).unwrap())
     };
 
     Group {

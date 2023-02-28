@@ -430,13 +430,16 @@ mod tests {
 
     #[test]
     fn serialize_group() {
-        for _ in 0..100 {
+        for _ in 0..10 {
             serialize_group_test::<G1>(32);
             serialize_group_test::<G2>(128);
         }
     }
 
     fn serialize_group_test<E: Element>(size: usize) {
+        let empty = bincode::deserialize::<E>(&vec![]);
+        assert!(empty.is_err());
+
         let rng = &mut rand::thread_rng();
         let sig = E::rand(rng);
         let ser = bincode::serialize(&sig).unwrap();

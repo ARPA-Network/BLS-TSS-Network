@@ -171,7 +171,7 @@ cargo run --bin user-client 0x9000000000000000000000000000000000000001 "[::1]:50
 
 ```bash
 # produces a new block every 1 second and ignores contract size for now
-anvil --block-time 1 --code-size-limit 80000
+anvil --block-time 1 --code-size-limit 90000
 ```
 
 ## deploy the controller and the adapter contract:
@@ -196,7 +196,7 @@ cargo run --bin node-client -- -m new-run -c conf/config_test_3.yml
 
 ```bash
 cd contracts
-# this should be executed after we have an available group as logging "Success. Your share and threshold pubkey are ready." in node terminal
+# this should be executed after we have an available group as logging e.g."Group index:0 epoch:1 is available, committers saved." in node terminal
 forge script script/GetRandomNumberLocalTest.s.sol:GetRandomNumberLocalTestScript --fork-url http://localhost:8545 --broadcast
 ```
 

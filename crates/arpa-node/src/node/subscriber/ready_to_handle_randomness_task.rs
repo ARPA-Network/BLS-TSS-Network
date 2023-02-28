@@ -8,7 +8,7 @@ use crate::node::{
     queue::{event_queue::EventQueue, EventSubscriber},
     scheduler::{dynamic::SimpleDynamicTaskScheduler, SubscriberType, TaskScheduler, TaskType},
 };
-use arpa_node_core::{address_to_string, RandomnessTask, TaskType as BLSTaskType};
+use arpa_node_core::{address_to_string, u256_to_vec, RandomnessTask, TaskType as BLSTaskType};
 use arpa_node_dal::{
     cache::RandomnessResultCache, BLSTasksFetcher, GroupInfoFetcher, SignatureResultCacheFetcher,
     SignatureResultCacheUpdater,
@@ -128,11 +128,11 @@ impl<
         let committers = self.prepare_committer_clients().await?;
 
         for task in self.tasks {
-            let mut seed_bytes = vec![0u8; 32];
-            task.seed.to_big_endian(&mut seed_bytes);
-            let mut block_num_bytes = vec![0u8; 32];
-            U256::from(task.assignment_block_height).to_big_endian(&mut block_num_bytes);
-            let actual_seed = [&seed_bytes[..], &block_num_bytes[..]].concat();
+            let actual_seed = [
+                &u256_to_vec(&task.seed)[..],
+                &u256_to_vec(&U256::from(task.assignment_block_height))[..],
+            ]
+            .concat();
 
             let partial_signature = SimpleBLSCore::<PC>::partial_sign(
                 self.group_cache.read().await.get_secret_share()?,

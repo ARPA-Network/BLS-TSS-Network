@@ -1,11 +1,13 @@
-use super::WalletSigner;
+use super::{provider::NONCE, WalletSigner};
+use crate::ethers::builders::ContractCall;
+use crate::TransactionCaller;
 use crate::{
     contract_stub::controller::{CommitDkgParams, Controller, DkgTaskFilter},
     controller::{
         ControllerClientBuilder, ControllerLogs, ControllerTransactions, ControllerViews,
     },
     error::{ContractClientError, ContractClientResult},
-    ServiceClient,
+    NonceManager, ServiceClient,
 };
 use arpa_node_core::{ChainIdentity, DKGTask, GeneralChainIdentity, Node};
 use async_trait::async_trait;
@@ -60,19 +62,24 @@ impl ServiceClient<ControllerContract> for ControllerClient {
 }
 
 #[async_trait]
-impl ControllerTransactions for ControllerClient {
-    async fn node_register(&self, id_public_key: Vec<u8>) -> ContractClientResult<H256> {
-        let controller_contract =
-            ServiceClient::<ControllerContract>::prepare_service_client(self).await?;
+impl TransactionCaller for ControllerClient {
+    async fn call_contract_function(
+        &self,
+        info: &str,
+        call: ContractCall<WalletSigner, ()>,
+    ) -> ContractClientResult<H256> {
+        let pending_tx = call.send().await.map_err(|e| {
+            let e: ContractClientError = e.into();
+            e
+        })?;
 
-        let receipt = controller_contract
-            .node_register(id_public_key.into())
-            .send()
-            .await
-            .map_err(|e| {
-                let e: ContractClientError = e.into();
-                e
-            })?
+        info!(
+            "Calling contract function {}: {:?}",
+            info,
+            pending_tx.tx_hash()
+        );
+
+        let receipt = pending_tx
             .await
             .map_err(|e| {
                 let e: ContractClientError = e.into();
@@ -80,12 +87,45 @@ impl ControllerTransactions for ControllerClient {
             })?
             .ok_or(ContractClientError::NoTransactionReceipt)?;
 
-        info!(
-            "Node register transaction hash: {:?}",
-            receipt.transaction_hash
-        );
+        if receipt.status == Some(U64::from(0)) {
+            return Err(ContractClientError::TransactionFailed);
+        } else {
+            info!("Transaction successful({}), receipt: {:?}", info, receipt);
+        }
 
         Ok(receipt.transaction_hash)
+    }
+}
+
+#[async_trait]
+impl NonceManager for ControllerClient {
+    async fn increment_or_initialize_nonce(&self) -> ContractClientResult<u64> {
+        let mut nonce = NONCE.lock().await;
+        if *nonce == -1 {
+            let tx_count = self
+                .signer
+                .get_transaction_count(self.signer.address(), None)
+                .await?;
+            *nonce = tx_count.as_u64() as i64;
+        } else {
+            *nonce += 1;
+        }
+
+        Ok(*nonce as u64)
+    }
+}
+
+#[async_trait]
+impl ControllerTransactions for ControllerClient {
+    async fn node_register(&self, id_public_key: Vec<u8>) -> ContractClientResult<H256> {
+        let controller_contract =
+            ServiceClient::<ControllerContract>::prepare_service_client(self).await?;
+
+        let nonce = self.increment_or_initialize_nonce().await?;
+        let mut call = controller_contract.node_register(id_public_key.into());
+        call.tx.set_nonce(nonce);
+
+        self.call_contract_function("node_register", call).await
     }
 
     async fn commit_dkg(
@@ -99,33 +139,17 @@ impl ControllerTransactions for ControllerClient {
         let controller_contract =
             ServiceClient::<ControllerContract>::prepare_service_client(self).await?;
 
-        let receipt = controller_contract
-            .commit_dkg(CommitDkgParams {
-                group_index: group_index.into(),
-                group_epoch: group_epoch.into(),
-                public_key: public_key.into(),
-                partial_public_key: partial_public_key.into(),
-                disqualified_nodes,
-            })
-            .send()
-            .await
-            .map_err(|e| {
-                let e: ContractClientError = e.into();
-                e
-            })?
-            .await
-            .map_err(|e| {
-                let e: ContractClientError = e.into();
-                e
-            })?
-            .ok_or(ContractClientError::NoTransactionReceipt)?;
+        let nonce = self.increment_or_initialize_nonce().await?;
+        let mut call = controller_contract.commit_dkg(CommitDkgParams {
+            group_index: group_index.into(),
+            group_epoch: group_epoch.into(),
+            public_key: public_key.into(),
+            partial_public_key: partial_public_key.into(),
+            disqualified_nodes,
+        });
+        call.tx.set_nonce(nonce);
 
-        info!(
-            "Commit DKG transaction hash: {:?}",
-            receipt.transaction_hash
-        );
-
-        Ok(receipt.transaction_hash)
+        self.call_contract_function("commit_dkg", call).await
     }
 
     async fn post_process_dkg(
@@ -136,27 +160,11 @@ impl ControllerTransactions for ControllerClient {
         let controller_contract =
             ServiceClient::<ControllerContract>::prepare_service_client(self).await?;
 
-        let receipt = controller_contract
-            .post_process_dkg(group_index.into(), group_epoch.into())
-            .send()
-            .await
-            .map_err(|e| {
-                let e: ContractClientError = e.into();
-                e
-            })?
-            .await
-            .map_err(|e| {
-                let e: ContractClientError = e.into();
-                e
-            })?
-            .ok_or(ContractClientError::NoTransactionReceipt)?;
+        let nonce = self.increment_or_initialize_nonce().await?;
+        let mut call = controller_contract.post_process_dkg(group_index.into(), group_epoch.into());
+        call.tx.set_nonce(nonce);
 
-        info!(
-            "Post process DKG transaction hash: {:?}",
-            receipt.transaction_hash
-        );
-
-        Ok(receipt.transaction_hash)
+        self.call_contract_function("post_process_dkg", call).await
     }
 }
 

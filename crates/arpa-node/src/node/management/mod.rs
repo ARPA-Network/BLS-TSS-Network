@@ -8,7 +8,7 @@ use super::{
         types::GeneralContext,
         ContextFetcher,
     },
-    error::NodeResult,
+    error::{NodeError, NodeResult},
     scheduler::{FixedTaskScheduler, ListenerType, TaskType},
 };
 use anyhow::Result;
@@ -19,7 +19,8 @@ use arpa_node_contract_client::{
     provider::ChainProviderBuilder,
 };
 use arpa_node_core::{
-    ChainIdentity, DKGStatus, Group, RandomnessTask, SchedulerResult, TaskType as BLSTaskType,
+    ChainIdentity, DKGStatus, Group, PartialSignature, RandomnessTask, SchedulerResult,
+    TaskType as BLSTaskType,
 };
 use arpa_node_dal::{
     error::DataAccessResult, BLSTasksFetcher, BLSTasksUpdater, ContextInfoUpdater,
@@ -27,7 +28,7 @@ use arpa_node_dal::{
     SignatureResultCacheFetcher, SignatureResultCacheUpdater,
 };
 use ethers::types::Address;
-use threshold_bls::{group::PairingCurve, sig::Share};
+use threshold_bls::{group::PairingCurve, poly::Eval, sig::Share};
 
 pub mod server;
 
@@ -635,8 +636,25 @@ impl<
             .await
             .build_adapter_client(id_address);
 
+        let partial_signatures = partial_sigs
+            .iter()
+            .map(|(addr, partial)| {
+                let eval: Eval<Vec<u8>> = bincode::deserialize(partial)?;
+                let partial = PartialSignature {
+                    index: eval.index as usize,
+                    signature: eval.value,
+                };
+                Ok((*addr, partial))
+            })
+            .collect::<Result<_, NodeError>>()?;
+
         client
-            .fulfill_randomness(group_index, randomness_task_request_id, sig, partial_sigs)
+            .fulfill_randomness(
+                group_index,
+                randomness_task_request_id,
+                sig,
+                partial_signatures,
+            )
             .await?;
 
         Ok(())

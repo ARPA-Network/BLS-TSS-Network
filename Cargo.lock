@@ -251,6 +251,7 @@ dependencies = [
  "ethers",
  "ethers-contract-abigen",
  "ethers-core",
+ "lazy_static",
  "log",
  "prost 0.11.0",
  "prost-build 0.11.1",

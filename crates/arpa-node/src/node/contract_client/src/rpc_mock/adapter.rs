@@ -11,8 +11,8 @@ use crate::rpc_stub::adapter::{
     SignatureTaskReply,
 };
 use arpa_node_core::{
-    address_to_string, ChainIdentity, Group, Member as ModelMember, MockChainIdentity,
-    RandomnessTask,
+    address_to_string, u256_to_vec, ChainIdentity, Group, Member as ModelMember, MockChainIdentity,
+    PartialSignature, RandomnessTask,
 };
 use async_trait::async_trait;
 use ethers::types::{Address, H256, U256};
@@ -111,8 +111,7 @@ impl AdapterLogs for MockAdapterClient {
 #[async_trait]
 impl AdapterTransactions for MockAdapterClient {
     async fn request_randomness(&self, seed: U256) -> ContractClientResult<H256> {
-        let mut seed_bytes = vec![0u8; 32];
-        seed.to_big_endian(&mut seed_bytes);
+        let seed_bytes = u256_to_vec(&seed);
 
         let request = Request::new(RequestRandomnessRequest { seed: seed_bytes });
 
@@ -136,11 +135,11 @@ impl AdapterTransactions for MockAdapterClient {
         group_index: usize,
         request_id: Vec<u8>,
         signature: Vec<u8>,
-        partial_signatures: HashMap<Address, Vec<u8>>,
+        partial_signatures: HashMap<Address, PartialSignature>,
     ) -> ContractClientResult<H256> {
         let partial_signatures: HashMap<String, Vec<u8>> = partial_signatures
             .into_iter()
-            .map(|(id_address, sig)| (address_to_string(id_address), sig))
+            .map(|(id_address, sig)| (address_to_string(id_address), sig.signature))
             .collect();
 
         let request = Request::new(FulfillRandomnessRequest {

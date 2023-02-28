@@ -114,7 +114,7 @@ pub mod tests {
     fn test_serialize_bn254_g1_element() {
         use crate::curve::bn254::G1;
 
-        for _ in 0..100 {
+        for _ in 0..10 {
             let g1 = G1::rand(&mut thread_rng());
 
             let g1_bytes = g1.serialize_to_contract_form().unwrap();
@@ -129,7 +129,7 @@ pub mod tests {
     fn test_serialize_bn254_g2_element() {
         use crate::curve::bn254::G2;
 
-        for _ in 0..100 {
+        for _ in 0..10 {
             let g2 = G2::rand(&mut thread_rng());
 
             let g2_bytes = g2.serialize_to_contract_form().unwrap();

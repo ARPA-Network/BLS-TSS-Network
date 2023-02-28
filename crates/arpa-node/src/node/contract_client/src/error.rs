@@ -41,4 +41,6 @@ pub enum ContractClientError {
     HandlingLogSubscriptionError(#[from] anyhow::Error),
     #[error("can't fetch transaction receipt")]
     NoTransactionReceipt,
+    #[error("Transaction failed without specific reason")]
+    TransactionFailed,
 }

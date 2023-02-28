@@ -914,7 +914,7 @@ impl ControllerTransactions for Controller {
             .get(&group_index)
             .ok_or(ControllerError::CoordinatorNotExisted(group_index))?;
 
-        if coordinator.in_phase().is_ok() {
+        if coordinator.in_phase()? > 0 {
             return Err(ControllerError::CoordinatorNotEnded);
         }
 

@@ -1,5 +1,5 @@
 use chrono::Local;
-use ethers_core::types::Address;
+use ethers_core::types::{Address, U256};
 
 pub fn format_now_date() -> String {
     let fmt = "%Y-%m-%d %H:%M:%S";
@@ -8,6 +8,12 @@ pub fn format_now_date() -> String {
 
 pub fn address_to_string(address: Address) -> String {
     format!("{:?}", address)
+}
+
+pub fn u256_to_vec(x: &U256) -> Vec<u8> {
+    let mut x_bytes = vec![0u8; 32];
+    x.to_big_endian(&mut x_bytes);
+    x_bytes
 }
 
 #[cfg(test)]

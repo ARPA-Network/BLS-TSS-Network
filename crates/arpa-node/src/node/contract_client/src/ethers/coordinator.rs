@@ -1,11 +1,11 @@
-use super::WalletSigner;
+use super::{provider::NONCE, WalletSigner};
 use crate::{
     contract_stub::coordinator::Coordinator,
     coordinator::{
         CoordinatorClientBuilder, CoordinatorTransactions, CoordinatorViews, DKGContractError,
     },
     error::{ContractClientError, ContractClientResult},
-    ServiceClient,
+    NonceManager, ServiceClient, TransactionCaller,
 };
 use arpa_node_core::{ChainIdentity, GeneralChainIdentity};
 use async_trait::async_trait;
@@ -13,7 +13,7 @@ use dkg_core::{
     primitives::{BundledJustification, BundledResponses, BundledShares},
     BoardPublisher,
 };
-use ethers::prelude::*;
+use ethers::prelude::{builders::ContractCall, *};
 use log::info;
 use std::{convert::TryFrom, sync::Arc, time::Duration};
 use threshold_bls::group::Curve;
@@ -65,19 +65,42 @@ impl ServiceClient<CoordinatorContract> for CoordinatorClient {
 }
 
 #[async_trait]
-impl CoordinatorTransactions for CoordinatorClient {
-    async fn publish(&self, value: Vec<u8>) -> ContractClientResult<H256> {
-        let coordinator_contract =
-            ServiceClient::<CoordinatorContract>::prepare_service_client(self).await?;
+impl NonceManager for CoordinatorClient {
+    async fn increment_or_initialize_nonce(&self) -> ContractClientResult<u64> {
+        let mut nonce = NONCE.lock().await;
+        if *nonce == -1 {
+            let tx_count = self
+                .signer
+                .get_transaction_count(self.signer.address(), None)
+                .await?;
+            *nonce = tx_count.as_u64() as i64;
+        } else {
+            *nonce += 1;
+        }
 
-        let receipt = coordinator_contract
-            .publish(value.into())
-            .send()
-            .await
-            .map_err(|e| {
-                let e: ContractClientError = e.into();
-                e
-            })?
+        Ok(*nonce as u64)
+    }
+}
+
+#[async_trait]
+impl TransactionCaller for CoordinatorClient {
+    async fn call_contract_function(
+        &self,
+        info: &str,
+        call: ContractCall<WalletSigner, ()>,
+    ) -> ContractClientResult<H256> {
+        let pending_tx = call.send().await.map_err(|e| {
+            let e: ContractClientError = e.into();
+            e
+        })?;
+
+        info!(
+            "Calling contract function {}: {:?}",
+            info,
+            pending_tx.tx_hash()
+        );
+
+        let receipt = pending_tx
             .await
             .map_err(|e| {
                 let e: ContractClientError = e.into();
@@ -85,12 +108,27 @@ impl CoordinatorTransactions for CoordinatorClient {
             })?
             .ok_or(ContractClientError::NoTransactionReceipt)?;
 
-        info!(
-            "Published to coordinator transaction hash: {:?}",
-            receipt.transaction_hash
-        );
+        if receipt.status == Some(U64::from(0)) {
+            return Err(ContractClientError::TransactionFailed);
+        } else {
+            info!("Transaction successful({}), receipt: {:?}", info, receipt);
+        }
 
         Ok(receipt.transaction_hash)
+    }
+}
+
+#[async_trait]
+impl CoordinatorTransactions for CoordinatorClient {
+    async fn publish(&self, value: Vec<u8>) -> ContractClientResult<H256> {
+        let coordinator_contract =
+            ServiceClient::<CoordinatorContract>::prepare_service_client(self).await?;
+
+        let nonce = self.increment_or_initialize_nonce().await?;
+        let mut call = coordinator_contract.publish(value.into());
+        call.tx.set_nonce(nonce);
+
+        self.call_contract_function("publish", call).await
     }
 }
 

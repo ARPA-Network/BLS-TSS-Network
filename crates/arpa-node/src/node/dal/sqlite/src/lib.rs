@@ -5,6 +5,7 @@ use crate::core::NodeMutation;
 use crate::core::NodeQuery;
 use crate::core::RandomnessTaskMutation;
 use crate::core::RandomnessTaskQuery;
+use arpa_node_core::u256_to_vec;
 use arpa_node_core::Group;
 use arpa_node_core::Member;
 use arpa_node_core::RANDOMNESS_TASK_EXCLUSIVE_WINDOW;
@@ -797,8 +798,7 @@ impl<C: PairingCurve + Sync + Send> BLSTasksUpdater<RandomnessTask>
     for BLSTasksDBClient<RandomnessTask, C>
 {
     async fn add(&mut self, task: RandomnessTask) -> DataAccessResult<()> {
-        let mut seed_bytes = vec![0u8; 32];
-        task.seed.to_big_endian(&mut seed_bytes);
+        let seed_bytes = u256_to_vec(&task.seed);
 
         RandomnessTaskMutation::add_task(
             self.get_connection(),

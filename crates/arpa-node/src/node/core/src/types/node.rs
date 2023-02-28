@@ -1,4 +1,3 @@
-use crate::types::contract::ContractGroup;
 use ethers_core::{
     types::{Address, U256},
     utils::hex,
@@ -143,61 +142,10 @@ impl<C: PairingCurve> std::fmt::Debug for Member<C> {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct GroupRelayConfirmation {
-    pub group: ContractGroup,
-    pub status: Status,
-}
-
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Hash, Eq)]
-pub enum Status {
-    Success,
-    Complaint,
-}
-
-impl From<bool> for Status {
-    fn from(b: bool) -> Self {
-        if b {
-            Status::Success
-        } else {
-            Status::Complaint
-        }
-    }
-}
-
-impl Status {
-    pub fn is_success(self) -> bool {
-        match self {
-            Status::Success => true,
-            Status::Complaint => false,
-        }
-    }
-}
-
-pub enum GroupRelayConfirmationTaskState {
-    NotExisted,
-    Available,
-    Invalid,
-}
-
-impl GroupRelayConfirmationTaskState {
-    pub fn to_i32(&self) -> i32 {
-        match self {
-            GroupRelayConfirmationTaskState::NotExisted => 0,
-            GroupRelayConfirmationTaskState::Available => 1,
-            GroupRelayConfirmationTaskState::Invalid => 2,
-        }
-    }
-}
-
-impl From<i32> for GroupRelayConfirmationTaskState {
-    fn from(b: i32) -> Self {
-        match b {
-            1 => GroupRelayConfirmationTaskState::Available,
-            2 => GroupRelayConfirmationTaskState::Invalid,
-            _ => GroupRelayConfirmationTaskState::NotExisted,
-        }
-    }
+#[derive(Clone, Debug)]
+pub struct PartialSignature {
+    pub index: usize,
+    pub signature: Vec<u8>,
 }
 
 pub enum TaskType {

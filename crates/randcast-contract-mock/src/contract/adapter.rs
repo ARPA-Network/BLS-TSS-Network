@@ -1,3 +1,5 @@
+use crate::contract::utils::u256_to_vec;
+
 use super::errors::{ControllerError, ControllerResult};
 use super::types::{Group, SignatureTask};
 use ethers_core::types::{Address, U256};
@@ -162,22 +164,18 @@ impl AdapterTransactions for Adapter {
 
         self.last_assigned_group_index = assigned_group_index;
 
-        let mut user_seed_bytes = vec![0u8; 32];
-        seed.to_big_endian(&mut user_seed_bytes);
-        let mut last_output_bytes = vec![0u8; 32];
-        self.last_output.to_big_endian(&mut last_output_bytes);
+        // This is different from contract implementation
+        let user_seed = u256_to_vec(&seed);
+        let last_output = u256_to_vec(&self.last_output);
 
-        let seed = U256::from_big_endian(&keccak256(
-            [&user_seed_bytes[..], &last_output_bytes[..]].concat(),
-        ));
-        let mut seed_bytes = vec![0u8; 32];
-        seed.to_big_endian(&mut seed_bytes);
+        let raw_seed =
+            U256::from_big_endian(&keccak256([&user_seed[..], &last_output[..]].concat()));
 
-        let request_id = keccak256(&seed_bytes).to_vec();
+        let request_id = keccak256(&u256_to_vec(&raw_seed)).to_vec();
 
         let signature_task = SignatureTask {
             request_id: request_id.clone(),
-            seed,
+            seed: raw_seed,
             group_index: assigned_group_index,
             assignment_block_height: self.block_height,
         };
@@ -228,10 +226,8 @@ impl AdapterTransactions for Adapter {
             return Err(ControllerError::NotFromCommitter);
         }
 
-        let mut seed_bytes = vec![0u8; 32];
-        signature_task.seed.to_big_endian(&mut seed_bytes);
-        let mut block_num_bytes = vec![0u8; 32];
-        U256::from(signature_task.assignment_block_height).to_big_endian(&mut block_num_bytes);
+        let seed_bytes = u256_to_vec(&signature_task.seed);
+        let block_num_bytes = u256_to_vec(&U256::from(signature_task.assignment_block_height));
 
         let message = [&seed_bytes[..], &block_num_bytes[..]].concat();
 

@@ -6,7 +6,7 @@ use crate::node::{
 };
 use arpa_node_dal::GroupInfoUpdater;
 use async_trait::async_trait;
-use log::debug;
+use log::{debug, info};
 use std::{marker::PhantomData, sync::Arc};
 use threshold_bls::group::PairingCurve;
 use tokio::sync::RwLock;
@@ -48,6 +48,11 @@ impl<
             .await
             .save_committers(group.index, group.epoch, group.committers)
             .await?;
+
+        info!(
+            "Group index:{} epoch:{} is available, committers saved.",
+            group.index, group.epoch
+        );
 
         Ok(())
     }

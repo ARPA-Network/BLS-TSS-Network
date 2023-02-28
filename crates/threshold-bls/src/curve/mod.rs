@@ -65,3 +65,28 @@ pub trait CurveType {
     type G2Curve: Curve;
     type PairingCurve: PairingCurve;
 }
+
+#[cfg(test)]
+mod tests {
+    use crate::curve::bn254::G2Curve;
+    use crate::group::Curve;
+    use crate::group::Element;
+    use ethers_core::utils::hex;
+    use rand::prelude::*;
+
+    fn keypair<C: Curve>() -> (C::Scalar, C::Point) {
+        let private = C::Scalar::rand(&mut thread_rng());
+        let mut public = C::Point::one();
+        public.mul(&private);
+        (private, public)
+    }
+
+    #[test]
+    fn keypairs() {
+        for _ in 0..12 {
+            let (private, public) = keypair::<G2Curve>();
+            println!("{:?}", hex::encode(bincode::serialize(&private).unwrap()));
+            println!("{:?}", hex::encode(bincode::serialize(&public).unwrap()));
+        }
+    }
+}

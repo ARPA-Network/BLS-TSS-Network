@@ -7,7 +7,7 @@ use crate::contract::{
     coordinator::{Transactions, Views},
     errors::ControllerError,
     types::{DKGTask, Member as ModelMember, Node},
-    utils::address_to_string,
+    utils::{address_to_string, u256_to_vec},
 };
 use crate::rpc_stub::adapter::{
     transactions_server::TransactionsServer as AdapterTransactionsServer,
@@ -345,15 +345,14 @@ impl CoordinatorViews for MockCoordinator {
 
 impl From<Node> for NodeReply {
     fn from(n: Node) -> Self {
-        let mut b1 = vec![0u8; 32];
-        n.staking.to_big_endian(&mut b1);
+        let staking_bytes = u256_to_vec(&n.staking);
 
         NodeReply {
             id_address: address_to_string(n.id_address),
             id_public_key: n.id_public_key,
             state: n.state,
             pending_until_block: n.pending_until_block as u32,
-            staking: b1,
+            staking: staking_bytes,
         }
     }
 }
