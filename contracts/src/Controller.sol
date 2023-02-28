@@ -4,9 +4,9 @@ pragma solidity ^0.8.15;
 import "openzeppelin-contracts/contracts/access/Ownable.sol";
 import "openzeppelin-contracts/contracts/utils/math/SafeMath.sol";
 
-import {Coordinator} from "src/Coordinator.sol";
-import "src/interfaces/ICoordinator.sol";
-import "src/Adapter.sol";
+import {Coordinator} from "./Coordinator.sol";
+import "./interfaces/ICoordinator.sol";
+import "./Adapter.sol";
 
 contract Controller is Adapter {
     uint256 public constant NODE_STAKING_AMOUNT = 50000;
@@ -20,15 +20,13 @@ contract Controller is Adapter {
     uint256 public constant PENDING_BLOCK_AFTER_QUIT = 100;
     uint256 public constant DKG_POST_PROCESS_REWARD = 100;
 
-    uint256 epoch = 0; // self.epoch, previously ined in adapter
-
-    //  Node State Variables
+    // *Node State Variables*
     mapping(address => Node) public nodes; //maps node address to Node Struct
 
-    // Group State Variables
+    // *DKG Variables*
     mapping(uint256 => address) public coordinators; // maps group index to coordinator address
 
-    // * Structs
+    // *Structs*
     struct Node {
         address idAddress;
         bytes dkgPublicKey;
@@ -37,11 +35,33 @@ contract Controller is Adapter {
         uint256 staking;
     }
 
+    struct CommitDkgParams {
+        uint256 groupIndex;
+        uint256 groupEpoch;
+        bytes publicKey;
+        bytes partialPublicKey;
+        address[] disqualifiedNodes;
+    }
+
+    event DkgTask(
+        uint256 _groupIndex,
+        uint256 _epoch,
+        uint256 _size,
+        uint256 _threshold,
+        address[] _members,
+        uint256 _assignmentBlockHeight,
+        address _coordinatorAddress
+    );
+
     constructor(address arpa, address arpaEthFeed) Adapter(arpa, arpaEthFeed) {}
 
     function nodeRegister(bytes calldata dkgPublicKey) public {
         require(nodes[msg.sender].idAddress == address(0), "Node is already registered"); // error sender already in list of nodes
 
+        uint256[4] memory publicKey = BLS.fromBytesPublicKey(dkgPublicKey);
+        if (!BLS.isValidPublicKey(publicKey)) {
+            revert InvalidPublicKey();
+        }
         // TODO: Check to see if enough balance for staking
 
         // Populate Node struct and insert into nodes
@@ -247,16 +267,6 @@ contract Controller is Adapter {
         return groupSize / 2 + 1;
     }
 
-    event DkgTask(
-        uint256 _groupIndex,
-        uint256 _epoch,
-        uint256 _size,
-        uint256 _threshold,
-        address[] _members,
-        uint256 _assignmentBlockHeight,
-        address _coordinatorAddress
-    );
-
     // Note: set to internal later
     function emitGroupEvent(uint256 groupIndex) public {
         // Set to internal later
@@ -320,19 +330,11 @@ contract Controller is Adapter {
     function partialKeyRegistered(uint256 groupIndex, address nodeIdAddress) public view returns (bool) {
         Group storage g = groups[groupIndex];
         for (uint256 i = 0; i < g.members.length; i++) {
-            if (g.members[i].nodeIdAddress == nodeIdAddress && g.members[i].partialPublicKey.length != 0) {
-                return true;
+            if (g.members[i].nodeIdAddress == nodeIdAddress) {
+                return g.members[i].partialPublicKey[0] != 0;
             }
         }
         return false;
-    }
-
-    struct CommitDkgParams {
-        uint256 groupIndex;
-        uint256 groupEpoch;
-        bytes publicKey;
-        bytes partialPublicKey;
-        address[] disqualifiedNodes;
     }
 
     function commitDkg(CommitDkgParams memory params) external {
@@ -359,10 +361,20 @@ contract Controller is Adapter {
         require( // check to see if member has called commitdkg in the past.
         !partialKeyRegistered(params.groupIndex, msg.sender), "CommitCache already contains PartialKey for this node");
 
+        uint256[4] memory partialPublicKey = BLS.fromBytesPublicKey(params.partialPublicKey);
+        if (!BLS.isValidPublicKey(partialPublicKey)) {
+            revert InvalidPartialPublicKey();
+        }
+
+        uint256[4] memory publicKey = BLS.fromBytesPublicKey(params.publicKey);
+        if (!BLS.isValidPublicKey(publicKey)) {
+            revert InvalidPublicKey();
+        }
+
         // Populate CommitResult / CommitCache
         CommitResult memory commitResult = CommitResult({
             groupEpoch: params.groupEpoch,
-            publicKey: params.publicKey,
+            publicKey: publicKey,
             disqualifiedNodes: params.disqualifiedNodes
         });
 
@@ -373,9 +385,8 @@ contract Controller is Adapter {
             g.commitCacheList.push(commitCache);
         }
 
-        // if consensus previously reached, update the partial public key of the given node's member entry in the group
-        g.members[uint256(getMemberIndexByAddress(params.groupIndex, msg.sender))].partialPublicKey =
-            params.partialPublicKey;
+        // no matter consensus previously reached, update the partial public key of the given node's member entry in the group
+        g.members[uint256(getMemberIndexByAddress(params.groupIndex, msg.sender))].partialPublicKey = partialPublicKey;
 
         // if not.. call get StrictlyMajorityIdenticalCommitmentResult for the group and check if consensus has been reached.
         if (!g.isStrictlyMajorityConsensusReached) {
@@ -441,7 +452,7 @@ contract Controller is Adapter {
 
     // Choose "count" random indices from "indices" array.
     // Note: set to internal later
-    function chooseRandomlyFromIndices(uint64 seed, uint256[] memory indices, uint256 count)
+    function chooseRandomlyFromIndices(uint256 seed, uint256[] memory indices, uint256 count)
         public
         pure
         returns (uint256[] memory)
@@ -470,7 +481,7 @@ contract Controller is Adapter {
         view
         returns (CommitCache memory)
     {
-        CommitCache memory emptyCache = CommitCache(new address[](0), CommitResult(0, "", new address[](0)));
+        CommitCache memory emptyCache;
 
         // If there are no commit caches, return empty commit cache.
         Group memory g = groups[groupIndex];
@@ -550,13 +561,6 @@ contract Controller is Adapter {
         }
     }
 
-    // event groupRelayTask( // Not needed in first version.
-    //     uint256 index,
-    //     uint256 relayedGroupIndex,
-    //     uint256 relayedGroupEpoch,
-    //     uint256 assignmentBlockHeight
-    // );
-
     // Note: set to internal later
     function postProcessDkg(uint256 groupIndex, uint256 groupEpoch) public {
         // require group exists
@@ -589,12 +593,6 @@ contract Controller is Adapter {
         // get strictly majority identical commitment result
         CommitCache memory majorityMembers = getStrictlyMajorityIdenticalCommitmentResult(groupIndex);
 
-        // emit groupRelayTask(  // Not needed in the first version.
-        //     epoch,
-        //     groupIndex,
-        //     groupEpoch,
-        //     block.number
-        // );
         if (!isStrictlyMajorityConsensusReached) {
             if (majorityMembers.nodeIdAddress.length == 0) {
                 // if empty cache: zero out group
@@ -769,8 +767,7 @@ contract Controller is Adapter {
             for (uint256 i = 0; i < g.members.length; i++) {
                 membersLeftInGroup[i] = g.members[i].nodeIdAddress;
             }
-            uint256[] memory involvedGroups = new uint[](groupCount); // max number of groups involved is groupCount
-            uint256 numInvolvedGroups = 0; // track numInolvedGroups to avoid duplicates and trailing 0's in array.
+            bool[] memory involvedGroups = new bool[](groupCount); // max number of groups involved is groupCount
 
             // for each membersLeftInGroup, call findOrCreateTargetGroup and then add that member to the new group.
             for (uint256 i = 0; i < membersLeftInGroup.length; i++) {
@@ -785,36 +782,13 @@ contract Controller is Adapter {
                 // add member to target group
                 addToGroup(membersLeftInGroup[i], targetGroupIndex, false);
 
-                // check if group index already in involvedGroups, if not, add it
-                bool groupIndexAlreadyInInvolvedGroups = false;
-                for (uint256 j = 0; j < numInvolvedGroups; j++) {
-                    if (involvedGroups[j] == targetGroupIndex) {
-                        groupIndexAlreadyInInvolvedGroups = true;
-                        break;
-                    }
-                }
-
-                // Avoid adding duplicates to involvedGroups
-                if (!groupIndexAlreadyInInvolvedGroups) {
-                    involvedGroups[numInvolvedGroups] = targetGroupIndex;
-                    numInvolvedGroups++;
-                }
+                involvedGroups[targetGroupIndex] = true;
             }
 
-            //  truncate unused elements in involvedGroups
-            uint256[] memory involvedGroupsFinal = new uint256[](numInvolvedGroups);
-            for (uint256 i = 0; i < numInvolvedGroups; i++) {
-                involvedGroupsFinal[i] = involvedGroups[i];
-            }
-
-            // for each group in involvedGroups, if group size >= DefaultMinimumThreshold, emit group event
-            for (uint256 i = 0; i < involvedGroupsFinal.length; i++) {
-                // get group at groupIndex
-                Group storage group = groups[involvedGroupsFinal[i]];
-
-                // if group size >= DefaultMinimumThreshold, emit group event
-                if (group.size >= DEFAULT_MINIMUM_THRESHOLD) {
-                    emitGroupEvent(involvedGroupsFinal[i]);
+            // for each involved group, if group size >= DefaultMinimumThreshold, emit group event
+            for (uint256 i = 0; i < involvedGroups.length; i++) {
+                if (involvedGroups[i] && groups[i].size >= DEFAULT_MINIMUM_THRESHOLD) {
+                    emitGroupEvent(i);
                 }
             }
         }
@@ -827,10 +801,6 @@ contract Controller is Adapter {
 
     function getNode(address nodeAddress) public view returns (Node memory) {
         return nodes[nodeAddress];
-    }
-
-    function getGroup(uint256 groupIndex) public view returns (Group memory) {
-        return groups[groupIndex];
     }
 
     function getMember(uint256 groupIndex, uint256 memberIndex) public view returns (Member memory) {

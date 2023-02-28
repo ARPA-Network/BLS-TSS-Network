@@ -1,22 +1,22 @@
 // SPDX-License-Identifier: MIT
 pragma solidity >=0.8.10;
 
-import "./interfaces/IAdapter.sol";
-import "./interfaces/IBasicRandcastConsumerBase.sol";
-import "./utils/RequestIdBase.sol";
-import "./utils/RandomnessHandler.sol";
-import "./interfaces/IAggregatorV3.sol";
 import "openzeppelin-contracts/contracts/access/Ownable.sol";
 import "openzeppelin-contracts/contracts/token/ERC20/IERC20.sol";
 import "openzeppelin-contracts/contracts/token/ERC20/utils/SafeERC20.sol";
+
+import "./interfaces/IAdapter.sol";
+import "./interfaces/IBasicRandcastConsumerBase.sol";
+import "./interfaces/IAggregatorV3.sol";
+import "./utils/RequestIdBase.sol";
+import "./utils/RandomnessHandler.sol";
 import "./libraries/BLS.sol";
 
 contract Adapter is IAdapter, RequestIdBase, RandomnessHandler, Ownable {
     using SafeERC20 for IERC20;
     using Address for address;
 
-    IERC20 public immutable ARPA;
-    AggregatorV3Interface public immutable ARPA_ETH_FEED;
+    // *Constants*
     // We need to maintain a list of consuming addresses.
     // This bound ensures we are able to loop over them as needed.
     // Should a user require more consumers, they can use multiple subscriptions.
@@ -32,16 +32,30 @@ contract Adapter is IAdapter, RequestIdBase, RandomnessHandler, Ownable {
     uint256 public constant REWARD_PER_SIGNATURE = 50;
     uint256 public constant COMMITTER_REWARD_PER_SIGNATURE = 100;
 
-    // Group State Variables
+    // *State Variables*
+    IERC20 public immutable ARPA;
+    AggregatorV3Interface public immutable ARPA_ETH_FEED;
+    // Group State
+    uint256 epoch;
     uint256 public groupCount; // Number of groups
     mapping(uint256 => Group) public groups; // group_index => Group struct
     mapping(address => uint256) public rewards; // maps node address to reward amount
 
-    // Randomness Task Variables
-    uint256 lastAssignedGroupIndex;
+    // Randomness Task State
+    uint256 public lastAssignedGroupIndex;
     // TODO initialize this value
-    uint256 lastOutput = 0x2222222222222222; // global last output
+    uint256 public lastOutput = 0x2222222222222222; // global last output
 
+    int256 private s_fallbackWeiPerUnitArpa;
+    Config private s_config;
+    FeeConfig private s_feeConfig;
+    mapping(bytes32 => Callback) public s_callbacks;
+    mapping(address => Consumer) /* consumerAddress */ /* consumer */ private s_consumers;
+    mapping(uint64 => Subscription) /* subId */ /* subscription */ private s_subscriptions;
+    uint64 private s_currentSubId;
+    mapping(uint256 => uint96) /* group */ /* ARPA balance */ private s_withdrawableTokens;
+
+    // *Structs*
     struct Group {
         uint256 index; // group_index
         uint256 epoch; // 0
@@ -51,17 +65,17 @@ contract Adapter is IAdapter, RequestIdBase, RandomnessHandler, Ownable {
         address[] committers;
         CommitCache[] commitCacheList; // Map in rust mock contract
         bool isStrictlyMajorityConsensusReached;
-        bytes publicKey;
+        uint256[4] publicKey;
     }
 
     struct Member {
         address nodeIdAddress;
-        bytes partialPublicKey;
+        uint256[4] partialPublicKey;
     }
 
     struct CommitResult {
         uint256 groupEpoch;
-        bytes publicKey;
+        uint256[4] publicKey;
         address[] disqualifiedNodes;
     }
 
@@ -84,12 +98,9 @@ contract Adapter is IAdapter, RequestIdBase, RandomnessHandler, Ownable {
         // Gas except callback during fulfillment of randomness. Only used for estimating inflight cost.
         uint32 gasExceptCallback;
     }
-    int256 private s_fallbackWeiPerUnitArpa;
-    Config private s_config;
-    FeeConfig private s_feeConfig;
+
     struct FeeConfig {
         // Flat fee charged per fulfillment in millionths of arpa
-        // So fee range is [0, 2^32/10^6].
         uint32 fulfillmentFlatFeeArpaPPMTier1;
         uint32 fulfillmentFlatFeeArpaPPMTier2;
         uint32 fulfillmentFlatFeeArpaPPMTier3;
@@ -100,15 +111,6 @@ contract Adapter is IAdapter, RequestIdBase, RandomnessHandler, Ownable {
         uint24 reqsForTier4;
         uint24 reqsForTier5;
     }
-    event ConfigSet(
-        uint16 minimumRequestConfirmations,
-        uint32 maxGasLimit,
-        uint32 stalenessSeconds,
-        uint32 gasAfterPaymentCalculation,
-        uint32 gasExceptCallback,
-        int256 fallbackWeiPerUnitArpa,
-        FeeConfig feeConfig
-    );
 
     // TODO only record the hash of the callback params to save storage gas
     struct Callback {
@@ -117,14 +119,14 @@ contract Adapter is IAdapter, RequestIdBase, RandomnessHandler, Ownable {
         bytes params;
         uint64 subId;
         uint256 seed;
+        uint256 groupIndex;
         uint256 blockNum;
         uint16 requestConfirmations;
         uint256 callbackGasLimit;
         uint256 callbackMaxGasPrice;
     }
 
-    mapping(bytes32 => Callback) public s_callbacks;
-
+    // Note a nonce of 0 indicates an the consumer is not assigned to that subscription.
     struct Consumer {
         mapping(uint64 => uint64) nonces; /* subId */ /* nonce */
         uint64 lastSubscription;
@@ -139,23 +141,22 @@ contract Adapter is IAdapter, RequestIdBase, RandomnessHandler, Ownable {
         mapping(bytes32 => uint96) inflightPayments;
         uint64 reqCount; // For fee tiers
     }
-    // Note a nonce of 0 indicates an the consumer is not assigned to that subscription.
-    mapping(address => Consumer) /* consumerAddress */ /* consumer */
-        private s_consumers;
-    mapping(uint64 => Subscription) /* subId */ /* subscription */
-        private s_subscriptions;
-    uint64 private s_currentSubId;
-    mapping(uint256 => uint96) /* group */ /* ARPA balance */
-        private s_withdrawableTokens;
 
-    event SubscriptionCreated(uint64 indexed subId, address owner);
-    event SubscriptionFunded(
-        uint64 indexed subId,
-        uint256 oldBalance,
-        uint256 newBalance
+    // *Events*
+    event ConfigSet(
+        uint16 minimumRequestConfirmations,
+        uint32 maxGasLimit,
+        uint32 stalenessSeconds,
+        uint32 gasAfterPaymentCalculation,
+        uint32 gasExceptCallback,
+        int256 fallbackWeiPerUnitArpa,
+        FeeConfig feeConfig
     );
+    event SubscriptionCreated(uint64 indexed subId, address owner);
+    event SubscriptionFunded(uint64 indexed subId, uint256 oldBalance, uint256 newBalance);
     event SubscriptionConsumerAdded(uint64 indexed subId, address consumer);
 
+    // *Errors*
     error Reentrant();
     error InvalidRequestConfirmations(uint16 have, uint16 min, uint16 max);
     error TooManyConsumers();
@@ -173,6 +174,30 @@ contract Adapter is IAdapter, RequestIdBase, RandomnessHandler, Ownable {
     error NotFromCommitter();
     error InvalidSignatureFormat();
     error InvalidSignature();
+    error InvalidPartialSignatureFormat();
+    error InvalidPartialSignatures();
+    error EmptyPartialSignatures();
+    error InvalidPublicKey();
+    error InvalidPartialPublicKey();
+
+    // *Modifiers*
+    modifier onlySubOwner(uint64 subId) {
+        address owner = s_subscriptions[subId].owner;
+        if (owner == address(0)) {
+            revert InvalidSubscription();
+        }
+        if (msg.sender != owner) {
+            revert MustBeSubOwner(owner);
+        }
+        _;
+    }
+
+    modifier nonReentrant() {
+        if (s_config.reentrancyLock) {
+            revert Reentrant();
+        }
+        _;
+    }
 
     constructor(address arpa, address arpaEthFeed) {
         ARPA = IERC20(arpa);
@@ -188,11 +213,7 @@ contract Adapter is IAdapter, RequestIdBase, RandomnessHandler, Ownable {
         return s_currentSubId;
     }
 
-    function addConsumer(uint64 subId, address consumer)
-        external
-        onlySubOwner(subId)
-        nonReentrant
-    {
+    function addConsumer(uint64 subId, address consumer) external onlySubOwner(subId) nonReentrant {
         // Already maxed, cannot add any more consumers.
         if (s_subscriptions[subId].consumers.length == MAX_CONSUMERS) {
             revert TooManyConsumers();
@@ -210,10 +231,7 @@ contract Adapter is IAdapter, RequestIdBase, RandomnessHandler, Ownable {
         emit SubscriptionConsumerAdded(subId, consumer);
     }
 
-    function fundSubscription(uint64 subId, uint256 amount)
-        external
-        nonReentrant
-    {
+    function fundSubscription(uint64 subId, uint256 amount) external nonReentrant {
         if (s_subscriptions[subId].owner == address(0)) {
             revert InvalidSubscription();
         }
@@ -246,11 +264,7 @@ contract Adapter is IAdapter, RequestIdBase, RandomnessHandler, Ownable {
         return result;
     }
 
-    function containElement(uint256[] memory arr, uint256 element)
-        internal
-        pure
-        returns (bool)
-    {
+    function containElement(uint256[] memory arr, uint256 element) internal pure returns (bool) {
         for (uint256 i = 0; i < arr.length; i++) {
             if (arr[i] == element) {
                 return true;
@@ -259,11 +273,7 @@ contract Adapter is IAdapter, RequestIdBase, RandomnessHandler, Ownable {
         return false;
     }
 
-    function containElement(address[] memory arr, address element)
-        internal
-        pure
-        returns (bool)
-    {
+    function containElement(address[] memory arr, address element) internal pure returns (bool) {
         for (uint256 i = 0; i < arr.length; i++) {
             if (arr[i] == element) {
                 return true;
@@ -279,23 +289,16 @@ contract Adapter is IAdapter, RequestIdBase, RandomnessHandler, Ownable {
             revert NoAvailableGroups();
         }
 
-        uint256 currentAssignedGroupIndex = (lastAssignedGroupIndex + 1) %
-            groupCount;
+        uint256 currentAssignedGroupIndex = (lastAssignedGroupIndex + 1) % groupCount;
 
         while (!containElement(_validGroupIndices, currentAssignedGroupIndex)) {
-            currentAssignedGroupIndex =
-                (currentAssignedGroupIndex + 1) %
-                groupCount;
+            currentAssignedGroupIndex = (currentAssignedGroupIndex + 1) % groupCount;
         }
 
         return currentAssignedGroupIndex;
     }
 
-    function requestRandomness(RequestRandomnessParams memory p)
-        external
-        override
-        returns (bytes32)
-    {
+    function requestRandomness(RequestRandomnessParams memory p) external override returns (bytes32) {
         if (msg.sender == tx.origin) {
             revert InvalidRequestByEOA(
                 "Please request by extending GeneralRandcastConsumerBase so that we can callback with randomness."
@@ -329,17 +332,10 @@ contract Adapter is IAdapter, RequestIdBase, RandomnessHandler, Ownable {
         // Estimate upper cost of this fulfillment.
         uint64 reqCount = s_subscriptions[p.subId].reqCount;
         uint96 payment = estimatePaymentAmount(
-            p.callbackGasLimit,
-            s_config.gasExceptCallback,
-            getFeeTier(reqCount + 1),
-            p.callbackMaxGasPrice
+            p.callbackGasLimit, s_config.gasExceptCallback, getFeeTier(reqCount + 1), p.callbackMaxGasPrice
         );
 
-        if (
-            s_subscriptions[p.subId].balance -
-                s_subscriptions[p.subId].inflightCost <
-            payment
-        ) {
+        if (s_subscriptions[p.subId].balance - s_subscriptions[p.subId].inflightCost < payment) {
             revert InsufficientBalanceWhenRequest();
         }
         s_subscriptions[p.subId].inflightCost += payment;
@@ -353,6 +349,7 @@ contract Adapter is IAdapter, RequestIdBase, RandomnessHandler, Ownable {
         callback.params = p.params;
         callback.subId = p.subId;
         callback.seed = rawSeed;
+        callback.groupIndex = currentAssignedGroupIndex;
         callback.blockNum = block.number;
         callback.requestConfirmations = p.requestConfirmations;
         callback.callbackGasLimit = p.callbackGasLimit;
@@ -367,7 +364,7 @@ contract Adapter is IAdapter, RequestIdBase, RandomnessHandler, Ownable {
             callback.requestConfirmations,
             callback.callbackGasLimit,
             callback.callbackMaxGasPrice
-        );
+            );
 
         return requestId;
     }
@@ -386,14 +383,9 @@ contract Adapter is IAdapter, RequestIdBase, RandomnessHandler, Ownable {
             revert NoCorrespondingRequest();
         }
 
-        require(
-            block.number >= callback.blockNum + callback.requestConfirmations,
-            "Too early to fulfill"
-        );
+        require(block.number >= callback.blockNum + callback.requestConfirmations, "Too early to fulfill");
 
-        if (
-            block.number <= callback.blockNum + SIGNATURE_TASK_EXCLUSIVE_WINDOW
-        ) {
+        if (groupIndex != callback.groupIndex && block.number <= callback.blockNum + SIGNATURE_TASK_EXCLUSIVE_WINDOW) {
             revert TaskStillExclusive();
         }
 
@@ -403,38 +395,39 @@ contract Adapter is IAdapter, RequestIdBase, RandomnessHandler, Ownable {
             revert InvalidSignatureFormat();
         }
 
+        if (partialSignatures.length == 0) {
+            revert EmptyPartialSignatures();
+        }
+
         Group storage g = groups[groupIndex];
 
         if (!containElement(g.committers, msg.sender)) {
             revert NotFromCommitter();
         }
 
-        bytes memory actualSeed = abi.encodePacked(
-            callback.seed,
-            callback.blockNum
-        );
+        bytes memory actualSeed = abi.encodePacked(callback.seed, callback.blockNum);
 
         uint256[2] memory message = BLS.hashToPoint(actualSeed);
-        // verify tss-aggregation signature for randomness
 
-        if (
-            !BLS.verifySingle(
-                BLS.signatureToUncompressed(signature),
-                BLS.fromBytesPublicKey(g.publicKey),
-                message
-            )
-        ) {
+        // verify tss-aggregation signature for randomness
+        if (!BLS.verifySingle(BLS.signatureToUncompressed(signature), g.publicKey, message)) {
             revert InvalidSignature();
         }
 
-        // TODO verify partial signatures from provided members
-        (groupIndex, partialSignatures);
-
-        address[] memory participantMembers = new address[](
-            partialSignatures.length
-        );
+        // verify bls-aggregation signature for incentivizing worker list
+        uint256[2][] memory partials = new uint256[2][](partialSignatures.length);
+        uint256[4][] memory pubkeys = new uint256[4][](partialSignatures.length);
+        address[] memory participantMembers = new address[](partialSignatures.length);
         for (uint256 i = 0; i < partialSignatures.length; i++) {
-            participantMembers[i] = partialSignatures[i].nodeAddress;
+            if (!BLS.isValidCompressedSignature(partialSignatures[i].partialSignature)) {
+                revert InvalidPartialSignatureFormat();
+            }
+            partials[i] = BLS.signatureToUncompressed(partialSignatures[i].partialSignature);
+            pubkeys[i] = g.members[partialSignatures[i].index].partialPublicKey;
+            participantMembers[i] = g.members[partialSignatures[i].index].nodeIdAddress;
+        }
+        if (!BLS.verifyPartials(partials, pubkeys, message)) {
+            revert InvalidPartialSignatures();
         }
 
         uint256 randomness = uint256(keccak256(abi.encode(signature)));
@@ -489,30 +482,18 @@ contract Adapter is IAdapter, RequestIdBase, RandomnessHandler, Ownable {
         IBasicRandcastConsumerBase b;
         bytes memory resp;
         if (callback.requestType == RequestType.Randomness) {
-            resp = abi.encodeWithSelector(
-                b.rawFulfillRandomness.selector,
-                requestId,
-                randomness
-            );
+            resp = abi.encodeWithSelector(b.rawFulfillRandomness.selector, requestId, randomness);
         } else if (callback.requestType == RequestType.RandomWords) {
             uint32 numWords = abi.decode(callback.params, (uint32));
             uint256[] memory randomWords = new uint256[](numWords);
             for (uint256 i = 0; i < numWords; i++) {
                 randomWords[i] = uint256(keccak256(abi.encode(randomness, i)));
             }
-            resp = abi.encodeWithSelector(
-                b.rawFulfillRandomWords.selector,
-                requestId,
-                randomWords
-            );
+            resp = abi.encodeWithSelector(b.rawFulfillRandomWords.selector, requestId, randomWords);
         } else if (callback.requestType == RequestType.Shuffling) {
             uint32 upper = abi.decode(callback.params, (uint32));
             uint256[] memory shuffledArray = shuffle(upper, randomness);
-            resp = abi.encodeWithSelector(
-                b.rawFulfillShuffledArray.selector,
-                requestId,
-                shuffledArray
-            );
+            resp = abi.encodeWithSelector(b.rawFulfillShuffledArray.selector, requestId, shuffledArray);
         }
 
         delete s_callbacks[requestId];
@@ -524,11 +505,7 @@ contract Adapter is IAdapter, RequestIdBase, RandomnessHandler, Ownable {
         // Note that callWithExactGas will revert if we do not have sufficient gas
         // to give the callee their requested amount.
         s_config.reentrancyLock = true;
-        success = callWithExactGas(
-            callback.callbackGasLimit,
-            callback.callbackContract,
-            resp
-        );
+        success = callWithExactGas(callback.callbackGasLimit, callback.callbackContract, resp);
         s_config.reentrancyLock = false;
 
         // Increment the req count for fee tier selection.
@@ -541,47 +518,27 @@ contract Adapter is IAdapter, RequestIdBase, RandomnessHandler, Ownable {
         // We also add the flat arpa fee to the payment amount.
         // Its specified in millionths of arpa, if s_config.fulfillmentFlatFeeArpaPPM = 1
         // 1 arpa / 1e6 = 1e18 arpa wei / 1e6 = 1e12 arpa wei.
-        payment = calculatePaymentAmount(
-            startGas,
-            s_config.gasAfterPaymentCalculation,
-            getFeeTier(reqCount),
-            tx.gasprice
-        );
-
-        // emit log_string("Calculate payment when fulfill...");
-        // emit log_named_uint("tx.gasprice", tx.gasprice);
-        // emit log_named_uint("balance", s_subscriptions[callback.subId].balance);
-        // emit log_named_uint("actual payment", payment);
+        payment =
+            calculatePaymentAmount(startGas, s_config.gasAfterPaymentCalculation, getFeeTier(reqCount), tx.gasprice);
 
         if (s_subscriptions[callback.subId].balance < payment) {
             revert InsufficientBalanceWhenFulfill();
         }
-        s_subscriptions[callback.subId].inflightCost -= s_subscriptions[
-            callback.subId
-        ].inflightPayments[requestId];
+        s_subscriptions[callback.subId].inflightCost -= s_subscriptions[callback.subId].inflightPayments[requestId];
         delete s_subscriptions[callback.subId].inflightPayments[requestId];
         s_subscriptions[callback.subId].balance -= payment;
         // TODO mock distribute payment to working group
         s_withdrawableTokens[groupIndex] += payment;
 
         // Include payment in the event for tracking costs.
-        emit RandomnessRequestFulfilled(
-            requestId,
-            randomness,
-            payment,
-            success
-        );
+        emit RandomnessRequestFulfilled(requestId, randomness, payment, success);
     }
 
     /**
      * @dev calls target address with exactly gasAmount gas and data as calldata
      * or reverts if at least gasAmount gas is not available.
      */
-    function callWithExactGas(
-        uint256 gasAmount,
-        address target,
-        bytes memory data
-    ) private returns (bool success) {
+    function callWithExactGas(uint256 gasAmount, address target, bytes memory data) private returns (bool success) {
         // solhint-disable-next-line no-inline-assembly
         assembly {
             let g := gas()
@@ -591,30 +548,16 @@ contract Adapter is IAdapter, RequestIdBase, RandomnessHandler, Ownable {
             // as we do not want to provide them with less, however that check itself costs
             // gas.  GAS_FOR_CALL_EXACT_CHECK ensures we have at least enough gas to be able
             // to revert if gasAmount >  63//64*gas available.
-            if lt(g, GAS_FOR_CALL_EXACT_CHECK) {
-                revert(0, 0)
-            }
+            if lt(g, GAS_FOR_CALL_EXACT_CHECK) { revert(0, 0) }
             g := sub(g, GAS_FOR_CALL_EXACT_CHECK)
             // if g - g//64 <= gasAmount, revert
             // (we subtract g//64 because of EIP-150)
-            if iszero(gt(sub(g, div(g, 64)), gasAmount)) {
-                revert(0, 0)
-            }
+            if iszero(gt(sub(g, div(g, 64)), gasAmount)) { revert(0, 0) }
             // solidity calls check that a contract actually exists at the destination, so we do the same
-            if iszero(extcodesize(target)) {
-                revert(0, 0)
-            }
+            if iszero(extcodesize(target)) { revert(0, 0) }
             // call and return whether we succeeded. ignore return data
             // call(gas,addr,value,argsOffset,argsLength,retOffset,retLength)
-            success := call(
-                gasAmount,
-                target,
-                0,
-                add(data, 0x20),
-                mload(data),
-                0,
-                0
-            )
+            success := call(gasAmount, target, 0, add(data, 0x20), mload(data), 0, 0)
         }
         return success;
     }
@@ -639,9 +582,7 @@ contract Adapter is IAdapter, RequestIdBase, RandomnessHandler, Ownable {
     ) external onlyOwner {
         if (minimumRequestConfirmations > MAX_REQUEST_CONFIRMATIONS) {
             revert InvalidRequestConfirmations(
-                minimumRequestConfirmations,
-                minimumRequestConfirmations,
-                MAX_REQUEST_CONFIRMATIONS
+                minimumRequestConfirmations, minimumRequestConfirmations, MAX_REQUEST_CONFIRMATIONS
             );
         }
         if (fallbackWeiPerUnitArpa <= 0) {
@@ -665,7 +606,7 @@ contract Adapter is IAdapter, RequestIdBase, RandomnessHandler, Ownable {
             gasExceptCallback,
             fallbackWeiPerUnitArpa,
             s_feeConfig
-        );
+            );
     }
 
     /*
@@ -703,9 +644,7 @@ contract Adapter is IAdapter, RequestIdBase, RandomnessHandler, Ownable {
             revert InvalidArpaWeiPrice(weiPerUnitArpa);
         }
         // (1e18 arpa wei/arpa) (wei/gas * gas) / (wei/arpa) = arpa wei
-        uint256 paymentNoFee = (1e18 *
-            weiPerUnitGas *
-            (gasExceptCallback + callbackGasLimit)) / uint256(weiPerUnitArpa);
+        uint256 paymentNoFee = (1e18 * weiPerUnitGas * (gasExceptCallback + callbackGasLimit)) / uint256(weiPerUnitArpa);
         uint256 fee = 1e12 * uint256(fulfillmentFlatFeeArpaPPM);
         return uint96(paymentNoFee + fee);
     }
@@ -723,12 +662,10 @@ contract Adapter is IAdapter, RequestIdBase, RandomnessHandler, Ownable {
             revert InvalidArpaWeiPrice(weiPerUnitArpa);
         }
         // (1e18 arpa wei/arpa) (wei/gas * gas) / (wei/arpa) = arpa wei
-        uint256 paymentNoFee = (1e18 *
-            weiPerUnitGas *
-            (gasAfterPaymentCalculation + startGas - gasleft())) /
-            uint256(weiPerUnitArpa);
+        uint256 paymentNoFee =
+            (1e18 * weiPerUnitGas * (gasAfterPaymentCalculation + startGas - gasleft())) / uint256(weiPerUnitArpa);
         uint256 fee = 1e12 * uint256(fulfillmentFlatFeeArpaPPM);
-        if (paymentNoFee > (1e27 - fee)) {
+        if (paymentNoFee > (15e26 - fee)) {
             revert PaymentTooLarge(); // Payment + fee cannot be more than all of the arpa in existence.
         }
         return uint96(paymentNoFee + fee);
@@ -739,7 +676,7 @@ contract Adapter is IAdapter, RequestIdBase, RandomnessHandler, Ownable {
         bool staleFallback = stalenessSeconds > 0;
         uint256 timestamp;
         int256 weiPerUnitArpa;
-        (, weiPerUnitArpa, , timestamp, ) = ARPA_ETH_FEED.latestRoundData();
+        (, weiPerUnitArpa,, timestamp,) = ARPA_ETH_FEED.latestRoundData();
         // solhint-disable-next-line not-rely-on-time
         if (staleFallback && stalenessSeconds < block.timestamp - timestamp) {
             weiPerUnitArpa = s_fallbackWeiPerUnitArpa;
@@ -747,12 +684,7 @@ contract Adapter is IAdapter, RequestIdBase, RandomnessHandler, Ownable {
         return weiPerUnitArpa;
     }
 
-    function getLastSubscription(address consumer)
-        public
-        view
-        override
-        returns (uint64)
-    {
+    function getLastSubscription(address consumer) public view override returns (uint64) {
         return s_consumers[consumer].lastSubscription;
     }
 
@@ -760,13 +692,7 @@ contract Adapter is IAdapter, RequestIdBase, RandomnessHandler, Ownable {
         public
         view
         override
-        returns (
-            uint96 balance,
-            uint96 inflightCost,
-            uint64 reqCount,
-            address owner,
-            address[] memory consumers
-        )
+        returns (uint96 balance, uint96 inflightCost, uint64 reqCount, address owner, address[] memory consumers)
     {
         if (s_subscriptions[subId].owner == address(0)) {
             revert InvalidSubscription();
@@ -780,29 +706,11 @@ contract Adapter is IAdapter, RequestIdBase, RandomnessHandler, Ownable {
         );
     }
 
-    function getPendingRequest(bytes32 requestId)
-        public
-        view
-        returns (Callback memory)
-    {
+    function getPendingRequest(bytes32 requestId) public view returns (Callback memory) {
         return s_callbacks[requestId];
     }
 
-    modifier onlySubOwner(uint64 subId) {
-        address owner = s_subscriptions[subId].owner;
-        if (owner == address(0)) {
-            revert InvalidSubscription();
-        }
-        if (msg.sender != owner) {
-            revert MustBeSubOwner(owner);
-        }
-        _;
-    }
-
-    modifier nonReentrant() {
-        if (s_config.reentrancyLock) {
-            revert Reentrant();
-        }
-        _;
+    function getGroup(uint256 groupIndex) public view returns (Group memory) {
+        return groups[groupIndex];
     }
 }
