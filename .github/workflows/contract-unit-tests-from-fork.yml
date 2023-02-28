@@ -7,7 +7,7 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
-  tests:
+  contract-tests:
     name: Unit tests
     runs-on: ubuntu-latest
 
@@ -23,7 +23,7 @@ jobs:
       - name: Run Forge build
         run: |
           forge --version
-          forge build --sizes
+          forge build --names
         id: build
         working-directory: contracts
       - name: Run Forge tests
