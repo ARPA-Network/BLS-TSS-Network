@@ -5,11 +5,7 @@ import "../BasicRandcastConsumerBase.sol";
 import "../../utils/RandomnessHandler.sol";
 import "../../utils/RequestIdBase.sol";
 
-contract AdvancedGetShuffledArrayExample is
-    RequestIdBase,
-    BasicRandcastConsumerBase,
-    RandomnessHandler
-{
+contract AdvancedGetShuffledArrayExample is RequestIdBase, BasicRandcastConsumerBase, RandomnessHandler {
     mapping(bytes32 => uint256) public shuffledArrayUppers;
     uint256[][] public shuffleResults;
 
@@ -33,16 +29,9 @@ contract AdvancedGetShuffledArrayExample is
         bytes32 requestId = makeRequestId(rawSeed);
         shuffledArrayUppers[requestId] = shuffledArrayUpper;
 
-        return
-            rawRequestRandomness(
-                RequestType.Randomness,
-                params,
-                subId,
-                seed,
-                requestConfirmations,
-                callbackGasLimit,
-                callbackMaxGasPrice
-            );
+        return rawRequestRandomness(
+            RequestType.Randomness, params, subId, seed, requestConfirmations, callbackGasLimit, callbackMaxGasPrice
+        );
 
         // These equals to following code(recommended):
         // bytes32 requestId = rawRequestRandomness(
@@ -61,13 +50,8 @@ contract AdvancedGetShuffledArrayExample is
     /**
      * Callback function used by Randcast Controller
      */
-    function fulfillRandomness(bytes32 requestId, uint256 randomness)
-        internal
-        override
-    {
-        shuffleResults.push(
-            shuffle(shuffledArrayUppers[requestId], randomness)
-        );
+    function fulfillRandomness(bytes32 requestId, uint256 randomness) internal override {
+        shuffleResults.push(shuffle(shuffledArrayUppers[requestId], randomness));
     }
 
     function lengthOfShuffleResults() public view returns (uint256) {

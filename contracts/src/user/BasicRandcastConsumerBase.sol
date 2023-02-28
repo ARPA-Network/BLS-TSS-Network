@@ -25,20 +25,11 @@ abstract contract BasicRandcastConsumerBase is IRequestTypeBase {
         controller = _controller;
     }
 
-    function fulfillRandomness(bytes32 requestId, uint256 randomness)
-        internal
-        virtual
-    {}
+    function fulfillRandomness(bytes32 requestId, uint256 randomness) internal virtual {}
 
-    function fulfillRandomWords(bytes32 requestId, uint256[] memory randomWords)
-        internal
-        virtual
-    {}
+    function fulfillRandomWords(bytes32 requestId, uint256[] memory randomWords) internal virtual {}
 
-    function fulfillShuffledArray(
-        bytes32 requestId,
-        uint256[] memory shuffledArray
-    ) internal virtual {}
+    function fulfillShuffledArray(bytes32 requestId, uint256[] memory shuffledArray) internal virtual {}
 
     function rawRequestRandomness(
         RequestType requestType,
@@ -51,49 +42,25 @@ abstract contract BasicRandcastConsumerBase is IRequestTypeBase {
     ) internal returns (bytes32) {
         nonce = nonce + 1;
 
-        IAdapter.RequestRandomnessParams memory p = IAdapter
-            .RequestRandomnessParams(
-                requestType,
-                params,
-                subId,
-                seed,
-                requestConfirmations,
-                callbackGasLimit,
-                callbackMaxGasPrice
-            );
+        IAdapter.RequestRandomnessParams memory p = IAdapter.RequestRandomnessParams(
+            requestType, params, subId, seed, requestConfirmations, callbackGasLimit, callbackMaxGasPrice
+        );
 
         return IAdapter(controller).requestRandomness(p);
     }
 
-    function rawFulfillRandomness(bytes32 requestId, uint256 randomness)
-        external
-    {
-        require(
-            isEstimatingCallbackGasLimit || msg.sender == controller,
-            "Only controller can fulfill"
-        );
+    function rawFulfillRandomness(bytes32 requestId, uint256 randomness) external {
+        require(isEstimatingCallbackGasLimit || msg.sender == controller, "Only controller can fulfill");
         fulfillRandomness(requestId, randomness);
     }
 
-    function rawFulfillRandomWords(
-        bytes32 requestId,
-        uint256[] memory randomWords
-    ) external {
-        require(
-            isEstimatingCallbackGasLimit || msg.sender == controller,
-            "Only controller can fulfill"
-        );
+    function rawFulfillRandomWords(bytes32 requestId, uint256[] memory randomWords) external {
+        require(isEstimatingCallbackGasLimit || msg.sender == controller, "Only controller can fulfill");
         fulfillRandomWords(requestId, randomWords);
     }
 
-    function rawFulfillShuffledArray(
-        bytes32 requestId,
-        uint256[] memory shuffledArray
-    ) external {
-        require(
-            isEstimatingCallbackGasLimit || msg.sender == controller,
-            "Only controller can fulfill"
-        );
+    function rawFulfillShuffledArray(bytes32 requestId, uint256[] memory shuffledArray) external {
+        require(isEstimatingCallbackGasLimit || msg.sender == controller, "Only controller can fulfill");
         fulfillShuffledArray(requestId, shuffledArray);
     }
 }

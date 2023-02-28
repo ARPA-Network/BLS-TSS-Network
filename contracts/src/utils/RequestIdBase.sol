@@ -2,11 +2,11 @@
 pragma solidity >=0.8.10;
 
 contract RequestIdBase {
-    function makeRandcastInputSeed(
-        uint256 _userSeed,
-        address _requester,
-        uint256 _nonce
-    ) internal pure returns (uint256) {
+    function makeRandcastInputSeed(uint256 _userSeed, address _requester, uint256 _nonce)
+        internal
+        pure
+        returns (uint256)
+    {
         return uint256(keccak256(abi.encode(_userSeed, _requester, _nonce)));
     }
 

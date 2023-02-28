@@ -21,10 +21,7 @@ contract GetShuffledArrayExample is GeneralRandcastConsumerBase {
     /**
      * Callback function used by Randcast Controller
      */
-    function fulfillShuffledArray(bytes32 requestId, uint256[] memory array)
-        internal
-        override
-    {
+    function fulfillShuffledArray(bytes32 requestId, uint256[] memory array) internal override {
         randomResults[requestId] = array;
         shuffleResults = array;
     }

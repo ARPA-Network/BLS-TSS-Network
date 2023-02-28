@@ -21,15 +21,16 @@ contract GetRandomNumberExample is GeneralRandcastConsumerBase {
     /**
      * Callback function used by Randcast Controller
      */
-    function fulfillRandomness(bytes32 requestId, uint256 randomness)
-        internal
-        override
-    {
+    function fulfillRandomness(bytes32 requestId, uint256 randomness) internal override {
         randomResults[requestId] = randomness;
         randomnessResults.push(randomness);
     }
 
     function lengthOfRandomnessResults() public view returns (uint256) {
         return randomnessResults.length;
+    }
+
+    function lastRandomnessResult() public view returns (uint256) {
+        return randomnessResults[randomnessResults.length - 1];
     }
 }

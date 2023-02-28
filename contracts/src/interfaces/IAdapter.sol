@@ -5,8 +5,18 @@ import "./IRequestTypeBase.sol";
 
 interface IAdapter is IRequestTypeBase {
     struct PartialSignature {
-        address nodeAddress;
+        uint256 index;
         uint256 partialSignature;
+    }
+
+    struct RequestRandomnessParams {
+        RequestType requestType;
+        bytes params;
+        uint64 subId;
+        uint256 seed;
+        uint16 requestConfirmations;
+        uint256 callbackGasLimit;
+        uint256 callbackMaxGasPrice;
     }
 
     event RandomnessRequest(
@@ -20,26 +30,9 @@ interface IAdapter is IRequestTypeBase {
         uint256 callbackMaxGasPrice
     );
 
-    event RandomnessRequestFulfilled(
-        bytes32 requestId,
-        uint256 output,
-        uint256 payment,
-        bool success
-    );
+    event RandomnessRequestFulfilled(bytes32 requestId, uint256 output, uint256 payment, bool success);
 
-    struct RequestRandomnessParams {
-        RequestType requestType;
-        bytes params;
-        uint64 subId;
-        uint256 seed;
-        uint16 requestConfirmations;
-        uint256 callbackGasLimit;
-        uint256 callbackMaxGasPrice;
-    }
-
-    function requestRandomness(RequestRandomnessParams memory p)
-        external
-        returns (bytes32);
+    function requestRandomness(RequestRandomnessParams memory p) external returns (bytes32);
 
     function fulfillRandomness(
         uint256 groupIndex,
@@ -48,19 +41,10 @@ interface IAdapter is IRequestTypeBase {
         PartialSignature[] calldata partialSignatures
     ) external;
 
-    function getLastSubscription(address consumer)
-        external
-        view
-        returns (uint64);
+    function getLastSubscription(address consumer) external view returns (uint64);
 
     function getSubscription(uint64 subId)
         external
         view
-        returns (
-            uint96 balance,
-            uint96 inflightCost,
-            uint64 reqCount,
-            address owner,
-            address[] memory consumers
-        );
+        returns (uint96 balance, uint96 inflightCost, uint64 reqCount, address owner, address[] memory consumers);
 }

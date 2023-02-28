@@ -21,10 +21,7 @@ contract RollDiceExample is GeneralRandcastConsumerBase {
     /**
      * Callback function used by Randcast Controller
      */
-    function fulfillRandomWords(bytes32 requestId, uint256[] memory randomWords)
-        internal
-        override
-    {
+    function fulfillRandomWords(bytes32 requestId, uint256[] memory randomWords) internal override {
         randomResults[requestId] = randomWords;
         diceResults = new uint256[](randomWords.length);
         for (uint32 i = 0; i < randomWords.length; i++) {

@@ -32,10 +32,7 @@ abstract contract GeneralRandcastConsumerBase is
     // effective_gas_price = priority_fee_per_gas + block.base_fee_per_gas
     uint256 public callbackMaxGasFee;
 
-    function setCallbackGasConfig(
-        uint256 _callbackGasLimit,
-        uint256 _callbackMaxGasFee
-    ) external onlyOwner {
+    function setCallbackGasConfig(uint256 _callbackGasLimit, uint256 _callbackMaxGasFee) external onlyOwner {
         callbackGasLimit = _callbackGasLimit;
         callbackMaxGasFee = _callbackMaxGasFee;
     }
@@ -45,12 +42,7 @@ abstract contract GeneralRandcastConsumerBase is
         calculateCallbackGasLimit
         returns (bytes32)
     {
-        uint256 rawSeed = makeRandcastInputSeed(
-            USER_SEED_PLACEHOLDER,
-            msg.sender,
-            nonce
-        );
-        nonce = nonce + 1;
+        uint256 rawSeed = makeRandcastInputSeed(USER_SEED_PLACEHOLDER, msg.sender, nonce);
         // This should be identical to controller generated requestId.
         bytes32 requestId = makeRequestId(rawSeed);
         // Only in the first place we calculate the callbackGasLimit, then next time we directly use it to request randomness.
@@ -58,47 +50,27 @@ abstract contract GeneralRandcastConsumerBase is
             // Prepares the message call of callback function according to request type
             bytes memory data;
             if (requestType == RequestType.Randomness) {
-                data = abi.encodeWithSelector(
-                    this.rawFulfillRandomness.selector,
-                    requestId,
-                    RANDOMNESS_PLACEHOLDER
-                );
+                data = abi.encodeWithSelector(this.rawFulfillRandomness.selector, requestId, RANDOMNESS_PLACEHOLDER);
             } else if (requestType == RequestType.RandomWords) {
                 uint32 numWords = abi.decode(params, (uint32));
                 uint256[] memory randomWords = new uint256[](numWords);
                 for (uint256 i = 0; i < numWords; i++) {
-                    randomWords[i] = uint256(
-                        keccak256(abi.encode(RANDOMNESS_PLACEHOLDER, i))
-                    );
+                    randomWords[i] = uint256(keccak256(abi.encode(RANDOMNESS_PLACEHOLDER, i)));
                 }
-                data = abi.encodeWithSelector(
-                    this.rawFulfillRandomWords.selector,
-                    requestId,
-                    randomWords
-                );
+                data = abi.encodeWithSelector(this.rawFulfillRandomWords.selector, requestId, randomWords);
             } else if (requestType == RequestType.Shuffling) {
                 uint32 upper = abi.decode(params, (uint32));
                 uint256[] memory arr = new uint256[](upper);
                 for (uint256 k = 0; k < upper; k++) {
                     arr[k] = k;
                 }
-                data = abi.encodeWithSelector(
-                    this.rawFulfillShuffledArray.selector,
-                    requestId,
-                    arr
-                );
+                data = abi.encodeWithSelector(this.rawFulfillShuffledArray.selector, requestId, arr);
             }
 
             // We don't want message call for estimating gas to take effect, therefore success should be false,
             // and result should be the reverted reason, which in fact is gas used we encoded to string.
-            (bool success, bytes memory result) = address(this).call(
-                abi.encodeWithSelector(
-                    this.requiredTxGas.selector,
-                    address(this),
-                    0,
-                    data
-                )
-            );
+            (bool success, bytes memory result) =
+                address(this).call(abi.encodeWithSelector(this.requiredTxGas.selector, address(this), 0, data));
 
             // This will be 0 if message call for callback fails,
             // we pass this message to tell user that callback implementation need to be checked.
@@ -111,15 +83,14 @@ abstract contract GeneralRandcastConsumerBase is
 
             callbackGasLimit = gasUsed + GAS_FOR_CALLBACK_OVERHEAD;
         }
-        return
-            rawRequestRandomness(
-                requestType,
-                params,
-                IAdapter(controller).getLastSubscription(address(this)),
-                USER_SEED_PLACEHOLDER,
-                DEFAULT_REQUEST_CONFIRMATIONS,
-                callbackGasLimit,
-                callbackMaxGasFee == 0 ? tx.gasprice * 3 : callbackMaxGasFee
-            );
+        return rawRequestRandomness(
+            requestType,
+            params,
+            IAdapter(controller).getLastSubscription(address(this)),
+            USER_SEED_PLACEHOLDER,
+            DEFAULT_REQUEST_CONFIRMATIONS,
+            callbackGasLimit,
+            callbackMaxGasFee == 0 ? tx.gasprice * 3 : callbackMaxGasFee
+        );
     }
 }
