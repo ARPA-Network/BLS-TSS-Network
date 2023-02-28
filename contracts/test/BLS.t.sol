@@ -31,15 +31,15 @@ contract BLSTest is Test {
         emit log_uint(onCurve2 ? 1 : 0);
     }
 
-    function testSignatureToUncompressed() public {
+    function testDecompress() public {
         uint256 cx1 = 131449440775817426560367863668973187564446271105289002152564551034334957958;
         uint256 y1 = 5142471158538969335790353460140971440396771055705923842924855903685812733855;
 
         uint256 cx2 = 2993052591263300251421730215909578160265361713291681977422434783744805156453;
         uint256 y2 = 8236704679255897636411889564940276141365191991937272748153173274454109057806;
 
-        uint256[2] memory uncompressed1 = BLS.signatureToUncompressed(cx1);
-        uint256[2] memory uncompressed2 = BLS.signatureToUncompressed(cx2);
+        uint256[2] memory uncompressed1 = BLS.decompress(cx1);
+        uint256[2] memory uncompressed2 = BLS.decompress(cx2);
         assertEq(uncompressed1[1], y1);
         assertEq(uncompressed2[1], y2);
     }
@@ -76,7 +76,7 @@ contract BLSTest is Test {
         emit log_uint(msgPoint[0]);
         emit log_uint(msgPoint[1]);
         bytes memory publicKey = abi.encodePacked(params[2], params[3], params[4], params[5]);
-        uint256[2] memory sig = BLS.signatureToUncompressed(params[6]);
+        uint256[2] memory sig = BLS.decompress(params[6]);
         emit log_uint(sig[0]);
         emit log_uint(sig[1]);
 
@@ -104,9 +104,9 @@ contract BLSTest is Test {
             hex"01989cbe9c28b6fe28b152c9654d052567e27778b5b520105b53543f183239de135b1253a42042b6a11bc70287faee74c4c6a2d0a3cc14d83ad12eb3f380be55053c30615fba4b4d09dddfab945841294b6e955777ce811d691d91c9e66f1cf72b2534eddac940455454fa797e6a7336738fa56f30742a95cb0ae7cd1a9ab883";
 
         uint256[2][] memory partials = new uint256[2][](3);
-        partials[0] = BLS.signatureToUncompressed(sig1);
-        partials[1] = BLS.signatureToUncompressed(sig2);
-        partials[2] = BLS.signatureToUncompressed(sig3);
+        partials[0] = BLS.decompress(sig1);
+        partials[1] = BLS.decompress(sig2);
+        partials[2] = BLS.decompress(sig3);
         uint256[4][] memory pubkeys = new uint256[4][](3);
         pubkeys[0] = BLS.fromBytesPublicKey(pub1);
         pubkeys[1] = BLS.fromBytesPublicKey(pub2);

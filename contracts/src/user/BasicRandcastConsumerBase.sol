@@ -42,7 +42,7 @@ abstract contract BasicRandcastConsumerBase is IRequestTypeBase {
     ) internal returns (bytes32) {
         nonce = nonce + 1;
 
-        IAdapter.RequestRandomnessParams memory p = IAdapter.RequestRandomnessParams(
+        IAdapter.RandomnessRequestParams memory p = IAdapter.RandomnessRequestParams(
             requestType, params, subId, seed, requestConfirmations, callbackGasLimit, callbackMaxGasPrice
         );
 

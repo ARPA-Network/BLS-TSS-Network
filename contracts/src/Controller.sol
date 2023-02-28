@@ -128,7 +128,7 @@ contract Controller is Adapter {
             qualifiedIndices[i] = i;
         }
 
-        uint256[] memory membersToMove = chooseRandomlyFromIndices(lastOutput, qualifiedIndices, expectedSizeToMove);
+        uint256[] memory membersToMove = pickRandomIndex(lastOutput, qualifiedIndices, expectedSizeToMove);
 
         // Move members from group A to group B
         for (uint256 i = 0; i < membersToMove.length; i++) {
@@ -431,9 +431,9 @@ contract Controller is Adapter {
                         }
                     }
 
-                    // Compute commiter_indices by calling chooseRandomlyFromIndices with qualifiedIndices as input.
+                    // Compute commiter_indices by calling pickRandomIndex with qualifiedIndices as input.
                     uint256[] memory committerIndices =
-                        chooseRandomlyFromIndices(lastOutput, qualifiedIndices, DEFAULT_NUMBER_OF_COMMITTERS);
+                        pickRandomIndex(lastOutput, qualifiedIndices, DEFAULT_NUMBER_OF_COMMITTERS);
 
                     // For selected commiter_indices: add corresponding members into g.committers
                     g.committers = new address[](committerIndices.length);
@@ -452,7 +452,7 @@ contract Controller is Adapter {
 
     // Choose "count" random indices from "indices" array.
     // Note: set to internal later
-    function chooseRandomlyFromIndices(uint256 seed, uint256[] memory indices, uint256 count)
+    function pickRandomIndex(uint256 seed, uint256[] memory indices, uint256 count)
         public
         pure
         returns (uint256[] memory)

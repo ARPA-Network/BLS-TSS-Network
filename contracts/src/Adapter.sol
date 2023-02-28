@@ -298,7 +298,7 @@ contract Adapter is IAdapter, RequestIdBase, RandomnessHandler, Ownable {
         return currentAssignedGroupIndex;
     }
 
-    function requestRandomness(RequestRandomnessParams memory p) external override returns (bytes32) {
+    function requestRandomness(RandomnessRequestParams memory p) external override returns (bytes32) {
         if (msg.sender == tx.origin) {
             revert InvalidRequestByEOA(
                 "Please request by extending GeneralRandcastConsumerBase so that we can callback with randomness."
@@ -391,7 +391,7 @@ contract Adapter is IAdapter, RequestIdBase, RandomnessHandler, Ownable {
 
         require(groupIndex < groupCount, "Group does not exist");
 
-        if (!BLS.isValidCompressedSignature(signature)) {
+        if (!BLS.isValid(signature)) {
             revert InvalidSignatureFormat();
         }
 
@@ -410,7 +410,7 @@ contract Adapter is IAdapter, RequestIdBase, RandomnessHandler, Ownable {
         uint256[2] memory message = BLS.hashToPoint(actualSeed);
 
         // verify tss-aggregation signature for randomness
-        if (!BLS.verifySingle(BLS.signatureToUncompressed(signature), g.publicKey, message)) {
+        if (!BLS.verifySingle(BLS.decompress(signature), g.publicKey, message)) {
             revert InvalidSignature();
         }
 
@@ -419,10 +419,10 @@ contract Adapter is IAdapter, RequestIdBase, RandomnessHandler, Ownable {
         uint256[4][] memory pubkeys = new uint256[4][](partialSignatures.length);
         address[] memory participantMembers = new address[](partialSignatures.length);
         for (uint256 i = 0; i < partialSignatures.length; i++) {
-            if (!BLS.isValidCompressedSignature(partialSignatures[i].partialSignature)) {
+            if (!BLS.isValid(partialSignatures[i].partialSignature)) {
                 revert InvalidPartialSignatureFormat();
             }
-            partials[i] = BLS.signatureToUncompressed(partialSignatures[i].partialSignature);
+            partials[i] = BLS.decompress(partialSignatures[i].partialSignature);
             pubkeys[i] = g.members[partialSignatures[i].index].partialPublicKey;
             participantMembers[i] = g.members[partialSignatures[i].index].nodeIdAddress;
         }
@@ -531,7 +531,7 @@ contract Adapter is IAdapter, RequestIdBase, RandomnessHandler, Ownable {
         s_withdrawableTokens[groupIndex] += payment;
 
         // Include payment in the event for tracking costs.
-        emit RandomnessRequestFulfilled(requestId, randomness, payment, success);
+        emit RandomnessRequestResult(requestId, randomness, payment, success);
     }
 
     /**

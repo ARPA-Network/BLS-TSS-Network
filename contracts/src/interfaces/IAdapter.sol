@@ -9,7 +9,7 @@ interface IAdapter is IRequestTypeBase {
         uint256 partialSignature;
     }
 
-    struct RequestRandomnessParams {
+    struct RandomnessRequestParams {
         RequestType requestType;
         bytes params;
         uint64 subId;
@@ -30,9 +30,9 @@ interface IAdapter is IRequestTypeBase {
         uint256 callbackMaxGasPrice
     );
 
-    event RandomnessRequestFulfilled(bytes32 requestId, uint256 output, uint256 payment, bool success);
+    event RandomnessRequestResult(bytes32 requestId, uint256 output, uint256 payment, bool success);
 
-    function requestRandomness(RequestRandomnessParams memory p) external returns (bytes32);
+    function requestRandomness(RandomnessRequestParams memory p) external returns (bytes32);
 
     function fulfillRandomness(
         uint256 groupIndex,

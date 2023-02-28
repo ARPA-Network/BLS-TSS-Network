@@ -314,7 +314,7 @@ contract ControllerTest is RandcastTestHelper {
         // printGroupInfo(groupIndex);
     }
 
-    function testChooseRandomlyFromIndices() public {
+    function testPickRandomIndex() public {
         uint64 lastOutput = 0x2222222222222222;
 
         uint256[] memory indices = new uint256[](5);
@@ -324,7 +324,7 @@ contract ControllerTest is RandcastTestHelper {
         indices[3] = 3;
         indices[4] = 4;
 
-        uint256[] memory chosenIndices = controller.chooseRandomlyFromIndices(lastOutput, indices, 3);
+        uint256[] memory chosenIndices = controller.pickRandomIndex(lastOutput, indices, 3);
 
         for (uint256 i = 0; i < chosenIndices.length; i++) {
             emit log_named_uint("chosenIndices", chosenIndices[i]);

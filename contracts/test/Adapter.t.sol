@@ -86,7 +86,7 @@ contract AdapterTest is RandcastTestHelper {
             )
         );
 
-        IAdapter.RequestRandomnessParams memory p;
+        IAdapter.RandomnessRequestParams memory p;
         vm.broadcast(user);
         controller.requestRandomness(p);
     }

@@ -152,14 +152,14 @@ library BLS {
         pubkey = [x0, x1, y0, y1];
     }
 
-    function signatureToUncompressed(uint256 compressed) internal view returns (uint256[2] memory uncompressed) {
-        uint256 x = compressed & FIELD_MASK;
+    function decompress(uint256 compressedSignature) internal view returns (uint256[2] memory uncompressed) {
+        uint256 x = compressedSignature & FIELD_MASK;
         // The most significant bit, when set, indicates that the y-coordinate of the point
         // is the lexicographically largest of the two associated values.
         // The second-most significant bit indicates that the point is at infinity. If this bit is set,
         // the remaining bits of the group element's encoding should be set to zero.
         // We don't accept infinity as valid signature.
-        uint256 decision = compressed >> 254;
+        uint256 decision = compressedSignature >> 254;
         if (decision & 1 == 1) {
             revert MustNotBeInfinity();
         }
@@ -175,8 +175,8 @@ library BLS {
         return [x, y];
     }
 
-    function isValidCompressedSignature(uint256 signature) internal view returns (bool) {
-        uint256 x = signature & FIELD_MASK;
+    function isValid(uint256 compressedSignature) internal view returns (bool) {
+        uint256 x = compressedSignature & FIELD_MASK;
         if (x >= N) {
             return false;
         } else if (x == 0) {
