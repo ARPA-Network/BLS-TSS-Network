@@ -7,6 +7,7 @@ use arpa_node_dal::GroupInfoFetcher;
 use async_trait::async_trait;
 use ethers::types::Address;
 use std::sync::Arc;
+use threshold_bls::group::PairingCurve;
 use tokio::sync::RwLock;
 
 #[async_trait]
@@ -21,7 +22,7 @@ pub(crate) trait CommitterService {
         chain_id: usize,
         task_type: TaskType,
         message: Vec<u8>,
-        signature_index: usize,
+        request_id: Vec<u8>,
         partial_signature: Vec<u8>,
     ) -> NodeResult<bool>;
 }
@@ -37,7 +38,8 @@ pub(crate) trait CommitterClient {
 #[async_trait]
 pub(crate) trait CommitterClientHandler<
     C: CommitterClient + Sync + Send,
-    G: GroupInfoFetcher + Sync + Send,
+    G: GroupInfoFetcher<PC> + Sync + Send,
+    PC: PairingCurve,
 >
 {
     async fn get_id_address(&self) -> Address;

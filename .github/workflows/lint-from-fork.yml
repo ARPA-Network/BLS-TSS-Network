@@ -31,7 +31,9 @@ jobs:
         uses: foundry-rs/foundry-toolchain@v1
         with:
           version: nightly
+      - name: Build
+        run: cargo build
       - name: Format
         run: cargo fmt
       - name: Lint
-        run: CARGO_HTTP_MULTIPLEXING=false cargo clippy -- -A clippy::derive_partial_eq_without_eq
+        run: CARGO_HTTP_MULTIPLEXING=false cargo clippy

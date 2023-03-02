@@ -95,7 +95,7 @@ pub enum ControllerError {
     #[error("deserialization failed: the public key is not a valid G1 point {0})")]
     PublicKeyBadFormat(#[from] bincode::Error),
 
-    #[error("BLS verify failed")]
+    #[error(transparent)]
     BLSVerifyFailed(#[from] BLSError),
 
     #[error(transparent)]
@@ -126,6 +126,9 @@ pub enum CoordinatorError {
 
     #[error("DKG has already started")]
     AlreadyStarted,
+
+    #[error("DKG has not started yet")]
+    DKGNotStarted,
 
     #[error("DKG has already ended")]
     DKGEnded,

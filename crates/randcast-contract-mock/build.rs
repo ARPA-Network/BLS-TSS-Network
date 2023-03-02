@@ -1,3 +1,5 @@
+use std::fs;
+
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let protos = &[
         "proto/adapter.proto",
@@ -11,10 +13,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let mut prost_build = prost_build::Config::new();
 
+    fs::create_dir_all("./src/rpc_stub")?;
+
     prost_build.btree_map(["members"]);
 
     tonic_build::configure()
-        .out_dir("stub")
+        .out_dir("./src/rpc_stub")
         .build_client(false)
         .compile_with_config(prost_build, protos, &["proto"])?;
 

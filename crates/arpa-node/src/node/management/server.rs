@@ -1,7 +1,12 @@
-use self::management_stub::management_service_server::{
+use crate::node::context::types::GeneralContext;
+use crate::node::context::ContextFetcher;
+use crate::node::error::NodeError;
+use crate::node::management::ComponentService;
+use crate::node::scheduler::ListenerType;
+use crate::rpc_stub::management::management_service_server::{
     ManagementService, ManagementServiceServer,
 };
-use self::management_stub::{
+use crate::rpc_stub::management::{
     AggregatePartialSigsReply, AggregatePartialSigsRequest, FulfillRandomnessReply,
     FulfillRandomnessRequest, GetGroupInfoReply, GetGroupInfoRequest, GetNodeInfoReply,
     GetNodeInfoRequest, Group, ListFixedTasksReply, ListFixedTasksRequest, Member,
@@ -12,12 +17,6 @@ use self::management_stub::{
     StartListenerRequest, VerifyPartialSigsReply, VerifyPartialSigsRequest, VerifySigReply,
     VerifySigRequest,
 };
-use crate::node::context::chain::MainChainFetcher;
-use crate::node::context::types::GeneralContext;
-use crate::node::context::ContextFetcher;
-use crate::node::error::NodeError;
-use crate::node::management::ComponentService;
-use crate::node::scheduler::ListenerType;
 use arpa_node_contract_client::{
     adapter::AdapterClientBuilder, controller::ControllerClientBuilder,
     coordinator::CoordinatorClientBuilder, provider::ChainProviderBuilder,
@@ -28,7 +27,7 @@ use arpa_node_core::{
 };
 use arpa_node_dal::error::DataAccessError;
 use arpa_node_dal::{
-    BLSTasksFetcher, BLSTasksUpdater, GroupInfoFetcher, GroupInfoUpdater, MdcContextUpdater,
+    BLSTasksFetcher, BLSTasksUpdater, ContextInfoUpdater, GroupInfoFetcher, GroupInfoUpdater,
     NodeInfoFetcher, NodeInfoUpdater,
 };
 use arpa_node_log::debug;
@@ -40,7 +39,7 @@ use std::{
     task::{Context, Poll},
     time::Duration,
 };
-use threshold_bls::curve::bls12381::G1;
+use threshold_bls::group::PairingCurve;
 use tokio::sync::RwLock;
 use tonic::transport::Body;
 use tonic::{body::BoxBody, transport::Server, Request, Response, Status};
@@ -49,52 +48,52 @@ use uuid::Uuid;
 
 use super::{BLSRandomnessService, DBService, DKGService, GroupInfo, NodeInfo, NodeService};
 
-pub mod management_stub {
-    include!("../../../rpc_stub/management.rs");
-}
+type NodeContext<N, G, T, I, C> = Arc<RwLock<GeneralContext<N, G, T, I, C>>>;
 
 pub(crate) struct NodeManagementServiceServer<
-    N: NodeInfoFetcher + NodeInfoUpdater + MdcContextUpdater,
-    G: GroupInfoFetcher + GroupInfoUpdater + MdcContextUpdater,
+    N: NodeInfoFetcher<C> + NodeInfoUpdater<C> + ContextInfoUpdater,
+    G: GroupInfoFetcher<C> + GroupInfoUpdater<C> + ContextInfoUpdater,
     T: BLSTasksFetcher<RandomnessTask> + BLSTasksUpdater<RandomnessTask>,
     I: ChainIdentity
         + ControllerClientBuilder
         + CoordinatorClientBuilder
-        + AdapterClientBuilder
+        + AdapterClientBuilder<C>
         + ChainProviderBuilder,
+    C: PairingCurve,
 > {
-    context: Arc<RwLock<GeneralContext<N, G, T, I>>>,
+    context: NodeContext<N, G, T, I, C>,
 }
 
 impl<
-        N: NodeInfoFetcher + NodeInfoUpdater + MdcContextUpdater,
-        G: GroupInfoFetcher + GroupInfoUpdater + MdcContextUpdater,
+        N: NodeInfoFetcher<C> + NodeInfoUpdater<C> + ContextInfoUpdater,
+        G: GroupInfoFetcher<C> + GroupInfoUpdater<C> + ContextInfoUpdater,
         T: BLSTasksFetcher<RandomnessTask> + BLSTasksUpdater<RandomnessTask>,
         I: ChainIdentity
             + ControllerClientBuilder
             + CoordinatorClientBuilder
-            + AdapterClientBuilder
+            + AdapterClientBuilder<C>
             + ChainProviderBuilder,
-    > NodeManagementServiceServer<N, G, T, I>
+        C: PairingCurve,
+    > NodeManagementServiceServer<N, G, T, I, C>
 {
-    pub fn new(context: Arc<RwLock<GeneralContext<N, G, T, I>>>) -> Self {
+    pub fn new(context: NodeContext<N, G, T, I, C>) -> Self {
         NodeManagementServiceServer { context }
     }
 }
 
 #[tonic::async_trait]
 impl<
-        N: NodeInfoFetcher
-            + NodeInfoUpdater
-            + MdcContextUpdater
+        N: NodeInfoFetcher<C>
+            + NodeInfoUpdater<C>
+            + ContextInfoUpdater
             + std::fmt::Debug
             + Clone
             + Sync
             + Send
             + 'static,
-        G: GroupInfoFetcher
-            + GroupInfoUpdater
-            + MdcContextUpdater
+        G: GroupInfoFetcher<C>
+            + GroupInfoUpdater<C>
+            + ContextInfoUpdater
             + std::fmt::Debug
             + Clone
             + Sync
@@ -110,14 +109,15 @@ impl<
         I: ChainIdentity
             + ControllerClientBuilder
             + CoordinatorClientBuilder
-            + AdapterClientBuilder
+            + AdapterClientBuilder<C>
             + ChainProviderBuilder
             + std::fmt::Debug
             + Clone
             + Sync
             + Send
             + 'static,
-    > ManagementService for NodeManagementServiceServer<N, G, T, I>
+        C: PairingCurve + std::fmt::Debug + Clone + Sync + Send + 'static,
+    > ManagementService for NodeManagementServiceServer<N, G, T, I, C>
 {
     async fn list_fixed_tasks(
         &self,
@@ -274,16 +274,16 @@ impl<
         request: Request<PartialSignRequest>,
     ) -> Result<tonic::Response<PartialSignReply>, tonic::Status> {
         let req = request.into_inner();
-        let sig_index = req.sig_index as usize;
+        let request_id = req.request_id;
         let threshold = req.threshold as usize;
         let msg = req.msg;
         let partial_sig = self
             .context
             .write()
             .await
-            .partial_sign(sig_index, threshold, &msg)
+            .partial_sign(request_id, threshold, &msg)
             .await
-            .map_err(|e: NodeError| Status::failed_precondition(e.to_string()))?;
+            .map_err(|e: anyhow::Error| Status::failed_precondition(e.to_string()))?;
         return Ok(Response::new(PartialSignReply { partial_sig }));
     }
 
@@ -299,7 +299,7 @@ impl<
             .write()
             .await
             .aggregate_partial_sigs(threshold, &partial_sigs)
-            .map_err(|e: NodeError| Status::failed_precondition(e.to_string()))?;
+            .map_err(|e: anyhow::Error| Status::failed_precondition(e.to_string()))?;
         return Ok(Response::new(AggregatePartialSigsReply { sig }));
     }
 
@@ -308,7 +308,7 @@ impl<
         request: Request<VerifySigRequest>,
     ) -> Result<tonic::Response<VerifySigReply>, tonic::Status> {
         let req = request.into_inner();
-        let public: G1 = bincode::deserialize(&req.public)
+        let public = bincode::deserialize(&req.public)
             .map_err(|e: bincode::Error| Status::invalid_argument(e.to_string()))?;
         let msg = req.msg;
         let sig = req.sig;
@@ -316,7 +316,7 @@ impl<
             .read()
             .await
             .verify_sig(&public, &msg, &sig)
-            .map_err(|e: NodeError| Status::failed_precondition(e.to_string()))?;
+            .map_err(|e: anyhow::Error| Status::failed_precondition(e.to_string()))?;
         return Ok(Response::new(VerifySigReply { res: true }));
     }
 
@@ -328,11 +328,8 @@ impl<
         let publics = req
             .publics
             .iter()
-            .map(|k| {
-                let public: G1 = bincode::deserialize(k).unwrap();
-                public
-            })
-            .collect::<Vec<G1>>();
+            .map(|k| bincode::deserialize(k).unwrap())
+            .collect::<Vec<_>>();
         let msg = req.msg;
         let partial_sigs = req
             .partial_sigs
@@ -343,7 +340,7 @@ impl<
             .read()
             .await
             .verify_partial_sigs(&publics, &msg, &partial_sigs)
-            .map_err(|e: NodeError| Status::failed_precondition(e.to_string()))?;
+            .map_err(|e: anyhow::Error| Status::failed_precondition(e.to_string()))?;
         return Ok(Response::new(VerifyPartialSigsReply { res: true }));
     }
 
@@ -357,15 +354,15 @@ impl<
             .parse()
             .map_err(|e: FromHexError| Status::invalid_argument(e.to_string()))?;
         let msg = req.msg;
-        let sig_index = req.sig_index as usize;
+        let request_id = req.request_id;
         let partial = req.partial_sig;
 
         self.context
             .write()
             .await
-            .send_partial_sig(member_id_address, msg, sig_index, partial)
+            .send_partial_sig(member_id_address, msg, request_id, partial)
             .await
-            .map_err(|e: NodeError| Status::unavailable(e.to_string()))?;
+            .map_err(|e: anyhow::Error| Status::unavailable(e.to_string()))?;
         return Ok(Response::new(SendPartialSigReply { res: true }));
     }
 
@@ -375,7 +372,7 @@ impl<
     ) -> Result<tonic::Response<FulfillRandomnessReply>, tonic::Status> {
         let req = request.into_inner();
         let group_index = req.group_index as usize;
-        let sig_index = req.sig_index as usize;
+        let request_id = req.request_id;
         let sig = req.sig;
         let partial_sigs = req
             .partial_sigs
@@ -385,15 +382,15 @@ impl<
         self.context
             .write()
             .await
-            .fulfill_randomness(group_index, sig_index, sig, partial_sigs)
+            .fulfill_randomness(group_index, request_id, sig, partial_sigs)
             .await
-            .map_err(|e: NodeError| Status::failed_precondition(e.to_string()))?;
+            .map_err(|e: anyhow::Error| Status::failed_precondition(e.to_string()))?;
         return Ok(Response::new(FulfillRandomnessReply { res: true }));
     }
 }
 
-impl From<NodeInfo> for GetNodeInfoReply {
-    fn from(n: NodeInfo) -> Self {
+impl<C: PairingCurve> From<NodeInfo<C>> for GetNodeInfoReply {
+    fn from(n: NodeInfo<C>) -> Self {
         GetNodeInfoReply {
             id_address: address_to_string(n.id_address),
             node_rpc_endpoint: n.node_rpc_endpoint,
@@ -403,8 +400,8 @@ impl From<NodeInfo> for GetNodeInfoReply {
     }
 }
 
-impl From<GroupInfo> for GetGroupInfoReply {
-    fn from(g: GroupInfo) -> Self {
+impl<C: PairingCurve> From<GroupInfo<C>> for GetGroupInfoReply {
+    fn from(g: GroupInfo<C>) -> Self {
         let share = if let Some(s) = g.share {
             bincode::serialize(&s).unwrap()
         } else {
@@ -420,8 +417,8 @@ impl From<GroupInfo> for GetGroupInfoReply {
     }
 }
 
-impl From<ModelGroup> for Group {
-    fn from(g: ModelGroup) -> Self {
+impl<C: PairingCurve> From<ModelGroup<C>> for Group {
+    fn from(g: ModelGroup<C>) -> Self {
         let public_key = if let Some(k) = g.public_key {
             bincode::serialize(&k).unwrap()
         } else {
@@ -449,8 +446,8 @@ impl From<ModelGroup> for Group {
     }
 }
 
-impl From<ModelMember> for Member {
-    fn from(member: ModelMember) -> Self {
+impl<C: PairingCurve> From<ModelMember<C>> for Member {
+    fn from(member: ModelMember<C>) -> Self {
         let partial_public_key = if let Some(k) = member.partial_public_key {
             bincode::serialize(&k).unwrap()
         } else {
@@ -467,17 +464,17 @@ impl From<ModelMember> for Member {
 }
 
 pub async fn start_management_server<
-    N: NodeInfoFetcher
-        + NodeInfoUpdater
-        + MdcContextUpdater
+    N: NodeInfoFetcher<C>
+        + NodeInfoUpdater<C>
+        + ContextInfoUpdater
         + std::fmt::Debug
         + Clone
         + Sync
         + Send
         + 'static,
-    G: GroupInfoFetcher
-        + GroupInfoUpdater
-        + MdcContextUpdater
+    G: GroupInfoFetcher<C>
+        + GroupInfoUpdater<C>
+        + ContextInfoUpdater
         + std::fmt::Debug
         + Clone
         + Sync
@@ -493,16 +490,17 @@ pub async fn start_management_server<
     I: ChainIdentity
         + ControllerClientBuilder
         + CoordinatorClientBuilder
-        + AdapterClientBuilder
+        + AdapterClientBuilder<C>
         + ChainProviderBuilder
         + std::fmt::Debug
         + Clone
         + Sync
         + Send
         + 'static,
+    C: PairingCurve + std::fmt::Debug + Clone + Sync + Send + 'static,
 >(
     endpoint: String,
-    context: Arc<RwLock<GeneralContext<N, G, T, I>>>,
+    context: NodeContext<N, G, T, I, C>,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let addr = endpoint.parse()?;
 
@@ -527,50 +525,53 @@ pub async fn start_management_server<
 
 #[derive(Debug, Clone)]
 struct LogLayer<
-    N: NodeInfoFetcher + NodeInfoUpdater + MdcContextUpdater + Clone,
-    G: GroupInfoFetcher + GroupInfoUpdater + MdcContextUpdater + Clone,
+    N: NodeInfoFetcher<C> + NodeInfoUpdater<C> + ContextInfoUpdater + Clone,
+    G: GroupInfoFetcher<C> + GroupInfoUpdater<C> + ContextInfoUpdater + Clone,
     T: BLSTasksFetcher<RandomnessTask> + BLSTasksUpdater<RandomnessTask> + Clone,
     I: ChainIdentity
         + ControllerClientBuilder
         + CoordinatorClientBuilder
-        + AdapterClientBuilder
+        + AdapterClientBuilder<C>
         + ChainProviderBuilder
         + Clone,
+    C: PairingCurve,
 > {
-    context: Arc<RwLock<GeneralContext<N, G, T, I>>>,
+    context: NodeContext<N, G, T, I, C>,
 }
 
 impl<
-        N: NodeInfoFetcher + NodeInfoUpdater + MdcContextUpdater + Clone,
-        G: GroupInfoFetcher + GroupInfoUpdater + MdcContextUpdater + Clone,
+        N: NodeInfoFetcher<C> + NodeInfoUpdater<C> + ContextInfoUpdater + Clone,
+        G: GroupInfoFetcher<C> + GroupInfoUpdater<C> + ContextInfoUpdater + Clone,
         T: BLSTasksFetcher<RandomnessTask> + BLSTasksUpdater<RandomnessTask> + Clone,
         I: ChainIdentity
             + ControllerClientBuilder
             + CoordinatorClientBuilder
-            + AdapterClientBuilder
+            + AdapterClientBuilder<C>
             + ChainProviderBuilder
             + Clone,
-    > LogLayer<N, G, T, I>
+        C: PairingCurve,
+    > LogLayer<N, G, T, I, C>
 {
-    pub fn new(context: Arc<RwLock<GeneralContext<N, G, T, I>>>) -> Self {
+    pub fn new(context: NodeContext<N, G, T, I, C>) -> Self {
         LogLayer { context }
     }
 }
 
 impl<
         S,
-        N: NodeInfoFetcher + NodeInfoUpdater + MdcContextUpdater + Clone,
-        G: GroupInfoFetcher + GroupInfoUpdater + MdcContextUpdater + Clone,
+        N: NodeInfoFetcher<C> + NodeInfoUpdater<C> + ContextInfoUpdater + Clone,
+        G: GroupInfoFetcher<C> + GroupInfoUpdater<C> + ContextInfoUpdater + Clone,
         T: BLSTasksFetcher<RandomnessTask> + BLSTasksUpdater<RandomnessTask> + Clone,
         I: ChainIdentity
             + ControllerClientBuilder
             + CoordinatorClientBuilder
-            + AdapterClientBuilder
+            + AdapterClientBuilder<C>
             + ChainProviderBuilder
             + Clone,
-    > Layer<S> for LogLayer<N, G, T, I>
+        C: PairingCurve,
+    > Layer<S> for LogLayer<N, G, T, I, C>
 {
-    type Service = LogService<S, N, G, T, I>;
+    type Service = LogService<S, N, G, T, I, C>;
 
     fn layer(&self, service: S) -> Self::Service {
         LogService {
@@ -583,33 +584,34 @@ impl<
 #[derive(Debug, Clone)]
 struct LogService<
     S,
-    N: NodeInfoFetcher + NodeInfoUpdater + MdcContextUpdater + Clone,
-    G: GroupInfoFetcher + GroupInfoUpdater + MdcContextUpdater + Clone,
+    N: NodeInfoFetcher<C> + NodeInfoUpdater<C> + ContextInfoUpdater + Clone,
+    G: GroupInfoFetcher<C> + GroupInfoUpdater<C> + ContextInfoUpdater + Clone,
     T: BLSTasksFetcher<RandomnessTask> + BLSTasksUpdater<RandomnessTask> + Clone,
     I: ChainIdentity
         + ControllerClientBuilder
         + CoordinatorClientBuilder
-        + AdapterClientBuilder
+        + AdapterClientBuilder<C>
         + ChainProviderBuilder
         + Clone,
+    C: PairingCurve,
 > {
     inner: S,
-    context: Arc<RwLock<GeneralContext<N, G, T, I>>>,
+    context: NodeContext<N, G, T, I, C>,
 }
 
 impl<
         S,
-        N: NodeInfoFetcher
-            + NodeInfoUpdater
-            + MdcContextUpdater
+        N: NodeInfoFetcher<C>
+            + NodeInfoUpdater<C>
+            + ContextInfoUpdater
             + std::fmt::Debug
             + Clone
             + Sync
             + Send
             + 'static,
-        G: GroupInfoFetcher
-            + GroupInfoUpdater
-            + MdcContextUpdater
+        G: GroupInfoFetcher<C>
+            + GroupInfoUpdater<C>
+            + ContextInfoUpdater
             + std::fmt::Debug
             + Clone
             + Sync
@@ -625,14 +627,15 @@ impl<
         I: ChainIdentity
             + ControllerClientBuilder
             + CoordinatorClientBuilder
-            + AdapterClientBuilder
+            + AdapterClientBuilder<C>
             + ChainProviderBuilder
             + std::fmt::Debug
             + Clone
             + Sync
             + Send
             + 'static,
-    > Service<hyper::Request<Body>> for LogService<S, N, G, T, I>
+        C: PairingCurve + std::fmt::Debug + Clone + Sync + Send + 'static,
+    > Service<hyper::Request<Body>> for LogService<S, N, G, T, I, C>
 where
     S: Service<hyper::Request<Body>, Response = hyper::Response<BoxBody>> + Clone + Send + 'static,
     S::Future: Send + 'static,
@@ -655,25 +658,7 @@ where
         let context = self.context.clone();
 
         Box::pin(async move {
-            log_mdc::insert("request_id", Uuid::new_v4().to_string());
-
-            context
-                .read()
-                .await
-                .get_main_chain()
-                .get_node_cache()
-                .read()
-                .await
-                .refresh_mdc_entry();
-
-            context
-                .read()
-                .await
-                .get_main_chain()
-                .get_group_cache()
-                .read()
-                .await
-                .refresh_mdc_entry();
+            log_mdc::insert("management_request_id", Uuid::new_v4().to_string());
 
             debug!("Intercepting management request: {:?}", req);
 
@@ -700,7 +685,7 @@ where
 
             let response = inner.call(req).await?;
 
-            log_mdc::remove("request_id");
+            log_mdc::remove("management_request_id");
 
             Ok(response)
         })

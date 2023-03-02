@@ -6,32 +6,26 @@ use crate::controller::{
 use crate::error::{ContractClientError, ContractClientResult};
 use crate::ServiceClient;
 
-use self::controller_stub::{
+use crate::rpc_stub::controller::{
     transactions_client::TransactionsClient as ControllerTransactionsClient,
     views_client::ViewsClient as ControllerViewsClient, CommitDkgRequest, GetNodeRequest, Member,
     NodeRegisterRequest, NodeReply, PostProcessDkgRequest,
 };
-use self::controller_stub::{DkgTaskReply, GroupRelayTaskReply, MineRequest};
+use crate::rpc_stub::controller::{DkgTaskReply, MineRequest};
 use arpa_node_core::{
-    address_to_string, ChainIdentity, DKGTask, GroupRelayTask, Member as ModelMember,
-    MockChainIdentity, Node,
+    address_to_string, ChainIdentity, DKGTask, Member as ModelMember, MockChainIdentity, Node,
 };
 use async_trait::async_trait;
-use ethers::types::Address;
+use ethers::types::{Address, H256, U256};
 use log::{debug, error};
+use threshold_bls::group::PairingCurve;
 use tonic::{Code, Request};
-
-pub mod controller_stub {
-    include!("../../rpc_stub/controller.rs");
-}
 
 #[async_trait]
 pub trait ControllerMockHelper {
     async fn mine(&self, block_number_increment: usize) -> ContractClientResult<usize>;
 
     async fn emit_dkg_task(&self) -> ContractClientResult<DKGTask>;
-
-    async fn emit_group_relay_task(&self) -> ContractClientResult<GroupRelayTask>;
 }
 
 pub struct MockControllerClient {
@@ -110,30 +104,11 @@ impl ControllerLogs for MockControllerClient {
             tokio::time::sleep(std::time::Duration::from_millis(1000)).await;
         }
     }
-    async fn subscribe_group_relay_task<
-        C: FnMut(GroupRelayTask) -> F + Send,
-        F: Future<Output = ContractClientResult<()>> + Send,
-    >(
-        &self,
-        mut cb: C,
-    ) -> ContractClientResult<()> {
-        loop {
-            let task_res = self.emit_group_relay_task().await;
-            match task_res {
-                Ok(task) => cb(task).await?,
-                Err(e) => match e {
-                    ContractClientError::NoTaskAvailable => debug!("{:?}", e),
-                    _ => error!("{:?}", e),
-                },
-            }
-            tokio::time::sleep(std::time::Duration::from_millis(1000)).await;
-        }
-    }
 }
 
 #[async_trait]
 impl ControllerTransactions for MockControllerClient {
-    async fn node_register(&self, id_public_key: Vec<u8>) -> ContractClientResult<()> {
+    async fn node_register(&self, id_public_key: Vec<u8>) -> ContractClientResult<H256> {
         let request = Request::new(NodeRegisterRequest {
             id_address: address_to_string(self.id_address),
             id_public_key,
@@ -146,7 +121,12 @@ impl ControllerTransactions for MockControllerClient {
             .node_register(request)
             .await
             .map(|r| r.into_inner())
-            .map_err(|status| status.into())
+            .map_err(|status| {
+                let e: ContractClientError = status.into();
+                e
+            })?;
+
+        Ok(H256::zero())
     }
 
     async fn commit_dkg(
@@ -156,7 +136,7 @@ impl ControllerTransactions for MockControllerClient {
         public_key: Vec<u8>,
         partial_public_key: Vec<u8>,
         disqualified_nodes: Vec<Address>,
-    ) -> ContractClientResult<()> {
+    ) -> ContractClientResult<H256> {
         let disqualified_nodes = disqualified_nodes
             .into_iter()
             .map(address_to_string)
@@ -178,14 +158,19 @@ impl ControllerTransactions for MockControllerClient {
             .commit_dkg(request)
             .await
             .map(|r| r.into_inner())
-            .map_err(|status| status.into())
+            .map_err(|status| {
+                let e: ContractClientError = status.into();
+                e
+            })?;
+
+        Ok(H256::zero())
     }
 
     async fn post_process_dkg(
         &self,
         group_index: usize,
         group_epoch: usize,
-    ) -> ContractClientResult<()> {
+    ) -> ContractClientResult<H256> {
         let request = Request::new(PostProcessDkgRequest {
             id_address: address_to_string(self.id_address),
             group_index: group_index as u32,
@@ -199,7 +184,12 @@ impl ControllerTransactions for MockControllerClient {
             .post_process_dkg(request)
             .await
             .map(|r| r.into_inner())
-            .map_err(|status| status.into())
+            .map_err(|status| {
+                let e: ContractClientError = status.into();
+                e
+            })?;
+
+        Ok(H256::zero())
     }
 }
 
@@ -240,8 +230,8 @@ impl ControllerMockHelper for MockControllerClient {
                 } = r.into_inner();
 
                 let members = members
-                    .into_iter()
-                    .map(|(address, index)| (address.parse().unwrap(), index as usize))
+                    .into_keys()
+                    .map(|address| address.parse().unwrap())
                     .collect();
 
                 DKGTask {
@@ -252,35 +242,6 @@ impl ControllerMockHelper for MockControllerClient {
                     members,
                     assignment_block_height: assignment_block_height as usize,
                     coordinator_address: coordinator_address.parse().unwrap(),
-                }
-            })
-            .map_err(|status| match status.code() {
-                Code::NotFound => ContractClientError::NoTaskAvailable,
-                _ => status.into(),
-            })
-    }
-
-    async fn emit_group_relay_task(&self) -> ContractClientResult<GroupRelayTask> {
-        let request = Request::new(());
-
-        let mut views_client = ServiceClient::<ViewsClient>::prepare_service_client(self).await?;
-
-        views_client
-            .emit_group_relay_task(request)
-            .await
-            .map(|r| {
-                let GroupRelayTaskReply {
-                    controller_global_epoch,
-                    relayed_group_index,
-                    relayed_group_epoch,
-                    assignment_block_height,
-                } = r.into_inner();
-
-                GroupRelayTask {
-                    controller_global_epoch: controller_global_epoch as usize,
-                    relayed_group_index: relayed_group_index as usize,
-                    relayed_group_epoch: relayed_group_epoch as usize,
-                    assignment_block_height: assignment_block_height as usize,
                 }
             })
             .map_err(|status| match status.code() {
@@ -313,16 +274,16 @@ impl ControllerViews for MockControllerClient {
 impl From<NodeReply> for Node {
     fn from(r: NodeReply) -> Self {
         Node {
-            id_address: r.id_address,
+            id_address: r.id_address.parse::<Address>().unwrap(),
             id_public_key: r.id_public_key,
             state: r.state,
             pending_until_block: r.pending_until_block as usize,
-            staking: r.staking as usize,
+            staking: U256::from_big_endian(&r.staking),
         }
     }
 }
 
-impl From<Member> for ModelMember {
+impl<C: PairingCurve> From<Member> for ModelMember<C> {
     fn from(member: Member) -> Self {
         let partial_public_key = if member.partial_public_key.is_empty() {
             None

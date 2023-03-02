@@ -18,7 +18,7 @@ message CommitPartialSignatureRequest {
     GroupRelayConfirmation = 2;
   }
   TaskType task_type = 3;
-  uint32 signature_index = 4;
+  bytes request_id = 4;
   bytes message = 5;
   bytes partial_signature = 6;
 }

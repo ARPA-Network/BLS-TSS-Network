@@ -18,7 +18,7 @@ use arpa_node_contract_client::{
 };
 use arpa_node_core::{ChainIdentity, RandomnessTask, SchedulerResult};
 use arpa_node_dal::{
-    BLSTasksFetcher, BLSTasksUpdater, GroupInfoFetcher, GroupInfoUpdater, MdcContextUpdater,
+    BLSTasksFetcher, BLSTasksUpdater, ContextInfoUpdater, GroupInfoFetcher, GroupInfoUpdater,
     NodeInfoFetcher, NodeInfoUpdater,
 };
 use async_trait::async_trait;
@@ -29,6 +29,7 @@ use ethers::{
 use log::error;
 use serde::{Deserialize, Serialize};
 use std::{env, sync::Arc};
+use threshold_bls::group::PairingCurve;
 use tokio::sync::RwLock;
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -37,11 +38,13 @@ pub struct Config {
     pub node_management_rpc_endpoint: String,
     pub node_management_rpc_token: String,
     pub provider_endpoint: String,
+    pub chain_id: usize,
     pub controller_address: String,
     // Data file for persistence
     pub data_path: Option<String>,
     pub account: Account,
     pub listeners: Option<Vec<ListenerType>>,
+    pub context_logging: bool,
 }
 
 impl Config {
@@ -86,33 +89,35 @@ pub struct HDWallet {
 
 #[derive(Debug)]
 pub struct GeneralContext<
-    N: NodeInfoFetcher + NodeInfoUpdater + MdcContextUpdater,
-    G: GroupInfoFetcher + GroupInfoUpdater + MdcContextUpdater,
+    N: NodeInfoFetcher<C> + NodeInfoUpdater<C> + ContextInfoUpdater,
+    G: GroupInfoFetcher<C> + GroupInfoUpdater<C> + ContextInfoUpdater,
     T: BLSTasksFetcher<RandomnessTask> + BLSTasksUpdater<RandomnessTask>,
-    I: ChainIdentity + ControllerClientBuilder + CoordinatorClientBuilder + AdapterClientBuilder,
+    I: ChainIdentity + ControllerClientBuilder + CoordinatorClientBuilder + AdapterClientBuilder<C>,
+    C: PairingCurve,
 > {
     config: Config,
-    main_chain: GeneralMainChain<N, G, T, I>,
+    main_chain: GeneralMainChain<N, G, T, I, C>,
     eq: Arc<RwLock<EventQueue>>,
     ts: Arc<RwLock<SimpleDynamicTaskScheduler>>,
     f_ts: Arc<RwLock<SimpleFixedTaskScheduler>>,
 }
 
 impl<
-        N: NodeInfoFetcher + NodeInfoUpdater + MdcContextUpdater + Sync + Send + 'static,
-        G: GroupInfoFetcher + GroupInfoUpdater + MdcContextUpdater + Sync + Send + 'static,
+        N: NodeInfoFetcher<C> + NodeInfoUpdater<C> + ContextInfoUpdater + Sync + Send + 'static,
+        G: GroupInfoFetcher<C> + GroupInfoUpdater<C> + ContextInfoUpdater + Sync + Send + 'static,
         T: BLSTasksFetcher<RandomnessTask> + BLSTasksUpdater<RandomnessTask> + Sync + Send + 'static,
         I: ChainIdentity
             + ControllerClientBuilder
             + CoordinatorClientBuilder
-            + AdapterClientBuilder
+            + AdapterClientBuilder<C>
             + ChainProviderBuilder
             + Sync
             + Send
             + 'static,
-    > GeneralContext<N, G, T, I>
+        C: PairingCurve,
+    > GeneralContext<N, G, T, I, C>
 {
-    pub fn new(config: Config, main_chain: GeneralMainChain<N, G, T, I>) -> Self {
+    pub fn new(config: Config, main_chain: GeneralMainChain<N, G, T, I, C>) -> Self {
         GeneralContext {
             config,
             main_chain,
@@ -124,17 +129,17 @@ impl<
 }
 
 impl<
-        N: NodeInfoFetcher
-            + NodeInfoUpdater
-            + MdcContextUpdater
+        N: NodeInfoFetcher<C>
+            + NodeInfoUpdater<C>
+            + ContextInfoUpdater
             + std::fmt::Debug
             + Clone
             + Sync
             + Send
             + 'static,
-        G: GroupInfoFetcher
-            + GroupInfoUpdater
-            + MdcContextUpdater
+        G: GroupInfoFetcher<C>
+            + GroupInfoUpdater<C>
+            + ContextInfoUpdater
             + std::fmt::Debug
             + Clone
             + Sync
@@ -150,16 +155,17 @@ impl<
         I: ChainIdentity
             + ControllerClientBuilder
             + CoordinatorClientBuilder
-            + AdapterClientBuilder
+            + AdapterClientBuilder<C>
             + ChainProviderBuilder
             + std::fmt::Debug
             + Clone
             + Sync
             + Send
             + 'static,
-    > Context for GeneralContext<N, G, T, I>
+        C: PairingCurve + std::fmt::Debug + Clone + Sync + Send + 'static,
+    > Context for GeneralContext<N, G, T, I, C>
 {
-    type MainChain = GeneralMainChain<N, G, T, I>;
+    type MainChain = GeneralMainChain<N, G, T, I, C>;
 
     async fn deploy(self) -> SchedulerResult<ContextHandle> {
         self.get_main_chain().init_components(&self).await?;
@@ -194,17 +200,17 @@ impl<
 }
 
 impl<
-        N: NodeInfoFetcher
-            + NodeInfoUpdater
-            + MdcContextUpdater
+        N: NodeInfoFetcher<C>
+            + NodeInfoUpdater<C>
+            + ContextInfoUpdater
             + std::fmt::Debug
             + Clone
             + Sync
             + Send
             + 'static,
-        G: GroupInfoFetcher
-            + GroupInfoUpdater
-            + MdcContextUpdater
+        G: GroupInfoFetcher<C>
+            + GroupInfoUpdater<C>
+            + ContextInfoUpdater
             + std::fmt::Debug
             + Clone
             + Sync
@@ -220,20 +226,21 @@ impl<
         I: ChainIdentity
             + ControllerClientBuilder
             + CoordinatorClientBuilder
-            + AdapterClientBuilder
+            + AdapterClientBuilder<C>
             + ChainProviderBuilder
             + std::fmt::Debug
             + Clone
             + Sync
             + Send
             + 'static,
-    > ContextFetcher<GeneralContext<N, G, T, I>> for GeneralContext<N, G, T, I>
+        C: PairingCurve + std::fmt::Debug + Clone + Sync + Send + 'static,
+    > ContextFetcher<GeneralContext<N, G, T, I, C>> for GeneralContext<N, G, T, I, C>
 {
     fn get_config(&self) -> &Config {
         &self.config
     }
 
-    fn get_main_chain(&self) -> &<GeneralContext<N, G, T, I> as Context>::MainChain {
+    fn get_main_chain(&self) -> &<GeneralContext<N, G, T, I, C> as Context>::MainChain {
         &self.main_chain
     }
 
@@ -274,17 +281,17 @@ impl TaskWaiter for ContextHandle {
 }
 
 impl<
-        N: NodeInfoFetcher
-            + NodeInfoUpdater
-            + MdcContextUpdater
+        N: NodeInfoFetcher<C>
+            + NodeInfoUpdater<C>
+            + ContextInfoUpdater
             + std::fmt::Debug
             + Clone
             + Sync
             + Send
             + 'static,
-        G: GroupInfoFetcher
-            + GroupInfoUpdater
-            + MdcContextUpdater
+        G: GroupInfoFetcher<C>
+            + GroupInfoUpdater<C>
+            + ContextInfoUpdater
             + std::fmt::Debug
             + Clone
             + Sync
@@ -300,19 +307,20 @@ impl<
         I: ChainIdentity
             + ControllerClientBuilder
             + CoordinatorClientBuilder
-            + AdapterClientBuilder
+            + AdapterClientBuilder<C>
             + ChainProviderBuilder
             + std::fmt::Debug
             + Clone
             + Sync
             + Send
             + 'static,
-    > CommitterServerStarter<GeneralContext<N, G, T, I>> for SimpleFixedTaskScheduler
+        C: PairingCurve + std::fmt::Debug + Clone + Sync + Send + 'static,
+    > CommitterServerStarter<GeneralContext<N, G, T, I, C>> for SimpleFixedTaskScheduler
 {
     fn start_committer_server(
         &mut self,
         rpc_endpoint: String,
-        context: Arc<RwLock<GeneralContext<N, G, T, I>>>,
+        context: Arc<RwLock<GeneralContext<N, G, T, I, C>>>,
     ) -> SchedulerResult<()> {
         self.add_task(TaskType::RpcServer(RpcServerType::Committer), async move {
             if let Err(e) = committer_server::start_committer_server(rpc_endpoint, context).await {
@@ -323,17 +331,17 @@ impl<
 }
 
 impl<
-        N: NodeInfoFetcher
-            + NodeInfoUpdater
-            + MdcContextUpdater
+        N: NodeInfoFetcher<C>
+            + NodeInfoUpdater<C>
+            + ContextInfoUpdater
             + std::fmt::Debug
             + Clone
             + Sync
             + Send
             + 'static,
-        G: GroupInfoFetcher
-            + GroupInfoUpdater
-            + MdcContextUpdater
+        G: GroupInfoFetcher<C>
+            + GroupInfoUpdater<C>
+            + ContextInfoUpdater
             + std::fmt::Debug
             + Clone
             + Sync
@@ -349,19 +357,20 @@ impl<
         I: ChainIdentity
             + ControllerClientBuilder
             + CoordinatorClientBuilder
-            + AdapterClientBuilder
+            + AdapterClientBuilder<C>
             + ChainProviderBuilder
             + std::fmt::Debug
             + Clone
             + Sync
             + Send
             + 'static,
-    > ManagementServerStarter<GeneralContext<N, G, T, I>> for SimpleFixedTaskScheduler
+        C: PairingCurve + std::fmt::Debug + Clone + Sync + Send + 'static,
+    > ManagementServerStarter<GeneralContext<N, G, T, I, C>> for SimpleFixedTaskScheduler
 {
     fn start_management_server(
         &mut self,
         rpc_endpoint: String,
-        context: Arc<RwLock<GeneralContext<N, G, T, I>>>,
+        context: Arc<RwLock<GeneralContext<N, G, T, I, C>>>,
     ) -> SchedulerResult<()> {
         self.add_task(TaskType::RpcServer(RpcServerType::Management), async move {
             if let Err(e) = management_server::start_management_server(rpc_endpoint, context).await
@@ -422,7 +431,7 @@ mod tests {
 
     #[test]
     fn test_deserialization_from_config() {
-        let config_str = &read_to_string("config.yml").unwrap_or_else(|_| {
+        let config_str = &read_to_string("conf/config.yml").unwrap_or_else(|_| {
             panic!("Error loading configuration file, please check the configuration!")
         });
 

@@ -9,21 +9,27 @@ use arpa_node_core::{ChainIdentity, DKGStatus};
 use arpa_node_dal::{GroupInfoFetcher, GroupInfoUpdater};
 use async_trait::async_trait;
 use log::error;
-use std::sync::Arc;
+use std::{marker::PhantomData, sync::Arc};
+use threshold_bls::group::PairingCurve;
 use tokio::sync::RwLock;
 use tokio_retry::{strategy::FixedInterval, RetryIf};
 
 pub struct PostCommitGroupingListener<
-    G: GroupInfoFetcher + GroupInfoUpdater,
-    I: ChainIdentity + AdapterClientBuilder,
+    G: GroupInfoFetcher<C> + GroupInfoUpdater<C>,
+    I: ChainIdentity + AdapterClientBuilder<C>,
+    C: PairingCurve,
 > {
     main_chain_identity: Arc<RwLock<I>>,
     group_cache: Arc<RwLock<G>>,
     eq: Arc<RwLock<EventQueue>>,
+    c: PhantomData<C>,
 }
 
-impl<G: GroupInfoFetcher + GroupInfoUpdater, I: ChainIdentity + AdapterClientBuilder>
-    PostCommitGroupingListener<G, I>
+impl<
+        G: GroupInfoFetcher<C> + GroupInfoUpdater<C>,
+        I: ChainIdentity + AdapterClientBuilder<C>,
+        C: PairingCurve,
+    > PostCommitGroupingListener<G, I, C>
 {
     pub fn new(
         main_chain_identity: Arc<RwLock<I>>,
@@ -34,26 +40,29 @@ impl<G: GroupInfoFetcher + GroupInfoUpdater, I: ChainIdentity + AdapterClientBui
             main_chain_identity,
             group_cache,
             eq,
+            c: PhantomData,
         }
     }
 }
 
 #[async_trait]
 impl<
-        G: GroupInfoFetcher + GroupInfoUpdater + Sync + Send,
-        I: ChainIdentity + AdapterClientBuilder + Sync + Send,
-    > EventPublisher<DKGSuccess> for PostCommitGroupingListener<G, I>
+        G: GroupInfoFetcher<C> + GroupInfoUpdater<C> + Sync + Send,
+        I: ChainIdentity + AdapterClientBuilder<C> + Sync + Send,
+        C: PairingCurve + Send + Sync + 'static,
+    > EventPublisher<DKGSuccess<C>> for PostCommitGroupingListener<G, I, C>
 {
-    async fn publish(&self, event: DKGSuccess) {
+    async fn publish(&self, event: DKGSuccess<C>) {
         self.eq.read().await.publish(event).await;
     }
 }
 
 #[async_trait]
 impl<
-        G: GroupInfoFetcher + GroupInfoUpdater + Sync + Send,
-        I: ChainIdentity + AdapterClientBuilder + Sync + Send,
-    > Listener for PostCommitGroupingListener<G, I>
+        G: GroupInfoFetcher<C> + GroupInfoUpdater<C> + Sync + Send,
+        I: ChainIdentity + AdapterClientBuilder<C> + Sync + Send,
+        C: PairingCurve + Sync + Send + 'static,
+    > Listener for PostCommitGroupingListener<G, I, C>
 {
     async fn start(mut self) -> NodeResult<()> {
         let id_address = self.main_chain_identity.read().await.get_id_address();

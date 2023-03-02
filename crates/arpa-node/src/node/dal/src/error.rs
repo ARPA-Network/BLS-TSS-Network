@@ -19,6 +19,9 @@ pub enum DataAccessError {
 
     #[error(transparent)]
     DBError(anyhow::Error),
+
+    #[error("could not deserialize: {0}")]
+    DeserializationError(#[from] bincode::Error),
 }
 
 #[derive(Debug, Error, PartialEq)]
@@ -62,6 +65,6 @@ pub enum NodeInfoError {
 
 #[derive(Debug, Error, PartialEq)]
 pub enum RandomnessTaskError {
-    #[error("there is no randomness task with index:{0}")]
-    NoRandomnessTask(usize),
+    #[error("there is no randomness task with request id:{0}")]
+    NoRandomnessTask(String),
 }

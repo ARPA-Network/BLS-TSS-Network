@@ -17,9 +17,18 @@ impl MigrationTrait for Migration {
                             .not_null()
                             .primary_key(),
                     )
-                    .col(ColumnDef::new(RandomnessTask::Index).integer().not_null())
+                    .col(
+                        ColumnDef::new(RandomnessTask::RequestId)
+                            .blob(BlobSize::Medium)
+                            .not_null(),
+                    )
                     .col(
                         ColumnDef::new(RandomnessTask::GroupIndex)
+                            .integer()
+                            .not_null(),
+                    )
+                    .col(
+                        ColumnDef::new(RandomnessTask::RequestConfirmations)
                             .integer()
                             .not_null(),
                     )
@@ -28,7 +37,11 @@ impl MigrationTrait for Migration {
                             .integer()
                             .not_null(),
                     )
-                    .col(ColumnDef::new(RandomnessTask::Message).text().not_null())
+                    .col(
+                        ColumnDef::new(RandomnessTask::Message)
+                            .blob(BlobSize::Medium)
+                            .not_null(),
+                    )
                     .col(ColumnDef::new(RandomnessTask::State).integer().not_null())
                     .col(
                         ColumnDef::new(RandomnessTask::CreateAt)
@@ -56,8 +69,9 @@ impl MigrationTrait for Migration {
 pub(crate) enum RandomnessTask {
     Table,
     Id,
-    Index,
+    RequestId,
     GroupIndex,
+    RequestConfirmations,
     AssignmentBlockHeight,
     Message,
     State,

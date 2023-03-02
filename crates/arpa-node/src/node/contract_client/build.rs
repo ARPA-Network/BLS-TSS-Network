@@ -10,7 +10,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     prost_build.btree_map(["members"]);
 
-    fs::create_dir_all("rpc_stub")?;
+    fs::create_dir_all("./src/rpc_stub")?;
 
     let protos = &[
         "proto/adapter.proto",
@@ -19,13 +19,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     ];
 
     tonic_build::configure()
-        .out_dir("rpc_stub")
+        .out_dir("./src/rpc_stub")
         .compile_with_config(prost_build, protos, &["proto"])?;
 
     MultiAbigen::from_json_files("./abi")
         .unwrap()
         .build()?
-        .write_to_module("contract_stub", false)?;
+        .write_to_module("./src/contract_stub", false)?;
 
     Ok(())
 }

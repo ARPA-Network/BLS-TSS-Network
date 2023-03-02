@@ -203,11 +203,11 @@ where
     }
 }
 
-#[cfg(feature = "bls12_381")]
+#[cfg(feature = "bn254")]
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::curve::bls12381::{Curve as G1Curve, G2Curve, PairingCurve as PCurve};
+    use crate::curve::bn254::{G1Curve, G2Curve, PairingCurve as PCurve};
     use crate::group::Curve;
     use rand::prelude::*;
 

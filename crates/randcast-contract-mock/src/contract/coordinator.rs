@@ -1,17 +1,19 @@
+use ethers_core::types::Address;
+
 use super::errors::{CoordinatorError, CoordinatorResult};
 use std::collections::HashMap;
 
 pub struct Coordinator {
     /// Mapping of Ethereum Address => BLS public keys
-    pub keys: HashMap<String, Vec<u8>>,
+    pub keys: HashMap<Address, Vec<u8>>,
     /// Mapping of Ethereum Address => DKG Phase 1 Shares
-    pub shares: HashMap<String, Vec<u8>>,
+    pub shares: HashMap<Address, Vec<u8>>,
     /// Mapping of Ethereum Address => DKG Phase 2 Responses
-    pub responses: HashMap<String, Vec<u8>>,
+    pub responses: HashMap<Address, Vec<u8>>,
     /// Mapping of Ethereum Address => DKG Phase 3 Justifications
-    pub justifications: HashMap<String, Vec<u8>>,
+    pub justifications: HashMap<Address, Vec<u8>>,
     /// List of registered Ethereum keys (used for conveniently fetching data)
-    pub participants: Vec<String>,
+    pub participants: Vec<Address>,
     // The duration of each phase
     pub phase_duration: usize,
     /// The epoch of the group
@@ -46,13 +48,13 @@ pub trait Transactions {
     fn initialize(
         &mut self,
         block_height: usize,
-        members: Vec<(String, usize, Vec<u8>)>,
+        members: Vec<(Address, usize, Vec<u8>)>,
     ) -> CoordinatorResult<()>;
 
     /// Participant publishes their data and depending on the phase the data gets inserted
     /// in the shares, responses or justifications mapping. Reverts if the participant
     /// has already published their data for a phase or if the DKG has ended.
-    fn publish(&mut self, id_address: String, value: Vec<u8>) -> CoordinatorResult<()>;
+    fn publish(&mut self, id_address: Address, value: Vec<u8>) -> CoordinatorResult<()>;
 }
 
 pub trait Views {
@@ -69,18 +71,18 @@ pub trait Views {
     fn get_justifications(&self) -> CoordinatorResult<Vec<Vec<u8>>>;
 
     /// Gets the participants' ethereum addresses
-    fn get_participants(&self) -> CoordinatorResult<Vec<String>>;
+    fn get_participants(&self) -> CoordinatorResult<Vec<Address>>;
 
     /// Gets the participants' BLS keys along with the thershold of the DKG
-    fn get_bls_keys(&self) -> CoordinatorResult<(usize, Vec<Vec<u8>>)>;
+    fn get_dkg_keys(&self) -> CoordinatorResult<(usize, Vec<Vec<u8>>)>;
 
     /// Returns the current phase of the DKG.
-    fn in_phase(&self) -> CoordinatorResult<usize>;
+    fn in_phase(&self) -> CoordinatorResult<i8>;
 }
 
 pub trait Internal {
     /// A registered participant is one whose pubkey's length > 0
-    fn only_allowed(&self, id_address: &str) -> CoordinatorResult<()>;
+    fn only_allowed(&self, id_address: Address) -> CoordinatorResult<()>;
 
     /// The DKG starts when startBlock > 0
     fn only_when_not_started(&self) -> CoordinatorResult<()>;
@@ -99,8 +101,8 @@ impl MockHelper for Coordinator {
 }
 
 impl Internal for Coordinator {
-    fn only_allowed(&self, id_address: &str) -> CoordinatorResult<()> {
-        if !self.participants.iter().any(|x| x == id_address) {
+    fn only_allowed(&self, id_address: Address) -> CoordinatorResult<()> {
+        if !self.participants.iter().any(|x| *x == id_address) {
             return Err(CoordinatorError::NotAllowlisted);
         }
 
@@ -120,7 +122,7 @@ impl Transactions for Coordinator {
     fn initialize(
         &mut self,
         block_height: usize,
-        members: Vec<(String, usize, Vec<u8>)>,
+        members: Vec<(Address, usize, Vec<u8>)>,
     ) -> CoordinatorResult<()> {
         self.only_when_not_started()?;
 
@@ -129,7 +131,7 @@ impl Transactions for Coordinator {
         self.block_height = block_height;
 
         members.into_iter().for_each(|(address, _, key)| {
-            self.participants.push(address.clone());
+            self.participants.push(address);
 
             self.keys.insert(address, key);
         });
@@ -139,8 +141,8 @@ impl Transactions for Coordinator {
         Ok(())
     }
 
-    fn publish(&mut self, id_address: String, value: Vec<u8>) -> CoordinatorResult<()> {
-        self.only_allowed(&id_address)?;
+    fn publish(&mut self, id_address: Address, value: Vec<u8>) -> CoordinatorResult<()> {
+        self.only_allowed(id_address)?;
 
         let blocks_since_start = self.block_height - self.start_block;
 
@@ -183,11 +185,11 @@ impl Views for Coordinator {
         Ok(self.justifications.values().cloned().collect::<Vec<_>>())
     }
 
-    fn get_participants(&self) -> CoordinatorResult<Vec<String>> {
+    fn get_participants(&self) -> CoordinatorResult<Vec<Address>> {
         Ok(self.participants.clone())
     }
 
-    fn get_bls_keys(&self) -> CoordinatorResult<(usize, Vec<Vec<u8>>)> {
+    fn get_dkg_keys(&self) -> CoordinatorResult<(usize, Vec<Vec<u8>>)> {
         let keys = self
             .participants
             .iter()
@@ -197,25 +199,28 @@ impl Views for Coordinator {
         Ok((self.threshold, keys))
     }
 
-    fn in_phase(&self) -> CoordinatorResult<usize> {
+    fn in_phase(&self) -> CoordinatorResult<i8> {
+        if self.start_block == 0 {
+            return Ok(0);
+        }
         let blocks_since_start = self.block_height - self.start_block;
 
         if blocks_since_start <= self.phase_duration {
-            return Ok(0);
-        }
-
-        if blocks_since_start <= 2 * self.phase_duration {
             return Ok(1);
         }
 
-        if blocks_since_start <= 3 * self.phase_duration {
+        if blocks_since_start <= 2 * self.phase_duration {
             return Ok(2);
         }
 
-        if blocks_since_start <= 4 * self.phase_duration {
+        if blocks_since_start <= 3 * self.phase_duration {
             return Ok(3);
         }
 
-        Err(CoordinatorError::DKGEnded)
+        if blocks_since_start <= 4 * self.phase_duration {
+            return Ok(4);
+        }
+
+        Ok(-1)
     }
 }

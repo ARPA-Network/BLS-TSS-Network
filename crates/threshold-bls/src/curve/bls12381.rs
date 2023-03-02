@@ -1,66 +1,113 @@
 use crate::group::{self, Element, PairingCurve as PC, Point, Scalar as Sc};
-use ff::{Field, PrimeField};
-use groupy::CurveProjective;
-use paired::bls12_381::{Bls12, Fq12, Fr, FrRepr, G1 as PG1, G2 as PG2};
-use paired::Engine;
+use crate::hash::hasher::Keccak256Hasher;
+use crate::hash::try_and_increment::TryAndIncrement;
+use crate::hash::HashToCurve;
+use ark_bls12_381 as bls12_381;
+use ark_ec::{AffineCurve, PairingEngine, ProjectiveCurve};
+use ark_ff::PrimeField;
+use ark_ff::{Field, One, UniformRand, Zero};
+use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
 use rand_core::RngCore;
-use std::result::Result;
+use serde::{
+    de::{Error as DeserializeError, SeqAccess, Visitor},
+    ser::{Error as SerializationError, SerializeTuple},
+    Deserialize, Deserializer, Serialize, Serializer,
+};
+use std::{
+    fmt,
+    marker::PhantomData,
+    ops::{AddAssign, MulAssign, Neg, SubAssign},
+};
+
 use thiserror::Error;
 
-pub type Scalar = Fr;
-pub type G1 = PG1;
-pub type G2 = PG2;
-pub type GT = Fq12;
+use super::{BLSError, CurveType};
 
 #[derive(Debug, Error)]
-pub enum BellmanError {
-    #[error("decoding: invalid length {0}/{1}")]
-    InvalidLength(usize, usize),
-    #[error("IO Error: {0}")]
-    IoError(#[from] std::io::Error),
-    #[error("Field Decoding Error: {0}")]
-    PrimeFieldDecodingError(#[from] ff::PrimeFieldDecodingError),
-    #[error("Group Decoding Error: {0}")]
-    GroupDecodingError(#[from] groupy::GroupDecodingError),
+pub enum BLS12Error {
+    #[error("{0}")]
+    SerializationError(#[from] ark_serialize::SerializationError),
+    #[error("{0}")]
+    BLSError(#[from] BLSError),
 }
 
+#[derive(Debug, Clone, Copy, Eq, PartialEq, Deserialize, Serialize)]
+pub struct Scalar(
+    #[serde(deserialize_with = "deserialize_field")]
+    #[serde(serialize_with = "serialize_field")]
+    <bls12_381::Bls12_381 as PairingEngine>::Fr,
+);
+
+type ZG1 = <bls12_381::Bls12_381 as PairingEngine>::G1Projective;
+
+#[derive(Debug, Clone, Copy, Eq, PartialEq, Serialize, Deserialize)]
+pub struct G1(
+    #[serde(deserialize_with = "deserialize_group")]
+    #[serde(serialize_with = "serialize_group")]
+    ZG1,
+);
+
+type ZG2 = <bls12_381::Bls12_381 as PairingEngine>::G2Projective;
+
+#[derive(Debug, Clone, Copy, Eq, PartialEq, Serialize, Deserialize)]
+pub struct G2(
+    #[serde(deserialize_with = "deserialize_group")]
+    #[serde(serialize_with = "serialize_group")]
+    ZG2,
+);
+
+#[derive(Debug, Clone, Copy, Eq, PartialEq, Serialize, Deserialize)]
+pub struct GT(
+    #[serde(deserialize_with = "deserialize_field")]
+    #[serde(serialize_with = "serialize_field")]
+    <bls12_381::Bls12_381 as PairingEngine>::Fqk,
+);
+
 impl Element for Scalar {
-    type RHS = Fr;
+    type RHS = Scalar;
 
     fn new() -> Self {
-        ff::Field::zero()
+        Self(Zero::zero())
     }
 
     fn one() -> Self {
-        ff::Field::one()
+        Self(One::one())
     }
+
     fn add(&mut self, s2: &Self) {
-        self.add_assign(s2);
+        self.0.add_assign(s2.0);
     }
-    fn mul(&mut self, mul: &Fr) {
-        self.mul_assign(mul)
+
+    fn mul(&mut self, mul: &Scalar) {
+        self.0.mul_assign(mul.0)
     }
-    fn rand<R: RngCore>(rng: &mut R) -> Self {
-        Fr::random(rng)
+
+    fn rand<R: rand_core::RngCore>(rng: &mut R) -> Self {
+        Self(bls12_381::Fr::rand(rng))
     }
 }
 
-/// Implementation of Scalar using field elements used in BLS12-381
 impl Sc for Scalar {
     fn set_int(&mut self, i: u64) {
-        *self = Fr::from_repr(FrRepr::from(i)).unwrap();
+        *self = Self(bls12_381::Fr::from(i))
     }
 
     fn inverse(&self) -> Option<Self> {
-        ff::Field::inverse(self)
+        Some(Self(Field::inverse(&self.0)?))
     }
 
     fn negate(&mut self) {
-        ff::Field::negate(self);
+        *self = Self(self.0.neg())
     }
 
     fn sub(&mut self, other: &Self) {
-        self.sub_assign(other);
+        self.0.sub_assign(other.0);
+    }
+}
+
+impl fmt::Display for Scalar {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{{{:?}}}", self.0)
     }
 }
 
@@ -69,96 +116,129 @@ impl Element for G1 {
     type RHS = Scalar;
 
     fn new() -> Self {
-        groupy::CurveProjective::zero()
+        Self(Zero::zero())
     }
 
     fn one() -> Self {
-        groupy::CurveProjective::one()
+        Self(ZG1::prime_subgroup_generator())
     }
 
     fn rand<R: RngCore>(rng: &mut R) -> Self {
-        G1::random(rng)
+        Self(ZG1::rand(rng))
     }
 
     fn add(&mut self, s2: &Self) {
-        self.add_assign(s2);
+        self.0.add_assign(s2.0);
     }
 
     fn mul(&mut self, mul: &Scalar) {
-        self.mul_assign(FrRepr::from(*mul))
+        self.0.mul_assign(mul.0);
     }
 }
 
+/// Implementation of Point using G1 from BLS12_381
+impl Point for G1 {
+    type Error = BLS12Error;
+
+    fn map(&mut self, data: &[u8]) -> Result<(), BLS12Error> {
+        let hasher = TryAndIncrement::new(&Keccak256Hasher);
+
+        let hash = hasher.hash(&[], data)?;
+
+        *self = Self(hash);
+
+        Ok(())
+    }
+}
+
+impl fmt::Display for G1 {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{{{:?}}}", self.0)
+    }
+}
+
+/// G1 points can be multiplied by Fr elements
 impl Element for G2 {
     type RHS = Scalar;
 
     fn new() -> Self {
-        groupy::CurveProjective::zero()
+        Self(Zero::zero())
     }
 
     fn one() -> Self {
-        groupy::CurveProjective::one()
+        Self(ZG2::prime_subgroup_generator())
     }
 
-    fn rand<R: RngCore>(rng: &mut R) -> Self {
-        G2::random(rng)
+    fn rand<R: RngCore>(mut rng: &mut R) -> Self {
+        Self(ZG2::rand(&mut rng))
     }
 
     fn add(&mut self, s2: &Self) {
-        self.add_assign(s2);
+        self.0.add_assign(s2.0);
     }
 
     fn mul(&mut self, mul: &Scalar) {
-        self.mul_assign(FrRepr::from(*mul))
+        self.0.mul_assign(mul.0)
     }
 }
 
-/// Implementation of Point using G1 from BLS12-381
-impl Point for G1 {
-    type Error = ();
-
-    fn map(&mut self, data: &[u8]) -> Result<(), ()> {
-        *self = G1::hash(data);
-        Ok(())
-    }
-}
-
-/// Implementation of Point using G2 from BLS12-381
+/// Implementation of Point using G2 from BLS12_381
 impl Point for G2 {
-    type Error = ();
+    type Error = BLS12Error;
 
-    fn map(&mut self, data: &[u8]) -> Result<(), ()> {
-        *self = G2::hash(data);
+    fn map(&mut self, data: &[u8]) -> Result<(), BLS12Error> {
+        let hasher = TryAndIncrement::new(&Keccak256Hasher);
+
+        let hash = hasher.hash(&[], data)?;
+
+        *self = Self(hash);
+
         Ok(())
+    }
+}
+
+impl fmt::Display for G2 {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{{{:?}}}", self.0)
     }
 }
 
 impl Element for GT {
-    type RHS = GT;
+    type RHS = Scalar;
 
     fn new() -> Self {
-        ff::Field::zero()
+        Self(One::one())
     }
-
     fn one() -> Self {
-        ff::Field::one()
+        Self(One::one())
     }
     fn add(&mut self, s2: &Self) {
-        self.add_assign(s2);
+        self.0.mul_assign(s2.0);
     }
-    fn mul(&mut self, mul: &GT) {
-        self.mul_assign(mul)
+    fn mul(&mut self, mul: &Scalar) {
+        let scalar = mul.0.into_repr();
+        let mut res = Self::one();
+        let mut temp = *self;
+        for b in ark_ff::BitIteratorLE::without_trailing_zeros(scalar) {
+            if b {
+                res.0.mul_assign(temp.0);
+            }
+            temp.0.square_in_place();
+        }
+        *self = res;
     }
-
     fn rand<R: RngCore>(rng: &mut R) -> Self {
-        ff::Field::random(rng)
+        Self(bls12_381::Fq12::rand(rng))
     }
 }
 
-/// alias to BLS12-381's G1 group
-pub type Curve = group::G1Curve<PairingCurve>;
+impl fmt::Display for GT {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{{{:?}}}", self.0)
+    }
+}
 
-/// alias to BLS12-381's G2 Group
+pub type G1Curve = group::G1Curve<PairingCurve>;
 pub type G2Curve = group::G2Curve<PairingCurve>;
 
 #[derive(Clone, Debug)]
@@ -166,23 +246,147 @@ pub struct PairingCurve;
 
 impl PC for PairingCurve {
     type Scalar = Scalar;
-
     type G1 = G1;
-
     type G2 = G2;
-
-    type GT = Fq12;
+    type GT = GT;
 
     fn pair(a: &Self::G1, b: &Self::G2) -> Self::GT {
-        Bls12::pairing(a.into_affine(), b.into_affine())
+        GT(<bls12_381::Bls12_381 as PairingEngine>::pairing(a.0, b.0))
     }
+}
+
+// Serde implementations (ideally, these should be upstreamed to Zexe)
+
+fn deserialize_field<'de, D, C>(deserializer: D) -> Result<C, D::Error>
+where
+    D: Deserializer<'de>,
+    C: Field,
+{
+    struct FieldVisitor<C>(PhantomData<C>);
+
+    impl<'de, C> Visitor<'de> for FieldVisitor<C>
+    where
+        C: Field,
+    {
+        type Value = C;
+
+        fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+            formatter.write_str("a valid group element")
+        }
+
+        fn visit_seq<S>(self, mut seq: S) -> Result<C, S::Error>
+        where
+            S: SeqAccess<'de>,
+        {
+            let len = C::zero().serialized_size();
+            let bytes: Vec<u8> = (0..len)
+                .map(|_| {
+                    seq.next_element()?
+                        .ok_or_else(|| DeserializeError::custom("could not read bytes"))
+                })
+                .collect::<Result<Vec<_>, _>>()?;
+
+            let res = C::deserialize(&mut &bytes[..]).map_err(DeserializeError::custom)?;
+            Ok(res)
+        }
+    }
+
+    let visitor = FieldVisitor(PhantomData);
+    deserializer.deserialize_tuple(C::zero().serialized_size(), visitor)
+}
+
+fn serialize_field<S, C>(c: &C, s: S) -> Result<S::Ok, S::Error>
+where
+    S: Serializer,
+    C: Field,
+{
+    let len = c.serialized_size();
+    let mut bytes = Vec::with_capacity(len);
+    c.serialize(&mut bytes)
+        .map_err(SerializationError::custom)?;
+
+    let mut tup = s.serialize_tuple(len)?;
+    for byte in &bytes {
+        tup.serialize_element(byte)?;
+    }
+    tup.end()
+}
+
+fn deserialize_group<'de, D, C>(deserializer: D) -> Result<C, D::Error>
+where
+    D: Deserializer<'de>,
+    C: ProjectiveCurve,
+    C::Affine: CanonicalDeserialize + CanonicalSerialize,
+{
+    struct GroupVisitor<C>(PhantomData<C>);
+
+    impl<'de, C> Visitor<'de> for GroupVisitor<C>
+    where
+        C: ProjectiveCurve,
+        //C::Affine: CanonicalDeserialize + CanonicalSerialize,
+    {
+        type Value = C;
+
+        fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+            formatter.write_str("a valid group element")
+        }
+
+        fn visit_seq<S>(self, mut seq: S) -> Result<C, S::Error>
+        where
+            S: SeqAccess<'de>,
+        {
+            let len = C::Affine::zero().serialized_size(); //C::Affine::SERIALIZED_SIZE;
+            let bytes: Vec<u8> = (0..len)
+                .map(|_| {
+                    seq.next_element()?
+                        .ok_or_else(|| DeserializeError::custom("could not read bytes"))
+                })
+                .collect::<Result<Vec<_>, _>>()?;
+
+            let affine =
+                C::Affine::deserialize(&mut &bytes[..]).map_err(DeserializeError::custom)?;
+            Ok(affine.into_projective())
+        }
+    }
+
+    let visitor = GroupVisitor(PhantomData);
+    deserializer.deserialize_tuple(C::Affine::zero().serialized_size(), visitor)
+}
+
+fn serialize_group<S, C>(c: &C, s: S) -> Result<S::Ok, S::Error>
+where
+    S: Serializer,
+    C: ProjectiveCurve,
+    C::Affine: CanonicalSerialize,
+{
+    let affine = c.into_affine();
+    let len = affine.serialized_size();
+    let mut bytes = Vec::with_capacity(len);
+    affine
+        .serialize(&mut bytes)
+        .map_err(SerializationError::custom)?;
+
+    let mut tup = s.serialize_tuple(len)?;
+    for byte in &bytes {
+        tup.serialize_element(byte)?;
+    }
+    tup.end()
+}
+
+#[derive(Clone, Debug)]
+pub struct BLS12381Curve;
+
+impl CurveType for BLS12381Curve {
+    type G1Curve = G1Curve;
+
+    type G2Curve = G2Curve;
+
+    type PairingCurve = PairingCurve;
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use rand::prelude::*;
-
     use serde::{de::DeserializeOwned, Serialize};
     use static_assertions::assert_impl_all;
 
@@ -191,31 +395,54 @@ mod tests {
     assert_impl_all!(GT: Serialize, DeserializeOwned, Clone);
     assert_impl_all!(Scalar: Serialize, DeserializeOwned, Clone);
 
-    // test if the element trait is usable
-    fn add_two<T: Element<RHS = T>>(e1: &mut T, e2: &T) {
-        e1.add(e2);
-        e1.mul(e2);
+    #[test]
+    fn serialize_group() {
+        serialize_group_test::<G1>(48);
+        serialize_group_test::<G2>(96);
+    }
+
+    fn serialize_group_test<E: Element>(size: usize) {
+        let rng = &mut rand::thread_rng();
+        let sig = E::rand(rng);
+        let ser = bincode::serialize(&sig).unwrap();
+        assert_eq!(ser.len(), size);
+
+        let de: E = bincode::deserialize(&ser).unwrap();
+        assert_eq!(de, sig);
     }
 
     #[test]
-    fn basic_group() {
-        let s = Scalar::rand(&mut thread_rng());
-        let mut e1 = s;
-        let e2 = s;
-        let mut s2 = s;
-        s2.add(&s);
-        s2.mul(&s);
-        add_two(&mut e1, &e2);
-        // p1 = s2 * G = (s+s)G
-        let mut p1 = G1::new();
-        p1.mul(&s2);
-        // p2 = sG + sG = s2 * G
-        let mut p2 = G1::new();
-        p2.mul(&s);
-        p2.add(&p2.clone());
-        assert_eq!(p1, p2);
+    fn serialize_field() {
+        serialize_field_test::<GT>(576);
+        serialize_field_test::<Scalar>(32);
+    }
 
-        let mut ii = Scalar::new();
-        ii.set_int(4);
+    fn serialize_field_test<E: Element>(size: usize) {
+        let rng = &mut rand::thread_rng();
+        let sig = E::rand(rng);
+        let ser = bincode::serialize(&sig).unwrap();
+        assert_eq!(ser.len(), size);
+
+        let de: E = bincode::deserialize(&ser).unwrap();
+        assert_eq!(de, sig);
+    }
+
+    #[test]
+    fn gt_exp() {
+        let rng = &mut rand::thread_rng();
+        let base = GT::rand(rng);
+
+        let mut sc = Scalar::one();
+        sc.add(&Scalar::one());
+        sc.add(&Scalar::one());
+
+        let mut exp = base.clone();
+        exp.mul(&sc);
+
+        let mut res = base.clone();
+        res.add(&base);
+        res.add(&base);
+
+        assert_eq!(exp, res);
     }
 }

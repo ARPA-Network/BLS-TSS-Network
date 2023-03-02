@@ -2,40 +2,32 @@ use crate::adapter::{AdapterClientBuilder, AdapterLogs, AdapterTransactions, Ada
 use crate::error::{ContractClientError, ContractClientResult};
 use crate::ServiceClient;
 
-use self::adapter_stub::{
+use crate::rpc_stub::adapter::{
     transactions_client::TransactionsClient as AdapterTransactionsClient,
     views_client::ViewsClient as AdapterViewsClient, GetGroupRequest, GroupReply, Member,
 };
-use self::adapter_stub::{
-    CancelInvalidRelayConfirmationTaskRequest, ConfirmRelayRequest, FulfillRandomnessRequest,
-    FulfillRelayRequest, GetGroupRelayCacheRequest, GetGroupRelayConfirmationTaskStateRequest,
-    GetSignatureTaskCompletionStateRequest, GroupRelayConfirmationTaskReply, MineRequest,
-    RequestRandomnessRequest, SetInitialGroupRequest, SignatureTaskReply,
+use crate::rpc_stub::adapter::{
+    FulfillRandomnessRequest, IsTaskPendingRequest, MineRequest, RequestRandomnessRequest,
+    SignatureTaskReply,
 };
 use arpa_node_core::{
-    address_to_string, ChainIdentity, Group, GroupRelayConfirmationTask,
-    GroupRelayConfirmationTaskState, Member as ModelMember, MockChainIdentity, RandomnessTask,
+    address_to_string, u256_to_vec, ChainIdentity, Group, Member as ModelMember, MockChainIdentity,
+    PartialSignature, RandomnessTask,
 };
 use async_trait::async_trait;
-use ethers::types::Address;
+use ethers::types::{Address, H256, U256};
 use log::{debug, error};
 use std::collections::{BTreeMap, HashMap};
 use std::future::Future;
+use std::marker::PhantomData;
+use threshold_bls::group::PairingCurve;
 use tonic::{Code, Request, Response};
-
-pub mod adapter_stub {
-    include!("../../rpc_stub/adapter.rs");
-}
 
 #[async_trait]
 pub trait AdapterMockHelper {
     async fn mine(&self, block_number_increment: usize) -> ContractClientResult<usize>;
 
     async fn emit_signature_task(&self) -> ContractClientResult<RandomnessTask>;
-
-    async fn emit_group_relay_confirmation_task(
-        &self,
-    ) -> ContractClientResult<GroupRelayConfirmationTask>;
 }
 
 pub struct MockAdapterClient {
@@ -52,7 +44,7 @@ impl MockAdapterClient {
     }
 }
 
-impl AdapterClientBuilder for MockChainIdentity {
+impl<C: PairingCurve> AdapterClientBuilder<C> for MockChainIdentity {
     type Service = MockAdapterClient;
 
     fn build_adapter_client(&self, main_id_address: Address) -> MockAdapterClient {
@@ -114,34 +106,14 @@ impl AdapterLogs for MockAdapterClient {
             tokio::time::sleep(std::time::Duration::from_millis(1000)).await;
         }
     }
-
-    async fn subscribe_group_relay_confirmation_task<
-        C: FnMut(GroupRelayConfirmationTask) -> F + Send,
-        F: Future<Output = ContractClientResult<()>> + Send,
-    >(
-        &self,
-        mut cb: C,
-    ) -> ContractClientResult<()> {
-        loop {
-            let task_res = self.emit_group_relay_confirmation_task().await;
-            match task_res {
-                Ok(task) => cb(task).await?,
-                Err(e) => match e {
-                    ContractClientError::NoTaskAvailable => debug!("{:?}", e),
-                    _ => error!("{:?}", e),
-                },
-            }
-            tokio::time::sleep(std::time::Duration::from_millis(1000)).await;
-        }
-    }
 }
 
 #[async_trait]
 impl AdapterTransactions for MockAdapterClient {
-    async fn request_randomness(&self, message: &str) -> ContractClientResult<()> {
-        let request = Request::new(RequestRandomnessRequest {
-            message: message.to_string(),
-        });
+    async fn request_randomness(&self, seed: U256) -> ContractClientResult<H256> {
+        let seed_bytes = u256_to_vec(&seed);
+
+        let request = Request::new(RequestRandomnessRequest { seed: seed_bytes });
 
         let mut transactions_client =
             ServiceClient::<TransactionsClient>::prepare_service_client(self).await?;
@@ -150,25 +122,30 @@ impl AdapterTransactions for MockAdapterClient {
             .request_randomness(request)
             .await
             .map(|r| r.into_inner())
-            .map_err(|status| status.into())
+            .map_err(|status| {
+                let e: ContractClientError = status.into();
+                e
+            })?;
+
+        Ok(H256::zero())
     }
 
     async fn fulfill_randomness(
         &self,
         group_index: usize,
-        signature_index: usize,
+        request_id: Vec<u8>,
         signature: Vec<u8>,
-        partial_signatures: HashMap<Address, Vec<u8>>,
-    ) -> ContractClientResult<()> {
+        partial_signatures: HashMap<Address, PartialSignature>,
+    ) -> ContractClientResult<H256> {
         let partial_signatures: HashMap<String, Vec<u8>> = partial_signatures
             .into_iter()
-            .map(|(id_address, sig)| (address_to_string(id_address), sig))
+            .map(|(id_address, sig)| (address_to_string(id_address), sig.signature))
             .collect();
 
         let request = Request::new(FulfillRandomnessRequest {
             id_address: address_to_string(self.id_address),
             group_index: group_index as u32,
-            signature_index: signature_index as u32,
+            request_id,
             signature,
             partial_signatures,
         });
@@ -180,90 +157,12 @@ impl AdapterTransactions for MockAdapterClient {
             .fulfill_randomness(request)
             .await
             .map(|r| r.into_inner())
-            .map_err(|status| status.into())
-    }
+            .map_err(|status| {
+                let e: ContractClientError = status.into();
+                e
+            })?;
 
-    async fn fulfill_relay(
-        &self,
-        relayer_group_index: usize,
-        task_index: usize,
-        signature: Vec<u8>,
-        group_as_bytes: Vec<u8>,
-    ) -> ContractClientResult<()> {
-        let request = Request::new(FulfillRelayRequest {
-            id_address: address_to_string(self.id_address),
-            relayer_group_index: relayer_group_index as u32,
-            task_index: task_index as u32,
-            signature,
-            group_as_bytes,
-        });
-
-        let mut transactions_client =
-            ServiceClient::<TransactionsClient>::prepare_service_client(self).await?;
-
-        transactions_client
-            .fulfill_relay(request)
-            .await
-            .map(|r| r.into_inner())
-            .map_err(|status| status.into())
-    }
-
-    async fn cancel_invalid_relay_confirmation_task(
-        &self,
-        task_index: usize,
-    ) -> ContractClientResult<()> {
-        let request = Request::new(CancelInvalidRelayConfirmationTaskRequest {
-            id_address: address_to_string(self.id_address),
-            task_index: task_index as u32,
-        });
-
-        let mut transactions_client =
-            ServiceClient::<TransactionsClient>::prepare_service_client(self).await?;
-
-        transactions_client
-            .cancel_invalid_relay_confirmation_task(request)
-            .await
-            .map(|r| r.into_inner())
-            .map_err(|status| status.into())
-    }
-
-    async fn confirm_relay(
-        &self,
-        task_index: usize,
-        group_relay_confirmation_as_bytes: Vec<u8>,
-        signature: Vec<u8>,
-    ) -> ContractClientResult<()> {
-        let request = Request::new(ConfirmRelayRequest {
-            id_address: address_to_string(self.id_address),
-            task_index: task_index as u32,
-            signature,
-            group_relay_confirmation_as_bytes,
-        });
-
-        let mut transactions_client =
-            ServiceClient::<TransactionsClient>::prepare_service_client(self).await?;
-
-        transactions_client
-            .confirm_relay(request)
-            .await
-            .map(|r| r.into_inner())
-            .map_err(|status| status.into())
-    }
-
-    async fn set_initial_group(&self, group: Vec<u8>) -> ContractClientResult<()> {
-        let request = Request::new(SetInitialGroupRequest {
-            id_address: address_to_string(self.id_address),
-            group,
-        });
-
-        let mut transactions_client =
-            ServiceClient::<TransactionsClient>::prepare_service_client(self).await?;
-
-        transactions_client
-            .set_initial_group(request)
-            .await
-            .map(|r| r.into_inner())
-            .map_err(|status| status.into())
+        Ok(H256::zero())
     }
 }
 
@@ -294,51 +193,19 @@ impl AdapterMockHelper for MockAdapterClient {
             .await
             .map(|r| {
                 let SignatureTaskReply {
-                    index,
-                    message,
+                    request_id,
+                    seed,
                     group_index,
                     assignment_block_height,
                 } = r.into_inner();
 
+                let seed = U256::from_big_endian(&seed);
+
                 RandomnessTask {
-                    index: index as usize,
-                    message,
+                    request_id,
+                    seed,
                     group_index: group_index as usize,
-                    assignment_block_height: assignment_block_height as usize,
-                }
-            })
-            .map_err(|status| match status.code() {
-                Code::NotFound => ContractClientError::NoTaskAvailable,
-                _ => status.into(),
-            })
-    }
-
-    async fn emit_group_relay_confirmation_task(
-        &self,
-    ) -> ContractClientResult<GroupRelayConfirmationTask> {
-        let request = Request::new(());
-
-        let mut views_client = ServiceClient::<ViewsClient>::prepare_service_client(self).await?;
-
-        views_client
-            .emit_group_relay_confirmation_task(request)
-            .await
-            .map(|r| {
-                let GroupRelayConfirmationTaskReply {
-                    index,
-                    group_relay_cache_index,
-                    relayed_group_index,
-                    relayed_group_epoch,
-                    relayer_group_index,
-                    assignment_block_height,
-                } = r.into_inner();
-
-                GroupRelayConfirmationTask {
-                    index: index as usize,
-                    group_relay_cache_index: group_relay_cache_index as usize,
-                    relayed_group_index: relayed_group_index as usize,
-                    relayed_group_epoch: relayed_group_epoch as usize,
-                    relayer_group_index: relayer_group_index as usize,
+                    request_confirmations: 0,
                     assignment_block_height: assignment_block_height as usize,
                 }
             })
@@ -350,8 +217,8 @@ impl AdapterMockHelper for MockAdapterClient {
 }
 
 #[async_trait]
-impl AdapterViews for MockAdapterClient {
-    async fn get_group(&self, group_index: usize) -> ContractClientResult<Group> {
+impl<C: PairingCurve> AdapterViews<C> for MockAdapterClient {
+    async fn get_group(&self, group_index: usize) -> ContractClientResult<Group<C>> {
         let request = Request::new(GetGroupRequest {
             index: group_index as u32,
         });
@@ -365,7 +232,7 @@ impl AdapterViews for MockAdapterClient {
             .map_err(|status| status.into())
     }
 
-    async fn get_last_output(&self) -> ContractClientResult<u64> {
+    async fn get_last_output(&self) -> ContractClientResult<U256> {
         let request = Request::new(());
 
         let mut views_client = ServiceClient::<ViewsClient>::prepare_service_client(self).await?;
@@ -375,24 +242,20 @@ impl AdapterViews for MockAdapterClient {
             .await
             .map(|r| {
                 let last_output_reply = r.into_inner();
-
-                last_output_reply.last_output
+                U256::from_big_endian(&last_output_reply.last_output)
             })
             .map_err(|status| status.into())
     }
 
-    async fn get_signature_task_completion_state(
-        &self,
-        index: usize,
-    ) -> ContractClientResult<bool> {
-        let request = Request::new(GetSignatureTaskCompletionStateRequest {
-            index: index as u32,
+    async fn is_task_pending(&self, request_id: &[u8]) -> ContractClientResult<bool> {
+        let request = Request::new(IsTaskPendingRequest {
+            request_id: request_id.to_vec(),
         });
 
         let mut views_client = ServiceClient::<ViewsClient>::prepare_service_client(self).await?;
 
         views_client
-            .get_signature_task_completion_state(request)
+            .is_task_pending(request)
             .await
             .map(|r| {
                 let reply = r.into_inner();
@@ -401,43 +264,9 @@ impl AdapterViews for MockAdapterClient {
             })
             .map_err(|status| status.into())
     }
-
-    async fn get_group_relay_cache(&self, group_index: usize) -> ContractClientResult<Group> {
-        let request = Request::new(GetGroupRelayCacheRequest {
-            index: group_index as u32,
-        });
-
-        let mut views_client = ServiceClient::<ViewsClient>::prepare_service_client(self).await?;
-
-        views_client
-            .get_group_relay_cache(request)
-            .await
-            .map(parse_group_reply)
-            .map_err(|status| status.into())
-    }
-
-    async fn get_group_relay_confirmation_task_state(
-        &self,
-        task_index: usize,
-    ) -> ContractClientResult<GroupRelayConfirmationTaskState> {
-        let request = Request::new(GetGroupRelayConfirmationTaskStateRequest {
-            index: task_index as u32,
-        });
-
-        let mut views_client = ServiceClient::<ViewsClient>::prepare_service_client(self).await?;
-
-        views_client
-            .get_group_relay_confirmation_task_state(request)
-            .await
-            .map(|r| {
-                let reply = r.into_inner();
-                GroupRelayConfirmationTaskState::from(reply.state)
-            })
-            .map_err(|status| status.into())
-    }
 }
 
-impl From<Member> for ModelMember {
+impl<C: PairingCurve> From<Member> for ModelMember<C> {
     fn from(member: Member) -> Self {
         let partial_public_key = if member.partial_public_key.is_empty() {
             None
@@ -454,7 +283,7 @@ impl From<Member> for ModelMember {
     }
 }
 
-fn parse_group_reply(reply: Response<GroupReply>) -> Group {
+fn parse_group_reply<C: PairingCurve>(reply: Response<GroupReply>) -> Group<C> {
     let GroupReply {
         index,
         epoch,
@@ -467,7 +296,7 @@ fn parse_group_reply(reply: Response<GroupReply>) -> Group {
         ..
     } = reply.into_inner();
 
-    let members: BTreeMap<Address, ModelMember> = members
+    let members: BTreeMap<Address, ModelMember<C>> = members
         .into_iter()
         .map(|(id_address, m)| (id_address.parse().unwrap(), m.into()))
         .collect();
@@ -489,5 +318,6 @@ fn parse_group_reply(reply: Response<GroupReply>) -> Group {
         public_key,
         members,
         committers,
+        c: PhantomData,
     }
 }

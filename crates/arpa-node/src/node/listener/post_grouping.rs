@@ -7,19 +7,26 @@ use crate::node::{
 use arpa_node_core::DKGStatus;
 use arpa_node_dal::{BlockInfoFetcher, GroupInfoFetcher, GroupInfoUpdater};
 use async_trait::async_trait;
-use log::info;
-use std::sync::Arc;
+use std::{marker::PhantomData, sync::Arc};
+use threshold_bls::group::PairingCurve;
 use tokio::sync::RwLock;
 
 pub const DEFAULT_DKG_TIMEOUT_DURATION: usize = 10 * 4;
 
-pub struct PostGroupingListener<B: BlockInfoFetcher, G: GroupInfoFetcher + GroupInfoUpdater> {
+pub struct PostGroupingListener<
+    B: BlockInfoFetcher,
+    G: GroupInfoFetcher<C> + GroupInfoUpdater<C>,
+    C: PairingCurve,
+> {
     block_cache: Arc<RwLock<B>>,
     group_cache: Arc<RwLock<G>>,
     eq: Arc<RwLock<EventQueue>>,
+    c: PhantomData<C>,
 }
 
-impl<B: BlockInfoFetcher, G: GroupInfoFetcher + GroupInfoUpdater> PostGroupingListener<B, G> {
+impl<B: BlockInfoFetcher, G: GroupInfoFetcher<C> + GroupInfoUpdater<C>, C: PairingCurve>
+    PostGroupingListener<B, G, C>
+{
     pub fn new(
         block_cache: Arc<RwLock<B>>,
         group_cache: Arc<RwLock<G>>,
@@ -29,13 +36,17 @@ impl<B: BlockInfoFetcher, G: GroupInfoFetcher + GroupInfoUpdater> PostGroupingLi
             block_cache,
             group_cache,
             eq,
+            c: PhantomData,
         }
     }
 }
 
 #[async_trait]
-impl<B: BlockInfoFetcher + Sync + Send, G: GroupInfoFetcher + GroupInfoUpdater + Sync + Send>
-    EventPublisher<DKGPostProcess> for PostGroupingListener<B, G>
+impl<
+        B: BlockInfoFetcher + Sync + Send,
+        G: GroupInfoFetcher<C> + GroupInfoUpdater<C> + Sync + Send,
+        C: PairingCurve + Sync + Send,
+    > EventPublisher<DKGPostProcess> for PostGroupingListener<B, G, C>
 {
     async fn publish(&self, event: DKGPostProcess) {
         self.eq.read().await.publish(event).await;
@@ -43,8 +54,11 @@ impl<B: BlockInfoFetcher + Sync + Send, G: GroupInfoFetcher + GroupInfoUpdater +
 }
 
 #[async_trait]
-impl<B: BlockInfoFetcher + Sync + Send, G: GroupInfoFetcher + GroupInfoUpdater + Sync + Send>
-    Listener for PostGroupingListener<B, G>
+impl<
+        B: BlockInfoFetcher + Sync + Send,
+        G: GroupInfoFetcher<C> + GroupInfoUpdater<C> + Sync + Send,
+        C: PairingCurve + Sync + Send,
+    > Listener for PostGroupingListener<B, G, C>
 {
     async fn start(mut self) -> NodeResult<()> {
         loop {
@@ -61,8 +75,8 @@ impl<B: BlockInfoFetcher + Sync + Send, G: GroupInfoFetcher + GroupInfoUpdater +
 
                         let block_height = self.block_cache.read().await.get_block_height();
 
-                        info!("dkg_start_block_height: {},current_block_height: {}, timeuout_dkg_block_height:{}",
-                        dkg_start_block_height,block_height,dkg_start_block_height + DEFAULT_DKG_TIMEOUT_DURATION);
+                        // info!("dkg_start_block_height: {},current_block_height: {}, timeuout_dkg_block_height:{}",
+                        // dkg_start_block_height,block_height,dkg_start_block_height + DEFAULT_DKG_TIMEOUT_DURATION);
 
                         if block_height > dkg_start_block_height + DEFAULT_DKG_TIMEOUT_DURATION {
                             let group_index =

@@ -5,33 +5,52 @@ use crate::node::{
     queue::{event_queue::EventQueue, EventPublisher, EventSubscriber},
 };
 use arpa_node_core::DKGStatus;
-use arpa_node_dal::{GroupInfoFetcher, GroupInfoUpdater, MdcContextUpdater};
+use arpa_node_dal::{ContextInfoUpdater, GroupInfoFetcher, GroupInfoUpdater};
 use async_trait::async_trait;
 use log::{debug, info};
-use std::sync::Arc;
+use std::{marker::PhantomData, sync::Arc};
+use threshold_bls::group::PairingCurve;
 use tokio::sync::RwLock;
 
 #[derive(Debug)]
 pub struct PreGroupingSubscriber<
-    G: GroupInfoFetcher + GroupInfoUpdater + MdcContextUpdater + std::fmt::Debug + Sync + Send,
+    G: GroupInfoFetcher<C> + GroupInfoUpdater<C> + ContextInfoUpdater + std::fmt::Debug + Sync + Send,
+    C: PairingCurve,
 > {
     group_cache: Arc<RwLock<G>>,
     eq: Arc<RwLock<EventQueue>>,
+    c: PhantomData<C>,
 }
 
 impl<
-        G: GroupInfoFetcher + GroupInfoUpdater + MdcContextUpdater + std::fmt::Debug + Sync + Send,
-    > PreGroupingSubscriber<G>
+        G: GroupInfoFetcher<C>
+            + GroupInfoUpdater<C>
+            + ContextInfoUpdater
+            + std::fmt::Debug
+            + Sync
+            + Send,
+        C: PairingCurve,
+    > PreGroupingSubscriber<G, C>
 {
     pub fn new(group_cache: Arc<RwLock<G>>, eq: Arc<RwLock<EventQueue>>) -> Self {
-        PreGroupingSubscriber { group_cache, eq }
+        PreGroupingSubscriber {
+            group_cache,
+            eq,
+            c: PhantomData,
+        }
     }
 }
 
 #[async_trait]
 impl<
-        G: GroupInfoFetcher + GroupInfoUpdater + MdcContextUpdater + std::fmt::Debug + Sync + Send,
-    > EventPublisher<RunDKG> for PreGroupingSubscriber<G>
+        G: GroupInfoFetcher<C>
+            + GroupInfoUpdater<C>
+            + ContextInfoUpdater
+            + std::fmt::Debug
+            + Sync
+            + Send,
+        C: PairingCurve + std::fmt::Debug + Sync + Send,
+    > EventPublisher<RunDKG> for PreGroupingSubscriber<G, C>
 {
     async fn publish(&self, event: RunDKG) {
         self.eq.read().await.publish(event).await;
@@ -40,14 +59,15 @@ impl<
 
 #[async_trait]
 impl<
-        G: GroupInfoFetcher
-            + GroupInfoUpdater
-            + MdcContextUpdater
+        G: GroupInfoFetcher<C>
+            + GroupInfoUpdater<C>
+            + ContextInfoUpdater
             + std::fmt::Debug
             + Sync
             + Send
             + 'static,
-    > Subscriber for PreGroupingSubscriber<G>
+        C: PairingCurve + std::fmt::Debug + Sync + Send + 'static,
+    > Subscriber for PreGroupingSubscriber<G, C>
 {
     async fn notify(&self, topic: Topic, payload: &(dyn DebuggableEvent)) -> NodeResult<()> {
         debug!("{:?}", topic);
@@ -106,13 +126,14 @@ impl<
 }
 
 impl<
-        G: GroupInfoFetcher
-            + GroupInfoUpdater
-            + MdcContextUpdater
+        G: GroupInfoFetcher<C>
+            + GroupInfoUpdater<C>
+            + ContextInfoUpdater
             + std::fmt::Debug
             + Sync
             + Send
             + 'static,
-    > DebuggableSubscriber for PreGroupingSubscriber<G>
+        C: PairingCurve + std::fmt::Debug + Sync + Send + 'static,
+    > DebuggableSubscriber for PreGroupingSubscriber<G, C>
 {
 }

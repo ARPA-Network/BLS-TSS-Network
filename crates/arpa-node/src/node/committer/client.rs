@@ -1,15 +1,11 @@
-use self::committer_stub::committer_service_client::CommitterServiceClient;
-use self::committer_stub::CommitPartialSignatureRequest;
 use super::{CommitterClient, CommitterService, ServiceClient};
 use crate::node::error::NodeResult;
+use crate::rpc_stub::committer::committer_service_client::CommitterServiceClient;
+use crate::rpc_stub::committer::CommitPartialSignatureRequest;
 use arpa_node_core::{address_to_string, TaskType};
 use async_trait::async_trait;
 use ethers::types::Address;
 use tonic::Request;
-
-pub mod committer_stub {
-    include!("../../../rpc_stub/committer.rs");
-}
 
 #[derive(Clone, Debug)]
 pub(crate) struct GeneralCommitterClient {
@@ -58,13 +54,13 @@ impl CommitterService for GeneralCommitterClient {
         chain_id: usize,
         task_type: TaskType,
         message: Vec<u8>,
-        signature_index: usize,
+        request_id: Vec<u8>,
         partial_signature: Vec<u8>,
     ) -> NodeResult<bool> {
         let request = Request::new(CommitPartialSignatureRequest {
             id_address: address_to_string(self.id_address),
             chain_id: chain_id as u32,
-            signature_index: signature_index as u32,
+            request_id,
             partial_signature,
             task_type: task_type.to_i32(),
             message,

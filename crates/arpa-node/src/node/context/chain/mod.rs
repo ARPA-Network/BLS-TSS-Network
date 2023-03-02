@@ -42,8 +42,6 @@ pub(crate) trait Chain {
 pub(crate) trait MainChain: Chain {
     type NodeInfoCache;
     type GroupInfoCache;
-    type GroupRelayTasksQueue;
-    type GroupRelayResultCaches;
 
     async fn init_block_listeners(&self, context: &Self::Context) -> SchedulerResult<()>;
 
