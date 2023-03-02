@@ -2,15 +2,15 @@
 
 ## Usage
 
-``` bash
+```bash
 cd contracts
 
 forge install # Install submodule dependencies
 forge build # Compile contracts
-forge test # Run Tests
+forge test --gas-price 1000000000 # Run Tests
 
 # Run a specific test
-forge test --match-test CommitDkg -vvvvv
+forge test --match-test CommitDkg --gas-price 1000000000 -vvvvv
 ```
 
 ## Coverage

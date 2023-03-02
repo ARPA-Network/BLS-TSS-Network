@@ -1,36 +1,27 @@
+// SPDX-License-Identifier: MIT
 pragma solidity ^0.8.15;
 
 import "openzeppelin-contracts/contracts/access/Ownable.sol";
 import "openzeppelin-contracts/contracts/utils/math/SafeMath.sol";
 
-import {Coordinator} from "src/Coordinator.sol";
-import "src/ICoordinator.sol";
+import {Coordinator} from "./Coordinator.sol";
+import "./interfaces/ICoordinator.sol";
+import "./Adapter.sol";
 
-contract Controller is Ownable {
-    uint256 public constant NODE_STAKING_AMOUNT = 50000;
-    uint256 public constant DISQUALIFIED_NODE_PENALTY_AMOUNT = 1000;
-    uint256 public constant COORDINATOR_STATE_TRIGGER_REWARD = 100;
+contract Controller is Adapter {
+    // *Constants*
     uint256 public constant DEFAULT_MINIMUM_THRESHOLD = 3;
-    uint256 public constant DEFAULT_NUMBER_OF_COMMITTERS = 3;
-    uint256 public constant DEFAULT_DKG_PHASE_DURATION = 10;
-    uint256 public constant GROUP_MAX_CAPACITY = 10;
-    uint256 public constant IDEAL_NUMBER_OF_GROUPS = 5;
-    uint256 public constant PENDING_BLOCK_AFTER_QUIT = 100;
-    uint256 public constant DKG_POST_PROCESS_REWARD = 100;
 
-    uint256 epoch = 0; // self.epoch, previously ined in adapter
+    // *Controller Config*
+    ControllerConfig private c_config;
 
-    //  Node State Variables
+    // *Node State Variables*
     mapping(address => Node) public nodes; //maps node address to Node Struct
-    mapping(address => uint256) public rewards; // maps node address to reward amount
 
-    // Group State Variables
-    uint256 public groupCount; // Number of groups
-    mapping(uint256 => Group) public groups; // group_index => Group struct
+    // *DKG Variables*
     mapping(uint256 => address) public coordinators; // maps group index to coordinator address
-    uint64 lastOutput = 0x2222222222222222; // global last output
 
-    // * Structs
+    // *Structs*
     struct Node {
         address idAddress;
         bytes dkgPublicKey;
@@ -39,37 +30,99 @@ contract Controller is Ownable {
         uint256 staking;
     }
 
-    struct Group {
-        uint256 index; // group_index
-        uint256 epoch; // 0
-        uint256 size; // 0
-        uint256 threshold; // DEFAULT_MINIMUM_THRESHOLD
-        Member[] members; // Map in rust mock contract
-        address[] committers;
-        CommitCache[] commitCacheList; // Map in rust mock contract
-        bool isStrictlyMajorityConsensusReached;
-        bytes publicKey;
-    }
-
-    struct Member {
-        address nodeIdAddress;
-        bytes partialPublicKey;
-    }
-
-    struct CommitResult {
+    struct CommitDkgParams {
+        uint256 groupIndex;
         uint256 groupEpoch;
         bytes publicKey;
+        bytes partialPublicKey;
         address[] disqualifiedNodes;
     }
 
-    struct CommitCache {
-        address[] nodeIdAddress;
-        CommitResult commitResult;
+    event DkgTask(
+        uint256 _groupIndex,
+        uint256 _epoch,
+        uint256 _size,
+        uint256 _threshold,
+        address[] _members,
+        uint256 _assignmentBlockHeight,
+        address _coordinatorAddress
+    );
+
+    event ControllerConfigSet(
+        uint256 nodeStakingAmount,
+        uint256 disqualifiedNodePenaltyAmount,
+        uint256 defaultNumberOfCommitters,
+        uint256 defaultDkgPhaseDuration,
+        uint256 groupMaxCapacity,
+        uint256 idealNumberOfGroups,
+        uint256 pendingBlockAfterQuit,
+        uint256 dkgPostProcessReward
+    );
+
+    constructor(address arpa, address arpaEthFeed) Adapter(arpa, arpaEthFeed) {}
+
+    struct ControllerConfig {
+        uint256 nodeStakingAmount;
+        uint256 disqualifiedNodePenaltyAmount;
+        uint256 defaultNumberOfCommitters;
+        uint256 defaultDkgPhaseDuration;
+        uint256 groupMaxCapacity;
+        uint256 idealNumberOfGroups;
+        uint256 pendingBlockAfterQuit;
+        uint256 dkgPostProcessReward;
+    }
+
+    /**
+     * @notice Sets the configuration of the controller
+     * @param nodeStakingAmount The amount of ARPA must staked by a node
+     * @param disqualifiedNodePenaltyAmount The amount of ARPA will be slashed from a node if it is disqualified
+     * @param defaultNumberOfCommitters The default number of committers for a DKG
+     * @param defaultDkgPhaseDuration The default duration(block number) of a DKG phase
+     * @param groupMaxCapacity The maximum number of nodes in a group
+     * @param idealNumberOfGroups The ideal number of groups
+     * @param pendingBlockAfterQuit The number of blocks a node must wait before joining a group after quitting
+     * @param dkgPostProcessReward The amount of ARPA will be rewarded to the node after dkgPostProcess is completed
+     */
+    function setControllerConfig(
+        uint256 nodeStakingAmount,
+        uint256 disqualifiedNodePenaltyAmount,
+        uint256 defaultNumberOfCommitters,
+        uint256 defaultDkgPhaseDuration,
+        uint256 groupMaxCapacity,
+        uint256 idealNumberOfGroups,
+        uint256 pendingBlockAfterQuit,
+        uint256 dkgPostProcessReward
+    ) external onlyOwner {
+        c_config = ControllerConfig({
+            nodeStakingAmount: nodeStakingAmount,
+            disqualifiedNodePenaltyAmount: disqualifiedNodePenaltyAmount,
+            defaultNumberOfCommitters: defaultNumberOfCommitters,
+            defaultDkgPhaseDuration: defaultDkgPhaseDuration,
+            groupMaxCapacity: groupMaxCapacity,
+            idealNumberOfGroups: idealNumberOfGroups,
+            pendingBlockAfterQuit: pendingBlockAfterQuit,
+            dkgPostProcessReward: dkgPostProcessReward
+        });
+
+        emit ControllerConfigSet(
+            nodeStakingAmount,
+            disqualifiedNodePenaltyAmount,
+            defaultNumberOfCommitters,
+            defaultDkgPhaseDuration,
+            groupMaxCapacity,
+            idealNumberOfGroups,
+            pendingBlockAfterQuit,
+            dkgPostProcessReward
+            );
     }
 
     function nodeRegister(bytes calldata dkgPublicKey) public {
         require(nodes[msg.sender].idAddress == address(0), "Node is already registered"); // error sender already in list of nodes
 
+        uint256[4] memory publicKey = BLS.fromBytesPublicKey(dkgPublicKey);
+        if (!BLS.isValidPublicKey(publicKey)) {
+            revert InvalidPublicKey();
+        }
         // TODO: Check to see if enough balance for staking
 
         // Populate Node struct and insert into nodes
@@ -78,7 +131,7 @@ contract Controller is Ownable {
         n.dkgPublicKey = dkgPublicKey;
         n.state = true;
         n.pendingUntilBlock = 0;
-        n.staking = NODE_STAKING_AMOUNT;
+        n.staking = c_config.nodeStakingAmount;
 
         nodeJoin(msg.sender);
     }
@@ -136,7 +189,7 @@ contract Controller is Ownable {
             qualifiedIndices[i] = i;
         }
 
-        uint256[] memory membersToMove = chooseRandomlyFromIndices(lastOutput, qualifiedIndices, expectedSizeToMove);
+        uint256[] memory membersToMove = pickRandomIndex(lastOutput, qualifiedIndices, expectedSizeToMove);
 
         // Move members from group A to group B
         for (uint256 i = 0; i < membersToMove.length; i++) {
@@ -207,7 +260,7 @@ contract Controller is Ownable {
 
         // get the group index of the group with the minimum size, as well as the min size
         uint256 indexOfMinSize;
-        uint256 minSize = GROUP_MAX_CAPACITY;
+        uint256 minSize = c_config.groupMaxCapacity;
         for (uint256 i = 0; i < groupCount; i++) {
             Group memory g = groups[i];
             if (g.size < minSize) {
@@ -222,8 +275,8 @@ contract Controller is Ownable {
         // check if valid group count < ideal_number_of_groups || minSize == group_max_capacity
         // If either condition is met and the number of valid groups == group count, call add group and return (index of new group, true)
         if (
-            (validGroupCount < IDEAL_NUMBER_OF_GROUPS && validGroupCount == groupCount)
-                || (minSize == GROUP_MAX_CAPACITY)
+            (validGroupCount < c_config.idealNumberOfGroups && validGroupCount == groupCount)
+                || (minSize == c_config.groupMaxCapacity)
         ) {
             uint256 groupIndex = addGroup();
             return (groupIndex, true); // NEEDS REBALANCE
@@ -231,28 +284,6 @@ contract Controller is Ownable {
 
         // if none of the above conditions are met:
         return (indexOfMinSize, false);
-    }
-
-    // Get list of all group indexes where group.isStrictlyMajorityConsensusReached == true
-    // Note: set to internal later
-    function validGroupIndices() public view returns (uint256[] memory) {
-        uint256[] memory groupIndices = new uint256[](groupCount); //max length is group count
-        uint256 index = 0;
-        for (uint256 i = 0; i < groupCount; i++) {
-            Group memory g = groups[i];
-            if (g.isStrictlyMajorityConsensusReached) {
-                groupIndices[index] = i;
-                index++;
-            }
-        }
-
-        // create result array of correct size (remove possible trailing zero elements)
-        uint256[] memory result = new uint256[](index);
-        for (uint256 i = 0; i < index; i++) {
-            result[i] = groupIndices[i];
-        }
-
-        return result;
     }
 
     function addGroup() internal returns (uint256) {
@@ -297,16 +328,6 @@ contract Controller is Ownable {
         return groupSize / 2 + 1;
     }
 
-    event DkgTask(
-        uint256 _groupIndex,
-        uint256 _epoch,
-        uint256 _size,
-        uint256 _threshold,
-        address[] _members,
-        uint256 _assignmentBlockHeight,
-        address _coordinatorAddress
-    );
-
     // Note: set to internal later
     function emitGroupEvent(uint256 groupIndex) public {
         // Set to internal later
@@ -323,7 +344,7 @@ contract Controller is Ownable {
 
         // Deploy coordinator, add to coordinators mapping
         Coordinator coordinator;
-        coordinator = new Coordinator(g.threshold, DEFAULT_DKG_PHASE_DURATION);
+        coordinator = new Coordinator(g.threshold, c_config.defaultDkgPhaseDuration);
         coordinators[groupIndex] = address(coordinator);
 
         // Initialize Coordinator
@@ -370,19 +391,11 @@ contract Controller is Ownable {
     function partialKeyRegistered(uint256 groupIndex, address nodeIdAddress) public view returns (bool) {
         Group storage g = groups[groupIndex];
         for (uint256 i = 0; i < g.members.length; i++) {
-            if (g.members[i].nodeIdAddress == nodeIdAddress && g.members[i].partialPublicKey.length != 0) {
-                return true;
+            if (g.members[i].nodeIdAddress == nodeIdAddress) {
+                return g.members[i].partialPublicKey[0] != 0;
             }
         }
         return false;
-    }
-
-    struct CommitDkgParams {
-        uint256 groupIndex;
-        uint256 groupEpoch;
-        bytes publicKey;
-        bytes partialPublicKey;
-        address[] disqualifiedNodes;
     }
 
     function commitDkg(CommitDkgParams memory params) external {
@@ -409,10 +422,20 @@ contract Controller is Ownable {
         require( // check to see if member has called commitdkg in the past.
         !partialKeyRegistered(params.groupIndex, msg.sender), "CommitCache already contains PartialKey for this node");
 
+        uint256[4] memory partialPublicKey = BLS.fromBytesPublicKey(params.partialPublicKey);
+        if (!BLS.isValidPublicKey(partialPublicKey)) {
+            revert InvalidPartialPublicKey();
+        }
+
+        uint256[4] memory publicKey = BLS.fromBytesPublicKey(params.publicKey);
+        if (!BLS.isValidPublicKey(publicKey)) {
+            revert InvalidPublicKey();
+        }
+
         // Populate CommitResult / CommitCache
         CommitResult memory commitResult = CommitResult({
             groupEpoch: params.groupEpoch,
-            publicKey: params.publicKey,
+            publicKey: publicKey,
             disqualifiedNodes: params.disqualifiedNodes
         });
 
@@ -423,9 +446,8 @@ contract Controller is Ownable {
             g.commitCacheList.push(commitCache);
         }
 
-        // if consensus previously reached, update the partial public key of the given node's member entry in the group
-        g.members[uint256(getMemberIndexByAddress(params.groupIndex, msg.sender))].partialPublicKey =
-            params.partialPublicKey;
+        // no matter consensus previously reached, update the partial public key of the given node's member entry in the group
+        g.members[uint256(getMemberIndexByAddress(params.groupIndex, msg.sender))].partialPublicKey = partialPublicKey;
 
         // if not.. call get StrictlyMajorityIdenticalCommitmentResult for the group and check if consensus has been reached.
         if (!g.isStrictlyMajorityConsensusReached) {
@@ -470,9 +492,9 @@ contract Controller is Ownable {
                         }
                     }
 
-                    // Compute commiter_indices by calling chooseRandomlyFromIndices with qualifiedIndices as input.
+                    // Compute commiter_indices by calling pickRandomIndex with qualifiedIndices as input.
                     uint256[] memory committerIndices =
-                        chooseRandomlyFromIndices(lastOutput, qualifiedIndices, DEFAULT_NUMBER_OF_COMMITTERS);
+                        pickRandomIndex(lastOutput, qualifiedIndices, c_config.defaultNumberOfCommitters);
 
                     // For selected commiter_indices: add corresponding members into g.committers
                     g.committers = new address[](committerIndices.length);
@@ -482,7 +504,7 @@ contract Controller is Ownable {
 
                     // Iterate over disqualified nodes and call slashNode on each.
                     for (uint256 i = 0; i < disqualifiedNodes.length; i++) {
-                        slashNode(disqualifiedNodes[i], DISQUALIFIED_NODE_PENALTY_AMOUNT, 0, false);
+                        slashNode(disqualifiedNodes[i], c_config.disqualifiedNodePenaltyAmount, 0, false);
                     }
                 }
             }
@@ -491,7 +513,7 @@ contract Controller is Ownable {
 
     // Choose "count" random indices from "indices" array.
     // Note: set to internal later
-    function chooseRandomlyFromIndices(uint64 seed, uint256[] memory indices, uint256 count)
+    function pickRandomIndex(uint256 seed, uint256[] memory indices, uint256 count)
         public
         pure
         returns (uint256[] memory)
@@ -520,7 +542,7 @@ contract Controller is Ownable {
         view
         returns (CommitCache memory)
     {
-        CommitCache memory emptyCache = CommitCache(new address[](0), CommitResult(0, "", new address[](0)));
+        CommitCache memory emptyCache;
 
         // If there are no commit caches, return empty commit cache.
         Group memory g = groups[groupIndex];
@@ -600,13 +622,6 @@ contract Controller is Ownable {
         }
     }
 
-    // event groupRelayTask( // Not needed in first version.
-    //     uint256 index,
-    //     uint256 relayedGroupIndex,
-    //     uint256 relayedGroupEpoch,
-    //     uint256 assignmentBlockHeight
-    // );
-
     // Note: set to internal later
     function postProcessDkg(uint256 groupIndex, uint256 groupEpoch) public {
         // require group exists
@@ -639,12 +654,6 @@ contract Controller is Ownable {
         // get strictly majority identical commitment result
         CommitCache memory majorityMembers = getStrictlyMajorityIdenticalCommitmentResult(groupIndex);
 
-        // emit groupRelayTask(  // Not needed in the first version.
-        //     epoch,
-        //     groupIndex,
-        //     groupEpoch,
-        //     block.number
-        // );
         if (!isStrictlyMajorityConsensusReached) {
             if (majorityMembers.nodeIdAddress.length == 0) {
                 // if empty cache: zero out group
@@ -653,7 +662,7 @@ contract Controller is Ownable {
 
                 // for each member, slash node
                 for (uint256 i = 0; i < g.members.length; i++) {
-                    slashNode(g.members[i].nodeIdAddress, DISQUALIFIED_NODE_PENALTY_AMOUNT, 0, false);
+                    slashNode(g.members[i].nodeIdAddress, c_config.disqualifiedNodePenaltyAmount, 0, false);
                 }
 
                 delete g.members; // Delete all members of the group
@@ -682,7 +691,7 @@ contract Controller is Ownable {
 
                 // for each disqualified node, slash node
                 for (uint256 i = 0; i < disqualifiedNodes.length; i++) {
-                    slashNode(disqualifiedNodes[i], DISQUALIFIED_NODE_PENALTY_AMOUNT, 0, false);
+                    slashNode(disqualifiedNodes[i], c_config.disqualifiedNodePenaltyAmount, 0, false);
                 }
 
                 arrangeMembersInGroup(groupIndex);
@@ -690,7 +699,7 @@ contract Controller is Ownable {
         }
 
         // update rewards for calling node
-        rewards[msg.sender] += DKG_POST_PROCESS_REWARD;
+        rewards[msg.sender] += c_config.dkgPostProcessReward;
     }
 
     function getRewards(address nodeAddress) public view returns (uint256) {
@@ -716,7 +725,7 @@ contract Controller is Ownable {
 
         if (node.state == true) {
             require(
-                node.staking - unstakeAmount >= NODE_STAKING_AMOUNT,
+                node.staking - unstakeAmount >= c_config.nodeStakingAmount,
                 "Node state is true, cannot unstake below staking threshold"
             );
         }
@@ -728,7 +737,7 @@ contract Controller is Ownable {
         Node storage node = nodes[msg.sender];
         require(node.idAddress == msg.sender, "Node not registered.");
 
-        freezeNode(msg.sender, PENDING_BLOCK_AFTER_QUIT, true);
+        freezeNode(msg.sender, c_config.pendingBlockAfterQuit, true);
 
         // send all staked tokens to msg.sender
         // TODO: need to add interaction with erc20 token contract
@@ -745,7 +754,7 @@ contract Controller is Ownable {
     ) public {
         Node storage node = nodes[nodeIdAddress];
         node.staking -= stakingPenalty;
-        if (node.staking < NODE_STAKING_AMOUNT || pendingBlock > 0) {
+        if (node.staking < c_config.nodeStakingAmount || pendingBlock > 0) {
             freezeNode(nodeIdAddress, pendingBlock, handleGroup);
         }
     }
@@ -819,8 +828,7 @@ contract Controller is Ownable {
             for (uint256 i = 0; i < g.members.length; i++) {
                 membersLeftInGroup[i] = g.members[i].nodeIdAddress;
             }
-            uint256[] memory involvedGroups = new uint[](groupCount); // max number of groups involved is groupCount
-            uint256 numInvolvedGroups = 0; // track numInolvedGroups to avoid duplicates and trailing 0's in array.
+            bool[] memory involvedGroups = new bool[](groupCount); // max number of groups involved is groupCount
 
             // for each membersLeftInGroup, call findOrCreateTargetGroup and then add that member to the new group.
             for (uint256 i = 0; i < membersLeftInGroup.length; i++) {
@@ -835,36 +843,13 @@ contract Controller is Ownable {
                 // add member to target group
                 addToGroup(membersLeftInGroup[i], targetGroupIndex, false);
 
-                // check if group index already in involvedGroups, if not, add it
-                bool groupIndexAlreadyInInvolvedGroups = false;
-                for (uint256 j = 0; j < numInvolvedGroups; j++) {
-                    if (involvedGroups[j] == targetGroupIndex) {
-                        groupIndexAlreadyInInvolvedGroups = true;
-                        break;
-                    }
-                }
-
-                // Avoid adding duplicates to involvedGroups
-                if (!groupIndexAlreadyInInvolvedGroups) {
-                    involvedGroups[numInvolvedGroups] = targetGroupIndex;
-                    numInvolvedGroups++;
-                }
+                involvedGroups[targetGroupIndex] = true;
             }
 
-            //  truncate unused elements in involvedGroups
-            uint256[] memory involvedGroupsFinal = new uint256[](numInvolvedGroups);
-            for (uint256 i = 0; i < numInvolvedGroups; i++) {
-                involvedGroupsFinal[i] = involvedGroups[i];
-            }
-
-            // for each group in involvedGroups, if group size >= DefaultMinimumThreshold, emit group event
-            for (uint256 i = 0; i < involvedGroupsFinal.length; i++) {
-                // get group at groupIndex
-                Group storage group = groups[involvedGroupsFinal[i]];
-
-                // if group size >= DefaultMinimumThreshold, emit group event
-                if (group.size >= DEFAULT_MINIMUM_THRESHOLD) {
-                    emitGroupEvent(involvedGroupsFinal[i]);
+            // for each involved group, if group size >= DefaultMinimumThreshold, emit group event
+            for (uint256 i = 0; i < involvedGroups.length; i++) {
+                if (involvedGroups[i] && groups[i].size >= DEFAULT_MINIMUM_THRESHOLD) {
+                    emitGroupEvent(i);
                 }
             }
         }
@@ -877,10 +862,6 @@ contract Controller is Ownable {
 
     function getNode(address nodeAddress) public view returns (Node memory) {
         return nodes[nodeAddress];
-    }
-
-    function getGroup(uint256 groupIndex) public view returns (Group memory) {
-        return groups[groupIndex];
     }
 
     function getMember(uint256 groupIndex, uint256 memberIndex) public view returns (Member memory) {
