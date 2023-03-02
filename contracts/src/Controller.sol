@@ -9,16 +9,11 @@ import "./interfaces/ICoordinator.sol";
 import "./Adapter.sol";
 
 contract Controller is Adapter {
-    uint256 public constant NODE_STAKING_AMOUNT = 50000;
-    uint256 public constant DISQUALIFIED_NODE_PENALTY_AMOUNT = 1000;
-    uint256 public constant COORDINATOR_STATE_TRIGGER_REWARD = 100;
+    // *Constants*
     uint256 public constant DEFAULT_MINIMUM_THRESHOLD = 3;
-    uint256 public constant DEFAULT_NUMBER_OF_COMMITTERS = 3;
-    uint256 public constant DEFAULT_DKG_PHASE_DURATION = 10;
-    uint256 public constant GROUP_MAX_CAPACITY = 10;
-    uint256 public constant IDEAL_NUMBER_OF_GROUPS = 5;
-    uint256 public constant PENDING_BLOCK_AFTER_QUIT = 100;
-    uint256 public constant DKG_POST_PROCESS_REWARD = 100;
+
+    // *Controller Config*
+    ControllerConfig private c_config;
 
     // *Node State Variables*
     mapping(address => Node) public nodes; //maps node address to Node Struct
@@ -53,7 +48,73 @@ contract Controller is Adapter {
         address _coordinatorAddress
     );
 
+    event ControllerConfigSet(
+        uint256 nodeStakingAmount,
+        uint256 disqualifiedNodePenaltyAmount,
+        uint256 defaultNumberOfCommitters,
+        uint256 defaultDkgPhaseDuration,
+        uint256 groupMaxCapacity,
+        uint256 idealNumberOfGroups,
+        uint256 pendingBlockAfterQuit,
+        uint256 dkgPostProcessReward
+    );
+
     constructor(address arpa, address arpaEthFeed) Adapter(arpa, arpaEthFeed) {}
+
+    struct ControllerConfig {
+        uint256 nodeStakingAmount;
+        uint256 disqualifiedNodePenaltyAmount;
+        uint256 defaultNumberOfCommitters;
+        uint256 defaultDkgPhaseDuration;
+        uint256 groupMaxCapacity;
+        uint256 idealNumberOfGroups;
+        uint256 pendingBlockAfterQuit;
+        uint256 dkgPostProcessReward;
+    }
+
+    /**
+     * @notice Sets the configuration of the controller
+     * @param nodeStakingAmount The amount of ARPA must staked by a node
+     * @param disqualifiedNodePenaltyAmount The amount of ARPA will be slashed from a node if it is disqualified
+     * @param defaultNumberOfCommitters The default number of committers for a DKG
+     * @param defaultDkgPhaseDuration The default duration(block number) of a DKG phase
+     * @param groupMaxCapacity The maximum number of nodes in a group
+     * @param idealNumberOfGroups The ideal number of groups
+     * @param pendingBlockAfterQuit The number of blocks a node must wait before joining a group after quitting
+     * @param dkgPostProcessReward The amount of ARPA will be rewarded to the node after dkgPostProcess is completed
+     */
+    function setControllerConfig(
+        uint256 nodeStakingAmount,
+        uint256 disqualifiedNodePenaltyAmount,
+        uint256 defaultNumberOfCommitters,
+        uint256 defaultDkgPhaseDuration,
+        uint256 groupMaxCapacity,
+        uint256 idealNumberOfGroups,
+        uint256 pendingBlockAfterQuit,
+        uint256 dkgPostProcessReward
+    ) external onlyOwner {
+        c_config = ControllerConfig({
+            nodeStakingAmount: nodeStakingAmount,
+            disqualifiedNodePenaltyAmount: disqualifiedNodePenaltyAmount,
+            defaultNumberOfCommitters: defaultNumberOfCommitters,
+            defaultDkgPhaseDuration: defaultDkgPhaseDuration,
+            groupMaxCapacity: groupMaxCapacity,
+            idealNumberOfGroups: idealNumberOfGroups,
+            pendingBlockAfterQuit: pendingBlockAfterQuit,
+            dkgPostProcessReward: dkgPostProcessReward
+        });
+
+        emit ControllerConfigSet(
+            nodeStakingAmount,
+            disqualifiedNodePenaltyAmount,
+            defaultNumberOfCommitters,
+            defaultDkgPhaseDuration,
+            groupMaxCapacity,
+            idealNumberOfGroups,
+            pendingBlockAfterQuit,
+            dkgPostProcessReward
+            );
+    }
 
     function nodeRegister(bytes calldata dkgPublicKey) public {
         require(nodes[msg.sender].idAddress == address(0), "Node is already registered"); // error sender already in list of nodes
@@ -70,7 +131,7 @@ contract Controller is Adapter {
         n.dkgPublicKey = dkgPublicKey;
         n.state = true;
         n.pendingUntilBlock = 0;
-        n.staking = NODE_STAKING_AMOUNT;
+        n.staking = c_config.nodeStakingAmount;
 
         nodeJoin(msg.sender);
     }
@@ -199,7 +260,7 @@ contract Controller is Adapter {
 
         // get the group index of the group with the minimum size, as well as the min size
         uint256 indexOfMinSize;
-        uint256 minSize = GROUP_MAX_CAPACITY;
+        uint256 minSize = c_config.groupMaxCapacity;
         for (uint256 i = 0; i < groupCount; i++) {
             Group memory g = groups[i];
             if (g.size < minSize) {
@@ -214,8 +275,8 @@ contract Controller is Adapter {
         // check if valid group count < ideal_number_of_groups || minSize == group_max_capacity
         // If either condition is met and the number of valid groups == group count, call add group and return (index of new group, true)
         if (
-            (validGroupCount < IDEAL_NUMBER_OF_GROUPS && validGroupCount == groupCount)
-                || (minSize == GROUP_MAX_CAPACITY)
+            (validGroupCount < c_config.idealNumberOfGroups && validGroupCount == groupCount)
+                || (minSize == c_config.groupMaxCapacity)
         ) {
             uint256 groupIndex = addGroup();
             return (groupIndex, true); // NEEDS REBALANCE
@@ -283,7 +344,7 @@ contract Controller is Adapter {
 
         // Deploy coordinator, add to coordinators mapping
         Coordinator coordinator;
-        coordinator = new Coordinator(g.threshold, DEFAULT_DKG_PHASE_DURATION);
+        coordinator = new Coordinator(g.threshold, c_config.defaultDkgPhaseDuration);
         coordinators[groupIndex] = address(coordinator);
 
         // Initialize Coordinator
@@ -433,7 +494,7 @@ contract Controller is Adapter {
 
                     // Compute commiter_indices by calling pickRandomIndex with qualifiedIndices as input.
                     uint256[] memory committerIndices =
-                        pickRandomIndex(lastOutput, qualifiedIndices, DEFAULT_NUMBER_OF_COMMITTERS);
+                        pickRandomIndex(lastOutput, qualifiedIndices, c_config.defaultNumberOfCommitters);
 
                     // For selected commiter_indices: add corresponding members into g.committers
                     g.committers = new address[](committerIndices.length);
@@ -443,7 +504,7 @@ contract Controller is Adapter {
 
                     // Iterate over disqualified nodes and call slashNode on each.
                     for (uint256 i = 0; i < disqualifiedNodes.length; i++) {
-                        slashNode(disqualifiedNodes[i], DISQUALIFIED_NODE_PENALTY_AMOUNT, 0, false);
+                        slashNode(disqualifiedNodes[i], c_config.disqualifiedNodePenaltyAmount, 0, false);
                     }
                 }
             }
@@ -601,7 +662,7 @@ contract Controller is Adapter {
 
                 // for each member, slash node
                 for (uint256 i = 0; i < g.members.length; i++) {
-                    slashNode(g.members[i].nodeIdAddress, DISQUALIFIED_NODE_PENALTY_AMOUNT, 0, false);
+                    slashNode(g.members[i].nodeIdAddress, c_config.disqualifiedNodePenaltyAmount, 0, false);
                 }
 
                 delete g.members; // Delete all members of the group
@@ -630,7 +691,7 @@ contract Controller is Adapter {
 
                 // for each disqualified node, slash node
                 for (uint256 i = 0; i < disqualifiedNodes.length; i++) {
-                    slashNode(disqualifiedNodes[i], DISQUALIFIED_NODE_PENALTY_AMOUNT, 0, false);
+                    slashNode(disqualifiedNodes[i], c_config.disqualifiedNodePenaltyAmount, 0, false);
                 }
 
                 arrangeMembersInGroup(groupIndex);
@@ -638,7 +699,7 @@ contract Controller is Adapter {
         }
 
         // update rewards for calling node
-        rewards[msg.sender] += DKG_POST_PROCESS_REWARD;
+        rewards[msg.sender] += c_config.dkgPostProcessReward;
     }
 
     function getRewards(address nodeAddress) public view returns (uint256) {
@@ -664,7 +725,7 @@ contract Controller is Adapter {
 
         if (node.state == true) {
             require(
-                node.staking - unstakeAmount >= NODE_STAKING_AMOUNT,
+                node.staking - unstakeAmount >= c_config.nodeStakingAmount,
                 "Node state is true, cannot unstake below staking threshold"
             );
         }
@@ -676,7 +737,7 @@ contract Controller is Adapter {
         Node storage node = nodes[msg.sender];
         require(node.idAddress == msg.sender, "Node not registered.");
 
-        freezeNode(msg.sender, PENDING_BLOCK_AFTER_QUIT, true);
+        freezeNode(msg.sender, c_config.pendingBlockAfterQuit, true);
 
         // send all staked tokens to msg.sender
         // TODO: need to add interaction with erc20 token contract
@@ -693,7 +754,7 @@ contract Controller is Adapter {
     ) public {
         Node storage node = nodes[nodeIdAddress];
         node.staking -= stakingPenalty;
-        if (node.staking < NODE_STAKING_AMOUNT || pendingBlock > 0) {
+        if (node.staking < c_config.nodeStakingAmount || pendingBlock > 0) {
             freezeNode(nodeIdAddress, pendingBlock, handleGroup);
         }
     }

@@ -9,12 +9,24 @@ contract AdapterTest is RandcastTestHelper {
     GetRandomNumberExample getRandomNumberExample;
     uint64 subId;
 
+    uint256 nodeStakingAmount = 50000;
+    uint256 disqualifiedNodePenaltyAmount = 1000;
+    uint256 defaultNumberOfCommitters = 3;
+    uint256 defaultDkgPhaseDuration = 10;
+    uint256 groupMaxCapacity = 10;
+    uint256 idealNumberOfGroups = 5;
+    uint256 pendingBlockAfterQuit = 100;
+    uint256 dkgPostProcessReward = 100;
+
     uint16 minimumRequestConfirmations = 3;
     uint32 maxGasLimit = 2000000;
     uint32 stalenessSeconds = 30;
     uint32 gasAfterPaymentCalculation = 30000;
     uint32 gasExceptCallback = 200000;
     int256 fallbackWeiPerUnitArpa = 1e12;
+    uint256 signatureTaskExclusiveWindow = 10;
+    uint256 rewardPerSignature = 50;
+    uint256 committerRewardPerSignature = 100;
 
     uint32 fulfillmentFlatFeeArpaPPMTier1 = 250000;
     uint32 fulfillmentFlatFeeArpaPPMTier2 = 250000;
@@ -39,13 +51,27 @@ contract AdapterTest is RandcastTestHelper {
             address(controller)
         );
 
-        controller.setConfig(
+        controller.setControllerConfig(
+            nodeStakingAmount,
+            disqualifiedNodePenaltyAmount,
+            defaultNumberOfCommitters,
+            defaultDkgPhaseDuration,
+            groupMaxCapacity,
+            idealNumberOfGroups,
+            pendingBlockAfterQuit,
+            dkgPostProcessReward
+        );
+
+        controller.setAdapterConfig(
             minimumRequestConfirmations,
             maxGasLimit,
             stalenessSeconds,
             gasAfterPaymentCalculation,
             gasExceptCallback,
             fallbackWeiPerUnitArpa,
+            signatureTaskExclusiveWindow,
+            rewardPerSignature,
+            committerRewardPerSignature,
             Adapter.FeeConfig(
                 fulfillmentFlatFeeArpaPPMTier1,
                 fulfillmentFlatFeeArpaPPMTier2,

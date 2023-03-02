@@ -30,19 +30,44 @@ contract ConsumerRequestBalanceTest is RandcastTestHelper {
             address(controller)
         );
 
+        uint256 nodeStakingAmount = 50000;
+        uint256 disqualifiedNodePenaltyAmount = 1000;
+        uint256 defaultNumberOfCommitters = 3;
+        uint256 defaultDkgPhaseDuration = 10;
+        uint256 groupMaxCapacity = 10;
+        uint256 idealNumberOfGroups = 5;
+        uint256 pendingBlockAfterQuit = 100;
+        uint256 dkgPostProcessReward = 100;
+        controller.setControllerConfig(
+            nodeStakingAmount,
+            disqualifiedNodePenaltyAmount,
+            defaultNumberOfCommitters,
+            defaultDkgPhaseDuration,
+            groupMaxCapacity,
+            idealNumberOfGroups,
+            pendingBlockAfterQuit,
+            dkgPostProcessReward
+        );
+
         uint16 minimumRequestConfirmations = 3;
         uint32 maxGasLimit = 2000000;
         uint32 stalenessSeconds = 30;
         uint32 gasAfterPaymentCalculation = 30000;
         uint32 gasExceptCallback = 357030;
         int256 fallbackWeiPerUnitArpa = 1e12;
-        controller.setConfig(
+        uint256 signatureTaskExclusiveWindow = 10;
+        uint256 rewardPerSignature = 50;
+        uint256 committerRewardPerSignature = 100;
+        controller.setAdapterConfig(
             minimumRequestConfirmations,
             maxGasLimit,
             stalenessSeconds,
             gasAfterPaymentCalculation,
             gasExceptCallback,
             fallbackWeiPerUnitArpa,
+            signatureTaskExclusiveWindow,
+            rewardPerSignature,
+            committerRewardPerSignature,
             Adapter.FeeConfig(250000, 250000, 250000, 250000, 250000, 0, 0, 0, 0)
         );
 

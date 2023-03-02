@@ -27,10 +27,6 @@ contract Adapter is IAdapter, RequestIdBase, RandomnessHandler, Ownable {
     // 5k is plenty for an EXTCODESIZE call (2600) + warm CALL (100)
     // and some arithmetic operations.
     uint256 private constant GAS_FOR_CALL_EXACT_CHECK = 5_000;
-    // The assigned group is exclusive for fulfilling the task within this block window
-    uint256 public constant SIGNATURE_TASK_EXCLUSIVE_WINDOW = 10;
-    uint256 public constant REWARD_PER_SIGNATURE = 50;
-    uint256 public constant COMMITTER_REWARD_PER_SIGNATURE = 100;
 
     // *State Variables*
     IERC20 public immutable ARPA;
@@ -47,7 +43,7 @@ contract Adapter is IAdapter, RequestIdBase, RandomnessHandler, Ownable {
     uint256 public lastOutput = 0x2222222222222222; // global last output
 
     int256 private s_fallbackWeiPerUnitArpa;
-    Config private s_config;
+    AdapterConfig private s_config;
     FeeConfig private s_feeConfig;
     mapping(bytes32 => Callback) public s_callbacks;
     mapping(address => Consumer) /* consumerAddress */ /* consumer */ private s_consumers;
@@ -84,8 +80,10 @@ contract Adapter is IAdapter, RequestIdBase, RandomnessHandler, Ownable {
         CommitResult commitResult;
     }
 
-    struct Config {
+    struct AdapterConfig {
+        // Minimum number of blocks a request must wait before being fulfilled.
         uint16 minimumRequestConfirmations;
+        // Maximum gas limit for fulfillRandomness requests.
         uint32 maxGasLimit;
         // Reentrancy protection.
         bool reentrancyLock;
@@ -97,6 +95,12 @@ contract Adapter is IAdapter, RequestIdBase, RandomnessHandler, Ownable {
         uint32 gasAfterPaymentCalculation;
         // Gas except callback during fulfillment of randomness. Only used for estimating inflight cost.
         uint32 gasExceptCallback;
+        // The assigned group is exclusive for fulfilling the task within this block window
+        uint256 signatureTaskExclusiveWindow;
+        // reward per signature for every participating node
+        uint256 rewardPerSignature;
+        // reward per signature for the committer
+        uint256 committerRewardPerSignature;
     }
 
     struct FeeConfig {
@@ -143,13 +147,16 @@ contract Adapter is IAdapter, RequestIdBase, RandomnessHandler, Ownable {
     }
 
     // *Events*
-    event ConfigSet(
+    event AdapterConfigSet(
         uint16 minimumRequestConfirmations,
         uint32 maxGasLimit,
         uint32 stalenessSeconds,
         uint32 gasAfterPaymentCalculation,
         uint32 gasExceptCallback,
         int256 fallbackWeiPerUnitArpa,
+        uint256 signatureTaskExclusiveWindow,
+        uint256 rewardPerSignature,
+        uint256 committerRewardPerSignature,
         FeeConfig feeConfig
     );
     event SubscriptionCreated(uint64 indexed subId, address owner);
@@ -385,7 +392,10 @@ contract Adapter is IAdapter, RequestIdBase, RandomnessHandler, Ownable {
 
         require(block.number >= callback.blockNum + callback.requestConfirmations, "Too early to fulfill");
 
-        if (groupIndex != callback.groupIndex && block.number <= callback.blockNum + SIGNATURE_TASK_EXCLUSIVE_WINDOW) {
+        if (
+            groupIndex != callback.groupIndex
+                && block.number <= callback.blockNum + s_config.signatureTaskExclusiveWindow
+        ) {
             revert TaskStillExclusive();
         }
 
@@ -466,9 +476,9 @@ contract Adapter is IAdapter, RequestIdBase, RandomnessHandler, Ownable {
     }
 
     function rewardRandomness(address[] memory participantMembers) internal {
-        rewards[msg.sender] += COMMITTER_REWARD_PER_SIGNATURE;
+        rewards[msg.sender] += s_config.committerRewardPerSignature;
         for (uint256 i = 0; i < participantMembers.length; i++) {
-            rewards[participantMembers[i]] += REWARD_PER_SIGNATURE;
+            rewards[participantMembers[i]] += s_config.rewardPerSignature;
         }
     }
 
@@ -563,21 +573,27 @@ contract Adapter is IAdapter, RequestIdBase, RandomnessHandler, Ownable {
     }
 
     /**
-     * @notice Sets the configuration of the vrfv2 coordinator
+     * @notice Sets the configuration of the adapter
      * @param minimumRequestConfirmations global min for request confirmations
      * @param maxGasLimit global max for request gas limit
      * @param stalenessSeconds if the eth/arpa feed is more stale then this, use the fallback price
      * @param gasAfterPaymentCalculation gas used in doing accounting after completing the gas measurement
      * @param fallbackWeiPerUnitArpa fallback eth/arpa price in the case of a stale feed
+     * @param signatureTaskExclusiveWindow window in which a signature task is exclusive to the assigned group
+     * @param rewardPerSignature reward per signature for every participating node
+     * @param committerRewardPerSignature reward per signature for the committer
      * @param feeConfig fee tier configuration
      */
-    function setConfig(
+    function setAdapterConfig(
         uint16 minimumRequestConfirmations,
         uint32 maxGasLimit,
         uint32 stalenessSeconds,
         uint32 gasAfterPaymentCalculation,
         uint32 gasExceptCallback,
         int256 fallbackWeiPerUnitArpa,
+        uint256 signatureTaskExclusiveWindow,
+        uint256 rewardPerSignature,
+        uint256 committerRewardPerSignature,
         FeeConfig memory feeConfig
     ) external onlyOwner {
         if (minimumRequestConfirmations > MAX_REQUEST_CONFIRMATIONS) {
@@ -588,23 +604,29 @@ contract Adapter is IAdapter, RequestIdBase, RandomnessHandler, Ownable {
         if (fallbackWeiPerUnitArpa <= 0) {
             revert InvalidArpaWeiPrice(fallbackWeiPerUnitArpa);
         }
-        s_config = Config({
+        s_config = AdapterConfig({
             minimumRequestConfirmations: minimumRequestConfirmations,
             maxGasLimit: maxGasLimit,
             stalenessSeconds: stalenessSeconds,
             gasAfterPaymentCalculation: gasAfterPaymentCalculation,
             gasExceptCallback: gasExceptCallback,
+            signatureTaskExclusiveWindow: signatureTaskExclusiveWindow,
+            rewardPerSignature: rewardPerSignature,
+            committerRewardPerSignature: committerRewardPerSignature,
             reentrancyLock: false
         });
         s_feeConfig = feeConfig;
         s_fallbackWeiPerUnitArpa = fallbackWeiPerUnitArpa;
-        emit ConfigSet(
+        emit AdapterConfigSet(
             minimumRequestConfirmations,
             maxGasLimit,
             stalenessSeconds,
             gasAfterPaymentCalculation,
             gasExceptCallback,
             fallbackWeiPerUnitArpa,
+            signatureTaskExclusiveWindow,
+            rewardPerSignature,
+            committerRewardPerSignature,
             s_feeConfig
             );
     }
