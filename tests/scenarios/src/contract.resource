@@ -6,6 +6,7 @@ Library             Process
 Library             String
 Library             OperatingSystem
 Library             environment/local_ethereum.py
+Library             environment/node.py
 
 Resource            common.resource
 
@@ -18,6 +19,7 @@ ${PROXY_OUTPUT}                          out/
 ${PROXY_CONTRACT}
 ${CONTROLLER_CONTRACT}
 ${COORDINATOR_CONTRACT}
+${COORDINATOR_CONTRACT}
 
 # Test value:
 ${TEST_NODE_ADDRESS}                     0x70997970c51812dc3a010c7d01b50e0d17dc79c8
@@ -27,9 +29,17 @@ ${MODIFIRD_PARTIAL_PUB_KEY}              0x02
 @{MODIFIRD_DISQUALIFIED_NODES}           0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC
 
 *** Keywords ***
+Set Enviorment And Deploy Contract
+    [Documentation]    Set enviorment and deploy proxy contract
+    Setup Scenario Testing Environment
+    Deploy Controller
+    Deploy Proxy Contract
+    Set ARPA Address
+    Create Node Config    ${PROXY_CONTRACT_ADDRESS}
+
 Deploy Proxy Contract
     [Documentation]    Deploy the proxy contract, the proxy and controller share the same address
-    ${contract_output} =    Run    cd contracts/; forge create ${PROXY_CONTRACT_PATH} --private-key ${PROXY_CONTRACT_DEPLOYER_KEY} -o ${PROXY_OUTPUT} 
+    ${contract_output} =    Run    cd contracts/; forge create ${PROXY_CONTRACT_PATH} --constructor-args 0x9fE46736679d2D9a65F0992F2272dE9f3c7fa6e0 --private-key ${PROXY_CONTRACT_DEPLOYER_KEY} -o ${PROXY_OUTPUT} 
     Log    ${contract_output}
     ${lines} =	Get Lines Containing String    ${contract_output}    Deployed to: 
     ${address} =    Fetch From Right    ${lines}    Deployed to: 
@@ -41,20 +51,37 @@ Deploy Proxy Contract
     ${controller_contract} =    Get Contract    contracts/${PROXY_OUTPUT}Controller.sol/Controller.json    ${address}
     Set Global Variable    $CONTROLLER_CONTRACT   ${controller_contract}
 
+Deploy User Contract And Request Randomness
+    [Documentation]    Deploy the user contract
+    ${contract_output} =    Run    cd contracts/; forge script script/GetRandomNumberLocalTest.s.sol:GetRandomNumberLocalTestScript --fork-url http://localhost:8545 --broadcast
+
+Check Randomness
+    [Documentation]    Check the randomness
+    ${user_contract} =    Get Value From Env    USER_ADDRESS
+    #${user_contract_output} =    Run    cast call ${PROXY_CONTRACT_ADDRESS} "lastOutput()returns(uint256)"
+    ${adapter_contract_output} =    Run    cast call ${user_contract} "lastRandomnessResult()"
+    Log    ${adapter_contract_output}
+
+Set ARPA Address
+    ${address} =    Get Value From Env    ARPA_ADDRESS
+    Set Global Variable    $ARPA_CONTRACT_ADDRESS    ${address}
+
 Get Modified CommitdDkg
     [Documentation]    Get all modifed value of commitDkg
     [Arguments]    ${node}
     ${node} =    To Checksum Address    ${node}
-    ${result} =    Contract Function Call    ${proxy_contract}    getModifiedDkgData    ${node}
+    ${result} =    Contract Function Call    ${PROXY_CONTRACT}    getModifiedDkgData    ${node}
     Log    Modified dkg data: ${result}
     RETURN    ${result}
 
 Set Modified CommitdDkg
     [Documentation]    Set all modifed value of commitDkg
     [Arguments]    ${node}
-    Set Modified Public Key    ${node}    ${MODIFIRD_PUB_KEY}
-    Set Modified Partial Public Key    ${node}    ${MODIFIRD_PARTIAL_PUB_KEY}
-    Set Modified Disqualified Nodes    ${node}    ${MODIFIRD_DISQUALIFIED_NODES}
+    ${node} =    To Checksum Address    ${node}
+    ${result} =    Set Modified Public Key    ${node}    ${MODIFIRD_PUB_KEY}
+    ${result} =    Set Modified Partial Public Key    ${node}    ${MODIFIRD_PARTIAL_PUB_KEY}
+    ${result} =    Set Modified Disqualified Nodes    ${node}    ${MODIFIRD_DISQUALIFIED_NODES}
+    Sleep    1s
     ${result} =    Get Modified CommitdDkg    ${node}
     ${result_list} =    Convert To String    ${result[3]}
     Should Be Equal    ${result_list}    [True, True, True]
@@ -99,23 +126,13 @@ Get Group
     Log    Group info: ${result}
     RETURN    ${result}
 
-Node In Members
-    [Documentation]    To check if node in members
-    [Arguments]    ${index}    ${node}
+Group Node Number Should Be
+    [Documentation]    Check group node number
+    [Arguments]    ${index}    ${number}
     ${index} =    Convert To Integer    ${index}
-    ${node} =    To Checksum Address    ${node}
-    ${result} =    Contract Function Call    ${CONTROLLER_CONTRACT}    NodeInMembers    ${index}    ${node}
-    Log    Node in members : ${result}
-    RETURN    ${result}
-
-Partial Key Registered
-    [Documentation]    Check to see if a group has a partial public key registered for a given node
-    [Arguments]    ${index}    ${node}
-    ${index} =    Convert To Integer    ${index}
-    ${node} =    To Checksum Address    ${node}
-    ${result} =    Contract Function Call    ${CONTROLLER_CONTRACT}    PartialKeyRegistered    ${index}    ${node}
-    Log    Partial public key registered : ${result}
-    RETURN    ${result}
+    ${number} =    Convert To Integer    ${number}
+    ${result} =    Get Group    ${index}
+    Should Be Equal   ${result[3]}    ${number}
 
 Get Member
     [Documentation]    Get member of a given group
@@ -181,4 +198,17 @@ In Phase
     [Documentation]    get Phase
     ${result} =    Contract Function Call    ${COORDINATOR_CONTRACT}    inPhase
     Log    Phase: ${result}
+    RETURN    ${result}
+
+Request Randomness
+    [Documentation]    Request randomness
+    ${result} =    Run   forge script script/GetRandomNumberLocalTest.s.sol:GetRandomNumberLocalTestScript --fork-url http://localhost:8545 --broadcast
+    Log    Request randomness: ${result}
+
+Get Test
+    [Documentation]    Get test
+    [Arguments]    ${index}
+    ${index} =    Convert To Integer    ${index}
+    ${result} =    Contract Function Call    ${CONTROLLER_CONTRACT}    test    ${index}
+    Log    Test: ${result}
     RETURN    ${result}
