@@ -75,13 +75,16 @@ pub mod common {
         fn internal_aggregation_verify_on_the_same_msg(
             partial_publics: &[Self::Public],
             msg: &[u8],
-            sigs: &[Self::Signature],
+            sigs: &[&[u8]],
             should_hash: bool,
         ) -> Result<(), BLSError> {
-            let mut sig_aggregation: Self::Signature = Self::Signature::zero();
-            for sig in sigs {
-                sig_aggregation.add(sig);
-            }
+            let sig_aggregation =
+                sigs.iter()
+                    .try_fold(Self::Signature::zero(), |mut acc, sig| {
+                        let sig: Self::Signature = bincode::deserialize_from(*sig)?;
+                        acc.add(&sig);
+                        Ok::<Self::Signature, BLSError>(acc)
+                    })?;
 
             let mut public_aggregation: Self::Public = Self::Public::zero();
             for partial_public in partial_publics {
@@ -130,7 +133,7 @@ pub mod common {
         fn aggregation_verify_on_the_same_msg(
             partial_publics: &[Self::Public],
             msg_bytes: &[u8],
-            sig_bytes: &[Self::Signature],
+            sig_bytes: &[&[u8]],
         ) -> Result<(), Self::Error> {
             T::internal_aggregation_verify_on_the_same_msg(
                 partial_publics,
@@ -200,11 +203,11 @@ where
     }
 }
 
-#[cfg(feature = "bls12_381")]
+#[cfg(feature = "bn254")]
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::curve::bls12381::{Curve as G1Curve, G2Curve, PairingCurve as PCurve};
+    use crate::curve::bn254::{G1Curve, G2Curve, PairingCurve as PCurve};
     use crate::group::Curve;
     use rand::prelude::*;
 

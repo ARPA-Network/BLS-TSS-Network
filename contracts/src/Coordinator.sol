@@ -1,6 +1,7 @@
 // Using the ABIEncoderV2 poses little risk here because we only use it for fetching the byte arrays
 // of shares/responses/justifications
 // pragma experimental ABIEncoderV2;  // don't think we need this
+// SPDX-License-Identifier: MIT
 pragma solidity ^0.8.15;
 
 import "openzeppelin-contracts/contracts/access/Ownable.sol";
@@ -47,11 +48,7 @@ contract Coordinator is Ownable {
         PHASE_DURATION = duration;
     }
 
-    function initialize(address[] calldata nodes, bytes[] calldata publicKeys)
-        external
-        onlyWhenNotStarted
-        onlyOwner
-    {
+    function initialize(address[] calldata nodes, bytes[] calldata publicKeys) external onlyWhenNotStarted onlyOwner {
         for (uint256 i = 0; i < nodes.length; i++) {
             participants.push(nodes[i]);
             keys[nodes[i]] = publicKeys[i];
@@ -67,22 +64,13 @@ contract Coordinator is Ownable {
         uint256 blocksSinceStart = block.number - startBlock;
 
         if (blocksSinceStart <= PHASE_DURATION) {
-            require(
-                shares[msg.sender].length == 0,
-                "you have already published your shares"
-            );
+            require(shares[msg.sender].length == 0, "you have already published your shares");
             shares[msg.sender] = value;
         } else if (blocksSinceStart <= 2 * PHASE_DURATION) {
-            require(
-                responses[msg.sender].length == 0,
-                "you have already published your responses"
-            );
+            require(responses[msg.sender].length == 0, "you have already published your responses");
             responses[msg.sender] = value;
         } else if (blocksSinceStart <= 3 * PHASE_DURATION) {
-            require(
-                justifications[msg.sender].length == 0,
-                "you have already published your justifications"
-            );
+            require(justifications[msg.sender].length == 0, "you have already published your justifications");
             justifications[msg.sender] = value;
         } else {
             revert("DKG Publish has ended");

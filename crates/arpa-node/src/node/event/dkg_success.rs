@@ -1,19 +1,21 @@
+use crate::node::subscriber::DebuggableEvent;
 use arpa_node_core::Group;
+use threshold_bls::group::PairingCurve;
 
 use super::{types::Topic, Event};
 
-#[derive(Clone)]
-pub struct DKGSuccess {
-    pub group: Group,
+#[derive(Clone, Debug)]
+pub struct DKGSuccess<C: PairingCurve> {
+    pub group: Group<C>,
 }
 
-impl DKGSuccess {
-    pub fn new(group: Group) -> Self {
+impl<C: PairingCurve> DKGSuccess<C> {
+    pub fn new(group: Group<C>) -> Self {
         DKGSuccess { group }
     }
 }
 
-impl Event for DKGSuccess {
+impl<C: PairingCurve + 'static> Event for DKGSuccess<C> {
     fn topic(&self) -> Topic {
         Topic::DKGSuccess
     }
@@ -22,3 +24,4 @@ impl Event for DKGSuccess {
         self
     }
 }
+impl<C: PairingCurve + Send + Sync + 'static> DebuggableEvent for DKGSuccess<C> {}

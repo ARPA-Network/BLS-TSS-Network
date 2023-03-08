@@ -5,7 +5,7 @@
 use super::primitives::types::{BundledJustification, BundledResponses, BundledShares};
 use async_trait::async_trait;
 use bincode::serialize_into;
-use std::io::Write;
+use std::{fmt::Debug, io::Write};
 use threshold_bls::group::Curve;
 
 /// Trait which must be implemented for writing to the board. This trait assumes
@@ -16,7 +16,7 @@ where
     C: Curve,
 {
     /// Error raised when trying to publish data to the board
-    type Error;
+    type Error: Debug;
 
     /// Publishes the shares to the board
     async fn publish_shares(&mut self, shares: BundledShares<C>) -> Result<(), Self::Error>

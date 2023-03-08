@@ -1,7 +1,7 @@
 # BLS Threshold CryptoSignatures
 
 This library provides primitives for (blind) threshold cryptography. Currently supported
-curves are BLS12-377 and BLS12-381.
+curves are BN254(alt_bn128) and BLS12-381.
 
 **Work In Progress: DO NOT EXPECT ANY STABLE API NOW**
 
@@ -10,6 +10,7 @@ curves are BLS12-377 and BLS12-381.
 [`src/group.rs`](src/group.rs) contains the definitions of generic trait to work
 with scalars of prime fields and points on elliptic curves. The following
 `Element` trait allows to get a generic implementation of a polynomial with lagrange interpolation for both scalars and points.
+
 ```rust
 pub trait Element<RHS = Self>: Clone + fmt::Display + fmt::Debug + Eq {
     /// new MUST return the zero element of the group.
@@ -55,16 +56,16 @@ fn interpolation() {
 
 ## Curve Implementations
 
-Curently there are two curves available, `BLS12 381` and `BLS 377`. By default they are enabled both, but you can select which one you want to use using
-the features `bls12_381` and `bls_377`.
+Curently there are two curves available, `BLS12 381` and `BN254`. By default they are enabled both, but you can select which one you want to use using
+the features `bls12_381` and `bn254`.
 
 You can use them like this when adding the dependency to your `Cargo.toml` file.
 
 ```toml
 # Only bls12_381
 threshold = { version = "0.1", default-features = false, features = ["bls12_381"] }
-# Only bls12_377
-threshold = { version = "0.1", default-features = false, features = ["bls12_377"] }
+# Only bn254
+threshold = { version = "0.1", default-features = false, features = ["bn254"] }
 # Both
 threshold = { version = "0.1" }
 ```

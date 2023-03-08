@@ -24,10 +24,15 @@ solidity/build
 .vscode
 .idea
 
-**/log
+/log/
 
 **/contract_stub
-**/rpc_stub
+**/rpc_stub/*.rs
+!**/rpc_stub/mod.rs
+
+
+# Custom
+contracts/test/Test.t.sol
 
 # Python virtual environments for robot-framework to run scenario testing and task automation
 # https://docs.python.org/3/library/venv.html

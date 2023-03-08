@@ -2,8 +2,9 @@ use arpa_node_contract_client::{
     adapter::{AdapterTransactions, AdapterViews},
     rpc_mock::adapter::MockAdapterClient,
 };
-use ethers::types::Address;
+use ethers::types::{Address, U256};
 use std::env;
+use threshold_bls::curve::bn254::PairingCurve as BN254;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -35,11 +36,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             Some(arg) => arg,
             None => panic!("Didn't get a seed string"),
         };
-        client.request_randomness(&seed).await?;
+
+        client
+            .request_randomness(U256::from_big_endian(seed.as_bytes()))
+            .await?;
 
         println!("request randomness successfully");
     } else if instruction == "last_output" {
-        let res = client.get_last_output().await?;
+        let res = AdapterViews::<BN254>::get_last_output(&client).await?;
 
         println!("last_randomness_output: {}", res);
     }

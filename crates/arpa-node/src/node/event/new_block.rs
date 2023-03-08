@@ -1,6 +1,7 @@
 use super::{types::Topic, Event};
+use crate::node::subscriber::DebuggableEvent;
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct NewBlock {
     pub chain_id: usize,
     pub block_height: usize,
@@ -24,3 +25,4 @@ impl Event for NewBlock {
         self
     }
 }
+impl DebuggableEvent for NewBlock {}

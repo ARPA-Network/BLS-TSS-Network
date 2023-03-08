@@ -1,4 +1,5 @@
 use arpa_node_contract_client::error::ContractClientError;
+use arpa_node_core::SchedulerError;
 use arpa_node_dal::error::DataAccessError;
 use arpa_node_sqlite_db::DBError;
 use dkg_core::{primitives::DKGError, NodeError as DKGNodeError};
@@ -6,7 +7,7 @@ use ethers::{providers::ProviderError, signers::WalletError};
 use rustc_hex::FromHexError;
 use std::env::VarError;
 use thiserror::Error;
-use threshold_bls::sig::{BLSError, G1Scheme, ThresholdError};
+use threshold_bls::sig::BLSError;
 
 pub type NodeResult<A> = Result<A, NodeError>;
 
@@ -27,9 +28,6 @@ pub enum NodeError {
     #[error(transparent)]
     BLSError(#[from] BLSError),
 
-    #[error(transparent)]
-    ThresholdError(#[from] ThresholdError<G1Scheme<threshold_bls::curve::bls12381::PairingCurve>>),
-
     #[error("the node is not the committer of the group")]
     NotCommitter,
 
@@ -39,11 +37,17 @@ pub enum NodeError {
     #[error("the message of the task is different from the committer")]
     InvalidTaskMessage,
 
+    #[error("not supported task type")]
+    InvalidTaskType,
+
     #[error("There is already this chain id in the context. Please check config.yml")]
     RepeatedChainId,
 
     #[error(transparent)]
     DataAccessError(#[from] DataAccessError),
+
+    #[error(transparent)]
+    SchedulerError(#[from] SchedulerError),
 
     #[error(transparent)]
     ContractClientError(#[from] ContractClientError),
@@ -74,6 +78,12 @@ pub enum NodeError {
 
     #[error("you are not contained in the group")]
     MemberNotExisted,
+
+    #[error("DKG has not started yet")]
+    DKGNotStarted,
+
+    #[error("DKG has ended")]
+    DKGEnded,
 }
 
 #[derive(Debug, Error)]

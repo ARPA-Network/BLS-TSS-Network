@@ -5,10 +5,10 @@ edition = "2021"
 publish = false
 
 [dependencies]
-threshold-bls = { path = "../../../../threshold-bls", default-features = false, features = ["bls12_381"] }
+threshold-bls = { path = "../../../../threshold-bls", default-features = false, features = ["bn254"] }
 
-ethers-core = { git = "https://github.com/gakonst/ethers-rs"}
-ethers-signers = { git = "https://github.com/gakonst/ethers-rs"}
+ethers-core = "1.0.0"
+ethers-signers = "1.0.0"
 thiserror = "1.0.15"
 serde = "1.0.106"
 log = "0.4"
@@ -16,6 +16,12 @@ chrono = "0.4"
 bincode = "1.2.1"
 async-trait = "0.1.35"
 anyhow = "1.0.31"
+thread-id = "4.0.0"
+log4rs = "1.2.0"
+log-mdc = "0.1.0"
+serde_json = "1.0.53"
+parking_lot = "0.12.0"
+lazy_static = "1.4.0"
 
 [lib]
 name = "arpa_node_core"

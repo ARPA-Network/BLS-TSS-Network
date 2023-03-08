@@ -1,43 +1,45 @@
-use crate::types::contract::ContractGroup;
-use ethers_core::types::{Address, Log};
+use ethers_core::{
+    types::{Address, U256},
+    utils::hex,
+};
 use serde::{Deserialize, Serialize};
-use std::collections::BTreeMap;
-use threshold_bls::curve::bls12381::G1;
+use std::{collections::BTreeMap, marker::PhantomData};
+use threshold_bls::{group::PairingCurve, serialize::point_to_hex};
 
 pub trait Task {
-    fn index(&self) -> usize;
+    fn request_id(&self) -> &[u8];
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct BLSTask<T: Task> {
     pub task: T,
     pub state: bool,
 }
 
 impl Task for RandomnessTask {
-    fn index(&self) -> usize {
-        self.index
+    fn request_id(&self) -> &[u8] {
+        &self.request_id
     }
 }
 
-impl Task for GroupRelayTask {
-    fn index(&self) -> usize {
-        self.controller_global_epoch
-    }
-}
-
-impl Task for GroupRelayConfirmationTask {
-    fn index(&self) -> usize {
-        self.index
-    }
-}
-
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Clone, PartialEq)]
 pub struct RandomnessTask {
-    pub index: usize,
-    pub message: String,
+    pub request_id: Vec<u8>,
+    pub seed: U256,
     pub group_index: usize,
+    pub request_confirmations: usize,
     pub assignment_block_height: usize,
+}
+
+impl std::fmt::Debug for RandomnessTask {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("RandomnessTask")
+            .field("request_id", &hex::encode(&self.request_id))
+            .field("seed", &self.seed)
+            .field("group_index", &self.group_index)
+            .field("assignment_block_height", &self.assignment_block_height)
+            .finish()
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -46,7 +48,7 @@ pub struct DKGTask {
     pub epoch: usize,
     pub size: usize,
     pub threshold: usize,
-    pub members: BTreeMap<Address, usize>,
+    pub members: Vec<Address>,
     pub assignment_block_height: usize,
     pub coordinator_address: Address,
 }
@@ -69,20 +71,36 @@ pub struct GroupRelayConfirmationTask {
     pub assignment_block_height: usize,
 }
 
-#[derive(Debug, Default, Clone, Serialize, Deserialize)]
-pub struct Group {
+#[derive(Default, Clone, Serialize, Deserialize)]
+pub struct Group<C: PairingCurve> {
     pub index: usize,
     pub epoch: usize,
     pub size: usize,
     pub threshold: usize,
     pub state: bool,
-    pub public_key: Option<G1>,
-    pub members: BTreeMap<Address, Member>,
+    pub public_key: Option<C::G2>,
+    pub members: BTreeMap<Address, Member<C>>,
     pub committers: Vec<Address>,
+    pub c: PhantomData<C>,
 }
 
-impl Group {
-    pub fn new() -> Group {
+impl<C: PairingCurve> std::fmt::Debug for Group<C> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Group")
+            .field("index", &self.index)
+            .field("epoch", &self.epoch)
+            .field("size", &self.size)
+            .field("threshold", &self.threshold)
+            .field("state", &self.state)
+            .field("public_key", &(self.public_key.as_ref()).map(point_to_hex))
+            .field("members", &self.members)
+            .field("committers", &self.committers)
+            .finish()
+    }
+}
+
+impl<C: PairingCurve> Group<C> {
+    pub fn new() -> Group<C> {
         Group {
             index: 0,
             epoch: 0,
@@ -92,6 +110,7 @@ impl Group {
             public_key: None,
             members: BTreeMap::new(),
             committers: vec![],
+            c: PhantomData,
         }
     }
 
@@ -101,69 +120,32 @@ impl Group {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct Member {
+#[derive(Clone, Serialize, Deserialize)]
+pub struct Member<C: PairingCurve> {
     pub index: usize,
     pub id_address: Address,
-    pub rpc_endpint: Option<String>,
-    pub partial_public_key: Option<G1>,
+    pub rpc_endpoint: Option<String>,
+    pub partial_public_key: Option<C::G2>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct GroupRelayConfirmation {
-    pub group: ContractGroup,
-    pub status: Status,
-}
-
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Hash, Eq)]
-pub enum Status {
-    Success,
-    Complaint,
-}
-
-impl From<bool> for Status {
-    fn from(b: bool) -> Self {
-        if b {
-            Status::Success
-        } else {
-            Status::Complaint
-        }
+impl<C: PairingCurve> std::fmt::Debug for Member<C> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Member")
+            .field("index", &self.index)
+            .field("id_address", &self.id_address)
+            .field("rpc_endpoint", &self.rpc_endpoint)
+            .field(
+                "partial_public_key",
+                &(self.partial_public_key.as_ref()).map(point_to_hex),
+            )
+            .finish()
     }
 }
 
-impl Status {
-    pub fn is_success(self) -> bool {
-        match self {
-            Status::Success => true,
-            Status::Complaint => false,
-        }
-    }
-}
-
-pub enum GroupRelayConfirmationTaskState {
-    NotExisted,
-    Available,
-    Invalid,
-}
-
-impl GroupRelayConfirmationTaskState {
-    pub fn to_i32(&self) -> i32 {
-        match self {
-            GroupRelayConfirmationTaskState::NotExisted => 0,
-            GroupRelayConfirmationTaskState::Available => 1,
-            GroupRelayConfirmationTaskState::Invalid => 2,
-        }
-    }
-}
-
-impl From<i32> for GroupRelayConfirmationTaskState {
-    fn from(b: i32) -> Self {
-        match b {
-            1 => GroupRelayConfirmationTaskState::Available,
-            2 => GroupRelayConfirmationTaskState::Invalid,
-            _ => GroupRelayConfirmationTaskState::NotExisted,
-        }
-    }
+#[derive(Clone, Debug)]
+pub struct PartialSignature {
+    pub index: usize,
+    pub signature: Vec<u8>,
 }
 
 pub enum TaskType {
@@ -192,7 +174,7 @@ impl From<i32> for TaskType {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Hash, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Hash, Eq, Serialize, Deserialize)]
 pub enum DKGStatus {
     None,
     InPhase,
@@ -219,29 +201,5 @@ impl From<usize> for DKGStatus {
             3 => DKGStatus::WaitForPostProcess,
             _ => DKGStatus::None,
         }
-    }
-}
-
-impl From<Log> for RandomnessTask {
-    fn from(_: Log) -> Self {
-        todo!()
-    }
-}
-
-impl From<Log> for GroupRelayConfirmationTask {
-    fn from(_: Log) -> Self {
-        todo!()
-    }
-}
-
-impl From<Log> for DKGTask {
-    fn from(_: Log) -> Self {
-        todo!()
-    }
-}
-
-impl From<Log> for GroupRelayTask {
-    fn from(_: Log) -> Self {
-        todo!()
     }
 }

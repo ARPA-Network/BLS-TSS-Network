@@ -1,3 +1,4 @@
+use log::error;
 use rand::RngCore;
 use thiserror::Error;
 
@@ -69,10 +70,10 @@ where
         self.set_rpc_endpoint();
         let (next, shares) = self.encrypt_shares(rng)?;
         if let Some(sh) = shares {
-            board
-                .publish_shares(sh)
-                .await
-                .map_err(|_| NodeError::PublisherError)?;
+            board.publish_shares(sh).await.map_err(|e| {
+                error!("{:?}", e);
+                NodeError::PublisherError
+            })?;
         }
 
         Ok(next)
@@ -100,10 +101,10 @@ where
         let (next, bundle) = self.process_shares(shares, true)?;
 
         if let Some(bundle) = bundle {
-            board
-                .publish_responses(bundle)
-                .await
-                .map_err(|_| NodeError::PublisherError)?;
+            board.publish_responses(bundle).await.map_err(|e| {
+                error!("{:?}", e);
+                NodeError::PublisherError
+            })?;
         }
 
         Ok(next)
@@ -141,7 +142,10 @@ where
                             board
                                 .publish_justifications(justifications)
                                 .await
-                                .map_err(|_| NodeError::PublisherError)?;
+                                .map_err(|e| {
+                                    error!("{:?}", e);
+                                    NodeError::PublisherError
+                                })?;
                         }
 
                         Ok(Phase2Result::GoToPhase3(next))
@@ -185,7 +189,7 @@ mod tests {
     };
     use rand::RngCore;
     use threshold_bls::{
-        curve::bls12381::{self, PairingCurve as BLS12_381},
+        curve::bn254::{self, PairingCurve as BN254},
         poly::Idx,
         sig::{BlindThresholdScheme, G1Scheme, G2Scheme, Scheme, SignatureScheme, ThresholdScheme},
     };
@@ -202,8 +206,8 @@ mod tests {
     #[tokio::test]
     async fn dkg_sign_e2e() {
         let (t, n) = (3, 5);
-        dkg_sign_e2e_curve::<bls12381::Curve, G1Scheme<BLS12_381>>(n, t).await;
-        dkg_sign_e2e_curve::<bls12381::G2Curve, G2Scheme<BLS12_381>>(n, t).await;
+        dkg_sign_e2e_curve::<bn254::G1Curve, G1Scheme<BN254>>(n, t).await;
+        dkg_sign_e2e_curve::<bn254::G2Curve, G2Scheme<BN254>>(n, t).await;
     }
 
     async fn dkg_sign_e2e_curve<C, S>(n: usize, t: usize)
@@ -295,7 +299,7 @@ mod tests {
         let honest = n - bad;
 
         let rng = &mut rand::thread_rng();
-        let (mut board, phase0s) = setup::<bls12381::Curve, G1Scheme<BLS12_381>, _>(n, t, rng);
+        let (mut board, phase0s) = setup::<bn254::G1Curve, G1Scheme<BN254>, _>(n, t, rng);
 
         let mut phase1s = Vec::new();
         for (i, phase0) in phase0s.into_iter().enumerate() {
@@ -351,7 +355,7 @@ mod tests {
         let bad = 2; // >0 people not broadcasting in the start force us to go to phase 3
 
         let rng = &mut rand::thread_rng();
-        let (mut board, phase0s) = setup::<bls12381::Curve, G1Scheme<BLS12_381>, _>(n, t, rng);
+        let (mut board, phase0s) = setup::<bn254::G1Curve, G1Scheme<BN254>, _>(n, t, rng);
 
         let mut phase1s = Vec::new();
         for (i, phase0) in phase0s.into_iter().enumerate() {

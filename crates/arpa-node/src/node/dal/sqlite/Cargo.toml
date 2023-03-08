@@ -9,11 +9,11 @@ entity = { path = "./entity" }
 migration = { path = "./migration" }
 arpa-node-core = { path = "../../core" }
 arpa-node-dal = { path = "../../dal" }
-threshold-bls = { path = "../../../../../threshold-bls", default-features = false, features = ["bls12_381"] }
+threshold-bls = { path = "../../../../../threshold-bls", default-features = false, features = ["bn254"] }
 dkg-core = { path = "../../../../../dkg-core"}
 
 sea-orm = { version = "^0.9.0", features = [ "sqlx-sqlite", "runtime-tokio-native-tls", "macros", "debug-print"]}
-libsqlite3-sys = { version = "0.24.1",  default-features = false, features = [
+libsqlite3-sys = { version = "0.24.2",  default-features = false, features = [
       "pkg-config",
       "vcpkg",
       "bundled-sqlcipher",
@@ -22,11 +22,11 @@ libsqlite3-sys = { version = "0.24.1",  default-features = false, features = [
 chrono = "0.4"
 log = "0.4"
 tokio = { version = "1.20.1", features = ["full"] }
-ethers-core = { git = "https://github.com/gakonst/ethers-rs"}
+ethers-core = "1.0.0"
 thiserror = "1.0.15"
 anyhow = "1.0.31"
 bincode = "1.2.1"
-rand = "0.7"
+rand = "0.8"
 async-trait = "0.1.35"
 serde = "1.0.106"
 serde_json = "1.0.53"

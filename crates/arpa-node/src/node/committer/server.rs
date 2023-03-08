@@ -1,89 +1,111 @@
-use self::committer_stub::{
-    committer_service_server::{CommitterService, CommitterServiceServer},
-    CommitPartialSignatureReply, CommitPartialSignatureRequest,
-};
 use crate::node::context::chain::MainChainFetcher;
 use crate::node::{
     algorithm::bls::{BLSCore, SimpleBLSCore},
-    context::{
-        chain::{AdapterChainFetcher, ChainFetcher},
-        types::GeneralContext,
-        ContextFetcher,
-    },
+    context::{chain::ChainFetcher, types::GeneralContext, ContextFetcher},
     error::NodeError,
+};
+use crate::rpc_stub::committer::{
+    committer_service_server::{CommitterService, CommitterServiceServer},
+    CommitPartialSignatureReply, CommitPartialSignatureRequest,
 };
 use arpa_node_contract_client::{
     adapter::AdapterClientBuilder, controller::ControllerClientBuilder,
     coordinator::CoordinatorClientBuilder, provider::ChainProviderBuilder,
 };
-use arpa_node_core::{ChainIdentity, RandomnessTask, TaskError, TaskType};
+use arpa_node_core::{BLSTaskError, ChainIdentity, RandomnessTask, TaskType};
 use arpa_node_dal::{
-    BLSTasksFetcher, BLSTasksUpdater, GroupInfoFetcher, GroupInfoUpdater, NodeInfoFetcher,
-    SignatureResultCacheFetcher, SignatureResultCacheUpdater,
+    BLSTasksFetcher, BLSTasksUpdater, ContextInfoUpdater, GroupInfoFetcher, GroupInfoUpdater,
+    NodeInfoFetcher, NodeInfoUpdater, SignatureResultCacheFetcher, SignatureResultCacheUpdater,
 };
 use ethers::types::Address;
 use futures::Future;
-use std::sync::Arc;
+use std::{marker::PhantomData, sync::Arc};
+use threshold_bls::group::PairingCurve;
 use tokio::sync::RwLock;
 use tonic::{transport::Server, Request, Response, Status};
 
-pub mod committer_stub {
-    include!("../../../rpc_stub/committer.rs");
-}
+type NodeContext<N, G, T, I, PC> = Arc<RwLock<GeneralContext<N, G, T, I, PC>>>;
 
 pub(crate) struct BLSCommitterServiceServer<
-    N: NodeInfoFetcher,
-    G: GroupInfoFetcher + GroupInfoUpdater,
+    N: NodeInfoFetcher<PC> + NodeInfoUpdater<PC> + ContextInfoUpdater,
+    G: GroupInfoFetcher<PC> + GroupInfoUpdater<PC> + ContextInfoUpdater,
     T: BLSTasksFetcher<RandomnessTask> + BLSTasksUpdater<RandomnessTask>,
     I: ChainIdentity
         + ControllerClientBuilder
         + CoordinatorClientBuilder
-        + AdapterClientBuilder
+        + AdapterClientBuilder<PC>
         + ChainProviderBuilder,
+    PC: PairingCurve,
 > {
     id_address: Address,
     group_cache: Arc<RwLock<G>>,
-    context: Arc<RwLock<GeneralContext<N, G, T, I>>>,
+    context: NodeContext<N, G, T, I, PC>,
+    c: PhantomData<PC>,
 }
 
 impl<
-        N: NodeInfoFetcher,
-        G: GroupInfoFetcher + GroupInfoUpdater,
+        N: NodeInfoFetcher<PC> + NodeInfoUpdater<PC> + ContextInfoUpdater,
+        G: GroupInfoFetcher<PC> + GroupInfoUpdater<PC> + ContextInfoUpdater,
         T: BLSTasksFetcher<RandomnessTask> + BLSTasksUpdater<RandomnessTask>,
         I: ChainIdentity
             + ControllerClientBuilder
             + CoordinatorClientBuilder
-            + AdapterClientBuilder
+            + AdapterClientBuilder<PC>
             + ChainProviderBuilder,
-    > BLSCommitterServiceServer<N, G, T, I>
+        PC: PairingCurve,
+    > BLSCommitterServiceServer<N, G, T, I, PC>
 {
     pub fn new(
         id_address: Address,
         group_cache: Arc<RwLock<G>>,
-        context: Arc<RwLock<GeneralContext<N, G, T, I>>>,
+        context: NodeContext<N, G, T, I, PC>,
     ) -> Self {
         BLSCommitterServiceServer {
             id_address,
             group_cache,
             context,
+            c: PhantomData,
         }
     }
 }
 
 #[tonic::async_trait]
 impl<
-        N: NodeInfoFetcher + Sync + Send + 'static,
-        G: GroupInfoFetcher + GroupInfoUpdater + Sync + Send + 'static,
-        T: BLSTasksFetcher<RandomnessTask> + BLSTasksUpdater<RandomnessTask> + Sync + Send + 'static,
-        I: ChainIdentity
-            + ControllerClientBuilder
-            + CoordinatorClientBuilder
-            + AdapterClientBuilder
-            + ChainProviderBuilder
+        N: NodeInfoFetcher<PC>
+            + NodeInfoUpdater<PC>
+            + ContextInfoUpdater
+            + std::fmt::Debug
+            + Clone
             + Sync
             + Send
             + 'static,
-    > CommitterService for BLSCommitterServiceServer<N, G, T, I>
+        G: GroupInfoFetcher<PC>
+            + GroupInfoUpdater<PC>
+            + ContextInfoUpdater
+            + std::fmt::Debug
+            + Clone
+            + Sync
+            + Send
+            + 'static,
+        T: BLSTasksFetcher<RandomnessTask>
+            + BLSTasksUpdater<RandomnessTask>
+            + std::fmt::Debug
+            + Clone
+            + Sync
+            + Send
+            + 'static,
+        I: ChainIdentity
+            + ControllerClientBuilder
+            + CoordinatorClientBuilder
+            + AdapterClientBuilder<PC>
+            + ChainProviderBuilder
+            + std::fmt::Debug
+            + Clone
+            + Sync
+            + Send
+            + 'static,
+        PC: PairingCurve + std::fmt::Debug + Clone + Sync + Send + 'static,
+    > CommitterService for BLSCommitterServiceServer<N, G, T, I, PC>
 {
     async fn commit_partial_signature(
         &self,
@@ -105,13 +127,14 @@ impl<
             .map_err(|_| Status::invalid_argument(NodeError::AddressFormatError.to_string()))?;
 
         if let Ok(member) = self.group_cache.read().await.get_member(req_id_address) {
-            let partial_public_key = member.partial_public_key.unwrap();
+            let partial_public_key = member.partial_public_key.clone().unwrap();
 
-            let bls_core = SimpleBLSCore {};
-
-            bls_core
-                .partial_verify(&partial_public_key, &req.message, &req.partial_signature)
-                .map_err(|e| Status::internal(e.to_string()))?;
+            SimpleBLSCore::<PC>::partial_verify(
+                &partial_public_key,
+                &req.message,
+                &req.partial_signature,
+            )
+            .map_err(|e| Status::internal(e.to_string()))?;
 
             let chain_id = req.chain_id as usize;
 
@@ -125,27 +148,19 @@ impl<
                             .get_main_chain()
                             .get_randomness_result_cache(),
                         _ => {
-                            if !self.context.read().await.contains_chain(chain_id) {
-                                return Err(Status::invalid_argument(
-                                    NodeError::InvalidChainId(chain_id).to_string(),
-                                ));
-                            }
-                            self.context
-                                .read()
-                                .await
-                                .get_adapter_chain(req.chain_id as usize)
-                                .unwrap()
-                                .get_randomness_result_cache()
+                            return Err(Status::invalid_argument(
+                                NodeError::InvalidChainId(chain_id).to_string(),
+                            ));
                         }
                     };
 
                     if !randomness_result_cache
                         .read()
                         .await
-                        .contains(req.signature_index as usize)
+                        .contains(&req.request_id)
                     {
                         return Err(Status::invalid_argument(
-                            TaskError::CommitterCacheNotExisted.to_string(),
+                            BLSTaskError::CommitterCacheNotExisted.to_string(),
                         ));
                         // because we can't assure reliability of requested partial signature to original message,
                         // we refuse to accept other node's request if the committer has not build this committer cache first.
@@ -154,16 +169,13 @@ impl<
                     let committer_cache_message = randomness_result_cache
                         .read()
                         .await
-                        .get(req.signature_index as usize)
+                        .get(&req.request_id)
                         .unwrap()
                         .result_cache
                         .message
-                        .to_string();
+                        .clone();
 
-                    let req_message = String::from_utf8(req.message)
-                        .map_err(|e| Status::internal(e.to_string()))?;
-
-                    if req_message != committer_cache_message {
+                    if req.message != committer_cache_message {
                         return Err(Status::invalid_argument(
                             NodeError::InvalidTaskMessage.to_string(),
                         ));
@@ -173,120 +185,19 @@ impl<
                         .write()
                         .await
                         .add_partial_signature(
-                            req.signature_index as usize,
+                            req.request_id,
                             req_id_address,
                             req.partial_signature,
                         )
                         .map_err(|_| {
-                            Status::internal(TaskError::CommitterCacheNotExisted.to_string())
+                            Status::internal(BLSTaskError::CommitterCacheNotExisted.to_string())
                         })?;
                 }
 
-                TaskType::GroupRelay => {
-                    let group_relay_result_cache = self
-                        .context
-                        .read()
-                        .await
-                        .get_main_chain()
-                        .get_group_relay_result_cache();
-
-                    if !group_relay_result_cache
-                        .read()
-                        .await
-                        .contains(req.signature_index as usize)
-                    {
-                        return Err(Status::invalid_argument(
-                            TaskError::CommitterCacheNotExisted.to_string(),
-                        ));
-                        // because we can't assure reliability of requested partial signature to original message,
-                        // we refuse to accept other node's request if the committer has not build this committer cache first.
-                    }
-
-                    let relayed_group = group_relay_result_cache
-                        .read()
-                        .await
-                        .get(req.signature_index as usize)
-                        .unwrap()
-                        .result_cache
-                        .relayed_group
-                        .clone();
-
-                    let relayed_group_as_bytes = bincode::serialize(&relayed_group).unwrap();
-
-                    if req.message != relayed_group_as_bytes {
-                        return Err(Status::invalid_argument(
-                            NodeError::InvalidTaskMessage.to_string(),
-                        ));
-                    }
-
-                    group_relay_result_cache
-                        .write()
-                        .await
-                        .add_partial_signature(
-                            req.signature_index as usize,
-                            req_id_address,
-                            req.partial_signature,
-                        )
-                        .map_err(|_| {
-                            Status::internal(TaskError::CommitterCacheNotExisted.to_string())
-                        })?;
-                }
-                TaskType::GroupRelayConfirmation => {
-                    if chain_id == 0 || !self.context.read().await.contains_chain(chain_id) {
-                        return Err(Status::invalid_argument(
-                            NodeError::InvalidChainId(chain_id).to_string(),
-                        ));
-                    }
-
-                    let group_relay_confirmation_result_cache = self
-                        .context
-                        .read()
-                        .await
-                        .get_adapter_chain(req.chain_id as usize)
-                        .unwrap()
-                        .get_group_relay_confirmation_result_cache();
-
-                    if !group_relay_confirmation_result_cache
-                        .read()
-                        .await
-                        .contains(req.signature_index as usize)
-                    {
-                        return Err(Status::invalid_argument(
-                            TaskError::CommitterCacheNotExisted.to_string(),
-                        ));
-                        // because we can't assure reliability of requested partial signature to original message,
-                        // we refuse to accept other node's request if the committer has not build this committer cache first.
-                    }
-
-                    let group_relay_confirmation = group_relay_confirmation_result_cache
-                        .read()
-                        .await
-                        .get(req.signature_index as usize)
-                        .unwrap()
-                        .result_cache
-                        .group_relay_confirmation
-                        .clone();
-
-                    let group_relay_confirmation_as_bytes =
-                        bincode::serialize(&group_relay_confirmation).unwrap();
-
-                    if req.message != group_relay_confirmation_as_bytes {
-                        return Err(Status::invalid_argument(
-                            NodeError::InvalidTaskMessage.to_string(),
-                        ));
-                    }
-
-                    group_relay_confirmation_result_cache
-                        .write()
-                        .await
-                        .add_partial_signature(
-                            req.signature_index as usize,
-                            req_id_address,
-                            req.partial_signature,
-                        )
-                        .map_err(|_| {
-                            Status::internal(TaskError::CommitterCacheNotExisted.to_string())
-                        })?;
+                _ => {
+                    return Err(Status::invalid_argument(
+                        NodeError::InvalidTaskType.to_string(),
+                    ));
                 }
             }
 
@@ -299,20 +210,43 @@ impl<
 
 pub async fn start_committer_server_with_shutdown<
     F: Future<Output = ()>,
-    N: NodeInfoFetcher + Sync + Send + 'static,
-    G: GroupInfoFetcher + GroupInfoUpdater + Sync + Send + 'static,
-    T: BLSTasksFetcher<RandomnessTask> + BLSTasksUpdater<RandomnessTask> + Sync + Send + 'static,
-    I: ChainIdentity
-        + ControllerClientBuilder
-        + CoordinatorClientBuilder
-        + AdapterClientBuilder
-        + ChainProviderBuilder
+    N: NodeInfoFetcher<PC>
+        + NodeInfoUpdater<PC>
+        + ContextInfoUpdater
+        + std::fmt::Debug
+        + Clone
         + Sync
         + Send
         + 'static,
+    G: GroupInfoFetcher<PC>
+        + GroupInfoUpdater<PC>
+        + ContextInfoUpdater
+        + std::fmt::Debug
+        + Clone
+        + Sync
+        + Send
+        + 'static,
+    T: BLSTasksFetcher<RandomnessTask>
+        + BLSTasksUpdater<RandomnessTask>
+        + std::fmt::Debug
+        + Clone
+        + Sync
+        + Send
+        + 'static,
+    I: ChainIdentity
+        + ControllerClientBuilder
+        + CoordinatorClientBuilder
+        + AdapterClientBuilder<PC>
+        + ChainProviderBuilder
+        + std::fmt::Debug
+        + Clone
+        + Sync
+        + Send
+        + 'static,
+    PC: PairingCurve + std::fmt::Debug + Clone + Sync + Send + 'static,
 >(
     endpoint: String,
-    context: Arc<RwLock<GeneralContext<N, G, T, I>>>,
+    context: NodeContext<N, G, T, I, PC>,
     shutdown_signal: F,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let addr = endpoint.parse()?;
@@ -339,20 +273,43 @@ pub async fn start_committer_server_with_shutdown<
 }
 
 pub async fn start_committer_server<
-    N: NodeInfoFetcher + Sync + Send + 'static,
-    G: GroupInfoFetcher + GroupInfoUpdater + Sync + Send + 'static,
-    T: BLSTasksFetcher<RandomnessTask> + BLSTasksUpdater<RandomnessTask> + Sync + Send + 'static,
-    I: ChainIdentity
-        + ControllerClientBuilder
-        + CoordinatorClientBuilder
-        + AdapterClientBuilder
-        + ChainProviderBuilder
+    N: NodeInfoFetcher<PC>
+        + NodeInfoUpdater<PC>
+        + ContextInfoUpdater
+        + std::fmt::Debug
+        + Clone
         + Sync
         + Send
         + 'static,
+    G: GroupInfoFetcher<PC>
+        + GroupInfoUpdater<PC>
+        + ContextInfoUpdater
+        + std::fmt::Debug
+        + Clone
+        + Sync
+        + Send
+        + 'static,
+    T: BLSTasksFetcher<RandomnessTask>
+        + BLSTasksUpdater<RandomnessTask>
+        + std::fmt::Debug
+        + Clone
+        + Sync
+        + Send
+        + 'static,
+    I: ChainIdentity
+        + ControllerClientBuilder
+        + CoordinatorClientBuilder
+        + AdapterClientBuilder<PC>
+        + ChainProviderBuilder
+        + std::fmt::Debug
+        + Clone
+        + Sync
+        + Send
+        + 'static,
+    PC: PairingCurve + std::fmt::Debug + Clone + Sync + Send + 'static,
 >(
     endpoint: String,
-    context: Arc<RwLock<GeneralContext<N, G, T, I>>>,
+    context: NodeContext<N, G, T, I, PC>,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let addr = endpoint.parse()?;
 

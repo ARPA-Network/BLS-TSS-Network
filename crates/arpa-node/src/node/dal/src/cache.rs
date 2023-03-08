@@ -1,13 +1,14 @@
 use crate::error::{DataAccessResult, GroupError, NodeInfoError};
+use crate::ContextInfoUpdater;
 
 use super::{
     BLSTasksFetcher, BLSTasksUpdater, BlockInfoFetcher, BlockInfoUpdater, GroupInfoFetcher,
     GroupInfoUpdater, NodeInfoFetcher, NodeInfoUpdater, ResultCache, SignatureResultCacheFetcher,
     SignatureResultCacheUpdater,
 };
+use arpa_node_core::log::encoder;
 use arpa_node_core::{
-    BLSTask, ContractGroup, DKGStatus, DKGTask, Group, GroupRelayConfirmation,
-    GroupRelayConfirmationTask, GroupRelayTask, Member, RandomnessTask, Task, TaskError,
+    BLSTask, BLSTaskError, DKGStatus, DKGTask, Group, Member, RandomnessTask, Task,
     RANDOMNESS_TASK_EXCLUSIVE_WINDOW,
 };
 use async_trait::async_trait;
@@ -15,13 +16,11 @@ use dkg_core::primitives::DKGOutput;
 use ethers_core::types::Address;
 use log::info;
 use std::collections::{BTreeMap, HashMap};
-use threshold_bls::group::Element;
-use threshold_bls::{
-    curve::bls12381::{Curve, Scalar, G1},
-    sig::Share,
-};
+use threshold_bls::group::{Curve, Element, PairingCurve};
+use threshold_bls::serialize::point_to_hex;
+use threshold_bls::sig::Share;
 
-#[derive(Default)]
+#[derive(Debug, Default)]
 pub struct InMemoryBlockInfoCache {
     block_height: usize,
 }
@@ -44,15 +43,29 @@ impl BlockInfoUpdater for InMemoryBlockInfoCache {
     }
 }
 
-#[derive(Debug)]
-pub struct InMemoryNodeInfoCache {
+#[derive(Clone)]
+pub struct InMemoryNodeInfoCache<C: PairingCurve> {
     pub(crate) id_address: Address,
     pub(crate) node_rpc_endpoint: Option<String>,
-    pub(crate) dkg_private_key: Option<Scalar>,
-    pub(crate) dkg_public_key: Option<G1>,
+    pub(crate) dkg_private_key: Option<C::Scalar>,
+    pub(crate) dkg_public_key: Option<C::G2>,
 }
 
-impl InMemoryNodeInfoCache {
+impl<C: PairingCurve> std::fmt::Debug for InMemoryNodeInfoCache<C> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("InMemoryNodeInfoCache")
+            .field("id_address", &self.id_address)
+            .field("node_rpc_endpoint", &self.node_rpc_endpoint)
+            .field("dkg_private_key", &"ignored")
+            .field(
+                "dkg_public_key",
+                &(self.dkg_public_key.as_ref()).map(point_to_hex),
+            )
+            .finish()
+    }
+}
+
+impl<C: PairingCurve> InMemoryNodeInfoCache<C> {
     pub fn new(id_address: Address) -> Self {
         InMemoryNodeInfoCache {
             id_address,
@@ -65,8 +78,8 @@ impl InMemoryNodeInfoCache {
     pub fn rebuild(
         id_address: Address,
         node_rpc_endpoint: String,
-        dkg_private_key: Scalar,
-        dkg_public_key: G1,
+        dkg_private_key: C::Scalar,
+        dkg_public_key: C::G2,
     ) -> Self {
         InMemoryNodeInfoCache {
             id_address,
@@ -77,25 +90,33 @@ impl InMemoryNodeInfoCache {
     }
 }
 
+impl<C: PairingCurve> ContextInfoUpdater for InMemoryNodeInfoCache<C> {
+    fn refresh_context_entry(&self) {
+        encoder::CONTEXT_INFO.write()[0] = format!("{:?}", &self);
+    }
+}
+
 #[async_trait]
-impl NodeInfoUpdater for InMemoryNodeInfoCache {
+impl<C: PairingCurve> NodeInfoUpdater<C> for InMemoryNodeInfoCache<C> {
     async fn set_node_rpc_endpoint(&mut self, node_rpc_endpoint: String) -> DataAccessResult<()> {
         self.node_rpc_endpoint = Some(node_rpc_endpoint);
+        self.refresh_context_entry();
         Ok(())
     }
 
     async fn set_dkg_key_pair(
         &mut self,
-        dkg_private_key: Scalar,
-        dkg_public_key: G1,
+        dkg_private_key: C::Scalar,
+        dkg_public_key: C::G2,
     ) -> DataAccessResult<()> {
         self.dkg_private_key = Some(dkg_private_key);
         self.dkg_public_key = Some(dkg_public_key);
+        self.refresh_context_entry();
         Ok(())
     }
 }
 
-impl NodeInfoFetcher for InMemoryNodeInfoCache {
+impl<C: PairingCurve> NodeInfoFetcher<C> for InMemoryNodeInfoCache<C> {
     fn get_id_address(&self) -> DataAccessResult<Address> {
         Ok(self.id_address)
     }
@@ -107,37 +128,49 @@ impl NodeInfoFetcher for InMemoryNodeInfoCache {
             .ok_or_else(|| NodeInfoError::NoRpcEndpoint.into())
     }
 
-    fn get_dkg_private_key(&self) -> DataAccessResult<&Scalar> {
+    fn get_dkg_private_key(&self) -> DataAccessResult<&C::Scalar> {
         self.dkg_private_key
             .as_ref()
             .ok_or_else(|| NodeInfoError::NoDKGKeyPair.into())
     }
 
-    fn get_dkg_public_key(&self) -> DataAccessResult<&G1> {
+    fn get_dkg_public_key(&self) -> DataAccessResult<&C::G2> {
         self.dkg_public_key
             .as_ref()
             .ok_or_else(|| NodeInfoError::NoDKGKeyPair.into())
     }
 }
 
-#[derive(Debug)]
-pub struct InMemoryGroupInfoCache {
-    pub(crate) share: Option<Share<Scalar>>,
-    pub(crate) group: Group,
+#[derive(Clone)]
+pub struct InMemoryGroupInfoCache<C: PairingCurve> {
+    pub(crate) share: Option<Share<C::Scalar>>,
+    pub(crate) group: Group<C>,
     pub(crate) dkg_status: DKGStatus,
     pub(crate) self_index: usize,
     pub(crate) dkg_start_block_height: usize,
 }
 
-impl Default for InMemoryGroupInfoCache {
+impl<C: PairingCurve> Default for InMemoryGroupInfoCache<C> {
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl InMemoryGroupInfoCache {
+impl<C: PairingCurve> std::fmt::Debug for InMemoryGroupInfoCache<C> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("InMemoryGroupInfoCache")
+            .field("share", &"ignored")
+            .field("group", &self.group)
+            .field("dkg_status", &self.dkg_status)
+            .field("self_index", &self.self_index)
+            .field("dkg_start_block_height", &self.dkg_start_block_height)
+            .finish()
+    }
+}
+
+impl<C: PairingCurve> InMemoryGroupInfoCache<C> {
     pub fn new() -> Self {
-        let group: Group = Group::new();
+        let group: Group<C> = Group::new();
 
         InMemoryGroupInfoCache {
             share: None,
@@ -149,8 +182,8 @@ impl InMemoryGroupInfoCache {
     }
 
     pub fn rebuild(
-        share: Option<Share<Scalar>>,
-        group: Group,
+        share: Option<Share<C::Scalar>>,
+        group: Group<C>,
         dkg_status: DKGStatus,
         self_index: usize,
         dkg_start_block_height: usize,
@@ -164,12 +197,8 @@ impl InMemoryGroupInfoCache {
         }
     }
 
-    pub fn get_group(&self) -> &Group {
-        &self.group
-    }
-
     fn only_has_group_task(&self) -> DataAccessResult<()> {
-        if self.group.index == 0 {
+        if self.dkg_start_block_height == 0 {
             return Err(GroupError::NoGroupTask.into());
         }
 
@@ -177,8 +206,14 @@ impl InMemoryGroupInfoCache {
     }
 }
 
+impl<C: PairingCurve> ContextInfoUpdater for InMemoryGroupInfoCache<C> {
+    fn refresh_context_entry(&self) {
+        encoder::CONTEXT_INFO.write()[1] = format!("{:?}", &self);
+    }
+}
+
 #[async_trait]
-impl GroupInfoUpdater for InMemoryGroupInfoCache {
+impl<PC: PairingCurve + Send + Sync> GroupInfoUpdater<PC> for InMemoryGroupInfoCache<PC> {
     async fn update_dkg_status(
         &mut self,
         index: usize,
@@ -206,6 +241,8 @@ impl GroupInfoUpdater for InMemoryGroupInfoCache {
 
         self.dkg_status = dkg_status;
 
+        self.refresh_context_entry();
+
         Ok(true)
     }
 
@@ -230,25 +267,30 @@ impl GroupInfoUpdater for InMemoryGroupInfoCache {
 
         self.dkg_start_block_height = task.assignment_block_height;
 
-        task.members.iter().for_each(|(address, index)| {
-            let member = Member {
-                index: *index,
-                id_address: *address,
-                rpc_endpint: None,
-                partial_public_key: None,
-            };
-            self.group.members.insert(*address, member);
-        });
+        task.members
+            .iter()
+            .enumerate()
+            .for_each(|(index, address)| {
+                let member = Member {
+                    index,
+                    id_address: *address,
+                    rpc_endpoint: None,
+                    partial_public_key: None,
+                };
+                self.group.members.insert(*address, member);
+            });
+
+        self.refresh_context_entry();
 
         Ok(())
     }
 
-    async fn save_output(
+    async fn save_output<C: Curve>(
         &mut self,
         index: usize,
         epoch: usize,
-        output: DKGOutput<Curve>,
-    ) -> DataAccessResult<(G1, G1, Vec<Address>)> {
+        output: DKGOutput<C>,
+    ) -> DataAccessResult<(PC::G2, PC::G2, Vec<Address>)> {
         self.only_has_group_task()?;
 
         if self.group.index != index {
@@ -279,16 +321,19 @@ impl GroupInfoUpdater for InMemoryGroupInfoCache {
             .map(|(id_address, _)| *id_address)
             .collect::<Vec<_>>();
 
-        let public_key = *output.public.public_key();
+        let public_key: PC::G2 =
+            bincode::deserialize(&bincode::serialize(&output.public.public_key())?)?;
 
-        let mut partial_public_key = G1::new();
+        let mut partial_public_key = PC::G2::new();
 
-        self.share = Some(output.share);
+        let share = bincode::deserialize(&bincode::serialize(&output.share)?)?;
+
+        self.share = Some(share);
         self.group.size = qualified_node_indices.len();
         self.group
             .members
             .retain(|node, _| !disqualified_nodes.contains(node));
-        self.group.public_key = Some(public_key);
+        self.group.public_key = Some(public_key.clone());
 
         for (_, member) in self.group.members.iter_mut() {
             if let Some(node) = output
@@ -298,16 +343,21 @@ impl GroupInfoUpdater for InMemoryGroupInfoCache {
                 .find(|node| member.index == node.id() as usize)
             {
                 if let Some(rpc_endpoint) = node.get_rpc_endpoint() {
-                    member.rpc_endpint = Some(rpc_endpoint.to_string());
+                    member.rpc_endpoint = Some(rpc_endpoint.to_string());
                 }
             }
 
-            member.partial_public_key = Some(output.public.eval(member.index as u32).value);
+            let member_partial_public_key = bincode::deserialize(&bincode::serialize(
+                &output.public.eval(member.index as u32).value,
+            )?)?;
+            member.partial_public_key = Some(member_partial_public_key);
 
             if self.self_index == member.index {
-                partial_public_key = member.partial_public_key.unwrap();
+                partial_public_key = member.partial_public_key.clone().unwrap();
             }
         }
+
+        self.refresh_context_entry();
 
         Ok((public_key, partial_public_key, disqualified_nodes))
     }
@@ -336,11 +386,19 @@ impl GroupInfoUpdater for InMemoryGroupInfoCache {
 
         self.group.state = true;
 
+        self.refresh_context_entry();
+
         Ok(())
     }
 }
 
-impl GroupInfoFetcher for InMemoryGroupInfoCache {
+impl<C: PairingCurve> GroupInfoFetcher<C> for InMemoryGroupInfoCache<C> {
+    fn get_group(&self) -> DataAccessResult<&Group<C>> {
+        self.only_has_group_task()?;
+
+        Ok(&self.group)
+    }
+
     fn get_index(&self) -> DataAccessResult<usize> {
         self.only_has_group_task()?;
 
@@ -377,7 +435,7 @@ impl GroupInfoFetcher for InMemoryGroupInfoCache {
         Ok(self.self_index)
     }
 
-    fn get_public_key(&self) -> DataAccessResult<&G1> {
+    fn get_public_key(&self) -> DataAccessResult<&C::G2> {
         self.only_has_group_task()?;
 
         self.group
@@ -387,7 +445,7 @@ impl GroupInfoFetcher for InMemoryGroupInfoCache {
             .map_err(|e| e.into())
     }
 
-    fn get_secret_share(&self) -> DataAccessResult<&Share<Scalar>> {
+    fn get_secret_share(&self) -> DataAccessResult<&Share<C::Scalar>> {
         self.only_has_group_task()?;
 
         self.share
@@ -396,19 +454,19 @@ impl GroupInfoFetcher for InMemoryGroupInfoCache {
             .map_err(|e| e.into())
     }
 
-    fn get_members(&self) -> DataAccessResult<&BTreeMap<Address, Member>> {
+    fn get_members(&self) -> DataAccessResult<&BTreeMap<Address, Member<C>>> {
         self.only_has_group_task()?;
 
         Ok(&self.group.members)
     }
 
-    fn get_member(&self, id_address: Address) -> DataAccessResult<&Member> {
+    fn get_member(&self, id_address: Address) -> DataAccessResult<&Member<C>> {
         self.only_has_group_task()?;
 
         self.group
             .members
             .get(&id_address)
-            .ok_or(GroupError::GroupNotExisted)
+            .ok_or(GroupError::MemberNotExisted)
             .map_err(|e| e.into())
     }
 
@@ -437,39 +495,36 @@ impl GroupInfoFetcher for InMemoryGroupInfoCache {
     }
 }
 
-#[derive(Default)]
+#[derive(Default, Debug, Clone)]
 pub struct InMemoryBLSTasksQueue<T: Task> {
-    bls_tasks: Vec<BLSTask<T>>,
+    bls_tasks: HashMap<Vec<u8>, BLSTask<T>>,
 }
 
 impl<T: Task> InMemoryBLSTasksQueue<T> {
     pub fn new() -> Self {
         InMemoryBLSTasksQueue {
-            bls_tasks: Vec::new(),
+            bls_tasks: HashMap::new(),
         }
     }
 }
 
 #[async_trait]
 impl<T: Task + Sync + Clone> BLSTasksFetcher<T> for InMemoryBLSTasksQueue<T> {
-    async fn contains(&self, task_index: usize) -> DataAccessResult<bool> {
-        Ok(self
-            .bls_tasks
-            .iter()
-            .any(|task| task.task.index() == task_index))
+    async fn contains(&self, task_request_id: &[u8]) -> DataAccessResult<bool> {
+        Ok(self.bls_tasks.contains_key(task_request_id))
     }
 
-    async fn get(&self, task_index: usize) -> DataAccessResult<T> {
+    async fn get(&self, task_request_id: &[u8]) -> DataAccessResult<T> {
         self.bls_tasks
-            .get(task_index)
+            .get(task_request_id)
             .map(|task| task.task.clone())
-            .ok_or_else(|| TaskError::TaskNotFound.into())
+            .ok_or_else(|| BLSTaskError::TaskNotFound.into())
     }
 
-    async fn is_handled(&self, task_index: usize) -> DataAccessResult<bool> {
+    async fn is_handled(&self, task_request_id: &[u8]) -> DataAccessResult<bool> {
         Ok(*self
             .bls_tasks
-            .get(task_index)
+            .get(task_request_id)
             .map(|task| &task.state)
             .unwrap_or(&false))
     }
@@ -478,7 +533,8 @@ impl<T: Task + Sync + Clone> BLSTasksFetcher<T> for InMemoryBLSTasksQueue<T> {
 #[async_trait]
 impl BLSTasksUpdater<RandomnessTask> for InMemoryBLSTasksQueue<RandomnessTask> {
     async fn add(&mut self, task: RandomnessTask) -> DataAccessResult<()> {
-        self.bls_tasks.push(BLSTask { task, state: false });
+        self.bls_tasks
+            .insert(task.request_id().to_vec(), BLSTask { task, state: false });
 
         Ok(())
     }
@@ -491,13 +547,13 @@ impl BLSTasksUpdater<RandomnessTask> for InMemoryBLSTasksQueue<RandomnessTask> {
         let available_tasks = self
             .bls_tasks
             .iter_mut()
-            .filter(|task| !task.state)
-            .filter(|task| {
+            .filter(|(_, task)| !task.state)
+            .filter(|(_, task)| {
                 task.task.group_index == current_group_index
                     || current_block_height
                         > task.task.assignment_block_height + RANDOMNESS_TASK_EXCLUSIVE_WINDOW
             })
-            .map(|task| {
+            .map(|(_, task)| {
                 task.state = true;
                 task.task.clone()
             })
@@ -507,67 +563,9 @@ impl BLSTasksUpdater<RandomnessTask> for InMemoryBLSTasksQueue<RandomnessTask> {
     }
 }
 
-#[async_trait]
-impl BLSTasksUpdater<GroupRelayTask> for InMemoryBLSTasksQueue<GroupRelayTask> {
-    async fn add(&mut self, task: GroupRelayTask) -> DataAccessResult<()> {
-        self.bls_tasks.push(BLSTask { task, state: false });
-
-        Ok(())
-    }
-
-    async fn check_and_get_available_tasks(
-        &mut self,
-        _: usize,
-        current_group_index: usize,
-    ) -> DataAccessResult<Vec<GroupRelayTask>> {
-        let available_tasks = self
-            .bls_tasks
-            .iter_mut()
-            .filter(|task| !task.state)
-            .filter(|task| task.task.relayed_group_index != current_group_index)
-            .map(|task| {
-                task.state = true;
-                task.task.clone()
-            })
-            .collect::<Vec<_>>();
-
-        Ok(available_tasks)
-    }
-}
-
-#[async_trait]
-impl BLSTasksUpdater<GroupRelayConfirmationTask>
-    for InMemoryBLSTasksQueue<GroupRelayConfirmationTask>
-{
-    async fn add(&mut self, task: GroupRelayConfirmationTask) -> DataAccessResult<()> {
-        self.bls_tasks.push(BLSTask { task, state: false });
-
-        Ok(())
-    }
-
-    async fn check_and_get_available_tasks(
-        &mut self,
-        _: usize,
-        current_group_index: usize,
-    ) -> DataAccessResult<Vec<GroupRelayConfirmationTask>> {
-        let available_tasks = self
-            .bls_tasks
-            .iter_mut()
-            .filter(|task| !task.state)
-            .filter(|task| task.task.relayed_group_index == current_group_index)
-            .map(|task| {
-                task.state = true;
-                task.task.clone()
-            })
-            .collect::<Vec<_>>();
-
-        Ok(available_tasks)
-    }
-}
-
-#[derive(Default)]
+#[derive(Debug, Default)]
 pub struct InMemorySignatureResultCache<T: ResultCache> {
-    signature_result_caches: HashMap<usize, BLSResultCache<T>>,
+    signature_result_caches: HashMap<Vec<u8>, BLSResultCache<T>>,
 }
 
 impl<T: ResultCache> InMemorySignatureResultCache<T> {
@@ -579,70 +577,39 @@ impl<T: ResultCache> InMemorySignatureResultCache<T> {
 }
 
 impl Task for RandomnessResultCache {
-    fn index(&self) -> usize {
-        self.randomness_task_index
-    }
-}
-impl Task for GroupRelayResultCache {
-    fn index(&self) -> usize {
-        self.group_relay_task_index
-    }
-}
-impl Task for GroupRelayConfirmationResultCache {
-    fn index(&self) -> usize {
-        self.group_relay_confirmation_task_index
+    fn request_id(&self) -> &[u8] {
+        &self.randomness_task_request_id
     }
 }
 
 impl ResultCache for RandomnessResultCache {
-    type M = String;
-}
-impl ResultCache for GroupRelayResultCache {
-    type M = ContractGroup;
-}
-impl ResultCache for GroupRelayConfirmationResultCache {
-    type M = GroupRelayConfirmation;
+    type Task = RandomnessTask;
+    type M = Vec<u8>;
 }
 
+#[derive(Debug)]
 pub struct BLSResultCache<T: ResultCache> {
     pub result_cache: T,
+    pub task: T::Task,
     pub state: bool,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct RandomnessResultCache {
     pub group_index: usize,
-    pub randomness_task_index: usize,
-    pub message: String,
-    pub threshold: usize,
-    pub partial_signatures: HashMap<Address, Vec<u8>>,
-}
-
-#[derive(Clone)]
-pub struct GroupRelayResultCache {
-    pub group_index: usize,
-    pub group_relay_task_index: usize,
-    pub relayed_group: ContractGroup,
-    pub threshold: usize,
-    pub partial_signatures: HashMap<Address, Vec<u8>>,
-}
-
-#[derive(Clone)]
-pub struct GroupRelayConfirmationResultCache {
-    pub group_index: usize,
-    pub group_relay_confirmation_task_index: usize,
-    pub group_relay_confirmation: GroupRelayConfirmation,
+    pub randomness_task_request_id: Vec<u8>,
+    pub message: Vec<u8>,
     pub threshold: usize,
     pub partial_signatures: HashMap<Address, Vec<u8>>,
 }
 
 impl<T: ResultCache> SignatureResultCacheFetcher<T> for InMemorySignatureResultCache<T> {
-    fn contains(&self, signature_index: usize) -> bool {
-        self.signature_result_caches.contains_key(&signature_index)
+    fn contains(&self, task_request_id: &[u8]) -> bool {
+        self.signature_result_caches.contains_key(task_request_id)
     }
 
-    fn get(&self, signature_index: usize) -> Option<&BLSResultCache<T>> {
-        self.signature_result_caches.get(&signature_index)
+    fn get(&self, task_request_id: &[u8]) -> Option<&BLSResultCache<T>> {
+        self.signature_result_caches.get(task_request_id)
     }
 }
 
@@ -652,22 +619,23 @@ impl SignatureResultCacheUpdater<RandomnessResultCache>
     fn add(
         &mut self,
         group_index: usize,
-        signature_index: usize,
-        message: String,
+        task: RandomnessTask,
+        message: Vec<u8>,
         threshold: usize,
     ) -> DataAccessResult<bool> {
         let signature_result_cache = RandomnessResultCache {
             group_index,
-            randomness_task_index: signature_index,
+            randomness_task_request_id: task.request_id.clone(),
             message,
             threshold,
             partial_signatures: HashMap::new(),
         };
 
         self.signature_result_caches.insert(
-            signature_index,
+            task.request_id.clone(),
             BLSResultCache {
                 result_cache: signature_result_cache,
+                task,
                 state: false,
             },
         );
@@ -677,14 +645,14 @@ impl SignatureResultCacheUpdater<RandomnessResultCache>
 
     fn add_partial_signature(
         &mut self,
-        signature_index: usize,
+        task_request_id: Vec<u8>,
         member_address: Address,
         partial_signature: Vec<u8>,
     ) -> DataAccessResult<bool> {
         let signature_result_cache = self
             .signature_result_caches
-            .get_mut(&signature_index)
-            .ok_or(TaskError::CommitterCacheNotExisted)?;
+            .get_mut(&task_request_id)
+            .ok_or(BLSTaskError::CommitterCacheNotExisted)?;
 
         signature_result_cache
             .result_cache
@@ -694,135 +662,17 @@ impl SignatureResultCacheUpdater<RandomnessResultCache>
         Ok(true)
     }
 
-    fn get_ready_to_commit_signatures(&mut self) -> Vec<RandomnessResultCache> {
+    fn get_ready_to_commit_signatures(
+        &mut self,
+        current_block_height: usize,
+    ) -> Vec<RandomnessResultCache> {
         self.signature_result_caches
             .values_mut()
             .filter(|v| {
-                !v.state && v.result_cache.partial_signatures.len() >= v.result_cache.threshold
-            })
-            .map(|v| {
-                v.state = true;
-                v.result_cache.clone()
-            })
-            .collect::<Vec<_>>()
-    }
-}
-
-impl SignatureResultCacheUpdater<GroupRelayResultCache>
-    for InMemorySignatureResultCache<GroupRelayResultCache>
-{
-    fn add(
-        &mut self,
-        group_index: usize,
-        signature_index: usize,
-        message: ContractGroup,
-        threshold: usize,
-    ) -> DataAccessResult<bool> {
-        let signature_result_cache = GroupRelayResultCache {
-            group_index,
-            group_relay_task_index: signature_index,
-            relayed_group: message,
-            threshold,
-            partial_signatures: HashMap::new(),
-        };
-
-        self.signature_result_caches.insert(
-            signature_index,
-            BLSResultCache {
-                result_cache: signature_result_cache,
-                state: false,
-            },
-        );
-
-        Ok(true)
-    }
-
-    fn add_partial_signature(
-        &mut self,
-        signature_index: usize,
-        member_address: Address,
-        partial_signature: Vec<u8>,
-    ) -> DataAccessResult<bool> {
-        let signature_result_cache = self
-            .signature_result_caches
-            .get_mut(&signature_index)
-            .ok_or(TaskError::CommitterCacheNotExisted)?;
-
-        signature_result_cache
-            .result_cache
-            .partial_signatures
-            .insert(member_address, partial_signature);
-
-        Ok(true)
-    }
-
-    fn get_ready_to_commit_signatures(&mut self) -> Vec<GroupRelayResultCache> {
-        self.signature_result_caches
-            .values_mut()
-            .filter(|v| {
-                !v.state && v.result_cache.partial_signatures.len() >= v.result_cache.threshold
-            })
-            .map(|v| {
-                v.state = true;
-                v.result_cache.clone()
-            })
-            .collect::<Vec<_>>()
-    }
-}
-
-impl SignatureResultCacheUpdater<GroupRelayConfirmationResultCache>
-    for InMemorySignatureResultCache<GroupRelayConfirmationResultCache>
-{
-    fn add(
-        &mut self,
-        group_index: usize,
-        signature_index: usize,
-        message: GroupRelayConfirmation,
-        threshold: usize,
-    ) -> DataAccessResult<bool> {
-        let signature_result_cache = GroupRelayConfirmationResultCache {
-            group_index,
-            group_relay_confirmation_task_index: signature_index,
-            group_relay_confirmation: message,
-            threshold,
-            partial_signatures: HashMap::new(),
-        };
-
-        self.signature_result_caches.insert(
-            signature_index,
-            BLSResultCache {
-                result_cache: signature_result_cache,
-                state: false,
-            },
-        );
-
-        Ok(true)
-    }
-
-    fn add_partial_signature(
-        &mut self,
-        signature_index: usize,
-        member_address: Address,
-        partial_signature: Vec<u8>,
-    ) -> DataAccessResult<bool> {
-        let signature_result_cache = self
-            .signature_result_caches
-            .get_mut(&signature_index)
-            .ok_or(TaskError::CommitterCacheNotExisted)?;
-
-        signature_result_cache
-            .result_cache
-            .partial_signatures
-            .insert(member_address, partial_signature);
-
-        Ok(true)
-    }
-
-    fn get_ready_to_commit_signatures(&mut self) -> Vec<GroupRelayConfirmationResultCache> {
-        self.signature_result_caches
-            .values_mut()
-            .filter(|v| {
-                !v.state && v.result_cache.partial_signatures.len() >= v.result_cache.threshold
+                (current_block_height
+                    >= v.task.assignment_block_height + v.task.request_confirmations)
+                    && !v.state
+                    && v.result_cache.partial_signatures.len() >= v.result_cache.threshold
             })
             .map(|v| {
                 v.state = true;

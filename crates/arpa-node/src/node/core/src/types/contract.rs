@@ -1,24 +1,25 @@
 use crate::address_to_string;
 use crate::types::node::{Group as NodeGroup, Member as NodeMember};
-use ethers_core::types::Address;
+use ethers_core::types::{Address, U256};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use std::hash::{Hash, Hasher};
+use threshold_bls::group::PairingCurve;
 
 pub const GROUP_MAX_CAPACITY: usize = 10;
 
-pub const RANDOMNESS_TASK_EXCLUSIVE_WINDOW: usize = 30;
+pub const RANDOMNESS_TASK_EXCLUSIVE_WINDOW: usize = 10;
 
 pub struct Node {
-    pub id_address: String,
+    pub id_address: Address,
     pub id_public_key: Vec<u8>,
     pub state: bool,
     pub pending_until_block: usize,
-    pub staking: usize,
+    pub staking: U256,
 }
 
-impl From<NodeGroup> for ContractGroup {
-    fn from(g: NodeGroup) -> Self {
+impl<C: PairingCurve> From<NodeGroup<C>> for ContractGroup {
+    fn from(g: NodeGroup<C>) -> Self {
         let public_key = if let Some(k) = g.public_key {
             bincode::serialize(&k).unwrap()
         } else {
@@ -49,8 +50,8 @@ impl From<NodeGroup> for ContractGroup {
     }
 }
 
-impl From<NodeMember> for ContractMember {
-    fn from(m: NodeMember) -> Self {
+impl<C: PairingCurve> From<NodeMember<C>> for ContractMember {
+    fn from(m: NodeMember<C>) -> Self {
         let partial_public_key = if let Some(k) = m.partial_public_key {
             bincode::serialize(&k).unwrap()
         } else {

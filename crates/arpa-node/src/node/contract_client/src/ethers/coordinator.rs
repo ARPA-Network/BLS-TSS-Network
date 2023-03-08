@@ -1,28 +1,22 @@
+use super::{provider::NONCE, WalletSigner};
 use crate::{
+    contract_stub::coordinator::Coordinator,
     coordinator::{
         CoordinatorClientBuilder, CoordinatorTransactions, CoordinatorViews, DKGContractError,
     },
     error::{ContractClientError, ContractClientResult},
-    ServiceClient,
+    NonceManager, ServiceClient, TransactionCaller,
 };
-
-use self::coordinator_stub::Coordinator;
-use super::WalletSigner;
 use arpa_node_core::{ChainIdentity, GeneralChainIdentity};
 use async_trait::async_trait;
 use dkg_core::{
     primitives::{BundledJustification, BundledResponses, BundledShares},
     BoardPublisher,
 };
-use ethers::prelude::*;
+use ethers::prelude::{builders::ContractCall, *};
 use log::info;
 use std::{convert::TryFrom, sync::Arc, time::Duration};
-use threshold_bls::curve::bls12381::Curve;
-
-#[allow(clippy::useless_conversion)]
-pub mod coordinator_stub {
-    include!("../../../../../contract_stub/coordinator.rs");
-}
+use threshold_bls::group::Curve;
 
 pub struct CoordinatorClient {
     coordinator_address: Address,
@@ -33,7 +27,7 @@ impl CoordinatorClient {
     pub fn new(coordinator_address: Address, identity: &GeneralChainIdentity) -> Self {
         let provider = Provider::<Http>::try_from(identity.get_provider_rpc_endpoint())
             .unwrap()
-            .interval(Duration::from_millis(10u64));
+            .interval(Duration::from_millis(3000));
 
         // instantiate the client with the wallet
         let signer = Arc::new(SignerMiddleware::new(
@@ -51,7 +45,7 @@ impl CoordinatorClient {
     }
 }
 
-impl CoordinatorClientBuilder for GeneralChainIdentity {
+impl<C: Curve + 'static> CoordinatorClientBuilder<C> for GeneralChainIdentity {
     type Service = CoordinatorClient;
 
     fn build_coordinator_client(&self, contract_address: Address) -> CoordinatorClient {
@@ -71,26 +65,70 @@ impl ServiceClient<CoordinatorContract> for CoordinatorClient {
 }
 
 #[async_trait]
-impl CoordinatorTransactions for CoordinatorClient {
-    async fn publish(&self, value: Vec<u8>) -> ContractClientResult<()> {
-        let coordinator_contract =
-            ServiceClient::<CoordinatorContract>::prepare_service_client(self).await?;
+impl NonceManager for CoordinatorClient {
+    async fn increment_or_initialize_nonce(&self) -> ContractClientResult<u64> {
+        let mut nonce = NONCE.lock().await;
+        if *nonce == -1 {
+            let tx_count = self
+                .signer
+                .get_transaction_count(self.signer.address(), None)
+                .await?;
+            *nonce = tx_count.as_u64() as i64;
+        } else {
+            *nonce += 1;
+        }
 
-        coordinator_contract
-            .publish(value.into())
-            .send()
+        Ok(*nonce as u64)
+    }
+}
+
+#[async_trait]
+impl TransactionCaller for CoordinatorClient {
+    async fn call_contract_function(
+        &self,
+        info: &str,
+        call: ContractCall<WalletSigner, ()>,
+    ) -> ContractClientResult<H256> {
+        let pending_tx = call.send().await.map_err(|e| {
+            let e: ContractClientError = e.into();
+            e
+        })?;
+
+        info!(
+            "Calling contract function {}: {:?}",
+            info,
+            pending_tx.tx_hash()
+        );
+
+        let receipt = pending_tx
             .await
             .map_err(|e| {
                 let e: ContractClientError = e.into();
                 e
             })?
-            .await
-            .map_err(|e| {
-                let e: ContractClientError = e.into();
-                e
-            })?;
+            .ok_or(ContractClientError::NoTransactionReceipt)?;
 
-        Ok(())
+        if receipt.status == Some(U64::from(0)) {
+            return Err(ContractClientError::TransactionFailed);
+        } else {
+            info!("Transaction successful({}), receipt: {:?}", info, receipt);
+        }
+
+        Ok(receipt.transaction_hash)
+    }
+}
+
+#[async_trait]
+impl CoordinatorTransactions for CoordinatorClient {
+    async fn publish(&self, value: Vec<u8>) -> ContractClientResult<H256> {
+        let coordinator_contract =
+            ServiceClient::<CoordinatorContract>::prepare_service_client(self).await?;
+
+        let nonce = self.increment_or_initialize_nonce().await?;
+        let mut call = coordinator_contract.publish(value.into());
+        call.tx.set_nonce(nonce);
+
+        self.call_contract_function("publish", call).await
     }
 }
 
@@ -163,12 +201,12 @@ impl CoordinatorViews for CoordinatorClient {
         Ok(res)
     }
 
-    async fn get_bls_keys(&self) -> ContractClientResult<(usize, Vec<Vec<u8>>)> {
+    async fn get_dkg_keys(&self) -> ContractClientResult<(usize, Vec<Vec<u8>>)> {
         let coordinator_contract =
             ServiceClient::<CoordinatorContract>::prepare_service_client(self).await?;
 
         let res = coordinator_contract
-            .get_bls_keys()
+            .get_dkg_keys()
             .call()
             .await
             .map(|(t, keys)| {
@@ -185,7 +223,7 @@ impl CoordinatorViews for CoordinatorClient {
         Ok(res)
     }
 
-    async fn in_phase(&self) -> ContractClientResult<usize> {
+    async fn in_phase(&self) -> ContractClientResult<i8> {
         let coordinator_contract =
             ServiceClient::<CoordinatorContract>::prepare_service_client(self).await?;
 
@@ -194,40 +232,43 @@ impl CoordinatorViews for CoordinatorClient {
             e
         })?;
 
-        Ok(res.as_usize())
+        Ok(res)
     }
 }
 
 #[async_trait]
-impl BoardPublisher<Curve> for CoordinatorClient {
+impl<C: Curve + 'static> BoardPublisher<C> for CoordinatorClient {
     type Error = DKGContractError;
 
-    async fn publish_shares(&mut self, shares: BundledShares<Curve>) -> Result<(), Self::Error> {
+    async fn publish_shares(&mut self, shares: BundledShares<C>) -> Result<(), Self::Error> {
         info!("called publish_shares");
         let serialized = bincode::serialize(&shares)?;
-        self.publish(serialized).await.map_err(|e| e.into())
+        self.publish(serialized).await?;
+        Ok(())
     }
 
     async fn publish_responses(&mut self, responses: BundledResponses) -> Result<(), Self::Error> {
         info!("called publish_responses");
         let serialized = bincode::serialize(&responses)?;
-        self.publish(serialized).await.map_err(|e| e.into())
+        self.publish(serialized).await?;
+        Ok(())
     }
 
     async fn publish_justifications(
         &mut self,
-        justifications: BundledJustification<Curve>,
+        justifications: BundledJustification<C>,
     ) -> Result<(), Self::Error> {
         let serialized = bincode::serialize(&justifications)?;
-        self.publish(serialized).await.map_err(|e| e.into())
+        self.publish(serialized).await?;
+        Ok(())
     }
 }
 
 #[cfg(test)]
 pub mod coordinator_tests {
-    use crate::coordinator::CoordinatorTransactions;
-
     use super::{CoordinatorClient, WalletSigner};
+    use crate::contract_stub::coordinator::Coordinator;
+    use crate::coordinator::CoordinatorTransactions;
     use arpa_node_core::GeneralChainIdentity;
     use ethers::abi::Tokenize;
     use ethers::prelude::*;
@@ -237,9 +278,7 @@ pub mod coordinator_tests {
     use std::env;
     use std::path::PathBuf;
     use std::{convert::TryFrom, sync::Arc, time::Duration};
-    use threshold_bls::schemes::bls12_381::G1Scheme;
-
-    include!("../../../../../contract_stub/coordinator.rs");
+    use threshold_bls::schemes::bn254::G2Scheme;
 
     #[test]
     fn test_cargo_manifest_parent_dir() {
@@ -253,7 +292,7 @@ pub mod coordinator_tests {
     const INDEX: u32 = 0;
 
     fn start_chain() -> AnvilInstance {
-        Anvil::new().mnemonic(PHRASE).spawn()
+        Anvil::new().chain_id(1u64).mnemonic(PHRASE).spawn()
     }
 
     async fn deploy_contract(anvil: &AnvilInstance) -> Coordinator<WalletSigner> {
@@ -263,7 +302,7 @@ pub mod coordinator_tests {
         // 3. connect to the network
         let provider = Provider::<Http>::try_from(anvil.endpoint())
             .unwrap()
-            .interval(Duration::from_millis(10u64));
+            .interval(Duration::from_millis(3000));
 
         // 4. instantiate the client with the wallet
         let client = Arc::new(SignerMiddleware::new(
@@ -303,7 +342,7 @@ pub mod coordinator_tests {
             .unwrap();
 
         // mock dkg key pair
-        let (_, dkg_public_key) = dkg_core::generate_keypair::<G1Scheme>();
+        let (_, dkg_public_key) = dkg_core::generate_keypair::<G2Scheme>();
 
         let nodes = vec![wallet.address()];
         let public_keys = vec![bincode::serialize(&dkg_public_key).unwrap().into()];
@@ -314,8 +353,13 @@ pub mod coordinator_tests {
             .await
             .unwrap();
 
-        let main_chain_identity =
-            GeneralChainIdentity::new(0, 0, wallet, anvil.endpoint(), Address::random());
+        let main_chain_identity = GeneralChainIdentity::new(
+            0,
+            anvil.chain_id() as usize,
+            wallet,
+            anvil.endpoint(),
+            Address::random(),
+        );
 
         let client = CoordinatorClient::new(coordinator_contract.address(), &main_chain_identity);
 
@@ -328,7 +372,7 @@ pub mod coordinator_tests {
         let err = res.unwrap_err();
         assert!(err
             .to_string()
-            .contains("execution reverted: you have already published your shares"));
+            .contains("you have already published your shares"));
     }
 
     #[test]

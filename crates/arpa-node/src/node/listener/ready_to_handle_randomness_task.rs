@@ -10,15 +10,17 @@ use arpa_node_dal::{BLSTasksUpdater, BlockInfoFetcher, GroupInfoFetcher};
 use async_trait::async_trait;
 use ethers::types::Address;
 use log::error;
-use std::sync::Arc;
+use std::{marker::PhantomData, sync::Arc};
+use threshold_bls::group::PairingCurve;
 use tokio::sync::RwLock;
 use tokio_retry::{strategy::FixedInterval, RetryIf};
 
 pub struct ReadyToHandleRandomnessTaskListener<
     B: BlockInfoFetcher,
-    G: GroupInfoFetcher,
+    G: GroupInfoFetcher<C>,
     T: BLSTasksUpdater<RandomnessTask>,
-    I: ChainIdentity + AdapterClientBuilder,
+    I: ChainIdentity + AdapterClientBuilder<C>,
+    C: PairingCurve,
 > {
     chain_id: usize,
     id_address: Address,
@@ -27,14 +29,16 @@ pub struct ReadyToHandleRandomnessTaskListener<
     group_cache: Arc<RwLock<G>>,
     randomness_tasks_cache: Arc<RwLock<T>>,
     eq: Arc<RwLock<EventQueue>>,
+    c: PhantomData<C>,
 }
 
 impl<
         B: BlockInfoFetcher,
-        G: GroupInfoFetcher,
+        G: GroupInfoFetcher<C>,
         T: BLSTasksUpdater<RandomnessTask>,
-        I: ChainIdentity + AdapterClientBuilder,
-    > ReadyToHandleRandomnessTaskListener<B, G, T, I>
+        I: ChainIdentity + AdapterClientBuilder<C>,
+        C: PairingCurve,
+    > ReadyToHandleRandomnessTaskListener<B, G, T, I, C>
 {
     pub fn new(
         chain_id: usize,
@@ -53,6 +57,7 @@ impl<
             group_cache,
             randomness_tasks_cache,
             eq,
+            c: PhantomData,
         }
     }
 }
@@ -60,11 +65,12 @@ impl<
 #[async_trait]
 impl<
         B: BlockInfoFetcher + Sync + Send,
-        G: GroupInfoFetcher + Sync + Send,
+        G: GroupInfoFetcher<C> + Sync + Send,
         T: BLSTasksUpdater<RandomnessTask> + Sync + Send,
-        I: ChainIdentity + AdapterClientBuilder + Sync + Send,
+        I: ChainIdentity + AdapterClientBuilder<C> + Sync + Send,
+        C: PairingCurve + Sync + Send,
     > EventPublisher<ReadyToHandleRandomnessTask>
-    for ReadyToHandleRandomnessTaskListener<B, G, T, I>
+    for ReadyToHandleRandomnessTaskListener<B, G, T, I, C>
 {
     async fn publish(&self, event: ReadyToHandleRandomnessTask) {
         self.eq.read().await.publish(event).await;
@@ -74,10 +80,11 @@ impl<
 #[async_trait]
 impl<
         B: BlockInfoFetcher + Sync + Send,
-        G: GroupInfoFetcher + Sync + Send,
+        G: GroupInfoFetcher<C> + Sync + Send,
         T: BLSTasksUpdater<RandomnessTask> + Sync + Send,
-        I: ChainIdentity + AdapterClientBuilder + Sync + Send,
-    > Listener for ReadyToHandleRandomnessTaskListener<B, G, T, I>
+        I: ChainIdentity + AdapterClientBuilder<C> + Sync + Send,
+        C: PairingCurve + Sync + Send,
+    > Listener for ReadyToHandleRandomnessTaskListener<B, G, T, I, C>
 {
     async fn start(mut self) -> NodeResult<()> {
         let client = self
@@ -112,9 +119,7 @@ impl<
                         let mut tasks_to_process: Vec<RandomnessTask> = vec![];
 
                         for task in available_tasks {
-                            if let Ok(false) =
-                                client.get_signature_task_completion_state(task.index).await
-                            {
+                            if let Ok(true) = client.is_task_pending(&task.request_id).await {
                                 tasks_to_process.push(task);
                             }
                         }

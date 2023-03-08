@@ -1,23 +1,21 @@
 pub mod chain;
 pub mod types;
 
-use self::types::ContextHandle;
+use self::types::{Config, ContextHandle};
 
 use crate::node::{
     queue::event_queue::EventQueue,
     scheduler::{dynamic::SimpleDynamicTaskScheduler, fixed::SimpleFixedTaskScheduler},
 };
+use arpa_node_core::SchedulerResult;
 use async_trait::async_trait;
 use std::sync::Arc;
 use tokio::sync::RwLock;
 
-#[async_trait]
 pub trait Context {
     type MainChain;
 
-    type AdapterChain;
-
-    async fn deploy(self) -> ContextHandle;
+    async fn deploy(self) -> SchedulerResult<ContextHandle>;
 }
 
 #[async_trait]
@@ -26,9 +24,7 @@ pub trait TaskWaiter {
 }
 
 pub(crate) trait ContextFetcher<T: Context> {
-    fn contains_chain(&self, index: usize) -> bool;
-
-    fn get_adapter_chain(&self, index: usize) -> Option<&T::AdapterChain>;
+    fn get_config(&self) -> &Config;
 
     fn get_main_chain(&self) -> &T::MainChain;
 
@@ -40,5 +36,17 @@ pub(crate) trait ContextFetcher<T: Context> {
 }
 
 pub(crate) trait CommitterServerStarter<T: Context> {
-    fn start_committer_server(&mut self, rpc_endpoint: String, context: Arc<RwLock<T>>);
+    fn start_committer_server(
+        &mut self,
+        rpc_endpoint: String,
+        context: Arc<RwLock<T>>,
+    ) -> SchedulerResult<()>;
+}
+
+pub(crate) trait ManagementServerStarter<T: Context> {
+    fn start_management_server(
+        &mut self,
+        rpc_endpoint: String,
+        context: Arc<RwLock<T>>,
+    ) -> SchedulerResult<()>;
 }

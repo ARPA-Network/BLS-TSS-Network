@@ -1,4 +1,4 @@
-use arpa_node_core::TaskError;
+use arpa_node_core::BLSTaskError;
 use thiserror::Error;
 
 pub type DataAccessResult<A> = Result<A, DataAccessError>;
@@ -15,10 +15,13 @@ pub enum DataAccessError {
     RandomnessTaskError(#[from] RandomnessTaskError),
 
     #[error(transparent)]
-    TaskError(#[from] TaskError),
+    TaskError(#[from] BLSTaskError),
 
     #[error(transparent)]
     DBError(anyhow::Error),
+
+    #[error("could not deserialize: {0}")]
+    DeserializationError(#[from] bincode::Error),
 }
 
 #[derive(Debug, Error, PartialEq)]
@@ -28,6 +31,9 @@ pub enum GroupError {
 
     #[error("the group is not exist")]
     GroupNotExisted,
+
+    #[error("the member is not exist")]
+    MemberNotExisted,
 
     #[error("there is not an available DKG output")]
     GroupNotReady,
@@ -59,6 +65,6 @@ pub enum NodeInfoError {
 
 #[derive(Debug, Error, PartialEq)]
 pub enum RandomnessTaskError {
-    #[error("there is no randomness task with index:{0}")]
-    NoRandomnessTask(usize),
+    #[error("there is no randomness task with request id:{0}")]
+    NoRandomnessTask(String),
 }

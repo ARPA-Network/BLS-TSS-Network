@@ -1,0 +1,18 @@
+node_committer_rpc_endpoint: "[::1]:50063"
+
+node_management_rpc_endpoint: "[::1]:50093"
+
+node_management_rpc_token: "for_test"
+
+provider_endpoint: "http://127.0.0.1:8545"
+
+chain_id: 31337
+
+controller_address: "0x9fe46736679d2d9a65f0992f2272de9f3c7fa6e0"
+
+data_path: "./data3.sqlite"
+
+account:
+  private_key: "2a871d0798f97d79848a013d4936a73bf4cc922c825d33c1cf7073dff6d409c6"
+
+context_logging: false
