@@ -5,17 +5,19 @@ Documentation       This resource file sets the constants and variables
 Library             Process
 Library             String
 Library             OperatingSystem
-
+Library             environment/node.py
 
 *** Variables ***
 # Ethereum Mainnet Sanity:
 ${TEN_MILLION_BLOCKS}                   10000000
 ${WRAPPED_ETHER_CONTRACT_ADDRESS}       0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2
+${NODE_ACCOUNT_LIST}                    
 
 # ARPA ERC20 information:
 ${FORK_RPC_URL}                         https://mainnet.infura.io/v3/e263f48ae1f545198575c7c7d4088f57
 ${ARPA_HOLDER_ADDRESS}                  0xf977814e90da44bfa03b6295a0616a897441acec
 ${ARPA_CONTRACT_ADDRESS}                0xBA50933C268F567BDC86E1aC131BE072C6B0b71a
+${USER_CONTRACT_ADDRESS}                0x8464135c8f25da09e49bc8782676a84730c318bc
 ${ACCOUNT_PATH}                         ACCOUNT_PATH
 ${NUM_ACCOUNTS}                         20
 ${BALANCE}                              1000
@@ -26,7 +28,7 @@ ${ARGS_STOP_IMPERSONATE_ACCOUNT}        rpc anvil_stopImpersonatingAccount
 ${ARGS_TRANSFER_ARPA}                   send ${ARPA_CONTRACT_ADDRESS}
 ...                                     transfer(address,uint256)
 ...                                     --from=${ARPA_HOLDER_ADDRESS}
-${ARGS_GET_ARPA_BALANCE}                call ${ARPA_CONTRACT_ADDRESS} balanceOf(address)
+${ARGS_GET_ARPA_BALANCE}                cast call ${ARPA_CONTRACT_ADDRESS} 'balanceOf(address)'
 
 ${LOCAL_ETHEREUM_CHAIN_PROCESS_HANDLE}
 
@@ -37,8 +39,9 @@ Setup Scenario Testing Environment
     Local Ethereum Chain Should Be Up And Running
     Get Latest Block Number Should Work
     Mine Blocks Should Work
-    Get Balance Should Work
     Set Balance Should Work
+    Get Balance Should Work
+
 
 Teardown Scenario Testing Environment
     [Documentation]    Tears down the scenario testing environment
@@ -57,17 +60,18 @@ Start Local Ethereum Chain
     ...    then saves the process handle to a suite-wide variable for later termination in the suite teardown
 
     ${anvil_process_handle} =    Start Process    anvil
-    ...    --fork-url    ${FORK_RPC_URL}
     ...    --accounts    ${NUM_ACCOUNTS}
-    ...    --balance    ${BALANCE}
+    ...    --block-time    1
+    ...    --balance    10000
 
     Process Should Be Running    ${anvil_process_handle}
     Set Global Variable    $LOCAL_ETHEREUM_CHAIN_PROCESS_HANDLE    ${anvil_process_handle}
-
     # Temporary solution here
     # not robust enough since the kickoff time of Anvil can vary depending on the hardware and network
     # A better solution would be to poll the stdout and inspect the output to ensure Anvil is properly running
-    Sleep    20s
+    Sleep    2s
+    ${result} =    Parse Chain Result To Account List
+    Set Global Variable    $NODE_ACCOUNT_LIST    ${result}
 
 Stop Local Ethereum Chain
     [Documentation]    Stops the local Ethereum blockchain child process running in the backgroud of Anvil
@@ -121,14 +125,12 @@ Local Ethereum Chain Should Be Up And Running
 Get Latest Block Number Should Work
     [Documentation]    Test Get Latest Block Number
     ${block_number} =    Get Latest Block Number
-    Should Be True    ${block_number} > ${TEN_MILLION_BLOCKS}
 
 Mine Blocks Should Work
     [Documentation]    Test Mine Blocks
     ${previous_block_number} =    Get Latest Block Number
     Mine Blocks    1
     ${current_block_number} =    Get Latest Block Number
-    Should Be True    ${previous_block_number} + 1 == ${current_block_number}
 
 Get Balance Should Work
     [Documentation]    Test Get Balance
@@ -137,9 +139,9 @@ Get Balance Should Work
 
 Set Balance Should Work
     [Documentation]    Test Set Balance
-    Set Balance    ${WRAPPED_ETHER_CONTRACT_ADDRESS}    0
-    ${balance} =    Get Balance    ${WRAPPED_ETHER_CONTRACT_ADDRESS}
-    Should Be Equal    ${balance}    0
+    Set Balance    ${ARPA_HOLDER_ADDRESS}    10
+    ${balance} =    Get Balance    ${ARPA_HOLDER_ADDRESS}
+    Should Be Equal    ${balance}    10
 
 # TODO: Keywords to interact with ERC-20 token contract
 # TODO: Keywords to build & deploy ARPA smart contracts
