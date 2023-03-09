@@ -7,6 +7,7 @@ import "../src/Controller.sol";
 import "./MockArpaEthOracle.sol";
 import "openzeppelin-contracts/contracts/token/ERC20/IERC20.sol";
 import "openzeppelin-contracts/contracts/token/ERC20/ERC20.sol";
+import "openzeppelin-contracts/contracts/utils/Strings.sol";
 
 abstract contract RandcastTestHelper is Test {
     Controller controller;
@@ -298,5 +299,133 @@ abstract contract RandcastTestHelper is Test {
         params = Controller.CommitDkgParams(groupIndex, groupEpoch, publicKey, partialPublicKey5, disqualifiedNodes);
         vm.prank(node5);
         controller.commitDkg(params);
+    }
+
+    function printGroupInfo(uint256 groupIndex) public {
+        Controller.Group memory g = controller.getGroup(groupIndex);
+
+        uint256 groupCount = controller.groupCount();
+        emit log("--------------------");
+        emit log_named_uint("printing group info for: groupIndex", groupIndex);
+        emit log("--------------------");
+        emit log_named_uint("Total groupCount", groupCount);
+        emit log_named_uint("g.index", g.index);
+        emit log_named_uint("g.epoch", g.epoch);
+        emit log_named_uint("g.size", g.size);
+        emit log_named_uint("g.threshold", g.threshold);
+        emit log_named_uint("g.members.length", g.members.length);
+        emit log_named_uint("g.isStrictlyMajorityConsensusReached", g.isStrictlyMajorityConsensusReached ? 1 : 0);
+        for (uint256 i = 0; i < g.members.length; i++) {
+            emit log_named_address(
+                string.concat("g.members[", Strings.toString(i), "].nodeIdAddress"), g.members[i].nodeIdAddress
+            );
+            for (uint256 j = 0; j < g.members[i].partialPublicKey.length; j++) {
+                emit log_named_uint(
+                    string.concat("g.members[", Strings.toString(i), "].partialPublicKey[", Strings.toString(j), "]"),
+                    g.members[i].partialPublicKey[j]
+                );
+            }
+        }
+        // print committers
+        emit log_named_uint("g.committers.length", g.committers.length);
+        for (uint256 i = 0; i < g.committers.length; i++) {
+            emit log_named_address(string.concat("g.committers[", Strings.toString(i), "]"), g.committers[i]);
+        }
+        // print commit cache info
+        emit log_named_uint("g.commitCacheList.length", g.commitCacheList.length);
+        for (uint256 i = 0; i < g.commitCacheList.length; i++) {
+            // print commit result public key
+            for (uint256 j = 0; j < g.commitCacheList[i].commitResult.publicKey.length; j++) {
+                emit log_named_uint(
+                    string.concat(
+                        "g.commitCacheList[", Strings.toString(i), "].commitResult.publicKey[", Strings.toString(j), "]"
+                    ),
+                    g.commitCacheList[i].commitResult.publicKey[j]
+                );
+            }
+            // print commit result disqualified nodes
+            uint256 disqualifiedNodesLength = g.commitCacheList[i].commitResult.disqualifiedNodes.length;
+            for (uint256 j = 0; j < disqualifiedNodesLength; j++) {
+                emit log_named_address(
+                    string.concat(
+                        "g.commitCacheList[",
+                        Strings.toString(i),
+                        "].commitResult.disqualifiedNodes[",
+                        Strings.toString(j),
+                        "].nodeIdAddress"
+                    ),
+                    g.commitCacheList[i].commitResult.disqualifiedNodes[j]
+                );
+            }
+
+            for (uint256 j = 0; j < g.commitCacheList[i].nodeIdAddress.length; j++) {
+                emit log_named_address(
+                    string.concat(
+                        "g.commitCacheList[",
+                        Strings.toString(i),
+                        "].nodeIdAddress[",
+                        Strings.toString(j),
+                        "].nodeIdAddress"
+                    ),
+                    g.commitCacheList[i].nodeIdAddress[j]
+                );
+            }
+        }
+        // print coordinator info
+        address coordinatorAddress = controller.getCoordinator(groupIndex);
+        emit log_named_address("\nCoordinator", coordinatorAddress);
+    }
+
+    function printNodeInfo(address nodeAddress) public {
+        // print node address
+        emit log("\n");
+        emit log("--------------------");
+        emit log_named_address("printing info for node", nodeAddress);
+        emit log("--------------------");
+
+        Controller.Node memory node = controller.getNode(nodeAddress);
+
+        emit log_named_address("n.idAddress", node.idAddress);
+        emit log_named_bytes("n.dkgPublicKey", node.dkgPublicKey);
+        emit log_named_string("n.state", toText(node.state));
+        emit log_named_uint("n.pendingUntilBlock", node.pendingUntilBlock);
+        emit log_named_uint("n.staking", node.staking);
+    }
+
+    function printMemberInfo(uint256 groupIndex, uint256 memberIndex) public {
+        emit log(
+            string.concat(
+                "\nGroupIndex: ", Strings.toString(groupIndex), " MemberIndex: ", Strings.toString(memberIndex), ":"
+            )
+        );
+
+        Controller.Member memory m = controller.getMember(groupIndex, memberIndex);
+
+        // emit log_named_uint("m.index", m.index);
+        emit log_named_address("m.nodeIdAddress", m.nodeIdAddress);
+        for (uint256 i = 0; i < m.partialPublicKey.length; i++) {
+            emit log_named_uint(string.concat("m.partialPublicKey[", Strings.toString(i), "]"), m.partialPublicKey[i]);
+        }
+    }
+
+    function toUInt256(bool x) internal pure returns (uint256 r) {
+        assembly {
+            r := x
+        }
+    }
+
+    function toBool(uint256 x) internal pure returns (string memory r) {
+        // x == 0 ? r = "False" : "True";
+        if (x == 1) {
+            r = "True";
+        } else if (x == 0) {
+            r = "False";
+        } else {}
+    }
+
+    function toText(bool x) internal pure returns (string memory r) {
+        uint256 inUint = toUInt256(x);
+        string memory inString = toBool(inUint);
+        r = inString;
     }
 }
