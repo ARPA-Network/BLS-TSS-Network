@@ -20,6 +20,9 @@ ${PROXY_CONTRACT}
 ${CONTROLLER_CONTRACT}
 ${COORDINATOR_CONTRACT}
 ${COORDINATOR_CONTRACT}
+${DEPLOY_CONTROLLER_SCRIPT}              DeployControllerLocalTest.s.sol:DeployControllerTestScript
+${PROXY_CONFIG_SCRIPT}                   ProxyConfigLocalTest.s.sol:ProxyConfigLocalTestScript
+${REQUEST_RANDOMNESS_SCRIPT}             GetRandomNumberProxy.s.sol:GetRandomNumberProxyScript
 
 # Test value:
 ${TEST_NODE_ADDRESS}                     0x70997970c51812dc3a010c7d01b50e0d17dc79c8
@@ -33,18 +36,13 @@ Set Enviorment And Deploy Contract
     [Documentation]    Set enviorment and deploy proxy contract
     Setup Scenario Testing Environment
     Deploy Controller
-    Deploy Proxy Contract
+    Build Proxy Contract
+    Exec Script    ${PROXY_CONFIG_SCRIPT}
     Set ARPA Address
     Create Node Config    ${PROXY_CONTRACT_ADDRESS}
 
-Deploy Proxy Contract
-    [Documentation]    Deploy the proxy contract, the proxy and controller share the same address
-    ${contract_output} =    Run    cd contracts/; forge create ${PROXY_CONTRACT_PATH} --constructor-args 0x9fE46736679d2D9a65F0992F2272dE9f3c7fa6e0 --private-key ${PROXY_CONTRACT_DEPLOYER_KEY} -o ${PROXY_OUTPUT} 
-    Log    ${contract_output}
-    ${lines} =	Get Lines Containing String    ${contract_output}    Deployed to: 
-    ${address} =    Fetch From Right    ${lines}    Deployed to: 
-    ${address} =    Strip String    ${address}
-    Length Should Be    ${address}    42
+Build Proxy Contract
+    ${address} =    Get Value From Env    PROXY_ADDRESS
     Set Global Variable    $PROXY_CONTRACT_ADDRESS    ${address}
     ${proxy_contract} =    Get Contract    contracts/${PROXY_OUTPUT}Proxy.sol/Proxy.json    ${address}
     Set Global Variable    $PROXY_CONTRACT   ${proxy_contract}
@@ -53,14 +51,12 @@ Deploy Proxy Contract
 
 Deploy User Contract And Request Randomness
     [Documentation]    Deploy the user contract
-    ${contract_output} =    Run    cd contracts/; forge script script/GetRandomNumberLocalTest.s.sol:GetRandomNumberLocalTestScript --fork-url http://localhost:8545 --broadcast
+    ${contract_output} =    Exec Script    ${REQUEST_RANDOMNESS_SCRIPT}
 
 Check Randomness
     [Documentation]    Check the randomness
-    ${user_contract} =    Get Value From Env    USER_ADDRESS
-    #${user_contract_output} =    Run    cast call ${PROXY_CONTRACT_ADDRESS} "lastOutput()returns(uint256)"
-    ${adapter_contract_output} =    Run    cast call ${user_contract} "lastRandomnessResult()"
-    Log    ${adapter_contract_output}
+    ${last_output} =    Run    cast call ${USER_CONTRACT_ADDRESS} "lastRandomnessResult()"
+    Log    ${last_output}
 
 Set ARPA Address
     ${address} =    Get Value From Env    ARPA_ADDRESS
@@ -114,7 +110,7 @@ Get Node
     [Documentation]    Get node info by node address
     [Arguments]    ${node}
     ${node} =    To Checksum Address    ${node}
-    ${result} =    Contract Function Call    ${CONTROLLER_CONTRACT}    getNode    ${node}
+j    ${result} =    Contract Function Call    ${CONTROLLER_CONTRACT}    getNode    ${node}
     Log    Node info: ${result}
     RETURN    ${result}
 

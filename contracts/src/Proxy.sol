@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.15;
 
-import "forge-std/Test.sol";
-import {Controller} from "src/Controller.sol";
+import "openzeppelin-contracts/contracts/access/Ownable.sol";
+import "./Adapter.sol";
 
-contract Proxy {
+contract Proxy is Ownable {
     
     struct ModifiedDkgData {
         bytes publicKey;
@@ -127,6 +127,36 @@ contract Proxy {
             groupIndex, groupEpoch, publicKeyModified,
             partialPublicKeyModified, disqualifiedNodesModified));
         require(success, "modified delegatecall reverted");
+    }
+    event msgSender(address owner);
+
+    function setControllerConfig(
+        uint256 nodeStakingAmount,
+        uint256 disqualifiedNodePenaltyAmount,
+        uint256 defaultNumberOfCommitters,
+        uint256 defaultDkgPhaseDuration,
+        uint256 groupMaxCapacity,
+        uint256 idealNumberOfGroups,
+        uint256 pendingBlockAfterQuit,
+        uint256 dkgPostProcessReward
+    ) external{
+        emit msgSender(msg.sender);
+        _delegate(implementation());
+    }
+
+    function setAdapterConfig(
+        uint16 minimumRequestConfirmations,
+        uint32 maxGasLimit,
+        uint32 stalenessSeconds,
+        uint32 gasAfterPaymentCalculation,
+        uint32 gasExceptCallback,
+        int256 fallbackWeiPerUnitArpa,
+        uint256 signatureTaskExclusiveWindow,
+        uint256 rewardPerSignature,
+        uint256 committerRewardPerSignature,
+        Adapter.FeeConfig memory feeConfig
+    ) external {
+        _delegate(implementation());
     }
 
     fallback() external payable {

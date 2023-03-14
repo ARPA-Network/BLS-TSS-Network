@@ -1,5 +1,4 @@
 import os
-from dotenv import load_dotenv
 import subprocess
 import grpc
 import sys
@@ -38,7 +37,6 @@ def call_request(endpoint, request_name, **args):
     metadata.append(('authorization', 'for_test'))
     response = function(request, metadata=metadata)
     return response
-#call_request("localhost:50099", "NodeQuit")
 
 class Account:
     def __init__(self, address, key):
@@ -107,18 +105,13 @@ def start_node(node_idx):
        "cargo run --bin node-client -- -m new-run -c "
        "{}/tests/scenarios/src/environment/node_config/config{}.yml"
       ).format(root_path, root_path, node_idx)
-    proc = subprocess.Popen(cmd, shell=True)
+    proc = subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
     return proc
 
 def kill_node(proc):
     proc.kill()
+    proc.terminate()
 
 def get_node_port_from_index(node_idx):
     port = 50061 + int(node_idx) - 1
     return  'localhost:' + str(port)
-
-def get_value_from_env(name):
-    load_dotenv("contracts/.env")
-    value = os.environ.get(name)
-    print(value)
-    return value

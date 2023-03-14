@@ -17,7 +17,7 @@ ${NODE_ACCOUNT_LIST}
 ${FORK_RPC_URL}                         https://mainnet.infura.io/v3/e263f48ae1f545198575c7c7d4088f57
 ${ARPA_HOLDER_ADDRESS}                  0xf977814e90da44bfa03b6295a0616a897441acec
 ${ARPA_CONTRACT_ADDRESS}                0xBA50933C268F567BDC86E1aC131BE072C6B0b71a
-${USER_CONTRACT_ADDRESS}                0x8464135c8f25da09e49bc8782676a84730c318bc
+${USER_CONTRACT_ADDRESS}                0x8464135c8F25Da09e49BC8782676a84730C318bC
 ${ACCOUNT_PATH}                         ACCOUNT_PATH
 ${NUM_ACCOUNTS}                         20
 ${BALANCE}                              1000
@@ -46,6 +46,7 @@ Setup Scenario Testing Environment
 Teardown Scenario Testing Environment
     [Documentation]    Tears down the scenario testing environment
     Stop Local Ethereum Chain
+    Terminate All Processes
 
 Process Completes Successfully
     [Documentation]    The CLI command issued executes and terminates without error
@@ -62,7 +63,7 @@ Start Local Ethereum Chain
     ${anvil_process_handle} =    Start Process    anvil
     ...    --accounts    ${NUM_ACCOUNTS}
     ...    --block-time    1
-    ...    --balance    10000
+    ...    --balance    1000000
 
     Process Should Be Running    ${anvil_process_handle}
     Set Global Variable    $LOCAL_ETHEREUM_CHAIN_PROCESS_HANDLE    ${anvil_process_handle}
