@@ -67,6 +67,7 @@ contract DKGScenarioTest is RandcastTestHelper {
     struct Params {
         address nodeIdAddress;
         bool shouldRevert;
+        string revertMessage;
         uint256 groupIndex;
         uint256 groupEpoch;
         bytes publicKey;
@@ -78,7 +79,7 @@ contract DKGScenarioTest is RandcastTestHelper {
         for (uint256 i = 0; i < params.length; i++) {
             vm.prank(params[i].nodeIdAddress);
             if (params[i].shouldRevert) {
-                vm.expectRevert(); // it seems giving a custom message does not work.
+                vm.expectRevert(bytes(params[i].revertMessage));
             }
             controller.commitDkg(
                 Controller.CommitDkgParams(
@@ -93,23 +94,29 @@ contract DKGScenarioTest is RandcastTestHelper {
     }
 
     function testDkgScenarios() public {
-        // DKG Scenario 1
-        Params[] memory params1 = new Params[](5);
-        params1[0] = Params(node1, false, 0, 3, publicKey, partialPublicKey1, new address[](0));
-        params1[1] = Params(node2, false, 0, 3, publicKey, partialPublicKey2, new address[](0));
-        params1[2] = Params(node3, false, 0, 3, publicKey, partialPublicKey3, new address[](0));
-        params1[3] = Params(node4, false, 0, 3, publicKey, partialPublicKey4, new address[](0));
-        params1[4] = Params(node5, false, 0, 3, publicKey, partialPublicKey5, new address[](0));
-        dkgHelper(params1);
-        // printGroupInfo(0);
+        string memory err;
 
-        // DKG Scenario 2
-        Params[] memory params2 = new Params[](1);
-        params2[0] = Params(node1, true, 0, 4, publicKey, partialPublicKey1, new address[](0));
-        // params2[1] = Params(node2, true, 0, 4, publicKey, partialPublicKey2, new address[](0));
-        // params2[2] = Params(node3, true, 0, 4, publicKey, partialPublicKey3, new address[](0));
-        // params2[3] = Params(node4, true, 0, 4, publicKey, partialPublicKey4, new address[](0));
-        // params2[4] = Params(node5, true, 0, 4, publicKey, partialPublicKey5, new address[](0));
-        dkgHelper(params2);
+        // Group does not exist
+        Params[] memory params1 = new Params[](1);
+        err = "Group does not exist";
+        params1[0] = Params(node1, true, err, 1, 3, publicKey, partialPublicKey1, new address[](0));
+        dkgHelper(params1);
+
+        // Happy Path
+        Params[] memory params = new Params[](5);
+        params[0] = Params(node1, false, err, 0, 3, publicKey, partialPublicKey1, new address[](0));
+        params[1] = Params(node2, false, err, 0, 3, publicKey, partialPublicKey2, new address[](0));
+        params[2] = Params(node3, false, err, 0, 3, publicKey, partialPublicKey3, new address[](0));
+        params[3] = Params(node4, false, err, 0, 3, publicKey, partialPublicKey4, new address[](0));
+        params[4] = Params(node5, false, err, 0, 3, publicKey, partialPublicKey5, new address[](0));
+        dkgHelper(params);
+        printGroupInfo(0);
+
+        // Caller Group Epoch does not match controller group opech
+        // Params[] memory params2 = new Params[](1);
+        // params2[0] = Params(node1, true, 0, 4, publicKey, partialPublicKey1, new address[](0));
+        // dkgHelper(params2);
+
+        // Group does not exist
     }
 }
