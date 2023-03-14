@@ -437,12 +437,12 @@ abstract contract RandcastTestHelper is Test {
     }
 
     function nodeInGroup(address nodeIdAddress, uint256 groupIndex) public view returns (bool) {
-        bool nodeInGroup = false;
+        bool nodeFound = false;
         for (uint256 i = 0; i < controller.getGroup(groupIndex).members.length; i++) {
             if (nodeIdAddress == controller.getGroup(0).members[i].nodeIdAddress) {
-                nodeInGroup = true;
+                nodeFound = true;
             }
         }
-        return nodeInGroup;
+        return nodeFound;
     }
 }

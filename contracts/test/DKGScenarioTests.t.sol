@@ -171,4 +171,89 @@ contract DKGScenarioTest is RandcastTestHelper {
         assertEq(nodeStakingAmount - disqualifiedNodePenaltyAmount, controller.getStakedAmount(node1));
         // printGroupInfo(0);
     }
+
+    function testDkgTwoDisqualifiedNodes() public {
+        Params[] memory params = new Params[](5);
+        bytes memory err;
+        address[] memory disqualifiedNodes = new address[](2);
+        disqualifiedNodes[0] = node1;
+        disqualifiedNodes[1] = node2;
+
+        params[0] = Params(node1, false, err, 0, 3, publicKey, partialPublicKey1, new address[](0));
+        params[1] = Params(node2, false, err, 0, 3, publicKey, partialPublicKey2, new address[](0));
+        params[2] = Params(node3, false, err, 0, 3, publicKey, partialPublicKey3, disqualifiedNodes);
+        params[3] = Params(node4, false, err, 0, 3, publicKey, partialPublicKey4, disqualifiedNodes);
+        params[4] = Params(node5, false, err, 0, 3, publicKey, partialPublicKey5, disqualifiedNodes);
+        dkgHelper(params);
+
+        // assert group state is correct
+        assertEq(checkIsStrictlyMajorityConsensusReached(0), true);
+        assertEq(controller.getGroup(0).members.length, 3);
+        assertEq(controller.getGroup(0).size, 3);
+
+        // assert node1 was slashed
+        assertEq(nodeInGroup(node1, 0), false);
+        assertEq(nodeInGroup(node2, 0), false);
+        assertEq(nodeStakingAmount - disqualifiedNodePenaltyAmount, controller.getStakedAmount(node1));
+        assertEq(nodeStakingAmount - disqualifiedNodePenaltyAmount, controller.getStakedAmount(node2));
+        // printGroupInfo(0);
+    }
+
+    function testDkgThreeDisqualifiedNodes() public {
+        Params[] memory params = new Params[](5);
+        bytes memory err;
+        address[] memory disqualifiedNodes = new address[](3);
+        disqualifiedNodes[0] = node1;
+        disqualifiedNodes[1] = node2;
+        disqualifiedNodes[2] = node3;
+
+        params[0] = Params(node1, false, err, 0, 3, publicKey, partialPublicKey1, new address[](0));
+        params[1] = Params(node2, false, err, 0, 3, publicKey, partialPublicKey2, new address[](0));
+        params[2] = Params(node3, false, err, 0, 3, publicKey, partialPublicKey3, new address[](0));
+        params[3] = Params(node4, false, err, 0, 3, publicKey, partialPublicKey4, disqualifiedNodes);
+        params[4] = Params(node5, false, err, 0, 3, publicKey, partialPublicKey5, disqualifiedNodes);
+        dkgHelper(params);
+
+        // * is this right? no issues.
+        assertEq(checkIsStrictlyMajorityConsensusReached(0), true);
+        assertEq(controller.getGroup(0).members.length, 5);
+        assertEq(controller.getGroup(0).size, 5);
+    }
+
+    function testDkgAllDifferentDisqualifiedNodes() public {
+        Params[] memory params = new Params[](5);
+        bytes memory err;
+        address[] memory dn1 = new address[](1);
+        address[] memory dn2 = new address[](1);
+        address[] memory dn3 = new address[](1);
+        address[] memory dn4 = new address[](1);
+        address[] memory dn5 = new address[](1);
+
+        dn1[0] = node1;
+        dn2[0] = node2;
+        dn3[0] = node3;
+        dn4[0] = node4;
+        dn5[0] = node5;
+
+        params[0] = Params(node1, false, err, 0, 3, publicKey, partialPublicKey1, dn2);
+        params[1] = Params(node2, false, err, 0, 3, publicKey, partialPublicKey2, dn3);
+        params[2] = Params(node3, false, err, 0, 3, publicKey, partialPublicKey3, dn4);
+        params[3] = Params(node4, false, err, 0, 3, publicKey, partialPublicKey4, dn5);
+        params[4] = Params(node5, false, err, 0, 3, publicKey, partialPublicKey5, dn1);
+        dkgHelper(params);
+
+        // assert group state is correct
+        assertEq(checkIsStrictlyMajorityConsensusReached(0), false);
+        assertEq(controller.getGroup(0).members.length, 5);
+        assertEq(controller.getGroup(0).size, 5);
+
+        // assert node1 was slashed
+        assertEq(nodeStakingAmount, controller.getStakedAmount(node1));
+        assertEq(nodeStakingAmount, controller.getStakedAmount(node2));
+        assertEq(nodeStakingAmount, controller.getStakedAmount(node3));
+        assertEq(nodeStakingAmount, controller.getStakedAmount(node4));
+        assertEq(nodeStakingAmount, controller.getStakedAmount(node5));
+
+        printGroupInfo(0);
+    }
 }
