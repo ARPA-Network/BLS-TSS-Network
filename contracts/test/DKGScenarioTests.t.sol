@@ -67,7 +67,7 @@ contract DKGScenarioTest is RandcastTestHelper {
     struct Params {
         address nodeIdAddress;
         bool shouldRevert;
-        string revertMessage;
+        bytes revertMessage;
         uint256 groupIndex;
         uint256 groupEpoch;
         bytes publicKey;
@@ -79,7 +79,7 @@ contract DKGScenarioTest is RandcastTestHelper {
         for (uint256 i = 0; i < params.length; i++) {
             vm.prank(params[i].nodeIdAddress);
             if (params[i].shouldRevert) {
-                vm.expectRevert(bytes(params[i].revertMessage));
+                vm.expectRevert(params[i].revertMessage);
             }
             controller.commitDkg(
                 Controller.CommitDkgParams(
@@ -93,30 +93,46 @@ contract DKGScenarioTest is RandcastTestHelper {
         }
     }
 
-    function testDkgScenarios() public {
-        string memory err;
+    function testDkgBasicTests() public {
+        // Test all "require" checks
+        bytes memory err;
+        Params[] memory params = new Params[](1);
 
-        // Group does not exist
-        Params[] memory params1 = new Params[](1);
-        err = "Group does not exist";
-        params1[0] = Params(node1, true, err, 1, 3, publicKey, partialPublicKey1, new address[](0));
-        dkgHelper(params1);
+        err = bytes("Group does not exist");
+        params[0] = Params(node1, true, err, 999, 3, publicKey, partialPublicKey1, new address[](0));
+        dkgHelper(params);
+
+        err = bytes("Caller Group epoch does not match controller Group epoch");
+        params[0] = Params(node1, true, err, 0, 999, publicKey, partialPublicKey1, new address[](0));
+        dkgHelper(params);
+
+        err = bytes("Node is not a member of the group");
+        params[0] = Params(node6, true, err, 0, 3, publicKey, partialPublicKey1, new address[](0));
+        dkgHelper(params);
+
+        err = abi.encodeWithSelector(BLS.InvalidPublicKeyEncoding.selector);
+        params[0] = Params(node1, true, err, 0, 3, publicKey, hex"AAAA", new address[](0));
+        dkgHelper(params);
+
+        err = abi.encodeWithSelector(Adapter.InvalidPartialPublicKey.selector);
+        params[0] = Params(node1, true, err, 0, 3, publicKey, badKey, new address[](0));
+        dkgHelper(params);
+
+        err = abi.encodeWithSelector(Adapter.InvalidPublicKey.selector);
+        params[0] = Params(node1, true, err, 0, 3, badKey, partialPublicKey1, new address[](0));
+        dkgHelper(params);
 
         // Happy Path
-        Params[] memory params = new Params[](5);
-        params[0] = Params(node1, false, err, 0, 3, publicKey, partialPublicKey1, new address[](0));
-        params[1] = Params(node2, false, err, 0, 3, publicKey, partialPublicKey2, new address[](0));
-        params[2] = Params(node3, false, err, 0, 3, publicKey, partialPublicKey3, new address[](0));
-        params[3] = Params(node4, false, err, 0, 3, publicKey, partialPublicKey4, new address[](0));
-        params[4] = Params(node5, false, err, 0, 3, publicKey, partialPublicKey5, new address[](0));
-        dkgHelper(params);
-        printGroupInfo(0);
+        Params[] memory params2 = new Params[](6);
+        params2[0] = Params(node1, false, err, 0, 3, publicKey, partialPublicKey1, new address[](0));
 
-        // Caller Group Epoch does not match controller group opech
-        // Params[] memory params2 = new Params[](1);
-        // params2[0] = Params(node1, true, 0, 4, publicKey, partialPublicKey1, new address[](0));
-        // dkgHelper(params2);
+        err = bytes("CommitCache already contains PartialKey for this node");
+        params2[1] = Params(node1, true, err, 0, 3, publicKey, partialPublicKey1, new address[](0));
 
-        // Group does not exist
+        params2[2] = Params(node2, false, err, 0, 3, publicKey, partialPublicKey2, new address[](0));
+        params2[3] = Params(node3, false, err, 0, 3, publicKey, partialPublicKey3, new address[](0));
+        params2[4] = Params(node4, false, err, 0, 3, publicKey, partialPublicKey4, new address[](0));
+        params2[5] = Params(node5, false, err, 0, 3, publicKey, partialPublicKey5, new address[](0));
+        dkgHelper(params2);
     }
 }
