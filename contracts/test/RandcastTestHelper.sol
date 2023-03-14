@@ -45,6 +45,8 @@ abstract contract RandcastTestHelper is Test {
         hex"0b205d275db7e7254691803f189dd40e203f57f21f585b2f43924ba3189d8f8c0fccc061ce49df93900deadd2cdc4604807a8f4b99bccd4f0b14df4845473253166b778cee833e52268379d4c49a88729711f4e16a51fbc2c4086070c944baef212c93bda6b9ee0bf7419e6c0256569f33eecf345daffd01523ce9e6aa4fa43c";
     bytes partialPublicKey5 =
         hex"1ab24e550230862eccaa516975047156d5c7cdc299f5fce0aaf04e9246c1ab2122f8c83061984377026e4769de7cc228004221275241ee6a33622043a3c730fc183f7bff0be8b3e21d9d56bc5ed2566ce3193c9df3396bd8cdc457e7c57ecbc010092c9cf423391bff81f73b1b33ac475dbf2b941b23acc7aa26324a57e5951b";
+    bytes badKey =
+        hex"111111550230862eccaa516975047156d5c7cdc299f5fce0aaf04e9246c1ab2122f8c83061984377026e4769de7cc228004221275241ee6a33622043a3c730fc183f7bff0be8b3e21d9d56bc5ed2566ce3193c9df3396bd8cdc457e7c57ecbc010092c9cf423391bff81f73b1b33ac475dbf2b941b23acc7aa26324a57e5951b";
 
     // Group Public Key
     bytes publicKey =
@@ -427,5 +429,20 @@ abstract contract RandcastTestHelper is Test {
         uint256 inUint = toUInt256(x);
         string memory inString = toBool(inUint);
         r = inString;
+    }
+
+    function checkIsStrictlyMajorityConsensusReached(uint256 groupIndex) public view returns (bool) {
+        Controller.Group memory g = controller.getGroup(groupIndex);
+        return g.isStrictlyMajorityConsensusReached;
+    }
+
+    function nodeInGroup(address nodeIdAddress, uint256 groupIndex) public view returns (bool) {
+        bool nodeInGroup = false;
+        for (uint256 i = 0; i < controller.getGroup(groupIndex).members.length; i++) {
+            if (nodeIdAddress == controller.getGroup(0).members[i].nodeIdAddress) {
+                nodeInGroup = true;
+            }
+        }
+        return nodeInGroup;
     }
 }

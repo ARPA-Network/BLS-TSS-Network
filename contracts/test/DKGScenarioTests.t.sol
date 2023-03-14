@@ -93,7 +93,7 @@ contract DKGScenarioTest is RandcastTestHelper {
         }
     }
 
-    function testDkgBasicTests() public {
+    function testDkgReverts() public {
         // Test all "require" checks
         bytes memory err;
         Params[] memory params = new Params[](1);
@@ -123,16 +123,52 @@ contract DKGScenarioTest is RandcastTestHelper {
         dkgHelper(params);
 
         // Happy Path
-        Params[] memory params2 = new Params[](6);
+        Params[] memory params2 = new Params[](2);
         params2[0] = Params(node1, false, err, 0, 3, publicKey, partialPublicKey1, new address[](0));
 
         err = bytes("CommitCache already contains PartialKey for this node");
         params2[1] = Params(node1, true, err, 0, 3, publicKey, partialPublicKey1, new address[](0));
 
-        params2[2] = Params(node2, false, err, 0, 3, publicKey, partialPublicKey2, new address[](0));
-        params2[3] = Params(node3, false, err, 0, 3, publicKey, partialPublicKey3, new address[](0));
-        params2[4] = Params(node4, false, err, 0, 3, publicKey, partialPublicKey4, new address[](0));
-        params2[5] = Params(node5, false, err, 0, 3, publicKey, partialPublicKey5, new address[](0));
         dkgHelper(params2);
+    }
+
+    function testDkgHappyPath() public {
+        Params[] memory params = new Params[](5);
+        bytes memory err;
+        params[0] = Params(node1, false, err, 0, 3, publicKey, partialPublicKey1, new address[](0));
+        params[1] = Params(node2, false, err, 0, 3, publicKey, partialPublicKey2, new address[](0));
+        params[2] = Params(node3, false, err, 0, 3, publicKey, partialPublicKey3, new address[](0));
+        params[3] = Params(node4, false, err, 0, 3, publicKey, partialPublicKey4, new address[](0));
+        params[4] = Params(node5, false, err, 0, 3, publicKey, partialPublicKey5, new address[](0));
+        dkgHelper(params);
+
+        assertEq(checkIsStrictlyMajorityConsensusReached(0), true);
+        assertEq(controller.getGroup(0).members.length, 5);
+        assertEq(controller.getGroup(0).size, 5);
+        // printGroupInfo(0);
+    }
+
+    function testDkgSingleDisqualifiedNode() public {
+        Params[] memory params = new Params[](5);
+        bytes memory err;
+        address[] memory disqualifiedNodes = new address[](1);
+        disqualifiedNodes[0] = node1;
+
+        params[0] = Params(node1, false, err, 0, 3, publicKey, partialPublicKey1, new address[](0));
+        params[1] = Params(node2, false, err, 0, 3, publicKey, partialPublicKey2, disqualifiedNodes);
+        params[2] = Params(node3, false, err, 0, 3, publicKey, partialPublicKey3, disqualifiedNodes);
+        params[3] = Params(node4, false, err, 0, 3, publicKey, partialPublicKey4, disqualifiedNodes);
+        params[4] = Params(node5, false, err, 0, 3, publicKey, partialPublicKey5, disqualifiedNodes);
+        dkgHelper(params);
+
+        // assert group state is correct
+        assertEq(checkIsStrictlyMajorityConsensusReached(0), true);
+        assertEq(controller.getGroup(0).members.length, 4);
+        assertEq(controller.getGroup(0).size, 4);
+
+        // assert node1 was slashed
+        assertEq(nodeInGroup(node1, 0), false);
+        assertEq(nodeStakingAmount - disqualifiedNodePenaltyAmount, controller.getStakedAmount(node1));
+        // printGroupInfo(0);
     }
 }

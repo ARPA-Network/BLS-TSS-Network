@@ -371,11 +371,6 @@ contract ControllerTest is RandcastTestHelper {
         assertEq(controller.partialKeyRegistered(groupIndex, node1), false);
     }
 
-    function checkIsStrictlyMajorityConsensusReached(uint256 groupIndex) public view returns (bool) {
-        Controller.Group memory g = controller.getGroup(groupIndex);
-        return g.isStrictlyMajorityConsensusReached;
-    }
-
     function testPostProcessDkg() public {
         testCommitDkg();
 
