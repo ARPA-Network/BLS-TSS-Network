@@ -132,6 +132,7 @@ contract DKGScenarioTest is RandcastTestHelper {
         dkgHelper(params2);
     }
 
+    // ! Happy Path
     function testDkgHappyPath() public {
         Params[] memory params = new Params[](5);
         bytes memory err;
@@ -141,14 +142,15 @@ contract DKGScenarioTest is RandcastTestHelper {
         params[3] = Params(node4, false, err, 0, 3, publicKey, partialPublicKey4, new address[](0));
         params[4] = Params(node5, false, err, 0, 3, publicKey, partialPublicKey5, new address[](0));
         dkgHelper(params);
+        // printGroupInfo(0);
 
         assertEq(checkIsStrictlyMajorityConsensusReached(0), true);
         assertEq(controller.getGroup(0).members.length, 5);
         assertEq(controller.getGroup(0).size, 5);
-        // printGroupInfo(0);
     }
 
-    function testDkgSingleDisqualifiedNode() public {
+    // ! 1 Disqualified Node
+    function test1Dq4Reporter() public {
         Params[] memory params = new Params[](5);
         bytes memory err;
         address[] memory disqualifiedNodes = new address[](1);
@@ -160,6 +162,7 @@ contract DKGScenarioTest is RandcastTestHelper {
         params[3] = Params(node4, false, err, 0, 3, publicKey, partialPublicKey4, disqualifiedNodes);
         params[4] = Params(node5, false, err, 0, 3, publicKey, partialPublicKey5, disqualifiedNodes);
         dkgHelper(params);
+        // printGroupInfo(0);
 
         // assert group state is correct
         assertEq(checkIsStrictlyMajorityConsensusReached(0), true);
@@ -169,10 +172,103 @@ contract DKGScenarioTest is RandcastTestHelper {
         // assert node1 was slashed
         assertEq(nodeInGroup(node1, 0), false);
         assertEq(nodeStakingAmount - disqualifiedNodePenaltyAmount, controller.getStakedAmount(node1));
-        // printGroupInfo(0);
     }
 
-    function testDkgTwoDisqualifiedNodes() public {
+    function test1Dq3Reporter() public {
+        Params[] memory params = new Params[](5);
+        bytes memory err;
+        address[] memory disqualifiedNodes = new address[](1);
+        disqualifiedNodes[0] = node1;
+
+        params[0] = Params(node1, false, err, 0, 3, publicKey, partialPublicKey1, new address[](0));
+        params[1] = Params(node2, false, err, 0, 3, publicKey, partialPublicKey2, new address[](0));
+        params[2] = Params(node3, false, err, 0, 3, publicKey, partialPublicKey3, disqualifiedNodes);
+        params[3] = Params(node4, false, err, 0, 3, publicKey, partialPublicKey4, disqualifiedNodes);
+        params[4] = Params(node5, false, err, 0, 3, publicKey, partialPublicKey5, disqualifiedNodes);
+        dkgHelper(params);
+        // printGroupInfo(0);
+
+        // assert group state is correct
+        assertEq(checkIsStrictlyMajorityConsensusReached(0), true);
+        assertEq(controller.getGroup(0).members.length, 4);
+        assertEq(controller.getGroup(0).size, 4);
+
+        // assert node1 was slashed
+        assertEq(nodeInGroup(node1, 0), false);
+        assertEq(nodeStakingAmount - disqualifiedNodePenaltyAmount, controller.getStakedAmount(node1));
+    }
+
+    function test1Dq2Reporter() public {
+        Params[] memory params = new Params[](5);
+        bytes memory err;
+        address[] memory disqualifiedNodes = new address[](1);
+        disqualifiedNodes[0] = node1;
+
+        params[0] = Params(node1, false, err, 0, 3, publicKey, partialPublicKey1, new address[](0));
+        params[1] = Params(node2, false, err, 0, 3, publicKey, partialPublicKey2, new address[](0));
+        params[2] = Params(node3, false, err, 0, 3, publicKey, partialPublicKey3, new address[](0));
+        params[3] = Params(node4, false, err, 0, 3, publicKey, partialPublicKey4, disqualifiedNodes);
+        params[4] = Params(node5, false, err, 0, 3, publicKey, partialPublicKey5, disqualifiedNodes);
+        dkgHelper(params);
+        // printGroupInfo(0);
+
+        // assert group state is correct
+        assertEq(checkIsStrictlyMajorityConsensusReached(0), true);
+        assertEq(controller.getGroup(0).members.length, 5);
+        assertEq(controller.getGroup(0).size, 5);
+    }
+
+    function test1Dq1Reporter() public {
+        Params[] memory params = new Params[](5);
+        bytes memory err;
+        address[] memory disqualifiedNodes = new address[](1);
+        disqualifiedNodes[0] = node1;
+
+        params[0] = Params(node1, false, err, 0, 3, publicKey, partialPublicKey1, new address[](0));
+        params[1] = Params(node2, false, err, 0, 3, publicKey, partialPublicKey2, new address[](0));
+        params[2] = Params(node3, false, err, 0, 3, publicKey, partialPublicKey3, new address[](0));
+        params[3] = Params(node4, false, err, 0, 3, publicKey, partialPublicKey4, new address[](0));
+        params[4] = Params(node5, false, err, 0, 3, publicKey, partialPublicKey5, disqualifiedNodes);
+        dkgHelper(params);
+        // printGroupInfo(0);
+
+        // assert group state is correct
+        assertEq(checkIsStrictlyMajorityConsensusReached(0), true);
+        assertEq(controller.getGroup(0).members.length, 5);
+        assertEq(controller.getGroup(0).size, 5);
+    }
+
+    // ! 2 Disqualified Nodes
+
+    function test2Dq4Reporter() public {
+        Params[] memory params = new Params[](5);
+        bytes memory err;
+        address[] memory disqualifiedNodes = new address[](2);
+        disqualifiedNodes[0] = node1;
+        disqualifiedNodes[1] = node2;
+
+        params[0] = Params(node1, false, err, 0, 3, publicKey, partialPublicKey1, new address[](0));
+        params[1] = Params(node2, false, err, 0, 3, publicKey, partialPublicKey2, disqualifiedNodes);
+        params[2] = Params(node3, false, err, 0, 3, publicKey, partialPublicKey3, disqualifiedNodes);
+        params[3] = Params(node4, false, err, 0, 3, publicKey, partialPublicKey4, disqualifiedNodes);
+        params[4] = Params(node5, false, err, 0, 3, publicKey, partialPublicKey5, disqualifiedNodes);
+        dkgHelper(params);
+        // printGroupInfo(0);
+
+        // assert group state is correct
+        assertEq(checkIsStrictlyMajorityConsensusReached(0), true);
+        assertEq(controller.getGroup(0).members.length, 3);
+        assertEq(controller.getGroup(0).size, 3);
+
+        // assert node1 was slashed
+        assertEq(nodeInGroup(node1, 0), false);
+        assertEq(nodeStakingAmount - disqualifiedNodePenaltyAmount, controller.getStakedAmount(node1));
+        // assert node2 was slashed
+        assertEq(nodeInGroup(node2, 0), false);
+        assertEq(nodeStakingAmount - disqualifiedNodePenaltyAmount, controller.getStakedAmount(node2));
+    }
+
+    function test2Dq3Reporter() public {
         Params[] memory params = new Params[](5);
         bytes memory err;
         address[] memory disqualifiedNodes = new address[](2);
@@ -185,21 +281,43 @@ contract DKGScenarioTest is RandcastTestHelper {
         params[3] = Params(node4, false, err, 0, 3, publicKey, partialPublicKey4, disqualifiedNodes);
         params[4] = Params(node5, false, err, 0, 3, publicKey, partialPublicKey5, disqualifiedNodes);
         dkgHelper(params);
+        // printGroupInfo(0);
 
         // assert group state is correct
         assertEq(checkIsStrictlyMajorityConsensusReached(0), true);
         assertEq(controller.getGroup(0).members.length, 3);
         assertEq(controller.getGroup(0).size, 3);
 
-        // assert node1 was slashed
+        // assert node1 and node2 were slashed
         assertEq(nodeInGroup(node1, 0), false);
-        assertEq(nodeInGroup(node2, 0), false);
         assertEq(nodeStakingAmount - disqualifiedNodePenaltyAmount, controller.getStakedAmount(node1));
+        assertEq(nodeInGroup(node2, 0), false);
         assertEq(nodeStakingAmount - disqualifiedNodePenaltyAmount, controller.getStakedAmount(node2));
-        // printGroupInfo(0);
     }
 
-    function testDkgThreeDisqualifiedNodes() public {
+    function test2Dq2Reporter() public {
+        Params[] memory params = new Params[](5);
+        bytes memory err;
+        address[] memory disqualifiedNodes = new address[](2);
+        disqualifiedNodes[0] = node1;
+        disqualifiedNodes[1] = node2;
+
+        params[0] = Params(node1, false, err, 0, 3, publicKey, partialPublicKey1, new address[](0));
+        params[1] = Params(node2, false, err, 0, 3, publicKey, partialPublicKey2, new address[](0));
+        params[2] = Params(node3, false, err, 0, 3, publicKey, partialPublicKey3, new address[](0));
+        params[3] = Params(node4, false, err, 0, 3, publicKey, partialPublicKey4, disqualifiedNodes);
+        params[4] = Params(node5, false, err, 0, 3, publicKey, partialPublicKey5, disqualifiedNodes);
+        dkgHelper(params);
+        // printGroupInfo(0);
+
+        // assert group state is correct
+        assertEq(checkIsStrictlyMajorityConsensusReached(0), true);
+        assertEq(controller.getGroup(0).members.length, 5);
+        assertEq(controller.getGroup(0).size, 5);
+    }
+
+    // ! 3 Disqualified Nodes (???)
+    function test3Dq3Reporter() public {
         Params[] memory params = new Params[](5);
         bytes memory err;
         address[] memory disqualifiedNodes = new address[](3);
@@ -209,18 +327,30 @@ contract DKGScenarioTest is RandcastTestHelper {
 
         params[0] = Params(node1, false, err, 0, 3, publicKey, partialPublicKey1, new address[](0));
         params[1] = Params(node2, false, err, 0, 3, publicKey, partialPublicKey2, new address[](0));
-        params[2] = Params(node3, false, err, 0, 3, publicKey, partialPublicKey3, new address[](0));
+        params[2] = Params(node3, false, err, 0, 3, publicKey, partialPublicKey3, disqualifiedNodes);
         params[3] = Params(node4, false, err, 0, 3, publicKey, partialPublicKey4, disqualifiedNodes);
         params[4] = Params(node5, false, err, 0, 3, publicKey, partialPublicKey5, disqualifiedNodes);
         dkgHelper(params);
+        // printGroupInfo(0);
 
-        // * is this right? no issues.
-        assertEq(checkIsStrictlyMajorityConsensusReached(0), true);
+        // * Is this okay?
+        // * When non-disqualified majority members < g.threshold (3), group is not formed, nodes are not slashed.
+
+        // assert group state is correct
+        assertEq(checkIsStrictlyMajorityConsensusReached(0), false);
         assertEq(controller.getGroup(0).members.length, 5);
         assertEq(controller.getGroup(0).size, 5);
+
+        // assert node1, node2, and node3 were slashed
+        assertEq(nodeInGroup(node1, 0), true);
+        assertEq(nodeStakingAmount, controller.getStakedAmount(node1));
+        // assertEq(nodeInGroup(node1, 0), false);
+        // assertEq(nodeStakingAmount - disqualifiedNodePenaltyAmount, controller.getStakedAmount(node1));
     }
 
-    function testDkgAllDifferentDisqualifiedNodes() public {
+    // ! 1 Disqualified Node Mixed Reporting
+    function testMixed1Dq5Reporter5Target() public {
+        // 5 nodes all report different disqualified nodes (1 reports 2 reports 3 ...)
         Params[] memory params = new Params[](5);
         bytes memory err;
         address[] memory dn1 = new address[](1);
@@ -241,6 +371,10 @@ contract DKGScenarioTest is RandcastTestHelper {
         params[3] = Params(node4, false, err, 0, 3, publicKey, partialPublicKey4, dn5);
         params[4] = Params(node5, false, err, 0, 3, publicKey, partialPublicKey5, dn1);
         dkgHelper(params);
+        // printGroupInfo(0);
+
+        // * Is this okay?
+        // * When non-disqualified majority members < g.threshold (3), group is not formed, nodes are not slashed.
 
         // assert group state is correct
         assertEq(checkIsStrictlyMajorityConsensusReached(0), false);
@@ -253,7 +387,5 @@ contract DKGScenarioTest is RandcastTestHelper {
         assertEq(nodeStakingAmount, controller.getStakedAmount(node3));
         assertEq(nodeStakingAmount, controller.getStakedAmount(node4));
         assertEq(nodeStakingAmount, controller.getStakedAmount(node5));
-
-        printGroupInfo(0);
     }
 }
