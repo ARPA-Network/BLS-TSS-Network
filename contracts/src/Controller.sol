@@ -113,7 +113,7 @@ contract Controller is Adapter {
             idealNumberOfGroups,
             pendingBlockAfterQuit,
             dkgPostProcessReward
-            );
+        );
     }
 
     function nodeRegister(bytes calldata dkgPublicKey) public {
@@ -359,7 +359,7 @@ contract Controller is Adapter {
         coordinator.initialize(groupNodes, groupKeys);
 
         emit DkgTask( // needs to be verified against what node is expecting
-            g.index, g.epoch, g.size, g.threshold, groupNodes, block.number, address(coordinator));
+        g.index, g.epoch, g.size, g.threshold, groupNodes, block.number, address(coordinator));
     }
 
     // Note: set to internal later
