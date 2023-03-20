@@ -401,8 +401,6 @@ contract Controller is Adapter {
     function commitDkg(CommitDkgParams memory params) external {
         require(params.groupIndex < groupCount, "Group does not exist");
 
-        // Todo: require publickey and partial public key are not empty  / are the right format
-
         // require coordinator exists
         require(coordinators[params.groupIndex] != address(0), "Coordinator not found for groupIndex");
 
