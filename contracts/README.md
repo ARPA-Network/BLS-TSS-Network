@@ -21,3 +21,9 @@ Measure coverage by installing the vscode extension: [coverage gutters](https://
 ```bash
 forge coverage --report lcov
 ```
+
+## Useful forge shell aliases
+
+alias fw="forge test --watch --run-all"
+alias ft="forge test --watch -vvv --match-test"
+alias coverage="forge coverage --report lcov"
