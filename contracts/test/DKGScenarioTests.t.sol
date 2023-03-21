@@ -93,6 +93,13 @@ contract DKGScenarioTest is RandcastTestHelper {
         }
     }
 
+    function setPhase(uint256 groupIndex, uint256 phase) public {
+        address coordinatorAddress = controller.getCoordinator(groupIndex);
+        ICoordinator coordinator = ICoordinator(coordinatorAddress);
+        uint256 startBlock = coordinator.startBlock();
+        vm.roll(startBlock + 1 + phase * defaultDkgPhaseDuration);
+    }
+
     function testDkgReverts() public {
         // Test all "require" checks
         bytes memory err;
@@ -348,7 +355,34 @@ contract DKGScenarioTest is RandcastTestHelper {
         // assertEq(nodeStakingAmount - disqualifiedNodePenaltyAmount, controller.getStakedAmount(node1));
     }
 
-    // ! 1 Disqualified Node Mixed Reporting
+    // ! PPDKG with 3 Disqualified Nodes
+    function testPPDKG3Dq3Reporter() public {
+        test3Dq3Reporter();
+        // printGroupInfo(0);
+
+        // Set the coordinator to completed phase
+        setPhase(0, 4);
+
+        // call postProcessDkg as node1
+        vm.prank(node1);
+        controller.postProcessDkg(0, 3);
+        // printGroupInfo(0);
+
+        // assert group state is correct
+        assertEq(checkIsStrictlyMajorityConsensusReached(0), false);
+        assertEq(controller.getGroup(0).members.length, 2);
+        assertEq(controller.getGroup(0).size, 2);
+
+        // assert node1, node2, and node3 were slashed
+        assertEq(nodeInGroup(node1, 0), false);
+        assertEq(nodeStakingAmount - disqualifiedNodePenaltyAmount, controller.getStakedAmount(node1));
+        assertEq(nodeInGroup(node2, 0), false);
+        assertEq(nodeStakingAmount - disqualifiedNodePenaltyAmount, controller.getStakedAmount(node2));
+        assertEq(nodeInGroup(node3, 0), false);
+        assertEq(nodeStakingAmount - disqualifiedNodePenaltyAmount, controller.getStakedAmount(node3));
+    }
+
+    // !  Disqualified Node Mixed Reporting
     function testMixed1Dq5Reporter5Target() public {
         // 5 nodes all report different disqualified nodes (1 reports 2 reports 3 ...)
         Params[] memory params = new Params[](5);
@@ -387,5 +421,36 @@ contract DKGScenarioTest is RandcastTestHelper {
         assertEq(nodeStakingAmount, controller.getStakedAmount(node3));
         assertEq(nodeStakingAmount, controller.getStakedAmount(node4));
         assertEq(nodeStakingAmount, controller.getStakedAmount(node5));
+    }
+
+    // ! PPDKG Node Mixed Reporting
+    function testPPDKGMixed1Dq5Reporter5Target() public {
+        testMixed1Dq5Reporter5Target();
+        printGroupInfo(0);
+
+        // Set the coordinator to completed phase
+        setPhase(0, 4);
+
+        // call postProcessDkg as node1
+        vm.prank(node1);
+        controller.postProcessDkg(0, 3);
+        printGroupInfo(0);
+
+        // assert group state is correct
+        assertEq(checkIsStrictlyMajorityConsensusReached(0), false);
+        assertEq(controller.getGroup(0).members.length, 0);
+        assertEq(controller.getGroup(0).size, 0);
+
+        // assert nodes are slashed
+        assertEq(nodeInGroup(node1, 0), false);
+        assertEq(nodeStakingAmount - disqualifiedNodePenaltyAmount, controller.getStakedAmount(node1));
+        assertEq(nodeInGroup(node2, 0), false);
+        assertEq(nodeStakingAmount - disqualifiedNodePenaltyAmount, controller.getStakedAmount(node2));
+        assertEq(nodeInGroup(node3, 0), false);
+        assertEq(nodeStakingAmount - disqualifiedNodePenaltyAmount, controller.getStakedAmount(node3));
+        assertEq(nodeInGroup(node4, 0), false);
+        assertEq(nodeStakingAmount - disqualifiedNodePenaltyAmount, controller.getStakedAmount(node4));
+        assertEq(nodeInGroup(node5, 0), false);
+        assertEq(nodeStakingAmount - disqualifiedNodePenaltyAmount, controller.getStakedAmount(node5));
     }
 }
