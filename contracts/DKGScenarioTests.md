@@ -9,6 +9,7 @@
 4. tryAddToExistingCommitCache(groupIndex, commitResult):
 5. If consensus not reached, get majority member with identical commits.
         if majority members > g.threshold, slash all disqualified nodes.
+        else, members not slashed, but will be slashed in postProcessDKG.
 
 ## DKG Scenario Tests
 
@@ -32,7 +33,7 @@ Happy path:
       - test2Dq1Reporter: 1/5 report -> same as happy path (test skipped)
 
 Non-disqualified majority members < g.threshold (3): (Is this correct behaviour???)
-    - 3 Disqualified Nodese:
+    - 3 Disqualified Nodes:
         - test3Dq3Reporter: 3/5 report node1, node2, node3 dq'd.
         -  unable to reach consensus
         -  Group size = 5, nodes not slashed.
@@ -42,3 +43,16 @@ Non-disqualified majority members < g.threshold (3): (Is this correct behaviour?
         - unable to reah consensus 
         - Group size = 5, nodes not slashed.
 
+## PPDKG Scenario Tests
+
+3 Disqualified Nodes
+    -testPPDKG3Dq3Reporter:
+        - Call test3Dq3Reporter (3 disqualified nodes, slashing never completed)
+        - call postProcessDKG as node1
+          - 3 nodes slashed
+
+All Different Disqualified Nodes:
+    - testMixed1Dq5Reporter5Target:
+        - Call testMixed1Dq5Reporter5Target (5 disqualified nodes, slashing never completed)
+        - call postProcessDKG as node1
+          - 5 nodes slashed
