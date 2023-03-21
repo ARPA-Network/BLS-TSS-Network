@@ -26,4 +26,4 @@ forge coverage --report lcov
 
 alias fw="forge test --watch --run-all"
 alias ft="forge test --watch -vvv --match-test"
-alias coverage="forge coverage --report lcov"
+alias fc="forge coverage --report lcov"
