@@ -35,6 +35,7 @@ ${MODIFIRD_PARTIAL_PUB_KEY}              0x02
 Set Enviorment And Deploy Contract
     [Documentation]    Set enviorment and deploy proxy contract
     Setup Scenario Testing Environment
+    ${result} =    Run    cd contracts/;forge build -o out/
     Deploy Controller
     Build Proxy Contract
     Exec Script    ${PROXY_CONFIG_SCRIPT}

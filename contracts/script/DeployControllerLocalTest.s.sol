@@ -14,17 +14,13 @@ contract DeployControllerTestScript is Script {
     function setUp() public {}
 
     function run() external {
-        Controller controller;
-        MockArpaEthOracle oracle;
-        IERC20 arpa;
+        vm.broadcast(deployerPrivateKey);
+        IERC20 arpa = new Arpa();
 
         vm.broadcast(deployerPrivateKey);
-        arpa = new Arpa();
+        MockArpaEthOracle oracle = new MockArpaEthOracle();
 
         vm.broadcast(deployerPrivateKey);
-        oracle = new MockArpaEthOracle();
-
-        vm.broadcast(deployerPrivateKey);
-        controller = new Controller(address(arpa), address(oracle));
+        Controller controller = new Controller(address(arpa), address(oracle));
     }
 }

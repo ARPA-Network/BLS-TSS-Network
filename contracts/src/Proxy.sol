@@ -128,7 +128,6 @@ contract Proxy is Ownable {
             partialPublicKeyModified, disqualifiedNodesModified));
         require(success, "modified delegatecall reverted");
     }
-    event msgSender(address owner);
 
     function setControllerConfig(
         uint256 nodeStakingAmount,
@@ -139,9 +138,20 @@ contract Proxy is Ownable {
         uint256 idealNumberOfGroups,
         uint256 pendingBlockAfterQuit,
         uint256 dkgPostProcessReward
-    ) external{
-        emit msgSender(msg.sender);
-        _delegate(implementation());
+    ) external payable {
+        implementation().delegatecall(
+            abi.encodeWithSignature(
+                "setControllerConfig(uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256)",
+                nodeStakingAmount,
+                disqualifiedNodePenaltyAmount,
+                defaultNumberOfCommitters,
+                defaultDkgPhaseDuration,
+                groupMaxCapacity,
+                idealNumberOfGroups,
+                pendingBlockAfterQuit,
+                dkgPostProcessReward
+            )
+        );
     }
 
     function setAdapterConfig(
@@ -155,11 +165,29 @@ contract Proxy is Ownable {
         uint256 rewardPerSignature,
         uint256 committerRewardPerSignature,
         Adapter.FeeConfig memory feeConfig
-    ) external {
-        _delegate(implementation());
+    ) external payable {
+         implementation().delegatecall(
+            abi.encodeWithSignature(
+                "setAdapterConfig(uint16,uint32,uint32,uint32,uint32,int256,uint256,uint256,uint256,(uint32,uint32,uint32,uint32,uint32,uint24,uint24,uint24,uint24))",
+                minimumRequestConfirmations,
+                maxGasLimit,
+                stalenessSeconds,
+                gasAfterPaymentCalculation,
+                gasExceptCallback,
+                fallbackWeiPerUnitArpa,
+                signatureTaskExclusiveWindow,
+                rewardPerSignature,
+                committerRewardPerSignature,
+                feeConfig
+            )
+         );
     }
 
     fallback() external payable {
         _delegate(implementation());
+    }
+
+    receive() external payable {
+       _delegate(implementation());
     }
 }
