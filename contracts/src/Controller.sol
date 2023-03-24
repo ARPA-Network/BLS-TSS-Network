@@ -113,7 +113,7 @@ contract Controller is Adapter {
             idealNumberOfGroups,
             pendingBlockAfterQuit,
             dkgPostProcessReward
-            );
+        );
     }
 
     function nodeRegister(bytes calldata dkgPublicKey) public {
@@ -359,7 +359,7 @@ contract Controller is Adapter {
         coordinator.initialize(groupNodes, groupKeys);
 
         emit DkgTask( // needs to be verified against what node is expecting
-            g.index, g.epoch, g.size, g.threshold, groupNodes, block.number, address(coordinator));
+        g.index, g.epoch, g.size, g.threshold, groupNodes, block.number, address(coordinator));
     }
 
     // Note: set to internal later
@@ -400,8 +400,6 @@ contract Controller is Adapter {
 
     function commitDkg(CommitDkgParams memory params) external {
         require(params.groupIndex < groupCount, "Group does not exist");
-
-        // Todo: require publickey and partial public key are not empty  / are the right format
 
         // require coordinator exists
         require(coordinators[params.groupIndex] != address(0), "Coordinator not found for groupIndex");

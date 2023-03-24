@@ -7,6 +7,7 @@ import "../src/Controller.sol";
 import "./MockArpaEthOracle.sol";
 import "openzeppelin-contracts/contracts/token/ERC20/IERC20.sol";
 import "openzeppelin-contracts/contracts/token/ERC20/ERC20.sol";
+import "openzeppelin-contracts/contracts/utils/Strings.sol";
 
 abstract contract RandcastTestHelper is Test {
     Controller controller;
@@ -44,6 +45,8 @@ abstract contract RandcastTestHelper is Test {
         hex"0b205d275db7e7254691803f189dd40e203f57f21f585b2f43924ba3189d8f8c0fccc061ce49df93900deadd2cdc4604807a8f4b99bccd4f0b14df4845473253166b778cee833e52268379d4c49a88729711f4e16a51fbc2c4086070c944baef212c93bda6b9ee0bf7419e6c0256569f33eecf345daffd01523ce9e6aa4fa43c";
     bytes partialPublicKey5 =
         hex"1ab24e550230862eccaa516975047156d5c7cdc299f5fce0aaf04e9246c1ab2122f8c83061984377026e4769de7cc228004221275241ee6a33622043a3c730fc183f7bff0be8b3e21d9d56bc5ed2566ce3193c9df3396bd8cdc457e7c57ecbc010092c9cf423391bff81f73b1b33ac475dbf2b941b23acc7aa26324a57e5951b";
+    bytes badKey =
+        hex"111111550230862eccaa516975047156d5c7cdc299f5fce0aaf04e9246c1ab2122f8c83061984377026e4769de7cc228004221275241ee6a33622043a3c730fc183f7bff0be8b3e21d9d56bc5ed2566ce3193c9df3396bd8cdc457e7c57ecbc010092c9cf423391bff81f73b1b33ac475dbf2b941b23acc7aa26324a57e5951b";
 
     // Group Public Key
     bytes publicKey =
@@ -298,5 +301,148 @@ abstract contract RandcastTestHelper is Test {
         params = Controller.CommitDkgParams(groupIndex, groupEpoch, publicKey, partialPublicKey5, disqualifiedNodes);
         vm.prank(node5);
         controller.commitDkg(params);
+    }
+
+    function printGroupInfo(uint256 groupIndex) public {
+        Controller.Group memory g = controller.getGroup(groupIndex);
+
+        uint256 groupCount = controller.groupCount();
+        emit log("--------------------");
+        emit log_named_uint("printing group info for: groupIndex", groupIndex);
+        emit log("--------------------");
+        emit log_named_uint("Total groupCount", groupCount);
+        emit log_named_uint("g.index", g.index);
+        emit log_named_uint("g.epoch", g.epoch);
+        emit log_named_uint("g.size", g.size);
+        emit log_named_uint("g.threshold", g.threshold);
+        emit log_named_uint("g.members.length", g.members.length);
+        emit log_named_uint("g.isStrictlyMajorityConsensusReached", g.isStrictlyMajorityConsensusReached ? 1 : 0);
+        for (uint256 i = 0; i < g.members.length; i++) {
+            emit log_named_address(
+                string.concat("g.members[", Strings.toString(i), "].nodeIdAddress"), g.members[i].nodeIdAddress
+            );
+            for (uint256 j = 0; j < g.members[i].partialPublicKey.length; j++) {
+                emit log_named_uint(
+                    string.concat("g.members[", Strings.toString(i), "].partialPublicKey[", Strings.toString(j), "]"),
+                    g.members[i].partialPublicKey[j]
+                );
+            }
+        }
+        // print committers
+        emit log_named_uint("g.committers.length", g.committers.length);
+        for (uint256 i = 0; i < g.committers.length; i++) {
+            emit log_named_address(string.concat("g.committers[", Strings.toString(i), "]"), g.committers[i]);
+        }
+        // print commit cache info
+        emit log_named_uint("g.commitCacheList.length", g.commitCacheList.length);
+        for (uint256 i = 0; i < g.commitCacheList.length; i++) {
+            // print commit result public key
+            for (uint256 j = 0; j < g.commitCacheList[i].commitResult.publicKey.length; j++) {
+                emit log_named_uint(
+                    string.concat(
+                        "g.commitCacheList[", Strings.toString(i), "].commitResult.publicKey[", Strings.toString(j), "]"
+                    ),
+                    g.commitCacheList[i].commitResult.publicKey[j]
+                );
+            }
+            // print commit result disqualified nodes
+            uint256 disqualifiedNodesLength = g.commitCacheList[i].commitResult.disqualifiedNodes.length;
+            for (uint256 j = 0; j < disqualifiedNodesLength; j++) {
+                emit log_named_address(
+                    string.concat(
+                        "g.commitCacheList[",
+                        Strings.toString(i),
+                        "].commitResult.disqualifiedNodes[",
+                        Strings.toString(j),
+                        "].nodeIdAddress"
+                    ),
+                    g.commitCacheList[i].commitResult.disqualifiedNodes[j]
+                );
+            }
+
+            for (uint256 j = 0; j < g.commitCacheList[i].nodeIdAddress.length; j++) {
+                emit log_named_address(
+                    string.concat(
+                        "g.commitCacheList[",
+                        Strings.toString(i),
+                        "].nodeIdAddress[",
+                        Strings.toString(j),
+                        "].nodeIdAddress"
+                    ),
+                    g.commitCacheList[i].nodeIdAddress[j]
+                );
+            }
+        }
+        // print coordinator info
+        address coordinatorAddress = controller.getCoordinator(groupIndex);
+        emit log_named_address("\nCoordinator", coordinatorAddress);
+    }
+
+    function printNodeInfo(address nodeAddress) public {
+        // print node address
+        emit log("\n");
+        emit log("--------------------");
+        emit log_named_address("printing info for node", nodeAddress);
+        emit log("--------------------");
+
+        Controller.Node memory node = controller.getNode(nodeAddress);
+
+        emit log_named_address("n.idAddress", node.idAddress);
+        emit log_named_bytes("n.dkgPublicKey", node.dkgPublicKey);
+        emit log_named_string("n.state", toText(node.state));
+        emit log_named_uint("n.pendingUntilBlock", node.pendingUntilBlock);
+        emit log_named_uint("n.staking", node.staking);
+    }
+
+    function printMemberInfo(uint256 groupIndex, uint256 memberIndex) public {
+        emit log(
+            string.concat(
+                "\nGroupIndex: ", Strings.toString(groupIndex), " MemberIndex: ", Strings.toString(memberIndex), ":"
+            )
+        );
+
+        Controller.Member memory m = controller.getMember(groupIndex, memberIndex);
+
+        // emit log_named_uint("m.index", m.index);
+        emit log_named_address("m.nodeIdAddress", m.nodeIdAddress);
+        for (uint256 i = 0; i < m.partialPublicKey.length; i++) {
+            emit log_named_uint(string.concat("m.partialPublicKey[", Strings.toString(i), "]"), m.partialPublicKey[i]);
+        }
+    }
+
+    function toUInt256(bool x) internal pure returns (uint256 r) {
+        assembly {
+            r := x
+        }
+    }
+
+    function toBool(uint256 x) internal pure returns (string memory r) {
+        // x == 0 ? r = "False" : "True";
+        if (x == 1) {
+            r = "True";
+        } else if (x == 0) {
+            r = "False";
+        } else {}
+    }
+
+    function toText(bool x) internal pure returns (string memory r) {
+        uint256 inUint = toUInt256(x);
+        string memory inString = toBool(inUint);
+        r = inString;
+    }
+
+    function checkIsStrictlyMajorityConsensusReached(uint256 groupIndex) public view returns (bool) {
+        Controller.Group memory g = controller.getGroup(groupIndex);
+        return g.isStrictlyMajorityConsensusReached;
+    }
+
+    function nodeInGroup(address nodeIdAddress, uint256 groupIndex) public view returns (bool) {
+        bool nodeFound = false;
+        for (uint256 i = 0; i < controller.getGroup(groupIndex).members.length; i++) {
+            if (nodeIdAddress == controller.getGroup(0).members[i].nodeIdAddress) {
+                nodeFound = true;
+            }
+        }
+        return nodeFound;
     }
 }

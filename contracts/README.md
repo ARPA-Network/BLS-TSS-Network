@@ -1,16 +1,17 @@
 # Randcast Solidity Contracts
 
-## Usage
+## Building and Testing
+
+NOTE: foundry.toml must contain "gas_price = 1000000000" for tests to pass
 
 ```bash
 cd contracts
 
 forge install # Install submodule dependencies
 forge build # Compile contracts
-forge test --gas-price 1000000000 # Run Tests
 
-# Run a specific test
-forge test --match-test CommitDkg --gas-price 1000000000 -vvvvv
+forge test # Run tests
+forge test --match-test CommitDkg -vvvvv # Run a specific test
 ```
 
 ## Coverage
@@ -20,3 +21,9 @@ Measure coverage by installing the vscode extension: [coverage gutters](https://
 ```bash
 forge coverage --report lcov
 ```
+
+## Useful forge shell aliases
+
+alias fw="forge test --watch --run-all"
+alias ft="forge test --watch -vvv --match-test"
+alias fc="forge coverage --report lcov"

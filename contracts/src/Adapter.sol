@@ -371,7 +371,7 @@ contract Adapter is IAdapter, RequestIdBase, RandomnessHandler, Ownable {
             callback.requestConfirmations,
             callback.callbackGasLimit,
             callback.callbackMaxGasPrice
-            );
+        );
 
         return requestId;
     }
@@ -628,7 +628,7 @@ contract Adapter is IAdapter, RequestIdBase, RandomnessHandler, Ownable {
             rewardPerSignature,
             committerRewardPerSignature,
             s_feeConfig
-            );
+        );
     }
 
     /*
