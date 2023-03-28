@@ -9,7 +9,6 @@ Resource            common.resource
 *** Variables ***
 ${PROTO_PATH}                       tests/scenarios/src/environment/proto
 ${CONFIG_PATH}                      tests/scenarios/src/environment/node_config/
-
 #Test variables
 ${NODES_PORT}                       localhost:50101
 *** Keywords ***
@@ -148,4 +147,6 @@ Add Balance And Run Node
     ${proc} =    Start Node    ${node_index}
     ${register_result} =    Get Keyword From Log    ${proc}    Transaction successful(node_register)    200
     Should Not Be Empty    ${register_result}
+    ${list} =    Add Process To List    ${proc}    ${NODE_PROCESS_LIST}
+    Set Global Variable    $NODE_PROCESS_LIST    ${list}
     RETURN    ${proc}

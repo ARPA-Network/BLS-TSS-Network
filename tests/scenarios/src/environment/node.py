@@ -7,6 +7,7 @@ import sys
 import re
 import grpc
 from google.protobuf.empty_pb2 import Empty
+from web3 import Web3
 
 sys.path.insert(1, 'tests/scenarios/src/environment/proto')
 import management_pb2_grpc
@@ -130,6 +131,7 @@ def start_node(node_idx):
     node_idx: index of the node.
     """
     port = 50061 + int(node_idx) - 1
+    # Kill process running on the port
     os.system(f'kill $(lsof -t -i:{port})')
     root_path = os.path.dirname(os.path.abspath(__file__))
     root_path = root_path.split("/tests/")[0]
@@ -138,7 +140,8 @@ def start_node(node_idx):
        "{}/tests/scenarios/src/environment/node_config/config{}.yml"
       ).format(root_path, node_idx)
     print(cmd)
-    proc = subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, cwd=root_path)
+    proc = subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE,
+                            stderr=subprocess.STDOUT, cwd=root_path)
     return proc
 
 def kill_node(proc):
@@ -154,5 +157,23 @@ def get_node_port_from_index(node_idx):
     Get the port of a node from its index.
     node_idx: index of the node.
     """
-    port = 50061 + int(node_idx) - 1
+    port = 50101 + int(node_idx) - 1
     return  'localhost:' + str(port)
+
+def add_process_to_list(proc, node_list):
+    """
+    Add a process to the list of processes.
+    proc: process of the node.
+    node_list: list of processes.
+    """
+    if len(node_list) == 0:
+        node_list = []
+    node_list.append(proc)
+    return node_list
+
+def make_list(*args):
+    """
+    Make a list from the input.
+    args: accept any number of arguments, which are then gathered into a tuple. 
+    """
+    return list(args)

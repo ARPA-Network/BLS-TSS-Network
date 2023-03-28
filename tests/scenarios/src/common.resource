@@ -11,13 +11,15 @@ Library             environment/node.py
 # Ethereum Mainnet Sanity:
 ${TEN_MILLION_BLOCKS}                   10000000
 ${WRAPPED_ETHER_CONTRACT_ADDRESS}       0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2
-${NODE_ACCOUNT_LIST}                    
+${NODE_ACCOUNT_LIST}
+${NODE_PROCESS_LIST}
+${EMPTY_LIST}
 
 # ARPA ERC20 information:
 ${FORK_RPC_URL}                         https://mainnet.infura.io/v3/e263f48ae1f545198575c7c7d4088f57
 ${ARPA_HOLDER_ADDRESS}                  0xf977814e90da44bfa03b6295a0616a897441acec
 ${ARPA_CONTRACT_ADDRESS}                0xBA50933C268F567BDC86E1aC131BE072C6B0b71a
-${USER_CONTRACT_ADDRESS}                0x8464135c8F25Da09e49BC8782676a84730C318bC
+${USER_CONTRACT_ADDRESS}                0xbCF26943C0197d2eE0E5D05c716Be60cc2761508
 ${ACCOUNT_PATH}                         ACCOUNT_PATH
 ${NUM_ACCOUNTS}                         20
 ${BALANCE}                              1000
@@ -25,11 +27,6 @@ ${BALANCE}                              1000
 # Ethereum RPC client, Cast CLI command and arguments:
 ${ARGS_IMPERSONATE_ACCOUNT}             rpc anvil_impersonateAccount
 ${ARGS_STOP_IMPERSONATE_ACCOUNT}        rpc anvil_stopImpersonatingAccount
-${ARGS_TRANSFER_ARPA}                   send ${ARPA_CONTRACT_ADDRESS}
-...                                     transfer(address,uint256)
-...                                     --from=${ARPA_HOLDER_ADDRESS}
-${ARGS_GET_ARPA_BALANCE}                cast call ${ARPA_CONTRACT_ADDRESS} 'balanceOf(address)'
-
 ${LOCAL_ETHEREUM_CHAIN_PROCESS_HANDLE}
 
 *** Keywords ***
@@ -47,6 +44,7 @@ Teardown Scenario Testing Environment
     [Documentation]    Tears down the scenario testing environment
     Stop Local Ethereum Chain
     Terminate All Processes
+    
 
 Process Completes Successfully
     [Documentation]    The CLI command issued executes and terminates without error
@@ -63,7 +61,7 @@ Start Local Ethereum Chain
     ${anvil_process_handle} =    Start Process    anvil
     ...    --accounts    ${NUM_ACCOUNTS}
     ...    --balance    1000000
-    ...    --block-time    1
+    #...    --block-time    1
     #...    --code-size-limit    90000
 
     Process Should Be Running    ${anvil_process_handle}
@@ -115,6 +113,14 @@ Get Balance
     Process Completes Successfully    ${result}
     RETURN    ${result.stdout}
 
+Get ARPA Balance
+    [Documentation]    Gets the ARPA balance of a given address
+    [Arguments]    ${address}
+    ${result} =    Run Process    cast    call    ${ARPA_CONTRACT_ADDRESS}
+    ...    balanceOf(address)(uint256)    ${address}    
+    Process Completes Successfully    ${result}
+    RETURN    ${result.stdout}
+
 # Sanity check section for local Ethereum chain and helper functions:
 
 Local Ethereum Chain Should Be Up And Running
@@ -145,9 +151,13 @@ Set Balance Should Work
     ${balance} =    Get Balance    ${ARPA_HOLDER_ADDRESS}
     Should Be Equal    ${balance}    10
 
-# TODO: Keywords to interact with ERC-20 token contract
-# TODO: Keywords to build & deploy ARPA smart contracts
-# TODO: Keywords to interact with ARPA smart contracts
-# TODO: Keywords to build & run nodes
-# TODO: Keywords to interact with nodes via RPC
-# TODO: Test Cases for node registration
+Wait Block Number Increase
+    [Documentation]    Wait for the block number to increase
+    [Arguments]    ${number}
+    ${original_block_number} =    Get Latest Block Number
+    ${block_number} =    Get Latest Block Number
+    WHILE    ${original_block_number} + ${number} > ${block_number}
+        ${block_number} =    Get Latest Block Number
+        Sleep    1s
+    END
+    Should Be Equal    ${original_block_number} + ${number}    ${block_number}

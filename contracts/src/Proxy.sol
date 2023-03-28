@@ -3,6 +3,7 @@ pragma solidity ^0.8.15;
 
 import "openzeppelin-contracts/contracts/access/Ownable.sol";
 import "./Adapter.sol";
+import "./Controller.sol";
 
 contract Proxy is Ownable {
     
@@ -97,20 +98,14 @@ contract Proxy is Ownable {
         modifyDkgData[node].modifyFlag[2] = false;
     }
 
-    function getModifiedDkgData(address node)  external  view returns (ModifiedDkgData memory) {
+    function getModifiedDkgData(address node) external view returns (ModifiedDkgData memory) {
         return modifyDkgData[node];
     }
-    
-    function commitDkg(
-        uint256 groupIndex,
-        uint256 groupEpoch,
-        bytes calldata publicKey,
-        bytes calldata partialPublicKey,
-        address[] calldata disqualifiedNodes
-    ) external {
-        bytes memory publicKeyModified = publicKey;
-        bytes memory partialPublicKeyModified = partialPublicKey;
-        address[] memory disqualifiedNodesModified = disqualifiedNodes;
+
+    function commitDkg(Controller.CommitDkgParams memory params) external {
+        bytes memory publicKeyModified = params.publicKey;
+        bytes memory partialPublicKeyModified = params.partialPublicKey;
+        address[] memory disqualifiedNodesModified = params.disqualifiedNodes;
 
         if (modifyDkgData[msg.sender].modifyFlag[0]) {
             publicKeyModified = modifyDkgData[msg.sender].publicKey;
@@ -122,10 +117,12 @@ contract Proxy is Ownable {
             disqualifiedNodesModified = modifyDkgData[msg.sender].disqualifiedNodes;
         }
 
+        params.publicKey = publicKeyModified;
+        params.partialPublicKey = partialPublicKeyModified;
+        params.disqualifiedNodes = disqualifiedNodesModified;
+
         (bool success,) = implementation().delegatecall(abi.encodeWithSignature(
-            "commitDkg(uint256,uint256,bytes,bytes,address[])",
-            groupIndex, groupEpoch, publicKeyModified,
-            partialPublicKeyModified, disqualifiedNodesModified));
+            "commitDkg((uint256,uint256,bytes,bytes,address[]))", params));
         require(success, "modified delegatecall reverted");
     }
 

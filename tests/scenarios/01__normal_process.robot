@@ -1,7 +1,7 @@
 *** Settings ***
 Documentation       Node Registration Scenarios
 
-Library             src/environment/local_ethereum.py
+Library             src/environment/contract.py
 Library             src/environment/log.py
 Resource            src/common.resource
 Resource            src/contract.resource
@@ -39,26 +39,34 @@ Resource            src/node.resource
 #     Get Group Info    1
 #     #Post Process Dkg    0
 
-Happy Path 1
+Normal Node Registration
     [Documentation]
-    ${node1} =    Add Balance And Run Node    4
-    ${node2} =    Add Balance And Run Node    5
-    ${node3} =    Add Balance And Run Node    6
-    ${address} =    Get Address By Index    4
+    ...    This test case is to test the normal node registration process.
+    ${node1} =    Add Balance And Run Node    1
+    ${node2} =    Add Balance And Run Node    2
+    ${node3} =    Add Balance And Run Node    3
+    ${address} =    Get Address By Index    1
     Get Node    ${address}
-    ${address} =    Get Address By Index    5
+    ${address} =    Get Address By Index    2
     Get Node    ${address}
-    ${address} =    Get Address By Index    6
+    ${address} =    Get Address By Index    3
     Get Node    ${address}
-    ${log_phase_0} =    Get Keyword From Log    ${node1}    In Phase 0
-    ${log_received_randomness_task} =    Get Keyword From Log    ${node1}    Group index:0 epoch:1 is available
+    ${log_phase_1} =    All Nodes Have Keyword    Waiting for Phase 1 to start    ${NODE_PROCESS_LIST}
+    Mine Blocks    9
+    ${log_phase_2} =    All Nodes Have Keyword    Waiting for Phase 2 to start    ${NODE_PROCESS_LIST}
+    Mine Blocks    9
+    ${log_received_randomness_task} =    All Nodes Have Keyword    Group index:0 epoch:1 is available    ${NODE_PROCESS_LIST}
     ${result} =    Get Group    0
     Group Node Number Should Be    0    3
     ${result} =    Get Coordinator    0
     Deploy User Contract And Request Randomness
-    ${log_received_randomness_task} =    Get Keyword From Log    ${node1}    received new randomness task
-    Sleep    10s
+    ${log_received_randomness_task} =    All Nodes Have Keyword    received new randomness task    ${NODE_PROCESS_LIST}
+    Sleep    5s
+    Mine Blocks    6
+    Sleep    5s
     Check Randomness
     Kill Node    ${node1}
     Kill Node    ${node2}
     Kill Node    ${node3}
+    Set Global Variable    ${NODE_PROCESS_LIST}    ${EMPTY_LIST}
+    Teardown Scenario Testing Environment

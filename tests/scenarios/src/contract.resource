@@ -5,8 +5,9 @@ Documentation       This resource file sets the constants and variables
 Library             Process
 Library             String
 Library             OperatingSystem
-Library             environment/local_ethereum.py
+Library             environment/contract.py
 Library             environment/node.py
+Library             environment/log.py
 
 Resource            common.resource
 
@@ -34,29 +35,32 @@ ${MODIFIRD_PARTIAL_PUB_KEY}              0x02
 *** Keywords ***
 Set Enviorment And Deploy Contract
     [Documentation]    Set enviorment and deploy proxy contract
+    Clear Log
     Setup Scenario Testing Environment
-    ${result} =    Run    cd contracts/;forge build -o out/
+    ${result} =    Run    cd contracts/;forge build -o out/ --revert-strings debug
     Deploy Controller
     Build Proxy Contract
-    Exec Script    ${PROXY_CONFIG_SCRIPT}
+    ${result} =    Exec Script    ${PROXY_CONFIG_SCRIPT}
     Set ARPA Address
-    Create Node Config    ${PROXY_CONTRACT_ADDRESS}
+    ${result} =    Create Node Config    ${PROXY_CONTRACT_ADDRESS}
 
 Build Proxy Contract
-    ${address} =    Get Value From Env    PROXY_ADDRESS
-    Set Global Variable    $PROXY_CONTRACT_ADDRESS    ${address}
-    ${proxy_contract} =    Get Contract    contracts/${PROXY_OUTPUT}Proxy.sol/Proxy.json    ${address}
+    ${address} =    Get Contract Address from File    contracts/broadcast/ProxyConfigLocalTest.s.sol/31337/run-latest.json
+    Set Global Variable    $PROXY_CONTRACT_ADDRESS    ${address[0]}
+    ${proxy_contract} =    Get Contract    contracts/${PROXY_OUTPUT}Proxy.sol/Proxy.json    ${PROXY_CONTRACT_ADDRESS}
     Set Global Variable    $PROXY_CONTRACT   ${proxy_contract}
-    ${controller_contract} =    Get Contract    contracts/${PROXY_OUTPUT}Controller.sol/Controller.json    ${address}
+    ${controller_contract} =    Get Contract    contracts/${PROXY_OUTPUT}Controller.sol/Controller.json    ${PROXY_CONTRACT_ADDRESS}
     Set Global Variable    $CONTROLLER_CONTRACT   ${controller_contract}
 
 Deploy User Contract And Request Randomness
     [Documentation]    Deploy the user contract
     ${contract_output} =    Exec Script    ${REQUEST_RANDOMNESS_SCRIPT}
+    ${contract_address} =    Get Contract Address from File    contracts/broadcast/GetRandomNumberProxy.s.sol/31337/run-latest.json
+    Set Global Variable    $USER_CONTRACT_ADDRESS    ${contract_address[0]}
 
 Check Randomness
     [Documentation]    Check the randomness
-    ${last_output} =    Run    cast call ${USER_CONTRACT_ADDRESS} "lastRandomnessResult()"
+    ${last_output} =    Run    cast call ${USER_CONTRACT_ADDRESS} "lastRandomnessResult()(uint256)"
     Log    ${last_output}
 
 Set ARPA Address
@@ -69,6 +73,11 @@ Get Modified CommitdDkg
     ${node} =    To Checksum Address    ${node}
     ${result} =    Contract Function Call    ${PROXY_CONTRACT}    getModifiedDkgData    ${node}
     Log    Modified dkg data: ${result}
+    RETURN    ${result}
+
+Get Test Node Address
+    [Documentation]    Get test node address
+    ${result} =    Contract Function Call    ${PROXY_CONTRACT}    getTestAddress
     RETURN    ${result}
 
 Set Modified CommitdDkg
@@ -111,7 +120,7 @@ Get Node
     [Documentation]    Get node info by node address
     [Arguments]    ${node}
     ${node} =    To Checksum Address    ${node}
-j    ${result} =    Contract Function Call    ${CONTROLLER_CONTRACT}    getNode    ${node}
+    ${result} =    Contract Function Call    ${CONTROLLER_CONTRACT}    getNode    ${node}
     Log    Node info: ${result}
     RETURN    ${result}
 
@@ -129,7 +138,7 @@ Group Node Number Should Be
     ${index} =    Convert To Integer    ${index}
     ${number} =    Convert To Integer    ${number}
     ${result} =    Get Group    ${index}
-    Should Be Equal   ${result[3]}    ${number}
+    Should Be Equal   ${result[2]}    ${number}
 
 Get Member
     [Documentation]    Get member of a given group
@@ -209,3 +218,9 @@ Get Test
     ${result} =    Contract Function Call    ${CONTROLLER_CONTRACT}    test    ${index}
     Log    Test: ${result}
     RETURN    ${result}
+
+Get Node Staking
+    [Documentation]    Gets the ARPA balance of a given address
+    [Arguments]    ${address}
+    ${result} =    Get Node    ${address}
+    RETURN    ${result[4]}

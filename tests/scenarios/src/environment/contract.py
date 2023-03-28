@@ -34,7 +34,7 @@ def to_checksum_address(lower_case_address):
     Web3.py only accepts checksum addresses
     To be removed, new version of web3.py will accept lower case addresses
     """
-    return lower_case_address
+    return Web3.to_checksum_address(lower_case_address)
 
 def contract_function_call(contract, function_name, *args):
     """
@@ -67,7 +67,7 @@ def exec_script(script_name):
     """
     os.chdir("contracts")
     cmd = ("forge script script/" + script_name
-        + " --fork-url http://localhost:8545 --broadcast --slow")
+        + " --fork-url http://localhost:8545 --broadcast --slow --revert-strings debug")
     os.system(cmd)
     os.chdir("..")
 
@@ -95,7 +95,7 @@ def deploy_controller():
     need to input 'y' to continue.
     """
     cmd = ["forge", "script", "script/DeployControllerLocalTest.s.sol:DeployControllerTestScript",
-           "--fork-url", "http://localhost:8545", "--broadcast"]
+           "--fork-url", "http://localhost:8545", "--broadcast", "--slow", "--revert-strings", "debug"]
     pty_cmd = cmd = [sys.executable,
        '-c',
        'import pty, sys; pty.spawn(sys.argv[1:])',
@@ -110,3 +110,18 @@ def deploy_controller():
     out = proc.communicate(b"y")[0]
     print(out.decode('utf-8'))
     proc.wait()
+
+def get_contract_address_from_file(file_name):
+    """
+    Get contract address from receipt file.
+    file_name: the receipt file name.
+    """
+    with open(file_name, 'r', encoding='UTF-8') as f:
+        data = json.load(f)
+    transactions = data.get('transactions')
+    contract_addresses = []
+    for transaction in transactions:
+        contract_address = transaction.get('contractAddress')
+        if contract_address is not None:
+            contract_addresses.append(contract_address)
+    return contract_addresses
