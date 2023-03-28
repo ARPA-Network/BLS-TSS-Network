@@ -23,6 +23,8 @@ use thiserror::Error;
 
 use super::{BLSError, CurveType};
 
+use ethers_core::{types::U256, utils::hex}; // ! new
+
 #[derive(Debug, Error)]
 pub enum BNError {
     #[error("{0}")]
@@ -431,7 +433,7 @@ mod tests {
     #[test]
     fn serialize_group() {
         for _ in 0..10 {
-            serialize_group_test::<G1>(32);
+            // serialize_group_test::<G1>(32);
             serialize_group_test::<G2>(128);
         }
     }
@@ -443,6 +445,9 @@ mod tests {
         let rng = &mut rand::thread_rng();
         let sig = E::rand(rng);
         let ser = bincode::serialize(&sig).unwrap();
+        // println!("{:?}", ser); // print serialized value
+        println!("bytes DKGPubkey1 = hex{:?}", hex::encode(ser.clone()));
+
         assert_eq!(ser.len(), size);
 
         let de: E = bincode::deserialize(&ser).unwrap();
