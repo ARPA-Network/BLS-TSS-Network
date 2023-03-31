@@ -6,6 +6,7 @@ import "openzeppelin-contracts/contracts/utils/math/SafeMath.sol";
 
 import {Coordinator} from "./Coordinator.sol";
 import "./interfaces/ICoordinator.sol";
+import "Staking-v0.1/interfaces/INodeStaking.sol";
 import "./Adapter.sol";
 
 contract Controller is Adapter {
@@ -27,7 +28,6 @@ contract Controller is Adapter {
         bytes dkgPublicKey;
         bool state;
         uint256 pendingUntilBlock;
-        uint256 staking;
     }
 
     struct CommitDkgParams {
@@ -49,6 +49,7 @@ contract Controller is Adapter {
     );
 
     event ControllerConfigSet(
+        address stakingContract,
         uint256 nodeStakingAmount,
         uint256 disqualifiedNodePenaltyAmount,
         uint256 defaultNumberOfCommitters,
@@ -59,9 +60,15 @@ contract Controller is Adapter {
         uint256 dkgPostProcessReward
     );
 
+    error NodeNotRegistered();
+    error NodeAlreadyRegistered();
+    error NodeAlreadyActive();
+    error NodeStillPending(uint256 pendingUntilBlock);
+
     constructor(address arpa, address arpaEthFeed) Adapter(arpa, arpaEthFeed) {}
 
     struct ControllerConfig {
+        address stakingContract;
         uint256 nodeStakingAmount;
         uint256 disqualifiedNodePenaltyAmount;
         uint256 defaultNumberOfCommitters;
@@ -84,6 +91,7 @@ contract Controller is Adapter {
      * @param dkgPostProcessReward The amount of ARPA will be rewarded to the node after dkgPostProcess is completed
      */
     function setControllerConfig(
+        address stakingContract,
         uint256 nodeStakingAmount,
         uint256 disqualifiedNodePenaltyAmount,
         uint256 defaultNumberOfCommitters,
@@ -94,6 +102,7 @@ contract Controller is Adapter {
         uint256 dkgPostProcessReward
     ) external onlyOwner {
         c_config = ControllerConfig({
+            stakingContract: stakingContract,
             nodeStakingAmount: nodeStakingAmount,
             disqualifiedNodePenaltyAmount: disqualifiedNodePenaltyAmount,
             defaultNumberOfCommitters: defaultNumberOfCommitters,
@@ -105,6 +114,7 @@ contract Controller is Adapter {
         });
 
         emit ControllerConfigSet(
+            stakingContract,
             nodeStakingAmount,
             disqualifiedNodePenaltyAmount,
             defaultNumberOfCommitters,
@@ -116,14 +126,15 @@ contract Controller is Adapter {
         );
     }
 
-    function nodeRegister(bytes calldata dkgPublicKey) public {
+    function nodeRegister(bytes calldata dkgPublicKey) external {
         require(nodes[msg.sender].idAddress == address(0), "Node is already registered"); // error sender already in list of nodes
 
         uint256[4] memory publicKey = BLS.fromBytesPublicKey(dkgPublicKey);
         if (!BLS.isValidPublicKey(publicKey)) {
             revert InvalidPublicKey();
         }
-        // TODO: Check to see if enough balance for staking
+        // Lock staking amount in Staking contract
+        INodeStaking(c_config.stakingContract).lock(msg.sender, c_config.nodeStakingAmount);
 
         // Populate Node struct and insert into nodes
         Node storage n = nodes[msg.sender];
@@ -131,7 +142,6 @@ contract Controller is Adapter {
         n.dkgPublicKey = dkgPublicKey;
         n.state = true;
         n.pendingUntilBlock = 0;
-        n.staking = c_config.nodeStakingAmount;
 
         nodeJoin(msg.sender);
     }
@@ -164,11 +174,10 @@ contract Controller is Adapter {
         }
     }
 
-    // Note: set to internal later
     function rebalanceGroup(
         uint256 groupAIndex,
         uint256 groupBIndex // Needs further testing
-    ) public returns (bool) {
+    ) internal returns (bool) {
         Group memory groupA = groups[groupAIndex];
         Group memory groupB = groups[groupBIndex];
 
@@ -205,9 +214,8 @@ contract Controller is Adapter {
         return true;
     }
 
-    // Note: set to internal later
     function removeFromGroup(address nodeIdAddress, uint256 groupIndex, bool emitEventInstantly)
-        public
+        internal
         returns (bool)
     {
         Group storage g = groups[groupIndex];
@@ -244,9 +252,8 @@ contract Controller is Adapter {
         return false;
     }
 
-    // Note: set to internal later
     function findOrCreateTargetGroup()
-        public
+        internal
         returns (
             uint256, //groupIndex
             bool // needsRebalance
@@ -321,16 +328,11 @@ contract Controller is Adapter {
     }
 
     // returns the minimum threshold for a group of size groupSize
-    // Note: set to internal later
-    function minimumThreshold(
-        uint256 groupSize // set this to internal later
-    ) public pure returns (uint256) {
+    function minimumThreshold(uint256 groupSize) internal pure returns (uint256) {
         return groupSize / 2 + 1;
     }
 
-    // Note: set to internal later
-    function emitGroupEvent(uint256 groupIndex) public {
-        // Set to internal later
+    function emitGroupEvent(uint256 groupIndex) internal {
         // require(groups[groupIndex].index < groupCount, "Group does not exist");
         require(groupIndex < groupCount, "Group does not exist");
 
@@ -362,9 +364,8 @@ contract Controller is Adapter {
         g.index, g.epoch, g.size, g.threshold, groupNodes, block.number, address(coordinator));
     }
 
-    // Note: set to internal later
     function getMemberIndexByAddress(uint256 groupIndex, address nodeIdAddress)
-        public
+        internal
         view
         returns (int256 memberIndex)
     {
@@ -377,9 +378,8 @@ contract Controller is Adapter {
         return -1;
     }
 
-    // Note: set to internal later
     function getMemberAddressByIndex(uint256 groupIndex, uint256 memberIndex)
-        public
+        internal
         view
         returns (address nodeIdAddress)
     {
@@ -400,6 +400,8 @@ contract Controller is Adapter {
 
     function commitDkg(CommitDkgParams memory params) external {
         require(params.groupIndex < groupCount, "Group does not exist");
+
+        // Todo: require publickey and partial public key are not empty  / are the right format
 
         // require coordinator exists
         require(coordinators[params.groupIndex] != address(0), "Coordinator not found for groupIndex");
@@ -507,12 +509,11 @@ contract Controller is Adapter {
                 }
             }
         }
-    } // end commitDkg
+    }
 
     // Choose "count" random indices from "indices" array.
-    // Note: set to internal later
     function pickRandomIndex(uint256 seed, uint256[] memory indices, uint256 count)
-        public
+        internal
         pure
         returns (uint256[] memory)
     {
@@ -575,9 +576,8 @@ contract Controller is Adapter {
     }
 
     // function getNonDisqualifiedMajorityMembers iterates through list of members and remove disqualified nodes.
-    // Note: set to internal later
     function getNonDisqualifiedMajorityMembers(address[] memory nodeAddresses, address[] memory disqualifiedNodes)
-        public
+        internal
         pure
         returns (address[] memory)
     {
@@ -620,8 +620,7 @@ contract Controller is Adapter {
         }
     }
 
-    // Note: set to internal later
-    function postProcessDkg(uint256 groupIndex, uint256 groupEpoch) public {
+    function postProcessDkg(uint256 groupIndex, uint256 groupEpoch) external {
         // require group exists
         // require(groups[groupIndex].index != 0, "Group does not exist");
         require(groupIndex < groupCount, "Group does not exist"); // Is this okay?
@@ -704,63 +703,54 @@ contract Controller is Adapter {
         return rewards[nodeAddress];
     }
 
-    function getStakedAmount(address nodeAddress) public view returns (uint256) {
-        Node storage node = nodes[nodeAddress];
-        require(node.idAddress == nodeAddress, "Node not registered.");
-        return node.staking;
-    }
-
-    function nodeStake(uint256 stakeAmount) public {
+    function nodeActivate() external {
         Node storage node = nodes[msg.sender];
-        require(node.idAddress == msg.sender, "Node not registered.");
-        // TODO: need to add interaction with erc20 token contract
-        node.staking += stakeAmount;
-    }
-
-    function nodeUnstake(uint256 unstakeAmount) public {
-        Node storage node = nodes[msg.sender];
-        require(node.idAddress == msg.sender, "Node not registered.");
-
-        if (node.state == true) {
-            require(
-                node.staking - unstakeAmount >= c_config.nodeStakingAmount,
-                "Node state is true, cannot unstake below staking threshold"
-            );
+        if (node.idAddress != msg.sender) {
+            revert NodeNotRegistered();
         }
 
-        node.staking -= unstakeAmount;
+        if (node.state) {
+            revert NodeAlreadyActive();
+        }
+
+        if (node.pendingUntilBlock > block.number) {
+            revert NodeStillPending(node.pendingUntilBlock);
+        }
+
+        // TODO lock up to staking amount in Staking contract
+        // uint256 lockedAmount = INodeStaking(c_config.stakingContract).getLockedAmount(msg.sender);
+        // if (lockedAmount < c_config.nodeStakingAmount) {
+        //     INodeStaking(c_config.stakingContract).lock(msg.sender, c_config.nodeStakingAmount - lockedAmount);
+        // }
+
+        node.state = true;
+
+        nodeJoin(msg.sender);
     }
 
-    function nodeQuit() public {
+    function nodeQuit() external {
         Node storage node = nodes[msg.sender];
         require(node.idAddress == msg.sender, "Node not registered.");
 
         freezeNode(msg.sender, c_config.pendingBlockAfterQuit, true);
 
-        // send all staked tokens to msg.sender
-        // TODO: need to add interaction with erc20 token contract
-        node.staking = 0;
+        // lock staking amount in Staking contract
+        INodeStaking(c_config.stakingContract).unlock(msg.sender, c_config.nodeStakingAmount);
     }
 
-    // Give node staking penalty and freezeNode
-    // Note: set to internal later
-    function slashNode(
-        address nodeIdAddress,
-        uint256 stakingPenalty,
-        uint256 pendingBlock,
-        bool handleGroup // flip to internal
-    ) public {
-        Node storage node = nodes[nodeIdAddress];
-        node.staking -= stakingPenalty;
-        if (node.staking < c_config.nodeStakingAmount || pendingBlock > 0) {
-            freezeNode(nodeIdAddress, pendingBlock, handleGroup);
-        }
+    // Give node staking reward penalty and freezeNode
+    function slashNode(address nodeIdAddress, uint256 stakingPenalty, uint256 pendingBlock, bool handleGroup)
+        internal
+    {
+        // slash staking reward in Staking contract
+        INodeStaking(c_config.stakingContract).slashDelegationReward(nodeIdAddress, stakingPenalty);
+
+        // remove node from group if handleGroup is true and deactivate it
+        freezeNode(nodeIdAddress, pendingBlock, handleGroup);
     }
 
     // removes node from the group
-    // Note: set to internal later
-    function freezeNode(address nodeIdAddress, uint256 pendingBlock, bool handleGroup) public {
-        // flip to internal
+    function freezeNode(address nodeIdAddress, uint256 pendingBlock, bool handleGroup) internal {
         if (handleGroup) {
             uint256 groupIndex;
             bool groupFound = false;
@@ -785,7 +775,7 @@ contract Controller is Adapter {
 
         uint256 currentBlock = block.number;
         // if the node is already pending, add the pending block to the current pending block
-        if (nodes[nodeIdAddress].pendingUntilBlock > block.number) {
+        if (nodes[nodeIdAddress].pendingUntilBlock > currentBlock) {
             nodes[nodeIdAddress].pendingUntilBlock += pendingBlock;
             // else set the pending block to the current block + pending block
         } else {
@@ -795,8 +785,12 @@ contract Controller is Adapter {
 
     // Tries to rebalance the groups, and if it fails, it collects the IDs of the members in the group and tries to add them to other groups.
     // If a member is added to another group, the group is checked to see if its size meets a threshold; if it does, a group event is emitted.
-    // Note: set to internal later
-    function arrangeMembersInGroup(uint256 groupIndex) public {
+    function arrangeMembersInGroup(uint256 groupIndex) internal {
+        Group storage g = groups[groupIndex];
+        if (g.size == 0) {
+            return;
+        }
+
         // get all group indices excluding the current groupIndex
         uint256[] memory groupIndices = new uint256[](groupCount -1);
         uint256 index = 0;
@@ -818,7 +812,6 @@ contract Controller is Adapter {
 
         if (rebalanceFailure) {
             // Get group and set isStrictlyMajorityConsensusReached to false
-            Group storage g = groups[groupIndex];
             g.isStrictlyMajorityConsensusReached = false;
 
             // collect idAddress of members in group
