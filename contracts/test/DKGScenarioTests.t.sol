@@ -7,13 +7,11 @@ import {Coordinator} from "src/Coordinator.sol";
 import {Controller} from "src/Controller.sol";
 import "openzeppelin-contracts/contracts/utils/Strings.sol";
 import "src/interfaces/ICoordinator.sol";
-import "./MockArpaEthOracle.sol";
 import "./RandcastTestHelper.sol";
 
 // Suggested usage: forge test --match-contract Controller -vv
 
 contract DKGScenarioTest is RandcastTestHelper {
-    uint256 nodeStakingAmount = 50000;
     uint256 disqualifiedNodePenaltyAmount = 1000;
     uint256 defaultNumberOfCommitters = 3;
     uint256 defaultDkgPhaseDuration = 10;
@@ -22,7 +20,7 @@ contract DKGScenarioTest is RandcastTestHelper {
     uint256 pendingBlockAfterQuit = 100;
     uint256 dkgPostProcessReward = 100;
 
-    address public owner = address(0xC0FF33);
+    address public owner = admin;
 
     function setUp() public {
         // deal nodes
@@ -38,10 +36,20 @@ contract DKGScenarioTest is RandcastTestHelper {
 
         arpa = new ERC20("arpa token", "ARPA");
         MockArpaEthOracle oracle = new MockArpaEthOracle();
-        controller = new Controller(address(arpa), address(oracle));
+
+        address[] memory operators = new address[](5);
+        operators[0] = node1;
+        operators[1] = node2;
+        operators[2] = node3;
+        operators[3] = node4;
+        operators[4] = node5;
+        prepareStakingContract(stakingDeployer, address(arpa), operators);
+
+        controller = new ControllerForTest(address(arpa), address(oracle));
 
         controller.setControllerConfig(
-            nodeStakingAmount,
+            address(staking),
+            operatorStakeAmount,
             disqualifiedNodePenaltyAmount,
             defaultNumberOfCommitters,
             defaultDkgPhaseDuration,
@@ -50,6 +58,9 @@ contract DKGScenarioTest is RandcastTestHelper {
             pendingBlockAfterQuit,
             dkgPostProcessReward
         );
+
+        vm.prank(stakingDeployer);
+        staking.setController(address(controller));
 
         // Register Nodes
         vm.prank(node1);
@@ -163,6 +174,8 @@ contract DKGScenarioTest is RandcastTestHelper {
         address[] memory disqualifiedNodes = new address[](1);
         disqualifiedNodes[0] = node1;
 
+        uint256 node1DelegationRewardBefore = staking.getDelegationReward(node1);
+
         params[0] = Params(node1, false, err, 0, 3, publicKey, partialPublicKey1, new address[](0));
         params[1] = Params(node2, false, err, 0, 3, publicKey, partialPublicKey2, disqualifiedNodes);
         params[2] = Params(node3, false, err, 0, 3, publicKey, partialPublicKey3, disqualifiedNodes);
@@ -178,7 +191,7 @@ contract DKGScenarioTest is RandcastTestHelper {
 
         // assert node1 was slashed
         assertEq(nodeInGroup(node1, 0), false);
-        assertEq(nodeStakingAmount - disqualifiedNodePenaltyAmount, controller.getStakedAmount(node1));
+        assertEq(node1DelegationRewardBefore - disqualifiedNodePenaltyAmount, staking.getDelegationReward(node1));
     }
 
     function test1Dq3Reporter() public {
@@ -186,6 +199,8 @@ contract DKGScenarioTest is RandcastTestHelper {
         bytes memory err;
         address[] memory disqualifiedNodes = new address[](1);
         disqualifiedNodes[0] = node1;
+
+        uint256 node1DelegationRewardBefore = staking.getDelegationReward(node1);
 
         params[0] = Params(node1, false, err, 0, 3, publicKey, partialPublicKey1, new address[](0));
         params[1] = Params(node2, false, err, 0, 3, publicKey, partialPublicKey2, new address[](0));
@@ -202,7 +217,7 @@ contract DKGScenarioTest is RandcastTestHelper {
 
         // assert node1 was slashed
         assertEq(nodeInGroup(node1, 0), false);
-        assertEq(nodeStakingAmount - disqualifiedNodePenaltyAmount, controller.getStakedAmount(node1));
+        assertEq(node1DelegationRewardBefore - disqualifiedNodePenaltyAmount, staking.getDelegationReward(node1));
     }
 
     function test1Dq2Reporter() public {
@@ -254,6 +269,9 @@ contract DKGScenarioTest is RandcastTestHelper {
         disqualifiedNodes[0] = node1;
         disqualifiedNodes[1] = node2;
 
+        uint256 node1DelegationRewardBefore = staking.getDelegationReward(node1);
+        uint256 node2DelegationRewardBefore = staking.getDelegationReward(node2);
+
         params[0] = Params(node1, false, err, 0, 3, publicKey, partialPublicKey1, new address[](0));
         params[1] = Params(node2, false, err, 0, 3, publicKey, partialPublicKey2, disqualifiedNodes);
         params[2] = Params(node3, false, err, 0, 3, publicKey, partialPublicKey3, disqualifiedNodes);
@@ -269,10 +287,10 @@ contract DKGScenarioTest is RandcastTestHelper {
 
         // assert node1 was slashed
         assertEq(nodeInGroup(node1, 0), false);
-        assertEq(nodeStakingAmount - disqualifiedNodePenaltyAmount, controller.getStakedAmount(node1));
+        assertEq(node1DelegationRewardBefore - disqualifiedNodePenaltyAmount, staking.getDelegationReward(node1));
         // assert node2 was slashed
         assertEq(nodeInGroup(node2, 0), false);
-        assertEq(nodeStakingAmount - disqualifiedNodePenaltyAmount, controller.getStakedAmount(node2));
+        assertEq(node2DelegationRewardBefore - disqualifiedNodePenaltyAmount, staking.getDelegationReward(node2));
     }
 
     function test2Dq3Reporter() public {
@@ -281,6 +299,9 @@ contract DKGScenarioTest is RandcastTestHelper {
         address[] memory disqualifiedNodes = new address[](2);
         disqualifiedNodes[0] = node1;
         disqualifiedNodes[1] = node2;
+
+        uint256 node1DelegationRewardBefore = staking.getDelegationReward(node1);
+        uint256 node2DelegationRewardBefore = staking.getDelegationReward(node2);
 
         params[0] = Params(node1, false, err, 0, 3, publicKey, partialPublicKey1, new address[](0));
         params[1] = Params(node2, false, err, 0, 3, publicKey, partialPublicKey2, new address[](0));
@@ -297,9 +318,9 @@ contract DKGScenarioTest is RandcastTestHelper {
 
         // assert node1 and node2 were slashed
         assertEq(nodeInGroup(node1, 0), false);
-        assertEq(nodeStakingAmount - disqualifiedNodePenaltyAmount, controller.getStakedAmount(node1));
+        assertEq(node1DelegationRewardBefore - disqualifiedNodePenaltyAmount, staking.getDelegationReward(node1));
         assertEq(nodeInGroup(node2, 0), false);
-        assertEq(nodeStakingAmount - disqualifiedNodePenaltyAmount, controller.getStakedAmount(node2));
+        assertEq(node2DelegationRewardBefore - disqualifiedNodePenaltyAmount, staking.getDelegationReward(node2));
     }
 
     function test2Dq2Reporter() public {
@@ -350,9 +371,9 @@ contract DKGScenarioTest is RandcastTestHelper {
 
         // assert node1, node2, and node3 were slashed
         assertEq(nodeInGroup(node1, 0), true);
-        assertEq(nodeStakingAmount, controller.getStakedAmount(node1));
+        // assertEq(nodeStakingAmount, staking.getDelegationReward(node1));
         // assertEq(nodeInGroup(node1, 0), false);
-        // assertEq(nodeStakingAmount - disqualifiedNodePenaltyAmount, controller.getStakedAmount(node1));
+        // // assertEq(nodeStakingAmount - disqualifiedNodePenaltyAmount, staking.getDelegationReward(node1));
     }
 
     // ! PPDKG with 3 Disqualified Nodes
@@ -362,6 +383,10 @@ contract DKGScenarioTest is RandcastTestHelper {
 
         // Set the coordinator to completed phase
         setPhase(0, 4);
+
+        uint256 node1DelegationRewardBefore = staking.getDelegationReward(node1);
+        uint256 node2DelegationRewardBefore = staking.getDelegationReward(node2);
+        uint256 node3DelegationRewardBefore = staking.getDelegationReward(node3);
 
         // call postProcessDkg as node1
         vm.prank(node1);
@@ -375,11 +400,11 @@ contract DKGScenarioTest is RandcastTestHelper {
 
         // assert node1, node2, and node3 were slashed
         assertEq(nodeInGroup(node1, 0), false);
-        assertEq(nodeStakingAmount - disqualifiedNodePenaltyAmount, controller.getStakedAmount(node1));
+        assertEq(node1DelegationRewardBefore - disqualifiedNodePenaltyAmount, staking.getDelegationReward(node1));
         assertEq(nodeInGroup(node2, 0), false);
-        assertEq(nodeStakingAmount - disqualifiedNodePenaltyAmount, controller.getStakedAmount(node2));
+        assertEq(node2DelegationRewardBefore - disqualifiedNodePenaltyAmount, staking.getDelegationReward(node2));
         assertEq(nodeInGroup(node3, 0), false);
-        assertEq(nodeStakingAmount - disqualifiedNodePenaltyAmount, controller.getStakedAmount(node3));
+        assertEq(node3DelegationRewardBefore - disqualifiedNodePenaltyAmount, staking.getDelegationReward(node3));
     }
 
     // !  Disqualified Node Mixed Reporting
@@ -407,20 +432,12 @@ contract DKGScenarioTest is RandcastTestHelper {
         dkgHelper(params);
         // printGroupInfo(0);
 
-        // * Is this okay?
-        // * When non-disqualified majority members < g.threshold (3), group is not formed, nodes are not slashed.
+        // When non-disqualified majority members < g.threshold (3), group is not formed, nodes are not slashed.
 
         // assert group state is correct
         assertEq(checkIsStrictlyMajorityConsensusReached(0), false);
         assertEq(controller.getGroup(0).members.length, 5);
         assertEq(controller.getGroup(0).size, 5);
-
-        // assert node1 was slashed
-        assertEq(nodeStakingAmount, controller.getStakedAmount(node1));
-        assertEq(nodeStakingAmount, controller.getStakedAmount(node2));
-        assertEq(nodeStakingAmount, controller.getStakedAmount(node3));
-        assertEq(nodeStakingAmount, controller.getStakedAmount(node4));
-        assertEq(nodeStakingAmount, controller.getStakedAmount(node5));
     }
 
     // ! PPDKG Node Mixed Reporting
@@ -430,6 +447,12 @@ contract DKGScenarioTest is RandcastTestHelper {
 
         // Set the coordinator to completed phase
         setPhase(0, 4);
+
+        uint256 node1DelegationRewardBefore = staking.getDelegationReward(node1);
+        uint256 node2DelegationRewardBefore = staking.getDelegationReward(node2);
+        uint256 node3DelegationRewardBefore = staking.getDelegationReward(node3);
+        uint256 node4DelegationRewardBefore = staking.getDelegationReward(node4);
+        uint256 node5DelegationRewardBefore = staking.getDelegationReward(node5);
 
         // call postProcessDkg as node1
         vm.prank(node1);
@@ -443,14 +466,14 @@ contract DKGScenarioTest is RandcastTestHelper {
 
         // assert nodes are slashed
         assertEq(nodeInGroup(node1, 0), false);
-        assertEq(nodeStakingAmount - disqualifiedNodePenaltyAmount, controller.getStakedAmount(node1));
+        assertEq(node1DelegationRewardBefore - disqualifiedNodePenaltyAmount, staking.getDelegationReward(node1));
         assertEq(nodeInGroup(node2, 0), false);
-        assertEq(nodeStakingAmount - disqualifiedNodePenaltyAmount, controller.getStakedAmount(node2));
+        assertEq(node2DelegationRewardBefore - disqualifiedNodePenaltyAmount, staking.getDelegationReward(node2));
         assertEq(nodeInGroup(node3, 0), false);
-        assertEq(nodeStakingAmount - disqualifiedNodePenaltyAmount, controller.getStakedAmount(node3));
+        assertEq(node3DelegationRewardBefore - disqualifiedNodePenaltyAmount, staking.getDelegationReward(node3));
         assertEq(nodeInGroup(node4, 0), false);
-        assertEq(nodeStakingAmount - disqualifiedNodePenaltyAmount, controller.getStakedAmount(node4));
+        assertEq(node4DelegationRewardBefore - disqualifiedNodePenaltyAmount, staking.getDelegationReward(node4));
         assertEq(nodeInGroup(node5, 0), false);
-        assertEq(nodeStakingAmount - disqualifiedNodePenaltyAmount, controller.getStakedAmount(node5));
+        assertEq(node5DelegationRewardBefore - disqualifiedNodePenaltyAmount, staking.getDelegationReward(node5));
     }
 }

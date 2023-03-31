@@ -15,22 +15,40 @@ contract RandcastConsumerExampleTest is RandcastTestHelper {
 
     function setUp() public {
         skip(1000);
-        changePrank(admin);
+        vm.prank(admin);
         arpa = new ERC20("arpa token", "ARPA");
+        vm.prank(admin);
         oracle = new MockArpaEthOracle();
-        controller = new Controller(address(arpa), address(oracle));
+
+        address[] memory operators = new address[](5);
+        operators[0] = node1;
+        operators[1] = node2;
+        operators[2] = node3;
+        operators[3] = node4;
+        operators[4] = node5;
+        prepareStakingContract(stakingDeployer, address(arpa), operators);
+
+        vm.prank(admin);
+        controller = new ControllerForTest(address(arpa), address(oracle));
+
+        vm.prank(admin);
         getRandomNumberExample = new GetRandomNumberExample(
             address(controller)
         );
+
+        vm.prank(admin);
         rollDiceExample = new RollDiceExample(address(controller));
+
+        vm.prank(admin);
         getShuffledArrayExample = new GetShuffledArrayExample(
             address(controller)
         );
+
+        vm.prank(admin);
         advancedGetShuffledArrayExample = new AdvancedGetShuffledArrayExample(
             address(controller)
         );
 
-        uint256 nodeStakingAmount = 50000;
         uint256 disqualifiedNodePenaltyAmount = 1000;
         uint256 defaultNumberOfCommitters = 3;
         uint256 defaultDkgPhaseDuration = 10;
@@ -38,8 +56,11 @@ contract RandcastConsumerExampleTest is RandcastTestHelper {
         uint256 idealNumberOfGroups = 5;
         uint256 pendingBlockAfterQuit = 100;
         uint256 dkgPostProcessReward = 100;
+
+        vm.prank(admin);
         controller.setControllerConfig(
-            nodeStakingAmount,
+            address(staking),
+            operatorStakeAmount,
             disqualifiedNodePenaltyAmount,
             defaultNumberOfCommitters,
             defaultDkgPhaseDuration,
@@ -58,6 +79,8 @@ contract RandcastConsumerExampleTest is RandcastTestHelper {
         uint256 signatureTaskExclusiveWindow = 10;
         uint256 rewardPerSignature = 50;
         uint256 committerRewardPerSignature = 100;
+
+        vm.prank(admin);
         controller.setAdapterConfig(
             minimumRequestConfirmations,
             maxGasLimit,
@@ -71,9 +94,16 @@ contract RandcastConsumerExampleTest is RandcastTestHelper {
             Adapter.FeeConfig(250000, 250000, 250000, 250000, 250000, 0, 0, 0, 0)
         );
 
+        vm.prank(stakingDeployer);
+        staking.setController(address(controller));
+
         uint96 plentyOfArpaBalance = 1e6 * 1e18;
         deal(address(arpa), address(admin), 3 * plentyOfArpaBalance);
+
+        vm.prank(admin);
         arpa.approve(address(controller), 3 * plentyOfArpaBalance);
+
+        changePrank(admin);
         prepareSubscription(address(getRandomNumberExample), plentyOfArpaBalance);
         prepareSubscription(address(rollDiceExample), plentyOfArpaBalance);
         prepareSubscription(address(getShuffledArrayExample), plentyOfArpaBalance);
