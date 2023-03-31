@@ -12,14 +12,14 @@ I think we can merge this pr first. Then I will incorporate staking contract int
 
 ## Rebalance Tests
 
-`Regroup Single`
+`Regroup Single (5) -> nodeQuit`
 group_0: 5 members
 1 member of group_0 wants to exit the network
 Then, controller will let 4 members left in group_0 do dkg as 4 > 3 which is the threshold
 i.e. the group still meet the grouping condition
 after that, in happy path group_0 will be functional with 4 members.
 
-`Rebalance Two Groups`
+`Rebalance Two Groups (5,3) -> nodeQuit -> 3,4)`
 group_0: 5 members
 group_1: 3 members
 1 member of group_1 wants to exist the network.
