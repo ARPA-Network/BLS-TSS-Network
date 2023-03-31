@@ -8,11 +8,11 @@ import "./MockArpaEthOracle.sol";
 import "./ArpaLocalTest.sol";
 import "openzeppelin-contracts/contracts/token/ERC20/IERC20.sol";
 import "openzeppelin-contracts/contracts/token/ERC20/ERC20.sol";
+import {Staking, ArpaTokenInterface} from "Staking-v0.1/Staking.sol";
 
 contract ControllerLocalTestScript is Script {
     uint256 deployerPrivateKey = vm.envUint("ADMIN_PRIVATE_KEY");
 
-    uint256 nodeStakingAmount = vm.envUint("NODE_STAKING_AMOUNT");
     uint256 disqualifiedNodePenaltyAmount = vm.envUint("DISQUALIFIED_NODE_PENALTY_AMOUNT");
     uint256 defaultNumberOfCommitters = vm.envUint("DEFAULT_NUMBER_OF_COMMITTERS");
     uint256 defaultDkgPhaseDuration = vm.envUint("DEFAULT_DKG_PHASE_DURATION");
@@ -41,10 +41,20 @@ contract ControllerLocalTestScript is Script {
     uint24 reqsForTier4 = uint24(vm.envUint("REQS_FOR_TIER4"));
     uint24 reqsForTier5 = uint24(vm.envUint("REQS_FOR_TIER5"));
 
+    uint256 initialMaxPoolSize = vm.envUint("INITIAL_MAX_POOL_SIZE");
+    uint256 initialMaxCommunityStakeAmount = vm.envUint("INITIAL_MAX_COMMUNITY_STAKE_AMOUNT");
+    uint256 minCommunityStakeAmount = vm.envUint("MIN_COMMUNITY_STAKE_AMOUNT");
+    uint256 operatorStakeAmount = vm.envUint("OPERATOR_STAKE_AMOUNT");
+    uint256 minInitialOperatorCount = vm.envUint("MIN_INITIAL_OPERATOR_COUNT");
+    uint256 minRewardDuration = vm.envUint("MIN_REWARD_DURATION");
+    uint256 delegationRateDenominator = vm.envUint("DELEGATION_RATE_DENOMINATOR");
+    uint256 unstakeFreezingDuration = vm.envUint("UNSTAKE_FREEZING_DURATION");
+
     function setUp() public {}
 
     function run() external {
         Controller controller;
+        Staking staking;
         MockArpaEthOracle oracle;
         IERC20 arpa;
 
@@ -54,12 +64,27 @@ contract ControllerLocalTestScript is Script {
         vm.broadcast(deployerPrivateKey);
         oracle = new MockArpaEthOracle();
 
+        Staking.PoolConstructorParams memory params = Staking.PoolConstructorParams(
+            ArpaTokenInterface(address(arpa)),
+            initialMaxPoolSize,
+            initialMaxCommunityStakeAmount,
+            minCommunityStakeAmount,
+            operatorStakeAmount,
+            minInitialOperatorCount,
+            minRewardDuration,
+            delegationRateDenominator,
+            unstakeFreezingDuration
+        );
+        vm.broadcast(deployerPrivateKey);
+        staking = new Staking(params);
+
         vm.broadcast(deployerPrivateKey);
         controller = new Controller(address(arpa), address(oracle));
 
         vm.broadcast(deployerPrivateKey);
         controller.setControllerConfig(
-            nodeStakingAmount,
+            address(staking),
+            operatorStakeAmount,
             disqualifiedNodePenaltyAmount,
             defaultNumberOfCommitters,
             defaultDkgPhaseDuration,
@@ -92,5 +117,8 @@ contract ControllerLocalTestScript is Script {
                 reqsForTier5
             )
         );
+
+        vm.broadcast(deployerPrivateKey);
+        staking.setController(address(controller));
     }
 }
