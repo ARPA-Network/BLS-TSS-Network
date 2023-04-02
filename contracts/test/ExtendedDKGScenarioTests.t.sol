@@ -166,13 +166,15 @@ contract ExtendedDKGScenarioTest is RandcastTestHelper {
     // * Regroup remaining nodes after nodeQuit: (5 -> 4)
     function test5NodeQuit() public {
         // register nodes 1-5 using registerHelper()
+        assertEq(controller.getGroup(0).epoch, 0);
         registerIndex(1);
         registerIndex(2);
         registerIndex(3); // controller emits event here
+        assertEq(controller.getGroup(0).epoch, 1); // g.epoch++
         registerIndex(4); // here
+        assertEq(controller.getGroup(0).epoch, 2); // g.epoch++
         registerIndex(5); // and here
-
-        // ! assert epooch
+        assertEq(controller.getGroup(0).epoch, 3); // g.epoch++
 
         // group the 5 nodes using commitdkg.
         Params[] memory params = new Params[](5);
@@ -184,14 +186,15 @@ contract ExtendedDKGScenarioTest is RandcastTestHelper {
         params[4] = Params(node5, false, err, 0, 3, publicKey, partialPublicKey5, new address[](0));
         dkgHelper(params);
 
+        // assert group info
         assertEq(checkIsStrictlyMajorityConsensusReached(0), true);
         assertEq(controller.getGroup(0).members.length, 5);
         assertEq(controller.getGroup(0).size, 5);
 
-        printGroupInfo(0);
+        // node 1 calls nodeQuit
         vm.prank(node1);
-        controller.nodeQuit(); // controllere emits enother event to start dkg proccess
-        printGroupInfo(0);
+        controller.nodeQuit(); // controller emits event to start dkg proccess
+        assertEq(controller.getGroup(0).epoch, 4); // g.epoch++
 
         // node 2-4 call commitdkg
         params = new Params[](4);
@@ -200,58 +203,160 @@ contract ExtendedDKGScenarioTest is RandcastTestHelper {
         params[2] = Params(node4, false, err, 0, 4, publicKey, partialPublicKey4, new address[](0));
         params[3] = Params(node5, false, err, 0, 4, publicKey, partialPublicKey5, new address[](0));
         dkgHelper(params);
-        printGroupInfo(0);
 
-        // ! regrouping not happening with the 4??
+        // check group info
+        assertEq(checkIsStrictlyMajorityConsensusReached(0), true);
+        assertEq(controller.getGroup(0).members.length, 4);
+        assertEq(controller.getGroup(0).size, 4);
+        printGroupInfo(0);
     }
 
     // //* Rebalance two groups after nodeQuit results in group falling below threshold (5,3) -> (3,4)
     function test53NodeQuit() public {
-        // Register and grouo nodes 1-5 (5 nodes)
+        // * Register and group 5 nodes to group_0
+        assertEq(controller.getGroup(0).epoch, 0);
         registerIndex(1);
         registerIndex(2);
         registerIndex(3); // controller emits event here (1-3 call commitDkg)
+        assertEq(controller.getGroup(0).epoch, 1); // g.epoch++
         registerIndex(4); // here (1-4 call commitDkg)
+        assertEq(controller.getGroup(0).epoch, 2); // g.epoch++
         registerIndex(5); // here
-        emit log("Register: Nodes 1-5");
+        assertEq(controller.getGroup(0).epoch, 3); // g.epoch++
 
+        // group the 5 nodes using commitdkg.
         Params[] memory params = new Params[](5);
         bytes memory err;
-        // (node#, shouldRevert, revertMessage, groupIndex, groupEpoch, publicKey, partialPublicKey, disqualifiedNodes)
         params[0] = Params(node1, false, err, 0, 3, publicKey, partialPublicKey1, new address[](0));
         params[1] = Params(node2, false, err, 0, 3, publicKey, partialPublicKey2, new address[](0));
         params[2] = Params(node3, false, err, 0, 3, publicKey, partialPublicKey3, new address[](0));
         params[3] = Params(node4, false, err, 0, 3, publicKey, partialPublicKey4, new address[](0));
         params[4] = Params(node5, false, err, 0, 3, publicKey, partialPublicKey5, new address[](0));
         dkgHelper(params);
-        emit log("CommitDKG: Nodes 1-5, Group0");
 
-        printGroupInfo(0);
+        // assert group info
+        assertEq(checkIsStrictlyMajorityConsensusReached(0), true);
+        assertEq(controller.getGroup(0).members.length, 5);
+        assertEq(controller.getGroup(0).size, 5);
 
-        // Register and group nodes 6-9 (3 nodes)
-        registerIndex(6);
-        registerIndex(7);
-        registerIndex(8);
-        registerIndex(9);
+        // * Register and group 5 new nodes
+        assertEq(controller.getGroup(0).epoch, 3); // initial state
+        assertEq(controller.getGroup(1).epoch, 0); // initial state
 
-        emit log("Register: Nodes 6-8 Registered");
+        registerIndex(6); // Groups are rebalanced to (3,3) group_0 and group_1 epoch's are incremented here.
+        assertEq(controller.getGroup(0).epoch, 4); // g.epoch++
+        assertEq(controller.getGroup(1).epoch, 1); // g.epoch++
+        assertEq(controller.getGroup(0).size, 3);
+        assertEq(controller.getGroup(1).size, 3);
+        assertEq(checkIsStrictlyMajorityConsensusReached(0), false);
+        assertEq(checkIsStrictlyMajorityConsensusReached(1), false);
+
+        registerIndex(7); // added to group_0, only group_0 epoch is incremented
+        assertEq(controller.getGroup(0).epoch, 5); // g.epoch++
+        assertEq(controller.getGroup(1).epoch, 1); // no change
+        assertEq(controller.getGroup(0).size, 4); // g.size++
+        assertEq(controller.getGroup(1).size, 3);
+        assertEq(checkIsStrictlyMajorityConsensusReached(0), false);
+        assertEq(checkIsStrictlyMajorityConsensusReached(1), false);
+
+        registerIndex(8); // added to group_1, only group_1 epoch is incremented
+        assertEq(controller.getGroup(0).epoch, 5); // no change
+        assertEq(controller.getGroup(1).epoch, 2); // g.epoch++
+        assertEq(controller.getGroup(0).size, 4);
+        assertEq(controller.getGroup(1).size, 4); // g.size++
+        assertEq(checkIsStrictlyMajorityConsensusReached(0), false);
+        assertEq(checkIsStrictlyMajorityConsensusReached(1), false);
+
+        registerIndex(9); // added to group_0, only group_0 epoch is incremented
+        assertEq(controller.getGroup(0).epoch, 6); // g.epoch++
+        assertEq(controller.getGroup(1).epoch, 2); // no change
+        assertEq(controller.getGroup(0).size, 5); // g.size++
+        assertEq(controller.getGroup(1).size, 4);
+        assertEq(checkIsStrictlyMajorityConsensusReached(0), false);
+        assertEq(checkIsStrictlyMajorityConsensusReached(1), false);
+
+        registerIndex(10); // added to group_1, only group_1 epoch is incremented
+        assertEq(controller.getGroup(0).epoch, 6); // no change
+        assertEq(controller.getGroup(1).epoch, 3); // g.epoch++
+        assertEq(controller.getGroup(0).size, 5);
+        assertEq(controller.getGroup(1).size, 5); // g.size++
+        assertEq(checkIsStrictlyMajorityConsensusReached(0), false);
+        assertEq(checkIsStrictlyMajorityConsensusReached(1), false);
+        // groups have been reshuffled, current indexes are as follows:
+        // group_0 (5,4,3,7,9), group_1 (6,1,2,8,10)
+
+        // * Remove two nodes from group_1 (node8, node10) so that group_1 size == 3
+        vm.prank(node8);
+        controller.nodeQuit(); // group_1 epoch is incremented here
+        assertEq(controller.getGroup(1).epoch, 4); // g.epoch++
+        assertEq(controller.getGroup(1).size, 4); // g.size--
+
+        vm.prank(node10);
+        controller.nodeQuit(); // group_1 epoch is incremented here
+        assertEq(controller.getGroup(1).epoch, 5); // g.epoch++
+        assertEq(controller.getGroup(1).size, 3); // g.size--
+
+        // * (5,3) configuration reached: group_0 (5,4,3,7,9) / group_1 (6,1,2)
+        assertEq(controller.getGroup(0).size, 5);
+        assertEq(controller.getGroup(1).size, 3);
+        assertEq(checkIsStrictlyMajorityConsensusReached(0), false);
+        assertEq(checkIsStrictlyMajorityConsensusReached(1), false);
+        assertEq(controller.getGroup(0).epoch, 6);
+        assertEq(controller.getGroup(1).epoch, 5);
+
+        // * group group_0 and group_1 with commitDKG
+        params = new Params[](5);
+        params[0] = Params(node5, false, err, 0, 6, publicKey, partialPublicKey5, new address[](0));
+        params[1] = Params(node4, false, err, 0, 6, publicKey, partialPublicKey4, new address[](0));
+        params[2] = Params(node3, false, err, 0, 6, publicKey, partialPublicKey3, new address[](0));
+        params[3] = Params(node7, false, err, 0, 6, publicKey, partialPublicKey7, new address[](0));
+        params[4] = Params(node9, false, err, 0, 6, publicKey, partialPublicKey9, new address[](0));
+        dkgHelper(params);
+
+        params = new Params[](3);
+        params[0] = Params(node6, false, err, 1, 5, publicKey, partialPublicKey6, new address[](0));
+        params[1] = Params(node1, false, err, 1, 5, publicKey, partialPublicKey1, new address[](0));
+        params[2] = Params(node2, false, err, 1, 5, publicKey, partialPublicKey2, new address[](0));
+        dkgHelper(params);
+
+        assertEq(checkIsStrictlyMajorityConsensusReached(0), true);
+        assertEq(checkIsStrictlyMajorityConsensusReached(1), true);
+        assertEq(controller.getGroup(0).epoch, 6); // g.epoch++
+        assertEq(controller.getGroup(1).epoch, 5); // g.epoch++
+
+        // * node in group_1 quits (node6)
+        vm.prank(node6);
+        controller.nodeQuit();
+        // group_1 falls below threshold, rebalancing occurs to (3,4), event emitted for both groups
+        assertEq(controller.getGroup(0).epoch, 7); // g.epoch++
+        assertEq(controller.getGroup(1).epoch, 6); // g.epoch++
+        assertEq(controller.getGroup(0).size, 3);
+        assertEq(controller.getGroup(1).size, 4);
+        assertEq(checkIsStrictlyMajorityConsensusReached(0), false);
+        assertEq(checkIsStrictlyMajorityConsensusReached(1), false);
+
+        // * group group_0 (9,7,3) and group_1 (2,1,5,4) with commitDKG
+        params = new Params[](3);
+        params[0] = Params(node9, false, err, 0, 7, publicKey, partialPublicKey9, new address[](0));
+        params[1] = Params(node7, false, err, 0, 7, publicKey, partialPublicKey7, new address[](0));
+        params[2] = Params(node3, false, err, 0, 7, publicKey, partialPublicKey3, new address[](0));
+        dkgHelper(params);
+
+        params = new Params[](4);
+        params[0] = Params(node2, false, err, 1, 6, publicKey, partialPublicKey2, new address[](0));
+        params[1] = Params(node1, false, err, 1, 6, publicKey, partialPublicKey1, new address[](0));
+        params[2] = Params(node5, false, err, 1, 6, publicKey, partialPublicKey5, new address[](0));
+        params[3] = Params(node4, false, err, 1, 6, publicKey, partialPublicKey4, new address[](0));
+        dkgHelper(params);
+
+        assertEq(checkIsStrictlyMajorityConsensusReached(0), true);
+        assertEq(checkIsStrictlyMajorityConsensusReached(1), true);
 
         printGroupInfo(0);
         printGroupInfo(1);
-        // ! How do I even get the nodes into a (5,3) configuration???
-
-        params = new Params[](3);
-        params[0] = Params(node6, false, err, 1, 2, publicKey, DKGPubkey6, new address[](0));
-        params[1] = Params(node7, false, err, 1, 2, publicKey, DKGPubkey7, new address[](0));
-        params[2] = Params(node8, false, err, 1, 2, publicKey, DKGPubkey8, new address[](0));
-        // dkgHelper(params);
-        // ! hold up... publicKey, partialPublicKey, DKGPublicKey??? I'm confused.
-
-        // emit log("CommitDKG: Nodes 6-8, Group1");
-        // printGroupInfo(0);
-        // printGroupInfo(1);
     }
 
+    // * For the following tests we focus on Rebalancing logic rather than CommitDKG() details
     function test66NodeRegister() public {
         // Setup group_0 and group_1 so that they have 6 grouped nodes each
         registerIndex(1);
