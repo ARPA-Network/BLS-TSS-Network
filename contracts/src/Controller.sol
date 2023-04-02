@@ -342,6 +342,11 @@ contract Controller is Adapter {
         delete g.committers; // set commiters to empty
         delete g.commitCacheList; // Set commit_cache to empty
 
+        // ! new: clear out partial public keys for each member of group
+        for (uint256 i = 0; i < g.members.length; i++) {
+            delete g.members[i].partialPublicKey;
+        }
+
         // Deploy coordinator, add to coordinators mapping
         Coordinator coordinator;
         coordinator = new Coordinator(g.threshold, c_config.defaultDkgPhaseDuration);

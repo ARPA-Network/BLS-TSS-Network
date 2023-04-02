@@ -161,9 +161,11 @@ contract DKGScenarioTest is RandcastTestHelper {
         // register nodes 1-5 using registerHelper()
         registerIndex(1);
         registerIndex(2);
-        registerIndex(3);
-        registerIndex(4);
-        registerIndex(5);
+        registerIndex(3); // controller emits event here
+        registerIndex(4); // here
+        registerIndex(5); // and here
+
+        // ! assert epooch
 
         // group the 5 nodes using commitdkg.
         Params[] memory params = new Params[](5);
@@ -181,21 +183,29 @@ contract DKGScenarioTest is RandcastTestHelper {
 
         printGroupInfo(0);
         vm.prank(node1);
-        controller.nodeQuit();
+        controller.nodeQuit(); // controllere emits enother event to start dkg proccess
         printGroupInfo(0);
-        // controller.emitGroupEvent(0);
-        // printGroupInfo(0);
+
+        // node 2-4 call commitdkg
+        params = new Params[](4);
+        params[0] = Params(node2, false, err, 0, 4, publicKey, partialPublicKey2, new address[](0));
+        params[1] = Params(node3, false, err, 0, 4, publicKey, partialPublicKey3, new address[](0));
+        params[2] = Params(node4, false, err, 0, 4, publicKey, partialPublicKey4, new address[](0));
+        params[3] = Params(node5, false, err, 0, 4, publicKey, partialPublicKey5, new address[](0));
+        dkgHelper(params);
+        printGroupInfo(0);
+
         // ! regrouping not happening with the 4??
     }
 
-    //* Rebalance two groups after nodeQuit results in group falling below threshold (5,3) -> (3,4)
+    // //* Rebalance two groups after nodeQuit results in group falling below threshold (5,3) -> (3,4)
     function test53NodeQuit() public {
         // Register and grouo nodes 1-5 (5 nodes)
         registerIndex(1);
         registerIndex(2);
-        registerIndex(3);
-        registerIndex(4);
-        registerIndex(5);
+        registerIndex(3); // controller emits event here (1-3 call commitDkg)
+        registerIndex(4); // here (1-4 call commitDkg)
+        registerIndex(5); // here
         emit log("Register: Nodes 1-5");
 
         Params[] memory params = new Params[](5);
