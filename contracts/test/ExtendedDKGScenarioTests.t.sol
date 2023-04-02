@@ -10,7 +10,7 @@ import "src/interfaces/ICoordinator.sol";
 import "./MockArpaEthOracle.sol";
 import "./RandcastTestHelper.sol";
 
-contract DKGScenarioTest is RandcastTestHelper {
+contract ExtendedDKGScenarioTest is RandcastTestHelper {
     uint256 nodeStakingAmount = 50000;
     uint256 disqualifiedNodePenaltyAmount = 1000;
     uint256 defaultNumberOfCommitters = 3;
@@ -26,37 +26,37 @@ contract DKGScenarioTest is RandcastTestHelper {
 
     function setUp() public {
         // add 31 test nodes
-        addTestNode(1, node1, DKGPubkey1);
-        addTestNode(2, node2, DKGPubkey2);
-        addTestNode(3, node3, DKGPubkey3);
-        addTestNode(4, node4, DKGPubkey4);
-        addTestNode(5, node5, DKGPubkey5);
-        addTestNode(6, node6, DKGPubkey6);
-        addTestNode(7, node7, DKGPubkey7);
-        addTestNode(8, node8, DKGPubkey8);
-        addTestNode(9, node9, DKGPubkey9);
-        addTestNode(10, node10, DKGPubkey10);
-        addTestNode(11, node11, DKGPubkey11);
-        addTestNode(12, node12, DKGPubkey12);
-        addTestNode(13, node13, DKGPubkey13);
-        addTestNode(14, node14, DKGPubkey14);
-        addTestNode(15, node15, DKGPubkey15);
-        addTestNode(16, node16, DKGPubkey16);
-        addTestNode(17, node17, DKGPubkey17);
-        addTestNode(18, node18, DKGPubkey18);
-        addTestNode(19, node19, DKGPubkey19);
-        addTestNode(20, node20, DKGPubkey20);
-        addTestNode(21, node21, DKGPubkey21);
-        addTestNode(22, node22, DKGPubkey22);
-        addTestNode(23, node23, DKGPubkey23);
-        addTestNode(24, node24, DKGPubkey24);
-        addTestNode(25, node25, DKGPubkey25);
-        addTestNode(26, node26, DKGPubkey26);
-        addTestNode(27, node27, DKGPubkey27);
-        addTestNode(28, node28, DKGPubkey28);
-        addTestNode(29, node29, DKGPubkey29);
-        addTestNode(30, node30, DKGPubkey30);
-        addTestNode(31, node31, DKGPubkey31);
+        addTestNode(1, node1, DKGPubkey1, partialPublicKey1);
+        addTestNode(2, node2, DKGPubkey2, partialPublicKey2);
+        addTestNode(3, node3, DKGPubkey3, partialPublicKey3);
+        addTestNode(4, node4, DKGPubkey4, partialPublicKey4);
+        addTestNode(5, node5, DKGPubkey5, partialPublicKey5);
+        addTestNode(6, node6, DKGPubkey6, partialPublicKey6);
+        addTestNode(7, node7, DKGPubkey7, partialPublicKey7);
+        addTestNode(8, node8, DKGPubkey8, partialPublicKey8);
+        addTestNode(9, node9, DKGPubkey9, partialPublicKey9);
+        addTestNode(10, node10, DKGPubkey10, partialPublicKey10);
+        addTestNode(11, node11, DKGPubkey11, partialPublicKey11);
+        addTestNode(12, node12, DKGPubkey12, partialPublicKey12);
+        addTestNode(13, node13, DKGPubkey13, partialPublicKey13);
+        addTestNode(14, node14, DKGPubkey14, partialPublicKey14);
+        addTestNode(15, node15, DKGPubkey15, partialPublicKey15);
+        addTestNode(16, node16, DKGPubkey16, partialPublicKey16);
+        addTestNode(17, node17, DKGPubkey17, partialPublicKey17);
+        addTestNode(18, node18, DKGPubkey18, partialPublicKey18);
+        addTestNode(19, node19, DKGPubkey19, partialPublicKey19);
+        addTestNode(20, node20, DKGPubkey20, partialPublicKey20);
+        addTestNode(21, node21, DKGPubkey21, partialPublicKey21);
+        addTestNode(22, node22, DKGPubkey22, partialPublicKey22);
+        addTestNode(23, node23, DKGPubkey23, partialPublicKey23);
+        addTestNode(24, node24, DKGPubkey24, partialPublicKey24);
+        addTestNode(25, node25, DKGPubkey25, partialPublicKey25);
+        addTestNode(26, node26, DKGPubkey26, partialPublicKey26);
+        addTestNode(27, node27, DKGPubkey27, partialPublicKey27);
+        addTestNode(28, node28, DKGPubkey28, partialPublicKey28);
+        addTestNode(29, node29, DKGPubkey29, partialPublicKey29);
+        addTestNode(30, node30, DKGPubkey30, partialPublicKey30);
+        addTestNode(31, node31, DKGPubkey31, partialPublicKey31);
 
         // deal owner and create controller
         vm.deal(owner, 1 * 10 ** 18);
@@ -83,12 +83,15 @@ contract DKGScenarioTest is RandcastTestHelper {
         bytes memory dkgPublicKey;
         address nodeIdAddress;
         uint256[4] memory publicKey;
+        uint256[4] memory partialPublicKey;
 
         for (uint256 i = 1; i <= 31; i++) {
             nodeIdAddress = testNodes[i].nodeAddress;
             dkgPublicKey = testNodes[i].publicKey;
             publicKey = BLS.fromBytesPublicKey(dkgPublicKey);
+            partialPublicKey = BLS.fromBytesPublicKey(testNodes[i].partialPublicKey);
             assertEq(BLS.isValidPublicKey(publicKey), true);
+            assertEq(BLS.isValidPublicKey(partialPublicKey), true);
         }
     }
 
@@ -98,11 +101,15 @@ contract DKGScenarioTest is RandcastTestHelper {
     struct TestNode {
         address nodeAddress;
         bytes publicKey;
+        bytes partialPublicKey;
     }
 
     // Add a test node to the testNodes mapping and deal eth: Used for setup
-    function addTestNode(uint256 index, address nodeAddress, bytes memory publicKey) public {
-        TestNode memory newNode = TestNode({nodeAddress: nodeAddress, publicKey: publicKey});
+    function addTestNode(uint256 index, address nodeAddress, bytes memory publicKey, bytes memory partialPublicKey)
+        public
+    {
+        TestNode memory newNode =
+            TestNode({nodeAddress: nodeAddress, publicKey: publicKey, partialPublicKey: partialPublicKey});
 
         testNodes[index] = newNode;
         vm.deal(nodeAddress, 1 * 10 ** 18);

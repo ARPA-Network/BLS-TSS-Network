@@ -100,6 +100,9 @@ Edit bn254.rs
 
 ```rust
 
+// serialize_group_test::<G1>(32); // line 436 commented out
+
+// line 441
 use ethers_core::{types::U256, utils::hex}; // ! new
 
     fn serialize_group_test<E: Element>(size: usize) {
