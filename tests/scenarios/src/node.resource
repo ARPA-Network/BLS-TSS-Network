@@ -4,7 +4,9 @@ Library             Process
 Library             OperatingSystem
 Library             environment/node.py
 Library             environment/log.py
+Library             environment/util.py
 Resource            common.resource
+
 
 *** Variables ***
 ${PROTO_PATH}                       tests/scenarios/src/environment/proto
@@ -71,6 +73,7 @@ Get Group Info
     [Arguments]    ${node_index}
     ${node_port} =    Get Node Port From Index    ${node_index}
     ${group_info} =    Call Request    ${node_port}    GetGroupInfo
+    Log    ${group_info}
     RETURN    ${group_info}
 
 Post Process Dkg
@@ -145,8 +148,9 @@ Add Balance And Run Node
     ${address} =    Get Address By Index    ${node_index}
     Add ARPA    ${address}    100000
     ${proc} =    Start Node    ${node_index}
-    ${register_result} =    Get Keyword From Log    ${proc}    Transaction successful(node_register)    200
-    Should Not Be Empty    ${register_result}
+    ${register_result} =    Get Keyword From Log    ${proc}    Transaction successful(node_register)
+    Should Not Be Empty    ${register_result}    True
     ${list} =    Add Process To List    ${proc}    ${NODE_PROCESS_LIST}
     Set Global Variable    $NODE_PROCESS_LIST    ${list}
     RETURN    ${proc}
+

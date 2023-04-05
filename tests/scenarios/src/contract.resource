@@ -8,6 +8,7 @@ Library             OperatingSystem
 Library             environment/contract.py
 Library             environment/node.py
 Library             environment/log.py
+Library             environment/util.py
 
 Resource            common.resource
 
@@ -43,6 +44,7 @@ Set Enviorment And Deploy Contract
     ${result} =    Exec Script    ${PROXY_CONFIG_SCRIPT}
     Set ARPA Address
     ${result} =    Create Node Config    ${PROXY_CONTRACT_ADDRESS}
+    Kill Previous Node
 
 Build Proxy Contract
     ${address} =    Get Contract Address from File    contracts/broadcast/ProxyConfigLocalTest.s.sol/31337/run-latest.json
@@ -211,12 +213,11 @@ Request Randomness
     ${result} =    Run   forge script script/GetRandomNumberLocalTest.s.sol:GetRandomNumberLocalTestScript --fork-url http://localhost:8545 --broadcast
     Log    Request randomness: ${result}
 
-Get Test
-    [Documentation]    Get test
-    [Arguments]    ${index}
-    ${index} =    Convert To Integer    ${index}
-    ${result} =    Contract Function Call    ${CONTROLLER_CONTRACT}    test    ${index}
-    Log    Test: ${result}
+Get Reward
+    [Documentation]    Get reward
+    [Arguments]    ${address}
+    ${address} =    To Checksum Address    ${address}
+    ${result} =    Contract Function Call    ${CONTROLLER_CONTRACT}    getRewards    ${address}
     RETURN    ${result}
 
 Get Node Staking

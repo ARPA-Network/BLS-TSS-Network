@@ -5,7 +5,6 @@ import json
 import os
 import subprocess
 import sys
-from dotenv import load_dotenv
 from web3 import Web3
 
 def get_abi(file_name):
@@ -71,23 +70,6 @@ def exec_script(script_name):
     os.system(cmd)
     os.chdir("..")
 
-def get_value_from_env(name):
-    """
-    Get value from .env file.
-    """
-    load_dotenv("contracts/.env")
-    value = os.environ.get(name)
-    return value
-
-def set_value_to_env(name, value):
-    """
-    Set value to .env file.
-    """
-    load_dotenv("contracts/.env")
-    os.environ[name] = value
-    value = os.environ.get(name)
-    print("Set value to env: ", name, value)
-    os.system("source contracts/.env")
 
 def deploy_controller():
     """

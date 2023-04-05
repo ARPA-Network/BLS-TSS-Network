@@ -6,6 +6,7 @@ Library             Process
 Library             String
 Library             OperatingSystem
 Library             environment/node.py
+Library             environment/util.py
 
 *** Variables ***
 # Ethereum Mainnet Sanity:
@@ -28,6 +29,7 @@ ${BALANCE}                              1000
 ${ARGS_IMPERSONATE_ACCOUNT}             rpc anvil_impersonateAccount
 ${ARGS_STOP_IMPERSONATE_ACCOUNT}        rpc anvil_stopImpersonatingAccount
 ${LOCAL_ETHEREUM_CHAIN_PROCESS_HANDLE}
+${BLOCK_TIME}                           0
 
 *** Keywords ***
 Setup Scenario Testing Environment
@@ -44,6 +46,9 @@ Teardown Scenario Testing Environment
     [Documentation]    Tears down the scenario testing environment
     Stop Local Ethereum Chain
     Terminate All Processes
+    Set Global Variable    $NODE_PROCESS_LIST    ${EMPTY_LIST}
+    Set Global Variable    $BLOCK_TIME    0
+    Kill Previous Node
     
 
 Process Completes Successfully
@@ -57,12 +62,16 @@ Process Completes Successfully
 Start Local Ethereum Chain
     [Documentation]    Starts a local Ethereum blockchain child process in the background with Anvil CLI
     ...    then saves the process handle to a suite-wide variable for later termination in the suite teardown
-
-    ${anvil_process_handle} =    Start Process    anvil
-    ...    --accounts    ${NUM_ACCOUNTS}
-    ...    --balance    1000000
-    #...    --block-time    1
-    #...    --code-size-limit    90000
+    IF  ${BLOCK_TIME} == 0
+        ${anvil_process_handle} =    Start Process    anvil
+        ...    --accounts    ${NUM_ACCOUNTS}
+        ...    --balance    1000000
+    ELSE
+        ${anvil_process_handle} =    Start Process    anvil
+        ...    --accounts    ${NUM_ACCOUNTS}
+        ...    --balance    1000000
+        ...    --block-time    ${BLOCK_TIME}
+    END
 
     Process Should Be Running    ${anvil_process_handle}
     Set Global Variable    $LOCAL_ETHEREUM_CHAIN_PROCESS_HANDLE    ${anvil_process_handle}

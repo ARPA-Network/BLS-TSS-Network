@@ -7,8 +7,6 @@ import sys
 import re
 import grpc
 from google.protobuf.empty_pb2 import Empty
-from web3 import Web3
-
 sys.path.insert(1, 'tests/scenarios/src/environment/proto')
 import management_pb2_grpc
 import management_pb2
@@ -101,9 +99,9 @@ def create_node_config(controller_address):
         # Create filename
         file_name = f'config{i + 1}.yml'
         # Create contents
-        content = f"""node_committer_rpc_endpoint: \"[::1]:500{61 + i}\"
+        content = f"""node_committer_rpc_endpoint: \"[::1]:501{61 + i}\"
 
-node_management_rpc_endpoint: \"[::1]:50{101 + i}\"
+node_management_rpc_endpoint: \"[::1]:50{201 + i}\"
 
 node_management_rpc_token: "for_test"
 
@@ -130,9 +128,6 @@ def start_node(node_idx):
     Start a node.
     node_idx: index of the node.
     """
-    port = 50061 + int(node_idx) - 1
-    # Kill process running on the port
-    os.system(f'kill $(lsof -t -i:{port})')
     root_path = os.path.dirname(os.path.abspath(__file__))
     root_path = root_path.split("/tests/")[0]
     cmd = ("cd crates/arpa-node;"
@@ -157,7 +152,7 @@ def get_node_port_from_index(node_idx):
     Get the port of a node from its index.
     node_idx: index of the node.
     """
-    port = 50101 + int(node_idx) - 1
+    port = 50161 + int(node_idx) - 1
     return  'localhost:' + str(port)
 
 def add_process_to_list(proc, node_list):
@@ -171,9 +166,19 @@ def add_process_to_list(proc, node_list):
     node_list.append(proc)
     return node_list
 
-def make_list(*args):
+def kill_previous_node():
     """
-    Make a list from the input.
-    args: accept any number of arguments, which are then gathered into a tuple. 
+    Kill all previous processes.
     """
-    return list(args)
+    # Find all processes using ports 50061-50110
+    cmd = 'lsof -i :50061-50220'
+    p = subprocess.Popen(cmd.split(), stdout=subprocess.PIPE)
+    out, err = p.communicate()
+    # Kill each process found
+    for line in out.splitlines()[1:]:
+        fields = line.strip().split()
+        if fields:
+            if fields[0] == b'node-clie':
+                pid = int(fields[1])
+                subprocess.call(['kill', '-9', str(pid)])
+

@@ -121,8 +121,8 @@ contract Proxy is Ownable {
         params.partialPublicKey = partialPublicKeyModified;
         params.disqualifiedNodes = disqualifiedNodesModified;
 
-        (bool success,) = implementation().delegatecall(abi.encodeWithSignature(
-            "commitDkg((uint256,uint256,bytes,bytes,address[]))", params));
+        (bool success,) = implementation().delegatecall(abi.encodeWithSelector(
+            Controller.commitDkg.selector, params));
         require(success, "modified delegatecall reverted");
     }
 
