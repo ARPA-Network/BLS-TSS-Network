@@ -4,16 +4,12 @@ pragma solidity ^0.8.15;
 pragma experimental ABIEncoderV2;
 
 import {Coordinator} from "src/Coordinator.sol";
-import {Controller} from "src/Controller.sol";
-import "openzeppelin-contracts/contracts/utils/Strings.sol";
 import "src/interfaces/ICoordinator.sol";
-import "./MockArpaEthOracle.sol";
 import "./RandcastTestHelper.sol";
 
-// Suggested usage: forge test --match-contract Controller -vv
+// Suggested usage: forge test --match-contract ControllerTest -vv
 
 contract ControllerTest is RandcastTestHelper {
-    uint256 nodeStakingAmount = 50000;
     uint256 disqualifiedNodePenaltyAmount = 1000;
     uint256 defaultNumberOfCommitters = 3;
     uint256 defaultDkgPhaseDuration = 10;
@@ -22,7 +18,7 @@ contract ControllerTest is RandcastTestHelper {
     uint256 pendingBlockAfterQuit = 100;
     uint256 dkgPostProcessReward = 100;
 
-    address public owner = address(0xC0FF33);
+    address public owner = admin;
 
     function setUp() public {
         // deal nodes
@@ -35,13 +31,32 @@ contract ControllerTest is RandcastTestHelper {
         // deal owner and create controller
         vm.deal(owner, 1 * 10 ** 18);
         vm.prank(owner);
-
         arpa = new ERC20("arpa token", "ARPA");
-        MockArpaEthOracle oracle = new MockArpaEthOracle();
-        controller = new Controller(address(arpa), address(oracle));
 
+        address[] memory operators = new address[](11);
+        operators[0] = node1;
+        operators[1] = node2;
+        operators[2] = node3;
+        operators[3] = node4;
+        operators[4] = node5;
+        operators[5] = node6;
+        operators[6] = node7;
+        operators[7] = node8;
+        operators[8] = node9;
+        operators[9] = node10;
+        operators[10] = node11;
+        prepareStakingContract(stakingDeployer, address(arpa), operators);
+
+        vm.prank(owner);
+        MockArpaEthOracle oracle = new MockArpaEthOracle();
+
+        vm.prank(owner);
+        controller = new ControllerForTest(address(arpa), address(oracle));
+
+        vm.prank(owner);
         controller.setControllerConfig(
-            nodeStakingAmount,
+            address(staking),
+            operatorStakeAmount,
             disqualifiedNodePenaltyAmount,
             defaultNumberOfCommitters,
             defaultDkgPhaseDuration,
@@ -50,6 +65,9 @@ contract ControllerTest is RandcastTestHelper {
             pendingBlockAfterQuit,
             dkgPostProcessReward
         );
+
+        vm.prank(stakingDeployer);
+        staking.setController(address(controller));
     }
 
     function testNodeRegister() public {
@@ -63,7 +81,6 @@ contract ControllerTest is RandcastTestHelper {
         assertEq(n.dkgPublicKey, DKGPubkey1);
         assertEq(n.state, true);
         assertEq(n.pendingUntilBlock, 0);
-        assertEq(n.staking, 50000);
 
         vm.expectRevert("Node is already registered");
         vm.prank(node1);
@@ -74,7 +91,7 @@ contract ControllerTest is RandcastTestHelper {
         testCommitDkg();
         printGroupInfo(0);
         assertEq(controller.getGroup(0).size, 3);
-        controller.removeFromGroup(address(0x1), 0, false);
+        controller.removeFromGroupForTest(address(0x1), 0, false);
         printGroupInfo(0);
         assertEq(controller.getGroup(0).size, 2);
     }
@@ -111,12 +128,12 @@ contract ControllerTest is RandcastTestHelper {
         printGroupInfo(0);
         printGroupInfo(1);
         emit log("++++++ Rebalance 1 +++++++");
-        bool output = controller.rebalanceGroup(0, 1);
+        bool output = controller.rebalanceGroupForTest(0, 1);
         assertEq(output, true);
         printGroupInfo(0);
         printGroupInfo(1);
         emit log("++++++ Rebalance 2 +++++++");
-        output = controller.rebalanceGroup(0, 1);
+        output = controller.rebalanceGroupForTest(0, 1);
         assertEq(output, true);
         printGroupInfo(0);
         printGroupInfo(1);
@@ -124,13 +141,13 @@ contract ControllerTest is RandcastTestHelper {
 
     function testMinimumThreshold() public {
         uint256 min;
-        min = controller.minimumThreshold(3);
+        min = controller.minimumThresholdForTest(3);
         emit log_named_uint("min 3", min);
         assertEq(min, 2);
-        min = controller.minimumThreshold(7);
+        min = controller.minimumThresholdForTest(7);
         emit log_named_uint("min 7", min);
         assertEq(min, 4);
-        min = controller.minimumThreshold(100);
+        min = controller.minimumThresholdForTest(100);
         emit log_named_uint("min 100", min);
         assertEq(min, 51);
     }
@@ -138,7 +155,7 @@ contract ControllerTest is RandcastTestHelper {
     function testEmitGroupEvent() public {
         // * fail emit group event if group does not exist
         vm.expectRevert("Group does not exist");
-        controller.emitGroupEvent(99999);
+        controller.emitGroupEventForTest(99999);
 
         // * Register Three nodes and see if group struct is well formed
         uint256 groupIndex = 0;
@@ -207,19 +224,19 @@ contract ControllerTest is RandcastTestHelper {
         printGroupInfo(2);
     }
 
-    function testgetMemberIndexByAddress() public {
+    function testGetMemberIndexByAddress() public {
         uint256 groupIndex = 0;
 
-        int256 memberIndex = controller.getMemberIndexByAddress(groupIndex, node1);
+        int256 memberIndex = controller.getMemberIndexByAddressForTest(groupIndex, node1);
         assertEq(memberIndex, -1);
 
         testEmitGroupEvent();
 
-        memberIndex = controller.getMemberIndexByAddress(groupIndex, node1);
+        memberIndex = controller.getMemberIndexByAddressForTest(groupIndex, node1);
         assertEq(memberIndex, 0);
-        memberIndex = controller.getMemberIndexByAddress(groupIndex, node2);
+        memberIndex = controller.getMemberIndexByAddressForTest(groupIndex, node2);
         assertEq(memberIndex, 1);
-        memberIndex = controller.getMemberIndexByAddress(groupIndex, node3);
+        memberIndex = controller.getMemberIndexByAddressForTest(groupIndex, node3);
         assertEq(memberIndex, 2);
     }
 
@@ -342,7 +359,7 @@ contract ControllerTest is RandcastTestHelper {
         indices[3] = 3;
         indices[4] = 4;
 
-        uint256[] memory chosenIndices = controller.pickRandomIndex(lastOutput, indices, 3);
+        uint256[] memory chosenIndices = controller.pickRandomIndexForTest(lastOutput, indices, 3);
 
         for (uint256 i = 0; i < chosenIndices.length; i++) {
             emit log_named_uint("chosenIndices", chosenIndices[i]);
@@ -360,7 +377,7 @@ contract ControllerTest is RandcastTestHelper {
         address[] memory disqualifedNodes = new address[](1);
         disqualifedNodes[0] = node2;
 
-        address[] memory majorityMembers = controller.getNonDisqualifiedMajorityMembers(nodes, disqualifedNodes);
+        address[] memory majorityMembers = controller.getNonDisqualifiedMajorityMembersForTest(nodes, disqualifedNodes);
 
         assertEq(majorityMembers.length, 2);
     }
@@ -422,62 +439,24 @@ contract ControllerTest is RandcastTestHelper {
         assertEq(g.isStrictlyMajorityConsensusReached, true);
         printGroupInfo(0);
 
-        // Confirm node1 has correct initial stake amount
-        assertEq(nodeStakingAmount, controller.getStakedAmount(node1));
-
-        emit log_named_uint("node1 staked tokens before` slash", controller.getStakedAmount(node1));
+        uint256 node1DelegationRewardBefore = staking.getDelegationReward(node1);
+        emit log_named_uint("The delegation reward of node1 before slash", node1DelegationRewardBefore);
         // slash node1
         uint256 pendingBlock = 0;
         bool handleGroup = true;
-        controller.slashNode(node1, disqualifiedNodePenaltyAmount, pendingBlock, handleGroup);
+
+        controller.slashNodeForTest(node1, disqualifiedNodePenaltyAmount, pendingBlock, handleGroup);
 
         // Assert staking penalty applied to node1
-        assertEq(nodeStakingAmount - disqualifiedNodePenaltyAmount, controller.getStakedAmount(node1));
+        emit log_named_uint("The delegation reward of node1 after slash", staking.getDelegationReward(node1));
+        assertEq(node1DelegationRewardBefore - disqualifiedNodePenaltyAmount, staking.getDelegationReward(node1));
 
         // assert node1 has been removed from the group
         g = controller.getGroup(0);
         assertEq(g.members.length, 2);
         assertEq(g.isStrictlyMajorityConsensusReached, false);
 
-        emit log_named_uint("node1 staked tokens after slash", controller.getStakedAmount(node1));
         printGroupInfo(0);
-    }
-
-    function testNodeStake() public {
-        // call node stake with unregistered node: Fail
-        vm.startPrank(node1);
-        vm.expectRevert("Node not registered.");
-        controller.nodeStake(100);
-
-        // register node, confirm initial stake amount
-        controller.nodeRegister(DKGPubkey1);
-        assertEq(nodeStakingAmount, controller.getStakedAmount(node1));
-
-        // Stake 2000 tokens: Success
-        controller.nodeStake(100);
-        assertEq(nodeStakingAmount + 100, controller.getStakedAmount(node1));
-
-        vm.stopPrank();
-    }
-
-    function testNodeUnstake() public {
-        // call nodeUnstake with unregistered node: Fail
-        vm.startPrank(node1);
-        vm.expectRevert("Node not registered.");
-        controller.nodeUnstake(1000);
-
-        // register node, confirm initial stake amount()
-        controller.nodeRegister(DKGPubkey1);
-        assertEq(nodeStakingAmount, controller.getStakedAmount(node1));
-
-        // stake and fall below the stake threshold: Fail
-        vm.expectRevert("Node state is true, cannot unstake below staking threshold");
-        controller.nodeUnstake(1);
-
-        // Stake 2000, then unstake 1000, staying above threshold: success
-        controller.nodeStake(100);
-        controller.nodeUnstake(1);
-        assertEq(nodeStakingAmount + 99, controller.getStakedAmount(node1));
     }
 
     function testNodeQuit() public {
@@ -490,7 +469,8 @@ contract ControllerTest is RandcastTestHelper {
         vm.prank(node1);
         controller.nodeRegister(DKGPubkey1);
         assertEq(1, controller.getGroup(0).members.length);
-        assertEq(nodeStakingAmount, controller.getStakedAmount(node1));
+        // TODO
+        // assertEq(operatorStakeAmount, staker.getLockedAmount(node1));
         printGroupInfo(0);
         // printNodeInfo(node1);
 
@@ -499,7 +479,8 @@ contract ControllerTest is RandcastTestHelper {
         controller.nodeQuit();
         // assert member length is 0
         assertEq(0, controller.getGroup(0).members.length);
-        assertEq(0, controller.getStakedAmount(node1));
+        // TODO
+        // assertEq(0, staker.getLockedAmount(node1));
         // printGroupInfo(0);
         // printNodeInfo(node1);
     }

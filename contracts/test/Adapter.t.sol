@@ -9,7 +9,6 @@ contract AdapterTest is RandcastTestHelper {
     GetRandomNumberExample getRandomNumberExample;
     uint64 subId;
 
-    uint256 nodeStakingAmount = 50000;
     uint256 disqualifiedNodePenaltyAmount = 1000;
     uint256 defaultNumberOfCommitters = 3;
     uint256 defaultDkgPhaseDuration = 10;
@@ -43,16 +42,31 @@ contract AdapterTest is RandcastTestHelper {
     function setUp() public {
         skip(1000);
 
-        changePrank(admin);
+        vm.prank(admin);
         arpa = new ERC20("arpa token", "ARPA");
+        vm.prank(admin);
         oracle = new MockArpaEthOracle();
-        controller = new Controller(address(arpa), address(oracle));
+
+        address[] memory operators = new address[](5);
+        operators[0] = node1;
+        operators[1] = node2;
+        operators[2] = node3;
+        operators[3] = node4;
+        operators[4] = node5;
+        prepareStakingContract(stakingDeployer, address(arpa), operators);
+
+        vm.prank(admin);
+        controller = new ControllerForTest(address(arpa), address(oracle));
+
+        vm.prank(admin);
         getRandomNumberExample = new GetRandomNumberExample(
             address(controller)
         );
 
+        vm.prank(admin);
         controller.setControllerConfig(
-            nodeStakingAmount,
+            address(staking),
+            operatorStakeAmount,
             disqualifiedNodePenaltyAmount,
             defaultNumberOfCommitters,
             defaultDkgPhaseDuration,
@@ -62,6 +76,7 @@ contract AdapterTest is RandcastTestHelper {
             dkgPostProcessReward
         );
 
+        vm.prank(admin);
         controller.setAdapterConfig(
             minimumRequestConfirmations,
             maxGasLimit,
@@ -85,10 +100,15 @@ contract AdapterTest is RandcastTestHelper {
             )
         );
 
-        changePrank(user);
+        vm.prank(stakingDeployer);
+        staking.setController(address(controller));
+
         deal(address(arpa), address(user), plentyOfArpaBalance);
+
+        vm.prank(user);
         arpa.approve(address(controller), 3 * plentyOfArpaBalance);
 
+        changePrank(user);
         subId = prepareSubscription(address(getRandomNumberExample), plentyOfArpaBalance);
     }
 

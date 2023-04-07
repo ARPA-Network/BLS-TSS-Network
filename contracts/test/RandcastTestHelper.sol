@@ -3,18 +3,21 @@ pragma solidity >=0.8.10;
 
 import "forge-std/Test.sol";
 import "../src/interfaces/IAdapter.sol";
-import "../src/Controller.sol";
-import "./MockArpaEthOracle.sol";
+import {Staking, ArpaTokenInterface} from "Staking-v0.1/Staking.sol";
+import "./ControllerForTest.sol";
+import "./mock/MockArpaEthOracle.sol";
 import "openzeppelin-contracts/contracts/token/ERC20/IERC20.sol";
 import "openzeppelin-contracts/contracts/token/ERC20/ERC20.sol";
 import "openzeppelin-contracts/contracts/utils/Strings.sol";
 
 abstract contract RandcastTestHelper is Test {
-    Controller controller;
+    ControllerForTest controller;
     MockArpaEthOracle oracle;
     IERC20 arpa;
+    Staking staking;
 
     address public admin = address(0xABCD);
+    address public stakingDeployer = address(0xBCDE);
     address public user = address(0x11);
 
     // Nodes: To be Registered
@@ -30,6 +33,31 @@ abstract contract RandcastTestHelper is Test {
     address public node10 = address(0xA);
     address public node11 = address(0xB);
     address public node12 = address(0xC);
+
+    // Staking params
+    /// @notice The ARPA Token
+    ArpaTokenInterface ARPAAddress;
+    /// @notice The initial maximum total stake amount across all stakers
+    uint256 initialMaxPoolSize = 50_000_00 * 1e18;
+    /// @notice The initial maximum stake amount for a single community staker
+    uint256 initialMaxCommunityStakeAmount = 2_500_00 * 1e18;
+    /// @notice The minimum stake amount that a community staker can stake
+    uint256 minCommunityStakeAmount = 1e12;
+    /// @notice The minimum stake amount that an operator can stake
+    uint256 operatorStakeAmount = 500_00 * 1e18;
+    /// @notice The minimum number of node operators required to initialize the
+    /// staking pool.
+    uint256 minInitialOperatorCount = 1;
+    /// @notice The minimum reward duration after pool config updates and pool
+    /// reward extensions
+    uint256 minRewardDuration = 1 days;
+    /// @notice Used to calculate delegated stake amount
+    /// = amount / delegation rate denominator = 100% / 100 = 1%
+    uint256 delegationRateDenominator = 20;
+    /// @notice The freeze duration for stakers after unstaking
+    uint256 unstakeFreezingDuration = 14 days;
+
+    uint256 rewardAmount = 1_500_00 * 1e18;
 
     uint256 t = 3;
     uint256 n = 5;
@@ -241,6 +269,53 @@ abstract contract RandcastTestHelper is Test {
         return (balance, inflightCost);
     }
 
+    function prepareStakingContract(address sender, address arpaAddress, address[] memory operators) internal {
+        vm.stopPrank();
+
+        Staking.PoolConstructorParams memory params = Staking.PoolConstructorParams(
+            ArpaTokenInterface(arpaAddress),
+            initialMaxPoolSize,
+            initialMaxCommunityStakeAmount,
+            minCommunityStakeAmount,
+            operatorStakeAmount,
+            minInitialOperatorCount,
+            minRewardDuration,
+            delegationRateDenominator,
+            unstakeFreezingDuration
+        );
+        vm.prank(sender);
+        staking = new Staking(params);
+
+        // add operators
+        vm.prank(sender);
+        staking.addOperators(operators);
+
+        // start the staking pool
+        deal(address(arpa), sender, rewardAmount);
+        vm.prank(sender);
+        arpa.approve(address(staking), rewardAmount);
+        vm.prank(sender);
+        staking.start(rewardAmount, 30 days);
+
+        // let a user stake to accumulate some rewards
+        stake(sender);
+
+        for (uint256 i = 0; i < operators.length; i++) {
+            stake(operators[i]);
+        }
+
+        // warp to 10 days to earn some delegation rewards for nodes
+        vm.warp(10 days);
+    }
+
+    function stake(address sender) internal {
+        deal(address(arpa), sender, operatorStakeAmount);
+        vm.prank(sender);
+        arpa.approve(address(staking), operatorStakeAmount);
+        vm.prank(sender);
+        staking.stake(operatorStakeAmount);
+    }
+
     function prepareAnAvailableGroup() public {
         vm.stopPrank();
 
@@ -391,7 +466,6 @@ abstract contract RandcastTestHelper is Test {
         emit log_named_bytes("n.dkgPublicKey", node.dkgPublicKey);
         emit log_named_string("n.state", toText(node.state));
         emit log_named_uint("n.pendingUntilBlock", node.pendingUntilBlock);
-        emit log_named_uint("n.staking", node.staking);
     }
 
     function printMemberInfo(uint256 groupIndex, uint256 memberIndex) public {
