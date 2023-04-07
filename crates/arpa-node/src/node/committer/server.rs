@@ -31,9 +31,9 @@ pub(crate) struct BLSCommitterServiceServer<
     G: GroupInfoFetcher<PC> + GroupInfoUpdater<PC> + ContextInfoUpdater,
     T: BLSTasksFetcher<RandomnessTask> + BLSTasksUpdater<RandomnessTask>,
     I: ChainIdentity
-        + ControllerClientBuilder
+        + ControllerClientBuilder<PC>
         + CoordinatorClientBuilder
-        + AdapterClientBuilder<PC>
+        + AdapterClientBuilder
         + ChainProviderBuilder,
     PC: PairingCurve,
 > {
@@ -48,9 +48,9 @@ impl<
         G: GroupInfoFetcher<PC> + GroupInfoUpdater<PC> + ContextInfoUpdater,
         T: BLSTasksFetcher<RandomnessTask> + BLSTasksUpdater<RandomnessTask>,
         I: ChainIdentity
-            + ControllerClientBuilder
+            + ControllerClientBuilder<PC>
             + CoordinatorClientBuilder
-            + AdapterClientBuilder<PC>
+            + AdapterClientBuilder
             + ChainProviderBuilder,
         PC: PairingCurve,
     > BLSCommitterServiceServer<N, G, T, I, PC>
@@ -95,9 +95,9 @@ impl<
             + Send
             + 'static,
         I: ChainIdentity
-            + ControllerClientBuilder
+            + ControllerClientBuilder<PC>
             + CoordinatorClientBuilder
-            + AdapterClientBuilder<PC>
+            + AdapterClientBuilder
             + ChainProviderBuilder
             + std::fmt::Debug
             + Clone
@@ -234,9 +234,9 @@ pub async fn start_committer_server_with_shutdown<
         + Send
         + 'static,
     I: ChainIdentity
-        + ControllerClientBuilder
+        + ControllerClientBuilder<PC>
         + CoordinatorClientBuilder
-        + AdapterClientBuilder<PC>
+        + AdapterClientBuilder
         + ChainProviderBuilder
         + std::fmt::Debug
         + Clone
@@ -297,9 +297,9 @@ pub async fn start_committer_server<
         + Send
         + 'static,
     I: ChainIdentity
-        + ControllerClientBuilder
+        + ControllerClientBuilder<PC>
         + CoordinatorClientBuilder
-        + AdapterClientBuilder<PC>
+        + AdapterClientBuilder
         + ChainProviderBuilder
         + std::fmt::Debug
         + Clone

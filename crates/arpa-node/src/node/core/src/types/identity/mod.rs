@@ -13,7 +13,9 @@ pub trait ChainIdentity {
 
     fn get_provider_rpc_endpoint(&self) -> &str;
 
-    fn get_contract_address(&self) -> Address;
+    fn get_controller_address(&self) -> Address;
+
+    fn get_adapter_address(&self) -> Address;
 
     fn get_signer(&self) -> &LocalWallet;
 }

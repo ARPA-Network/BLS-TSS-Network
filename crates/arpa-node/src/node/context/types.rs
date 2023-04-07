@@ -40,11 +40,13 @@ pub struct Config {
     pub provider_endpoint: String,
     pub chain_id: usize,
     pub controller_address: String,
+    pub adapter_address: String,
     // Data file for persistence
     pub data_path: Option<String>,
     pub account: Account,
     pub listeners: Option<Vec<ListenerType>>,
     pub context_logging: bool,
+    pub node_id: Option<String>,
 }
 
 impl Config {
@@ -92,7 +94,7 @@ pub struct GeneralContext<
     N: NodeInfoFetcher<C> + NodeInfoUpdater<C> + ContextInfoUpdater,
     G: GroupInfoFetcher<C> + GroupInfoUpdater<C> + ContextInfoUpdater,
     T: BLSTasksFetcher<RandomnessTask> + BLSTasksUpdater<RandomnessTask>,
-    I: ChainIdentity + ControllerClientBuilder + CoordinatorClientBuilder + AdapterClientBuilder<C>,
+    I: ChainIdentity + ControllerClientBuilder<C> + CoordinatorClientBuilder + AdapterClientBuilder,
     C: PairingCurve,
 > {
     config: Config,
@@ -107,9 +109,9 @@ impl<
         G: GroupInfoFetcher<C> + GroupInfoUpdater<C> + ContextInfoUpdater + Sync + Send + 'static,
         T: BLSTasksFetcher<RandomnessTask> + BLSTasksUpdater<RandomnessTask> + Sync + Send + 'static,
         I: ChainIdentity
-            + ControllerClientBuilder
+            + ControllerClientBuilder<C>
             + CoordinatorClientBuilder
-            + AdapterClientBuilder<C>
+            + AdapterClientBuilder
             + ChainProviderBuilder
             + Sync
             + Send
@@ -153,9 +155,9 @@ impl<
             + Send
             + 'static,
         I: ChainIdentity
-            + ControllerClientBuilder
+            + ControllerClientBuilder<C>
             + CoordinatorClientBuilder
-            + AdapterClientBuilder<C>
+            + AdapterClientBuilder
             + ChainProviderBuilder
             + std::fmt::Debug
             + Clone
@@ -224,9 +226,9 @@ impl<
             + Send
             + 'static,
         I: ChainIdentity
-            + ControllerClientBuilder
+            + ControllerClientBuilder<C>
             + CoordinatorClientBuilder
-            + AdapterClientBuilder<C>
+            + AdapterClientBuilder
             + ChainProviderBuilder
             + std::fmt::Debug
             + Clone
@@ -305,9 +307,9 @@ impl<
             + Send
             + 'static,
         I: ChainIdentity
-            + ControllerClientBuilder
+            + ControllerClientBuilder<C>
             + CoordinatorClientBuilder
-            + AdapterClientBuilder<C>
+            + AdapterClientBuilder
             + ChainProviderBuilder
             + std::fmt::Debug
             + Clone
@@ -355,9 +357,9 @@ impl<
             + Send
             + 'static,
         I: ChainIdentity
-            + ControllerClientBuilder
+            + ControllerClientBuilder<C>
             + CoordinatorClientBuilder
-            + AdapterClientBuilder<C>
+            + AdapterClientBuilder
             + ChainProviderBuilder
             + std::fmt::Debug
             + Clone

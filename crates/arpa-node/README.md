@@ -1,6 +1,6 @@
 # Arpa Node
 
-This crate provides a node side on-chain implementation as well as an off-chain demo to the provided DKG and Threshold-BLS based randomness service(Randcast).
+This crate provides a node side on-chain implementation to the provided DKG and Threshold-BLS based randomness service(Randcast).
 
 The Arpa Node consists of an event queue, two types of task schedulers and a set of listeners and subscribers. Events are passed within components and drive them to work. All the components and data access layer(with sqlite) are wrapped in a context, which holds and shares all the information needed for the client bin and grpc servers to expose services.
 
@@ -29,12 +29,6 @@ Node-account-client is a practical tool to generate keystore corresponding to AR
 # Node-cmd-client bin(WIP)
 
 Node-cmd-client is a practical tool to interact with on-chain contracts for ARPA node owner or administrator.
-
-# User-client bin(WIP)
-
-User-client is a practical tool to interact with on-chain contracts for Randcast users.
-
-Note: Basically for demo use, in real environment a Randcast user should request and receive randomness by extending consumer contract instead of calling controller contract through an EOA directly.
 
 # Dependencies
 
@@ -97,74 +91,6 @@ To protect secrets, several items can be set with literal `env` as placeholder. 
 - ARPA_NODE_ACCOUNT_KEYSTORE_PASSWORD (account, keystore, password)
 - ARPA_NODE_HD_ACCOUNT_MNEMONIC (account, hdwallet, mnemonic)
 
-# Demo Steps
-
-## deploy contract server(different ip endpoints on different chains):
-
-```bash
-cargo run --bin controller-server "[::1]:50052"
-cargo run --bin adapter-server "[::1]:50053"
-```
-
-## run nodes:
-
-```bash
-cd crates/arpa-node
-cargo run --bin node-client -- -m demo -i 1
-cargo run --bin node-client -- -m demo -i 2
-cargo run --bin node-client -- -m demo -i 3
-```
-
-```bash
-cargo run --bin node-client -- -m demo -i 4
-cargo run --bin node-client -- -m demo -i 5
-cargo run --bin node-client -- -m demo -i 6
-```
-
-## use user-client to request randomness:
-
-```bash
-cargo run --bin user-client 0x9000000000000000000000000000000000000001 "[::1]:50052" request foo
-cargo run --bin user-client 0x9000000000000000000000000000000000000001 "[::1]:50053" request bar
-cargo run --bin user-client 0x9000000000000000000000000000000000000001 "[::1]:50052" last_output
-```
-
-## use node-cmd-client to get views or call some helper methods(1 - controller 2 - adapter):
-
-```bash
-cargo run --bin node-cmd-client 0x9000000000000000000000000000000000000001 "[::1]:50052" "1" get_group "0"
-cargo run --bin node-cmd-client 0x9000000000000000000000000000000000000001 "[::1]:50053" "2" get_group "0"
-```
-
-## 1 MainChain Demo(Happy Path) Example:
-
-```bash
-# deploy contract
-cargo run --bin controller-server "[::1]:50052"
-```
-
-```bash
-# run 3 nodes to prepare a BLS-ready group
-cd crates/arpa-node
-cargo run --bin node-client -- -m demo -i 1
-cargo run --bin node-client -- -m demo -i 2
-cargo run --bin node-client -- -m demo -i 3
-```
-
-```bash
-# check result by view get_group
-cargo run --bin node-cmd-client 0x9000000000000000000000000000000000000001 "[::1]:50052" "2" get_group "0"
-```
-
-```bash
-# now we can request randomness task as a user on main chain
-cargo run --bin user-client 0x9000000000000000000000000000000000000001 "[::1]:50052" request foo
-cargo run --bin user-client 0x9000000000000000000000000000000000000001 "[::1]:50052" last_output
-cargo run --bin user-client 0x9000000000000000000000000000000000000001 "[::1]:50052" request bar
-cargo run --bin user-client 0x9000000000000000000000000000000000000001 "[::1]:50052" last_output
-# verify result by view last_output and node logs
-```
-
 # Local Test
 
 ## start the local testnet by anvil:
@@ -172,16 +98,25 @@ cargo run --bin user-client 0x9000000000000000000000000000000000000001 "[::1]:50
 ```bash
 # produces a new block every 1 second and ignores contract size for now
 # evm errors can be reduced by increasing block-time properly
-anvil --block-time 1 --code-size-limit 90000
+anvil --block-time 1
 ```
 
 ## deploy the controller and the adapter contract:
 
 ```bash
 cd contracts
-# controller address 0x9fE46736679d2D9a65F0992F2272dE9f3c7fa6e0
+# controller address 0x5fc8d32690cc91d4c39d9d3abcbd16989f875707
+# adapter_address: 0x0165878a594ca255338adfa4d48449f69242eb8f
 # user contract address 0x8464135c8f25da09e49bc8782676a84730c318bc
-forge script script/ControllerLocalTest.s.sol:ControllerLocalTestScript --fork-url http://localhost:8545 --broadcast
+forge script script/ControllerLocalTest.s.sol:ControllerLocalTestScript --fork-url http://localhost:8545 --optimize --broadcast --slow
+```
+
+### add operators, start the staking pool and stake for a user and some nodes:
+
+```bash
+# nodes addresses are generated from index 10 by mnemonic "test test test test test test test test test test test junk"(anvil default)
+# offset and length can be set by STAKING_NODES_INDEX_OFFSET and STAKING_NODES_INDEX_LENGTH in .env
+forge script script/StakeNodeLocalTest.s.sol:StakeNodeLocalTestScript --fork-url http://localhost:8545 --optimize --broadcast --slow
 ```
 
 ## run 3 nodes to make a group:
@@ -198,7 +133,7 @@ cargo run --bin node-client -- -m new-run -c conf/config_test_3.yml
 ```bash
 cd contracts
 # this should be executed after we have an available group as logging e.g."Group index:0 epoch:1 is available, committers saved." in node terminal
-forge script script/GetRandomNumberLocalTest.s.sol:GetRandomNumberLocalTestScript --fork-url http://localhost:8545 --broadcast
+forge script script/GetRandomNumberLocalTest.s.sol:GetRandomNumberLocalTestScript --fork-url http://localhost:8545 --broadcast --slow
 ```
 
 ## the nodes should sign the randomness and one of the committers in the group will fulfill the result
@@ -207,8 +142,8 @@ forge script script/GetRandomNumberLocalTest.s.sol:GetRandomNumberLocalTestScrip
 
 ```bash
 # check the randomness result recorded by the adapter and the user contract respectively
-cast call 0x9fE46736679d2D9a65F0992F2272dE9f3c7fa6e0 \
-  "lastOutput()(uint256)"
+cast call 0x0165878a594ca255338adfa4d48449f69242eb8f \
+  "getLastRandomness()(uint256)"
 
 cast call 0x8464135c8f25da09e49bc8782676a84730c318bc \
   "lastRandomnessResult()(uint256)"

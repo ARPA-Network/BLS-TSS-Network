@@ -2,18 +2,25 @@ use super::{provider::NONCE, WalletSigner};
 use crate::ethers::builders::ContractCall;
 use crate::TransactionCaller;
 use crate::{
-    contract_stub::controller::{CommitDkgParams, Controller, DkgTaskFilter},
+    contract_stub::controller::{
+        CommitDkgParams, Controller, DkgTaskFilter, Group as ContractGroup,
+    },
     controller::{
         ControllerClientBuilder, ControllerLogs, ControllerTransactions, ControllerViews,
     },
     error::{ContractClientError, ContractClientResult},
     NonceManager, ServiceClient,
 };
-use arpa_node_core::{ChainIdentity, DKGTask, GeneralChainIdentity, Node};
+use arpa_node_core::{
+    u256_to_vec, ChainIdentity, DKGTask, GeneralChainIdentity, Group, Member, Node,
+};
 use async_trait::async_trait;
 use ethers::prelude::*;
 use log::info;
+use std::collections::BTreeMap;
+use std::marker::PhantomData;
 use std::{convert::TryFrom, future::Future, sync::Arc, time::Duration};
+use threshold_bls::group::PairingCurve;
 
 pub struct ControllerClient {
     controller_address: Address,
@@ -42,11 +49,11 @@ impl ControllerClient {
     }
 }
 
-impl ControllerClientBuilder for GeneralChainIdentity {
+impl<C: PairingCurve> ControllerClientBuilder<C> for GeneralChainIdentity {
     type Service = ControllerClient;
 
     fn build_controller_client(&self) -> ControllerClient {
-        ControllerClient::new(self.get_contract_address(), self)
+        ControllerClient::new(self.get_controller_address(), self)
     }
 }
 
@@ -168,9 +175,25 @@ impl ControllerTransactions for ControllerClient {
     }
 }
 
-#[allow(unused_variables)]
 #[async_trait]
-impl ControllerViews for ControllerClient {
+impl<C: PairingCurve> ControllerViews<C> for ControllerClient {
+    async fn get_group(&self, group_index: usize) -> ContractClientResult<Group<C>> {
+        let adapter_contract =
+            ServiceClient::<ControllerContract>::prepare_service_client(self).await?;
+
+        let res = adapter_contract
+            .get_group(group_index.into())
+            .call()
+            .await
+            .map(parse_contract_group)
+            .map_err(|e| {
+                let e: ContractClientError = e.into();
+                e
+            })?;
+
+        Ok(res)
+    }
+
     async fn get_node(&self, id_address: Address) -> ContractClientResult<Node> {
         let controller_contract =
             ServiceClient::<ControllerContract>::prepare_service_client(self).await?;
@@ -184,7 +207,7 @@ impl ControllerViews for ControllerClient {
                 id_public_key: n.dkg_public_key.to_vec(),
                 state: n.state,
                 pending_until_block: n.pending_until_block.as_usize(),
-                staking: n.staking,
+                staking: U256::zero(),
             })
             .map_err(|e| {
                 let e: ContractClientError = e.into();
@@ -216,8 +239,9 @@ impl ControllerLogs for ControllerClient {
         while let Some(Ok(evt)) = stream.next().await {
             let (
                 DkgTaskFilter {
+                    global_epoch: _,
                     group_index,
-                    epoch,
+                    group_epoch,
                     size,
                     threshold,
                     members,
@@ -229,12 +253,12 @@ impl ControllerLogs for ControllerClient {
 
             info!(
                 "Received DKG task: group_index: {}, epoch: {}, size: {}, threshold: {}, members: {:?}, coordinator_address: {}, block_number: {}",
-                group_index, epoch, size, threshold, members, coordinator_address, meta.block_number
+                group_index, group_epoch, size, threshold, members, coordinator_address, meta.block_number
             );
 
             let task = DKGTask {
                 group_index: group_index.as_usize(),
-                epoch: epoch.as_usize(),
+                epoch: group_epoch.as_usize(),
                 size: size.as_usize(),
                 threshold: threshold.as_usize(),
                 members,
@@ -244,5 +268,75 @@ impl ControllerLogs for ControllerClient {
             cb(task).await?;
         }
         Err(ContractClientError::FetchingDkgTaskError)
+    }
+}
+
+fn parse_contract_group<C: PairingCurve>(cg: ContractGroup) -> Group<C> {
+    let ContractGroup {
+        index,
+        epoch,
+        size,
+        threshold,
+        public_key,
+        members,
+        committers,
+        commit_cache_list: _,
+        is_strictly_majority_consensus_reached,
+    } = cg;
+
+    let members: BTreeMap<Address, Member<C>> = members
+        .into_iter()
+        .enumerate()
+        .map(|(index, cm)| {
+            let partial_public_key =
+                if cm.partial_public_key.is_empty() || cm.partial_public_key[0] == U256::zero() {
+                    None
+                } else {
+                    let bytes = cm
+                        .partial_public_key
+                        .iter()
+                        .map(u256_to_vec)
+                        .reduce(|mut acc, mut e| {
+                            acc.append(&mut e);
+                            acc
+                        })
+                        .unwrap();
+                    Some(bincode::deserialize(&bytes).unwrap())
+                };
+
+            let m = Member {
+                index,
+                id_address: cm.node_id_address,
+                rpc_endpoint: None,
+                partial_public_key,
+            };
+            (m.id_address, m)
+        })
+        .collect();
+
+    let public_key = if public_key.is_empty() || public_key[0] == U256::zero() {
+        None
+    } else {
+        let bytes = public_key
+            .iter()
+            .map(u256_to_vec)
+            .reduce(|mut acc, mut e| {
+                acc.append(&mut e);
+                acc
+            })
+            .unwrap();
+        Some(bincode::deserialize(&bytes).unwrap())
+    };
+
+    Group {
+        index: index.as_usize(),
+        epoch: epoch.as_usize(),
+        size: size.as_usize(),
+        threshold: threshold.as_usize(),
+        state: is_strictly_majority_consensus_reached,
+        public_key,
+        members,
+        committers,
+        c: PhantomData,
     }
 }

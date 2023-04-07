@@ -16,7 +16,7 @@ use tokio_retry::{strategy::FixedInterval, RetryIf};
 
 pub struct PreGroupingListener<
     G: GroupInfoFetcher<C>,
-    I: ChainIdentity + ControllerClientBuilder,
+    I: ChainIdentity + ControllerClientBuilder<C>,
     C: PairingCurve,
 > {
     main_chain_identity: Arc<RwLock<I>>,
@@ -25,7 +25,7 @@ pub struct PreGroupingListener<
     c: PhantomData<C>,
 }
 
-impl<G: GroupInfoFetcher<C>, I: ChainIdentity + ControllerClientBuilder, C: PairingCurve>
+impl<G: GroupInfoFetcher<C>, I: ChainIdentity + ControllerClientBuilder<C>, C: PairingCurve>
     PreGroupingListener<G, I, C>
 {
     pub fn new(
@@ -45,7 +45,7 @@ impl<G: GroupInfoFetcher<C>, I: ChainIdentity + ControllerClientBuilder, C: Pair
 #[async_trait]
 impl<
         G: GroupInfoFetcher<C> + Sync + Send,
-        I: ChainIdentity + ControllerClientBuilder + Sync + Send,
+        I: ChainIdentity + ControllerClientBuilder<C> + Sync + Send,
         C: PairingCurve + Sync + Send,
     > EventPublisher<NewDKGTask> for PreGroupingListener<G, I, C>
 {
@@ -57,7 +57,7 @@ impl<
 #[async_trait]
 impl<
         G: GroupInfoFetcher<C> + Sync + Send + 'static,
-        I: ChainIdentity + ControllerClientBuilder + Sync + Send,
+        I: ChainIdentity + ControllerClientBuilder<C> + Sync + Send,
         C: PairingCurve + Sync + Send,
     > Listener for PreGroupingListener<G, I, C>
 {
