@@ -3,7 +3,6 @@
 members = [ 
     "crates/dkg-core", 
     "crates/arpa-node",
-    "crates/randcast-contract-mock",
     "crates/threshold-bls"
 ]
 
