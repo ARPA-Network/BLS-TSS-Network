@@ -54,7 +54,7 @@ contract StakeNodeLocalTestScript is Script {
 
         // let a user stake to accumulate some rewards
         // have to set nonce manually or else the tx will fail
-        vm.setNonce(deployerAddress, 12 + stakingNodesIndexLength);
+        vm.setNonce(deployerAddress, 15 + stakingNodesIndexLength);
         stake(deployerAddress);
 
         for (uint256 i = 0; i < operators.length; i++) {

@@ -24,9 +24,16 @@ library BLS {
 
     error MustNotBeInfinity();
     error InvalidPublicKeyEncoding();
+    error InvalidSignatureFormat();
+    error InvalidSignature();
+    error InvalidPartialSignatureFormat();
+    error InvalidPartialSignatures();
+    error EmptyPartialSignatures();
+    error InvalidPublicKey();
+    error InvalidPartialPublicKey();
 
     function verifySingle(uint256[2] memory signature, uint256[4] memory pubkey, uint256[2] memory message)
-        internal
+        public
         view
         returns (bool)
     {
@@ -57,7 +64,7 @@ library BLS {
     }
 
     function verifyPartials(uint256[2][] memory partials, uint256[4][] memory pubkeys, uint256[2] memory message)
-        internal
+        public
         view
         returns (bool)
     {
@@ -95,7 +102,7 @@ library BLS {
     }
 
     // TODO a simple hash and increment implementation, can be improved later
-    function hashToPoint(bytes memory data) internal view returns (uint256[2] memory p) {
+    function hashToPoint(bytes memory data) public view returns (uint256[2] memory p) {
         bool found;
         bytes32 candidateHash = keccak256(data);
         while (true) {
@@ -126,7 +133,7 @@ library BLS {
         return sqrt(y);
     }
 
-    function isValidPublicKey(uint256[4] memory publicKey) internal pure returns (bool) {
+    function isValidPublicKey(uint256[4] memory publicKey) public pure returns (bool) {
         if ((publicKey[0] >= N) || (publicKey[1] >= N) || (publicKey[2] >= N || (publicKey[3] >= N))) {
             return false;
         } else {
@@ -134,7 +141,7 @@ library BLS {
         }
     }
 
-    function fromBytesPublicKey(bytes memory point) internal pure returns (uint256[4] memory pubkey) {
+    function fromBytesPublicKey(bytes memory point) public pure returns (uint256[4] memory pubkey) {
         if (point.length != 128) {
             revert InvalidPublicKeyEncoding();
         }
@@ -152,7 +159,7 @@ library BLS {
         pubkey = [x0, x1, y0, y1];
     }
 
-    function decompress(uint256 compressedSignature) internal view returns (uint256[2] memory uncompressed) {
+    function decompress(uint256 compressedSignature) public view returns (uint256[2] memory uncompressed) {
         uint256 x = compressedSignature & FIELD_MASK;
         // The most significant bit, when set, indicates that the y-coordinate of the point
         // is the lexicographically largest of the two associated values.
@@ -175,7 +182,7 @@ library BLS {
         return [x, y];
     }
 
-    function isValid(uint256 compressedSignature) internal view returns (bool) {
+    function isValid(uint256 compressedSignature) public view returns (bool) {
         uint256 x = compressedSignature & FIELD_MASK;
         if (x >= N) {
             return false;

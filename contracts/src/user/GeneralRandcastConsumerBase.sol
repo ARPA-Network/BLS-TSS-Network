@@ -43,7 +43,7 @@ abstract contract GeneralRandcastConsumerBase is
         returns (bytes32)
     {
         uint256 rawSeed = makeRandcastInputSeed(USER_SEED_PLACEHOLDER, msg.sender, nonce);
-        // This should be identical to controller generated requestId.
+        // This should be identical to adapter generated requestId.
         bytes32 requestId = makeRequestId(rawSeed);
         // Only in the first place we calculate the callbackGasLimit, then next time we directly use it to request randomness.
         if (callbackGasLimit == 0) {
@@ -86,7 +86,7 @@ abstract contract GeneralRandcastConsumerBase is
         return rawRequestRandomness(
             requestType,
             params,
-            IAdapter(controller).getLastSubscription(address(this)),
+            IAdapter(adapter).getLastSubscription(address(this)),
             USER_SEED_PLACEHOLDER,
             DEFAULT_REQUEST_CONFIRMATIONS,
             callbackGasLimit,

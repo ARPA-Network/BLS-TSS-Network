@@ -2,7 +2,7 @@
 pragma solidity >=0.8.10;
 
 import "forge-std/Test.sol";
-import "../src/interfaces/IAdapter.sol";
+import "../src/Adapter.sol";
 import {Staking, ArpaTokenInterface} from "Staking-v0.1/Staking.sol";
 import "./ControllerForTest.sol";
 import "./mock/MockArpaEthOracle.sol";
@@ -12,6 +12,7 @@ import "openzeppelin-contracts/contracts/utils/Strings.sol";
 
 abstract contract RandcastTestHelper is Test {
     ControllerForTest controller;
+    Adapter adapter;
     MockArpaEthOracle oracle;
     IERC20 arpa;
     Staking staking;
@@ -64,150 +65,138 @@ abstract contract RandcastTestHelper is Test {
 
     // Node Partial Public Keys
     bytes partialPublicKey1 =
-        hex"25b985d7e013aa556364b7723541ece7e92d4cf461446204aa72e37aeef7f2582b10412b61190143a48dc65628a6566c7af39483a45dcca44742c53a5ef14e6f2875a8a2580d1888129c85235d8d1b5ef8087423ad9aeb93c7cc060a53dab24226b90fdda6385b283a995448b4089787186c930ee8085430802e3df3764b4740";
+        hex"0f43a1f52305b2e8eb2c0fbed1be75f29526e9b6d81cb04971ef07289d263c7a02a0ae0b19ee2bf2dfa045092130770253191c95a71f2a36ebc1421a9e183b940cec8d1a59cc49a63de075ba92a5ad2570b08fc870970150ac24283df7d8b7390fe8912631f2228d82c01df7abe12aa7d619d213ca417cbc20ca728c704bca49";
     bytes partialPublicKey2 =
-        hex"1849985fba9099e6d8d1863a7c6c9c71483782b5d9a30d803bdec60f204b4fd42f3356e30b927030fd4d00d045fefa8eb93b29f254b8433f7ff64467f54b52d8217c5760bc64e70ab51f9bf8ee21e76daca13efcbfb9fbb35d5f405f974bfeee12dffc41ce6ec13f52cfd7ca911fb302ad5c64158b8079b626fd65b51b663a81";
+        hex"0dce7fbd5e5fd4c7c5d07abf9b0488026d0a6e0d97ab853867fd03d460af6e3a2a55b4c300d4ada98d4c1d652049ecb1fc884820d74d14675616c291d9e152ea2855dfd92ff71b043cdd80ae30019ee45e60ae2da408be402ebed54af8c91f371a54f07a261716395129f9cfab6f611658388d6f9c1306a78d15f11fae63c8fb";
     bytes partialPublicKey3 =
-        hex"0e1f951f32aba23599d09a6523c861a41a3666b0a41f9cf86a6e6c360a26304d2cead9504e3b7d1adbc775f9a6b1301bfbcf0a5aa4372326c00f91af7863b53b05ca366f0dc79e9e34c8966d33a3d77ee107e6e7e9ad86738b4d7a278fe81919110f586e639a4ac0823bde5be65a531a37fa45b9584dd1fca1d1aa42efdeffd9";
+        hex"2d2e7bc494344582d8fbdcd6a1dd583a25d7ff34356def9e876e1545d7fe943a10244eedd3c4c57a8e7225fd42d0d07aa032b5bcc2cc6acc022ed0c8aea96cae2c922c760836e6f9e35d4c00c875580a2156dd1f898fe35ec1acf042508220962c97917a438f84040476ffac48ea213bf3a8c51196d2c8dd84b9ddd3477cdbf8";
     bytes partialPublicKey4 =
-        hex"0b205d275db7e7254691803f189dd40e203f57f21f585b2f43924ba3189d8f8c0fccc061ce49df93900deadd2cdc4604807a8f4b99bccd4f0b14df4845473253166b778cee833e52268379d4c49a88729711f4e16a51fbc2c4086070c944baef212c93bda6b9ee0bf7419e6c0256569f33eecf345daffd01523ce9e6aa4fa43c";
+        hex"2365ccbbbdf4bd79a6b480f0bb07ab10b0bdc3f51d954dd2a27a5d87d37b0587144d1381eeb24f28248ddf5b10de95f91f732438d0a913be6c4d0bb3948b353b15001f911d281d85073ddd23587f280587c5c13bf766fda73742937546e387e8114e9084f5011a0ff6753dba34813c5805b1dc126145d3044daea8100f701be1";
     bytes partialPublicKey5 =
-        hex"1ab24e550230862eccaa516975047156d5c7cdc299f5fce0aaf04e9246c1ab2122f8c83061984377026e4769de7cc228004221275241ee6a33622043a3c730fc183f7bff0be8b3e21d9d56bc5ed2566ce3193c9df3396bd8cdc457e7c57ecbc010092c9cf423391bff81f73b1b33ac475dbf2b941b23acc7aa26324a57e5951b";
+        hex"19607cd16db7e55acfcba3a2d6f9e8649ee885e83a284136d98582e42a784e0912a633c2fc7a15b2ccedd66b4ec55063582b6b5b260796a1dafb4189db4f9a10218ed52346e4867c395852a3703a11cb264892743f9d5bb3c44581d9e543f3c71d18f0c9ae30fd1eb9d2edb564e5ed104f6091604acd2ebe03ad50ba22d3ebee";
     bytes badKey =
         hex"111111550230862eccaa516975047156d5c7cdc299f5fce0aaf04e9246c1ab2122f8c83061984377026e4769de7cc228004221275241ee6a33622043a3c730fc183f7bff0be8b3e21d9d56bc5ed2566ce3193c9df3396bd8cdc457e7c57ecbc010092c9cf423391bff81f73b1b33ac475dbf2b941b23acc7aa26324a57e5951b";
 
     // Group Public Key
     bytes publicKey =
-        hex"0f9c97d632d73c59e8d32ff08c51d11375bfb72d63239b6d7a4a9dfdb3f918be1622dd347dc1da12c8be8cf589e76216fe4cbd2ad696eb2134aa46c3705b5b3b2e7077789272b985a85fbb012b448564a65a07b7c7bd68fbd7f67bb3032cd7731e4506b2e2566b36ce57871ebc2a931b9ba51f1172271ce34be32816118a95c3";
+        hex"137bde2a3eca9e26d5023c8a31c7db75db47b4d1776efc144bc9cfa36403125510292172c806e0d9dd29958c8b359ea9c693179c505558cc95ca8ce6a690eb800652ce1fadb1895c06e5f28e871d8e3797f749941108195d2106a782464a09ed23ece01e5c6512317cd413fbecc36032ab7ba45f62704e9808ec2b6a2dd03d8c";
 
     // Partial Signatures
-    // msg: "2bdda4dd3ed74cb9ed050c6b6144174040215e9b997cc13ef7430487090270440000000000000000000000000000000000000000000000000000000000000001";
-    uint256 partial1_1 = 0x946b508624231c85e295a6af69a2f774c30912c24b68d03389bca6579ca4f7ff;
-    uint256 partial1_2 = 0x0b1dff99b5e89e5d6cf8ee13f03530fb365bef81f210a93bec1bd7966f0e813c;
-    uint256 partial1_3 = 0xa129d28a7acff9f841d36a7ea7449be909bd3a6df0db0d32038c407f33d7225e;
-    uint256 partial1_4 = 0xad7d8338f0a9f4a545088ca631830a4850233e973c6af021e7f6aa33196b9ce7;
-    uint256 partial1_5 = 0x2e783af9d4a26e543b269c5b1251588fc7428e406ad3110576dbbbc93df3de17;
-    uint256 signature1 = 0x021428f7a0c463c9ec48228219dcd5bd6b03ecdc734ca331541aacf97afeddb1;
+    // msg: "de7c516e867a427226866fa41566ad0eb0ff69f54e4408babd2f59c54238fa860000000000000000000000000000000000000000000000000000000000000001"
+    uint256 partial1_1 = 0xa7b0bf678df3ba00d8d25f952d80634635a2ae2bd1e8b480fc2cf7c3d264f5d9;
+    uint256 partial1_2 = 0x0a1db9a6dd4efe430498616ad8630c3efb6f89b71a978128dba1c1d33ac35ee8;
+    uint256 partial1_3 = 0x0aaf81e1d868eed5eea9b66e1b47cbe66dc5a36f273625bb69c68f5797a7339d;
+    uint256 partial1_4 = 0x15d1b24d486e923e8efd834bbf0c7e482e22cd9f263db13708b399853da96ae3;
+    uint256 partial1_5 = 0x1fe75aa1bf5c46bc51adba3783b4aa15b14d80f3a7ace0360c4429c43e295b1c;
+    uint256 signature1 = 0x9859ed63e7d820a42c664139264441525984e9034078b2fc983eef00291588ff;
     uint256[] sig1 = [signature1, partial1_1, partial1_2, partial1_3, partial1_4, partial1_5];
 
-    // msg: "adba1e0e95a816030c7ab73a0ac0d519e51bb207562b225c169ba4fca9708aba0000000000000000000000000000000000000000000000000000000000000012";
-
-    uint256 partial2_1 = 0xa760fcc4bf51cf5a2060e997cda96c3f234ae116072804d293284c5eae33961e;
-    uint256 partial2_2 = 0x9ff58b0ac4814713b0b410c7d1ebce225f56bb77b33660b77b1561a2216d838d;
-    uint256 partial2_3 = 0x9f478ef2ff9ceb771e5dadc82d6342104aa7fd55dc5d201897123db3d8127b2b;
-    uint256 partial2_4 = 0xa89a494479ddcf5c15d8cc7eaf24b82e779a6e4cce4f8731994ea636070d93d1;
-    uint256 partial2_5 = 0x94dc5a968688f9ae05557061d3f1baf7767bf874d4df7ec8d9cc1adf27315b58;
-    uint256 signature2 = 0x010fd071a6ef7d41302c2c3bc570b53d6a5ca9c3e9fa31a25b618a44c944e1f5;
+    // msg: "d33ade962639dfbe2c2cb144c8b81b9b41426183f4a8f9d97a3797267085e3e90000000000000000000000000000000000000000000000000000000000000012"
+    uint256 partial2_1 = 0x1d5c0300007948ff0294ea1f8e795c52af099396b407e7276e7fcb7da814524d;
+    uint256 partial2_2 = 0x2a57b3f486530ae0d1ec72931650fe908991046a2def72f7d11a1dd7ab5f95e4;
+    uint256 partial2_3 = 0x10763865020114ddc20aedaf8c22e7467266da0e6190d06f3a4e56a483ec7edc;
+    uint256 partial2_4 = 0x053c1c68b4fa2aaa703c5b74a337d1013e0e5c27b709637f11ddc4104b91a31f;
+    uint256 partial2_5 = 0xad4869169ad6185c5d4e0b40724a7867f11c91d838dddd3765aae2ba360bde0c;
+    uint256 signature2 = 0x28e0e8b54c9fc8e7e97aeec70d5dac07752f7f6d2aebe3a62176cfe9d0da346b;
     uint256[] sig2 = [signature2, partial2_1, partial2_2, partial2_3, partial2_4, partial2_5];
 
-    // msg: "2aba4fa6a8d715baf9a8e4965940c548f9d7a715093459ab3746a5516a7b83170000000000000000000000000000000000000000000000000000000000000023";
-
-    uint256 partial3_1 = 0x1e0da7d48c2b81ae036bd7ef6d421ad0b78daa558fb60db7bda43cf677934e4e;
-    uint256 partial3_2 = 0x8dcf2f3eacfee6459f4dbd9d750b6528edb47e2f7e7d39a8158a43f2af5a4cf7;
-    uint256 partial3_3 = 0x0c48d0f5884341404b884284a89bf31565497101f9fb264c0ad48f08f2b1d12a;
-    uint256 partial3_4 = 0x0406144835cb6ff3d6f0cc8f3b59004c00ad8e7d8d1a0c783fd7e6f62dcfd72f;
-    uint256 partial3_5 = 0x9e6385262bdfe12c2b9b56f68ecdea66ae7478ee48e248b4d5f27d7d81ec3f62;
-    uint256 signature3 = 0xabdd81d633ecd280e7e1e8c9facc2d009da0597068bbc7b2c3c846946f49014f;
+    // msg: "d43a01309e5ce06f563855ea4d63bfd19566144d62073344ca66a52fe459fcd20000000000000000000000000000000000000000000000000000000000000023"
+    uint256 partial3_1 = 0x02ecd86ac78fba0044c3af9f2d20f19c1eb0b817c3cf1633a21e9e54bcabf3b9;
+    uint256 partial3_2 = 0x21e305c78f09009152edbf7222621e868afdbe5ff0cf36bc8df3d0a7312a2739;
+    uint256 partial3_3 = 0xaf6163173a1c9967377dd4a9eefa8842db87682be214c8b5c4be81acf3ca14ec;
+    uint256 partial3_4 = 0x970e7620096c5d7ff6c2dfc41bd0e732330531bed9222287075c8cd16eb9bad3;
+    uint256 partial3_5 = 0x0e69fd733c1d38f6ad75f8cee338fc3dca33a317c841e1635fd5d096e86aacad;
+    uint256 signature3 = 0xab32ad45583c54b04f944fb7c256886e92c9b081bcd016e6d326157e16b0540b;
     uint256[] sig3 = [signature3, partial3_1, partial3_2, partial3_3, partial3_4, partial3_5];
 
-    // msg: "8c766583fa9c65789080aee687f24be92eaa68775d583eccbc54468f21b7fd190000000000000000000000000000000000000000000000000000000000000034";
-
-    uint256 partial4_1 = 0x01691bb7ea7907b8838444a335b10aa1560c6fb411fc11bb46e00af5bc5f801e;
-    uint256 partial4_2 = 0xa9fe69939f727a69c0c1bdb1fdb72874f8169d74e48c9e1b6462eb405f936652;
-    uint256 partial4_3 = 0x9216fc553ca2570069eb117f9f13b07d60542d187abd4baa870bb149f76e754f;
-    uint256 partial4_4 = 0x1165658dfd6f787ae1da9e109bb299cf34ed2efc6aea9516228af1fd5fe58319;
-    uint256 partial4_5 = 0x2b5fbf4c9f10815e112127527d54939ec50608e8aeb321453e4585704778becf;
-    uint256 signature4 = 0xa9ffc3d292b69c14a1c5426b9d8d32324bf8b960e3d7cc1608ae67eafbfeaa99;
+    // msg: "edea6587954fc90bf55a2e710f2edda6d40cbc59050201e7e04b44af906eb1dc0000000000000000000000000000000000000000000000000000000000000034"
+    uint256 partial4_1 = 0x1bd9a80aa816302169a2bda79f25295505744b00762573304c627e235c5489fb;
+    uint256 partial4_2 = 0x236bb25effd1e4de35ca8c968d06e3661719667bde72f43340e608e99a757709;
+    uint256 partial4_3 = 0x175db9284c6f33bc65e0b597ff015672a46a793c0b4afed4da06e92ff85b4353;
+    uint256 partial4_4 = 0xa9edc57ecdd0c3a32b7bdb78d683c49233ccda86f9f63faead489cf1d0b1ad41;
+    uint256 partial4_5 = 0xa325d272338d872a80e3bc5a262eb162600658f6bd7d794a5bbd87ce663041b1;
+    uint256 signature4 = 0x9f8e9654dd1a3b86c8bcdf6ad91704992e24112f450754ce2b76efbbde7c4ce7;
     uint256[] sig4 = [signature4, partial4_1, partial4_2, partial4_3, partial4_4, partial4_5];
 
-    // msg: "772e33591d14ca86452b2fa0b6c1f50e9a89eebc9d806aaebb6f825169f656390000000000000000000000000000000000000000000000000000000000000045";
-
-    uint256 partial5_1 = 0x08ca74445e3a5e674fc65f3252811ba60aa9f6b2a2497ea89ce30caf2157384b;
-    uint256 partial5_2 = 0xad61d8dfaa2d7803cc7dfedd0288ef276a26854647934cce2b4a861a304fd870;
-    uint256 partial5_3 = 0x8774d72c680a8bfd6fbb40ffe271d7d7178be5c3436e96f1346db8fa31ecd855;
-    uint256 partial5_4 = 0x85281a9afcbffe0eebbe6254571ed25d613bc389813ac3f29608b9c781d7b1b7;
-    uint256 partial5_5 = 0x2aeff23f7c46b806d25ac6fb4b736daa4d690b78f28182758ec826a340cc0289;
-    uint256 signature5 = 0x2d30b04946f771b974d91268530d8b62918405d949eb193f538351c1b14e79a1;
+    // msg: "3884a5de852ba49a376e504abed8501ce14c9fd7d0a8a4aaca2a81d9d87b35da0000000000000000000000000000000000000000000000000000000000000045"
+    uint256 partial5_1 = 0x8b2b823510064bbc826d442a36e10e19903f12d2b5d8889497ade0feb995fc7c;
+    uint256 partial5_2 = 0x994fbd013506b0323a3cf527521471b0d65b2e908b113ed82501133431d3c78f;
+    uint256 partial5_3 = 0x80cce4a7a23536d9532a9e70d4abf7938ac3b4c11b385be7a45d9fb01637f4b1;
+    uint256 partial5_4 = 0x2a0aaa9f7875564955e438f8ab29b105b095d6b97ab1e0acb4de68a8d71e4aff;
+    uint256 partial5_5 = 0x1cd4512a230edc07e81ee0a330bf0c25095e2df768e8fa3d28914a28b840ba09;
+    uint256 signature5 = 0x99485ca68e9b66724a768c47e04531a2f63cb3e5754f2a5b2a17784d48abf73c;
     uint256[] sig5 = [signature5, partial5_1, partial5_2, partial5_3, partial5_4, partial5_5];
 
-    // msg: "8a767bde8c14db8d024b7b6dd98163398f60d86bc9a4ac814a213db6f489975d0000000000000000000000000000000000000000000000000000000000000056";
-
-    uint256 partial6_1 = 0x9acb515c7bc899987c3ec9284a854e2865cb997be40d3303aebd820cf3674ba7;
-    uint256 partial6_2 = 0x304d1593ce934f03dac1a200cfdda4b170b54079bcc6d844b632daca4f12cb13;
-    uint256 partial6_3 = 0x219960faa5f120ea6df81b087300a41f94e2abd6f47eabeae41ec3dc589067c2;
-    uint256 partial6_4 = 0x1c7edaa28abd9307f3fbe68102c182df5fc67aaef3ed663cd679827fd37545b1;
-    uint256 partial6_5 = 0xa0e0a8007443479fcb6965c6e09509487d45be04c0e317e77bf6dd05e1566f1c;
-    uint256 signature6 = 0x050ac9abe886d104fdc80d48dd305d1478bf7281b95ed5f84f89002639605f73;
+    // msg: "5e834c9e0ee3c1df597ce48258054d49ed258ecb6d31fbce6a78be9daf9afaa10000000000000000000000000000000000000000000000000000000000000056"
+    uint256 partial6_1 = 0x83abcdb3e9e96f1f9227d7e37fdb92e7cf05576e35f404d45f48c5b554e65e12;
+    uint256 partial6_2 = 0x81a5a264abc76a54bf6f0f7f6bf2e4c775e73a4fa0c513857b6354d6b6505d26;
+    uint256 partial6_3 = 0x979584bd5813c849b0dbdf3e97c64ddbc6f0675a95c6eedb06b89c607c7644ec;
+    uint256 partial6_4 = 0x90e4535cc9aebc9c3ae363f2d12a49d2e4558cad5e0023e7912e60cffcfe2ffc;
+    uint256 partial6_5 = 0x22f69cf529e9cd57288c42b020ae1581e6977e5587e113d6358e766f462affdc;
+    uint256 signature6 = 0x156ae717ee09b79a3956a536b7793a5459c9e42a540594f27b3b0885e2da8d71;
     uint256[] sig6 = [signature6, partial6_1, partial6_2, partial6_3, partial6_4, partial6_5];
 
-    // msg: "13c4fe7022314f4e35623d61d30f71de31192dca0a19898ff36af659e969e7a10000000000000000000000000000000000000000000000000000000000000067";
-
-    uint256 partial7_1 = 0xa433e8373f9b41ff18b8e31efa2ae22109dc6f93945739b46862de2b793bde8e;
-    uint256 partial7_2 = 0x8e4b1ad76fb2caa8d798c7a4d9e0418e97e8665b8b5cd878bf312a5ade26e7ca;
-    uint256 partial7_3 = 0x226233a323d687d07184a86888446b6151a259af47ae859f4b63d704f3ffcd57;
-    uint256 partial7_4 = 0x1eaa6c8cfd49a4b538fd6a36dffaacccdc35277ea7ca78c4e97573d31ebfa485;
-    uint256 partial7_5 = 0x9bbdecbe04675f32fdb0abb6a1c8049b0fc8357e8210ba99aab424144884b6f1;
-    uint256 signature7 = 0xad6f2ff184eca21d93f93b8fdd21a0c793f2cc8d8659ef1a77468aaa322b6fba;
+    // msg: "e0ab0f3bc77b9c2b203d07aaa5af51280d8bba6c5bb1cd54763959c1b87708540000000000000000000000000000000000000000000000000000000000000067"
+    uint256 partial7_1 = 0x08bf742012c31bc9aaf96258e26e88292211dca4bf6556062092459a5a1c31a5;
+    uint256 partial7_2 = 0x0ae64cc1c9a2bd67609656ac5e14a2e522356ef09d2f3ccd4f3104ad20f333e7;
+    uint256 partial7_3 = 0x928cf016444f840ff1b91de1050d7e1bbdb76afd5b46c4211102a8601abf038d;
+    uint256 partial7_4 = 0x20341836bb2dd010bc8a8df9aa47b65848b3650266d9a96937849fcbc0da39fa;
+    uint256 partial7_5 = 0xa9060557a4f8f3a7aa033c916068d379823d98f2c4ce230a1c2e75917113653f;
+    uint256 signature7 = 0x062562ba880a4822833e1b280d2e985cb15dd3077e66abda262de66776ae9480;
     uint256[] sig7 = [signature7, partial7_1, partial7_2, partial7_3, partial7_4, partial7_5];
 
-    // msg: "249b38981df5bcd673f3bd50631aba97c5cc5b0dc7a85c94f11705ba950f5b0e0000000000000000000000000000000000000000000000000000000000000078";
-
-    uint256 partial8_1 = 0xad5d31d24d4ff1b9613c39da68d9b5900d512568f8376156778cdc659b79c48d;
-    uint256 partial8_2 = 0xa40e928c9845ea0b6e05c6c381677cc21988046e7fba297e17a134a8d9da0484;
-    uint256 partial8_3 = 0x0e4239ac002a032e9856ddac866f296114421f8788b080fdcfe425639bbbbfa1;
-    uint256 partial8_4 = 0x99dee2aac304d5b4a1432f8277060c1f8825224356e50bfea555b6d16df1a167;
-    uint256 partial8_5 = 0xa9140778f6822d579fc427267783717af64ff73a8b81d45acd19b2e06627f69d;
-    uint256 signature8 = 0x0fb13e9be1e8632d7d7bbe085ad0c1dd912e508200e52aa998238578763d7832;
+    // msg: "428874369318654d220b552cd69526384de1a9854b9a194f3ee725424d32e4bd0000000000000000000000000000000000000000000000000000000000000078"
+    uint256 partial8_1 = 0x15c9fea090a22f87231d9d44c6d7046556a42eabe891d43cd786a2a566c59df2;
+    uint256 partial8_2 = 0x2601fdffd8193fdc034b50dfb0dff66190715292dec0dbcbb3f0b787beab4e48;
+    uint256 partial8_3 = 0x8de124ee2c0ef60ab0fe344831610feb110fb1b707bbf6fe7bdb49ff32b43bf2;
+    uint256 partial8_4 = 0x8ef5ceb26b858046ca0d6a4f42da9331d0b01d6883111e2005d5d49fbdd1be45;
+    uint256 partial8_5 = 0x0019670cff4259fe152b53f228864c68d7564798cb09236677e2a0a73f6df58a;
+    uint256 signature8 = 0xabb882aa8a8ff347686556ae6998f14e29b60b3f16ef5bf09a67d46dac06248c;
     uint256[] sig8 = [signature8, partial8_1, partial8_2, partial8_3, partial8_4, partial8_5];
 
-    // msg: "ee37dd8f5b0b97804d115493672502eb373eca189306b49126816808ac2adcb80000000000000000000000000000000000000000000000000000000000000089";
-
-    uint256 partial9_1 = 0xadb7ace362880cf2081a2c0741d8fd04418e0395956318ff9ba1790824763599;
-    uint256 partial9_2 = 0xa3ab309eebf232311c7674d6d4036b4a81d7c2f89f3f56573833a17ae1d16629;
-    uint256 partial9_3 = 0x012f18a8f21bd54bf7a522dc4546323f738f410a67d503f29fb4ff6cca09092f;
-    uint256 partial9_4 = 0xa72ae610bfd641ab908365a98c8ba80a062b6e0b54e6ae39911da7da400ffdeb;
-    uint256 partial9_5 = 0x97e07d101266bc41703cfd31c38b207b9b10dcc49f0aa76b822bbc3b4521aa18;
-    uint256 signature9 = 0xa831de13b261538d545e5ed5801b3118663ce3b1420bf4cbdd60950124d5c248;
+    // msg: "640670d5370a0b1142d202dd8d733cdc5317af68692ed48653ec348d2432c6f60000000000000000000000000000000000000000000000000000000000000089"
+    uint256 partial9_1 = 0x241800efb6bafaf3e0701911137156975dfffaf04c0f7ff9620660192e52062e;
+    uint256 partial9_2 = 0x9da59c71df582722c4c6713745c027656c8ddb11294c4e35f47f48d9751dc84b;
+    uint256 partial9_3 = 0x99c85efca91b34cee4ba9edf93901548a3d377c207b36003c1c647d3e3e0ee46;
+    uint256 partial9_4 = 0xa7ffd70ac96bb618bd1d89df319ef8caf2b1a69ebfb208b3549de272b9854d42;
+    uint256 partial9_5 = 0x10417e79175775f12ae8f8fa8571aff64a566c2f0d43e8c9d1550b50ebedaaa3;
+    uint256 signature9 = 0x0c55d56d241c9d323fc541b5ef1674a0d7d012bc604464fcba7e72db09aa0dd7;
     uint256[] sig9 = [signature9, partial9_1, partial9_2, partial9_3, partial9_4, partial9_5];
 
-    // msg: "ccee934dfb6e63a7d154fb8cbbe6444659cf6d493b125bba2a931ce22414ddf8000000000000000000000000000000000000000000000000000000000000009a";
-
-    uint256 partial10_1 = 0x9a11790d94c2a0c455692773a2d0dc6641d9f55b04e7b999853a06689a24e9af;
-    uint256 partial10_2 = 0x8fe21a6669dbe5bec92fac15e83664acc6e16bd3d48e8846ed070ea6592400c2;
-    uint256 partial10_3 = 0x18ebb32d72009a6368a8cc54c7e10aa7e8acd5b326ebc0da81effd1b1f79ed92;
-    uint256 partial10_4 = 0x28367a9a90fcfdce26106591ce5ccd8ff3f4388f3836547e485e8c4471188a71;
-    uint256 partial10_5 = 0x0cbe7969ca650e88f8208034f33d71f14f536f80f345276652a473effe403f92;
-    uint256 signature10 = 0x87494bde9eec7bb33163c94cc9ac729ab3975e82c2b196826bb76d3d120fe415;
+    // msg: "1e049c83faf1abc374ad113f0e50995b4ed8a5be475156a346e773bb0d5cea7d000000000000000000000000000000000000000000000000000000000000009a"
+    uint256 partial10_1 = 0x80b4a22c52d462886031de42d8113b9bfcab1e691373c0387289c4126b7660c5;
+    uint256 partial10_2 = 0x23ab53561447aa449768f36d42ddf96484677af992afc2d595798eeaecb8fa23;
+    uint256 partial10_3 = 0xaf1b6f4e298b7dbdd428f2bedf29af44394a1a051580982cc1be2ae1ca03a4e6;
+    uint256 partial10_4 = 0x154bd43fe3e514638e455a6c09c7f45f8f655112555c56b0f9939f5df3e87616;
+    uint256 partial10_5 = 0x8ccb08b65a7a5830c1bf92de4dfdfa3b6a5f172cdf9582fdc26ffe5e6ae89356;
+    uint256 signature10 = 0x27fe7e0b003b339b407874fa0cabfe4b9df8ce862ec4eabe6e317f99bb55a0a8;
     uint256[] sig10 = [signature10, partial10_1, partial10_2, partial10_3, partial10_4, partial10_5];
 
-    // msg: "c8bc8d6c91c5384f0cf6a93dceec05e9580951bf07d8d4839242ac4a566e0e020000000000000000000000000000000000000000000000000000000000000001";
-
-    uint256 partial11_1 = 0xa0b7d6ae339f7a614dfa6d1286629fcdd3ed562cbff70ef4fb4293fc2bfbbb54;
-    uint256 partial11_2 = 0x9986c8af2136f0bd7eb7389d6bd17e58e2fb93ea4669dd9d42886d8e43167852;
-    uint256 partial11_3 = 0x9eb90655f4b93fd01bdf927a547a7a406c4f66a6e8c3982664f4433046918758;
-    uint256 partial11_4 = 0x88da0490707952b32dff64d54154f0f035d6dc8262190f4f902105d0cade9737;
-    uint256 partial11_5 = 0x11a424e93c0bf9c6320706462a4329cce7d5642d2cdb18bb84613da7441f4564;
-    uint256 signature11 = 0xa0ae19551797db366eaa443a6e82fb06dc0bf67c249817a6c4c2c03fa893fb3c;
+    // msg: "912879b65da7afad27afb740fed587019e3aac62a0731fcdb33a38a5e04a9dbc0000000000000000000000000000000000000000000000000000000000000001"
+    uint256 partial11_1 = 0x0e618d96d30ef2579b7302a3c1eaf512221e0584437bbbc31a084cc57212a7cf;
+    uint256 partial11_2 = 0x22760b163e645f88bf8afc1a8af8950f14346199bdbc177b0745db2c0ff8087f;
+    uint256 partial11_3 = 0xa5b5c0bc5ea3e352980dae9ec03001f7a7a365edf90c659bf56beecb721e48df;
+    uint256 partial11_4 = 0x200926692dc71a030f2532ca423ed23c8e971cde5722a83dcc3c0c4d8f39497d;
+    uint256 partial11_5 = 0xa56ea516bd4b4a7f6012132f40bd43a3db0179a833599638a02e0be1fe965934;
+    uint256 signature11 = 0xa9823520357ffdb0f7aa76d6fc7ae559289336e3c1dfcf84f830308af03f503c;
     uint256[] sig11 = [signature11, partial11_1, partial11_2, partial11_3, partial11_4, partial11_5];
 
-    // msg: "d1c2a1c7ae81259aae2c94abf016febc938fdda8fd917fb88c50b3c9613c2b3a0000000000000000000000000000000000000000000000000000000000000001";
-
-    uint256 partial12_1 = 0x134f9bcc39bfcfcf0916561cde41193068710c8b9320d71d13e9228445d0c369;
-    uint256 partial12_2 = 0x0383e198d44f61d4d6186546869e6de81332b40996caa0542ab7100df1ec4119;
-    uint256 partial12_3 = 0x16ac23a9a79c0da4b6348c961bc715aeb437127e741aebec365da9850de8bd8a;
-    uint256 partial12_4 = 0x29f1ccde3d31c6d2c825e8aafa2460f07def34acebb47d014c47ed584dbe5d87;
-    uint256 partial12_5 = 0xad35d01a2ea8522995b05b2bb2babfc18635749037c0ee3f51614d9c347d56fd;
-    uint256 signature12 = 0x954110abb3e2546d46b31f1b1c7cad4d6b6e0c279f242597c84c2a3a64e41367;
+    // msg: "34fa9bc41a34b4a1fb4dc01764f8f0cc61f6fc90284a603c49e393c2202135520000000000000000000000000000000000000000000000000000000000000001"
+    uint256 partial12_1 = 0x9c08dfa2c203dc5eb9cc044387dc204378e5f9cc9521b9227d27a345e79337ac;
+    uint256 partial12_2 = 0x246460deb8e7d38b356ece81a61289327cf7ef6912cd8ad58d6ae72a1c761409;
+    uint256 partial12_3 = 0x09d79a07b1c9a29ab852410658536c153ba18133d50dabdae20bb6d791667868;
+    uint256 partial12_4 = 0x2db11e0bf711c2f21df24c71e4c4ec21bc6b1d6475ded082a50b655494c6c930;
+    uint256 partial12_5 = 0x0b239f7e2d787287aa012b45d675251766463f8a8490a0cffe4f3c671e864041;
+    uint256 signature12 = 0xa41c00557357ddd77a247a5995bfc3e6b2923d98575d46a6325208935e60cc25;
     uint256[] sig12 = [signature12, partial12_1, partial12_2, partial12_3, partial12_4, partial12_5];
 
-    // msg: "f249c2d5758f9d37d62f3efc5e26a2509dd97a154b0daf661a4831b5b339fa1c0000000000000000000000000000000000000000000000000000000000000001";
-
-    uint256 partial13_1 = 0x8c2594f9df9aeb9c7bc58257e4cd0fc37a554afd8b2efd6922638458eedf1401;
-    uint256 partial13_2 = 0x2cdca76dae09bcc67a2a07f8c32727db5d0243a70199196ddc098148ccfdda6d;
-    uint256 partial13_3 = 0x03cf976c1a5618d77274d0631599f44f07d093765467efffed6b265e3153ee54;
-    uint256 partial13_4 = 0x89a4afd8bb8b1a14ada33ace850f99c73a11c89e8b0a0c336032ee235ee95835;
-    uint256 partial13_5 = 0x9c4fc6c66d44d7b4592727704508f902caa1415d51c796f3460f9a6fc01341fe;
-    uint256 signature13 = 0xa3ff1e6e94f55aac94c04430aac0b1a14b3d0de0af426e28cb8f129bc186524e;
+    // msg: "a4371e17c84d644e0823a95223011a30b995e36afd180b719769ad6ce88ceeae0000000000000000000000000000000000000000000000000000000000000001"
+    uint256 partial13_1 = 0x8ef9a2dd719dc0e0e96e5baa81cc4177141fb21af6a29210a37ecc166f819329;
+    uint256 partial13_2 = 0x10534c1673f82d97df90adcfb04deceb81be832191f7c38b0b3ce2d25276811a;
+    uint256 partial13_3 = 0xae718a17309070d21c58623ec883b640eb49aeed1a7abcfea0281a10f6e7fd64;
+    uint256 partial13_4 = 0x0a43269c573eab2804273f65b474e4ed328f5b1aa5a03c41be9f48cdaa05653a;
+    uint256 partial13_5 = 0x29e64a4aefdee243ceda6ad462b33d7a37936bcd5ec513ecd6fe303178d76577;
+    uint256 signature13 = 0x9d700195d65c76b2567a2b1763fbb19dc61256a3ce32e778e670631c21a23608;
     uint256[] sig13 = [signature13, partial13_1, partial13_2, partial13_3, partial13_4, partial13_5];
 
     uint256[][] sig = [sig1, sig2, sig3, sig4, sig5, sig6, sig7, sig8, sig9, sig10, sig11, sig12, sig13];
@@ -240,7 +229,7 @@ abstract contract RandcastTestHelper is Test {
         hex"02769fcd16915bb205af814a7520996c1200ce9dc01d1a15aa87fc34e5f30bd80371873ee754e8a9ef1242de811756088e55daba7263ade0daa25e00d2381ac22eabb44e702f14e18b0e899ea576715b6e0335f10696f3c1ef37bf35cda721090900d027f0e293a5da5a3fa147fa725bb2b1fa639112808bdfdcc516cffa580d";
 
     function fulfillRequest(bytes32 requestId, uint256 sigIndex) internal {
-        Controller.Callback memory callback = controller.getPendingRequest(requestId);
+        IAdapter.Callback memory callback = adapter.getPendingRequest(requestId);
         // mock confirmation times and SIGNATURE_TASK_EXCLUSIVE_WINDOW = 10;
         vm.roll(block.number + callback.requestConfirmations + 10);
 
@@ -249,7 +238,7 @@ abstract contract RandcastTestHelper is Test {
         partialSignatures[0] = IAdapter.PartialSignature(0, sig[sigIndex][1]);
         partialSignatures[1] = IAdapter.PartialSignature(1, sig[sigIndex][2]);
         partialSignatures[2] = IAdapter.PartialSignature(2, sig[sigIndex][3]);
-        controller.fulfillRandomness(
+        adapter.fulfillRandomness(
             0, // fixed group 0
             requestId,
             sig[sigIndex][0],
@@ -258,14 +247,15 @@ abstract contract RandcastTestHelper is Test {
     }
 
     function prepareSubscription(address consumer, uint96 balance) internal returns (uint64) {
-        uint64 subId = controller.createSubscription();
-        controller.fundSubscription(subId, balance);
-        controller.addConsumer(subId, consumer);
+        uint64 subId = adapter.createSubscription();
+        arpa.approve(address(adapter), balance);
+        adapter.fundSubscription(subId, balance);
+        adapter.addConsumer(subId, consumer);
         return subId;
     }
 
     function getBalance(uint64 subId) internal view returns (uint96, uint96) {
-        (uint96 balance, uint96 inflightCost,,,) = controller.getSubscription(subId);
+        (uint96 balance, uint96 inflightCost,,,) = adapter.getSubscription(subId);
         return (balance, inflightCost);
     }
 
@@ -350,38 +340,38 @@ abstract contract RandcastTestHelper is Test {
         uint256 groupEpoch = 3;
 
         address[] memory disqualifiedNodes = new address[](0);
-        Controller.CommitDkgParams memory params;
+        IController.CommitDkgParams memory params;
 
         // Succesful Commit: Node 1
-        params = Controller.CommitDkgParams(groupIndex, groupEpoch, publicKey, partialPublicKey1, disqualifiedNodes);
+        params = IController.CommitDkgParams(groupIndex, groupEpoch, publicKey, partialPublicKey1, disqualifiedNodes);
         vm.prank(node1);
         controller.commitDkg(params);
 
         // Succesful Commit: Node 2
-        params = Controller.CommitDkgParams(groupIndex, groupEpoch, publicKey, partialPublicKey2, disqualifiedNodes);
+        params = IController.CommitDkgParams(groupIndex, groupEpoch, publicKey, partialPublicKey2, disqualifiedNodes);
         vm.prank(node2);
         controller.commitDkg(params);
 
         // Succesful Commit: Node 3
-        params = Controller.CommitDkgParams(groupIndex, groupEpoch, publicKey, partialPublicKey3, disqualifiedNodes);
+        params = IController.CommitDkgParams(groupIndex, groupEpoch, publicKey, partialPublicKey3, disqualifiedNodes);
         vm.prank(node3);
         controller.commitDkg(params);
 
         // Succesful Commit: Node 4
-        params = Controller.CommitDkgParams(groupIndex, groupEpoch, publicKey, partialPublicKey4, disqualifiedNodes);
+        params = IController.CommitDkgParams(groupIndex, groupEpoch, publicKey, partialPublicKey4, disqualifiedNodes);
         vm.prank(node4);
         controller.commitDkg(params);
 
         // Succesful Commit: Node 5
-        params = Controller.CommitDkgParams(groupIndex, groupEpoch, publicKey, partialPublicKey5, disqualifiedNodes);
+        params = IController.CommitDkgParams(groupIndex, groupEpoch, publicKey, partialPublicKey5, disqualifiedNodes);
         vm.prank(node5);
         controller.commitDkg(params);
     }
 
     function printGroupInfo(uint256 groupIndex) public {
-        Controller.Group memory g = controller.getGroup(groupIndex);
+        IController.Group memory g = controller.getGroup(groupIndex);
 
-        uint256 groupCount = controller.groupCount();
+        uint256 groupCount = controller.getGroupCount();
         emit log("--------------------");
         emit log_named_uint("printing group info for: groupIndex", groupIndex);
         emit log("--------------------");
