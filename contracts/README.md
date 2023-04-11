@@ -33,4 +33,5 @@ alias fc="forge coverage --report lcov"
 ## Scenario Testing Notes
 
 [DKGScenarioTests.md](./DKGScenarioTests.md): DKG Scenarios
+
 [ExtendedScenarioTests.md](./ExtendedScenarioTests.md): Rebalancing and Grouping Scenarios
