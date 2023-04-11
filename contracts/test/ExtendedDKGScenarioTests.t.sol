@@ -163,8 +163,16 @@ contract ExtendedDKGScenarioTest is RandcastTestHelper {
     // * Extended Scenario Tests Begin (Rebalancing, Regrouping, Various Edgecases etc..)
     // * ////////////////////////////////////////////////////////////////////////////////
 
-    // * Regroup remaining nodes after nodeQuit: (5 -> 4)
+    //  Regroup remaining nodes after nodeQuit: (5 -> 4)
     function test5NodeQuit() public {
+        /*
+        group_0: 5 members
+        1 member of group_0 wants to exit the network
+        Then, controller will let 4 members left in group_0 do dkg as 4 > 3 which is the threshold
+        i.e. the group still meet the grouping condition
+        after that, in happy path group_0 will be functional with 4 members.
+        */
+
         // register nodes 1-5 using registerHelper()
         assertEq(controller.getGroup(0).epoch, 0);
         registerIndex(1);
@@ -211,8 +219,16 @@ contract ExtendedDKGScenarioTest is RandcastTestHelper {
         printGroupInfo(0);
     }
 
-    // //* Rebalance two groups after nodeQuit results in group falling below threshold (5,3) -> (3,4)
+    //  Rebalance two groups after nodeQuit results in group falling below threshold (5,3) -> (3,4)
     function test53NodeQuit() public {
+        /*
+        group_0: 5 members
+        group_1: 3 members
+        1 member of group_1 wants to exist the network.
+        Then, controller will let group_1 which has 2 remaining members rebalance with group_0.
+        Result: group_0 (3 members), group_1 (4 members) are both functional.
+        */
+
         // * Register and group 5 nodes to group_0
         assertEq(controller.getGroup(0).epoch, 0);
         registerIndex(1);
@@ -352,12 +368,22 @@ contract ExtendedDKGScenarioTest is RandcastTestHelper {
         assertEq(checkIsStrictlyMajorityConsensusReached(0), true);
         assertEq(checkIsStrictlyMajorityConsensusReached(1), true);
 
-        printGroupInfo(0);
-        printGroupInfo(1);
+        // printGroupInfo(0);
+        // printGroupInfo(1);
     }
 
     // * For the following tests we focus on Rebalancing logic rather than CommitDKG() details
+
+    // [6,6] -> nodeRegister -> [3,6,4]
     function test66NodeRegister() public {
+        /*
+        group_0: 6 members
+        group_1: 6 members
+        A new node calls nodeRegister.
+        Controller should create a new group (group_2), add the new node into group_2, and then rebalance between group_0 and group_2.
+        Final network status should be [3,6,4]
+        */
+
         // Setup group_0 and group_1 so that they have 6 grouped nodes each
         registerIndex(1);
         registerIndex(2);
@@ -372,55 +398,373 @@ contract ExtendedDKGScenarioTest is RandcastTestHelper {
         registerIndex(11);
         registerIndex(12);
 
-        // group up group0 (6,4,5,8,9,11)
-        bytes memory err;
-        Params[] memory params = new Params[](6);
-        params[0] = Params(node6, false, err, 0, 8, publicKey, DKGPubkey6, new address[](0));
-        params[1] = Params(node4, false, err, 0, 8, publicKey, DKGPubkey4, new address[](0));
-        params[2] = Params(node5, false, err, 0, 8, publicKey, DKGPubkey5, new address[](0));
-        params[3] = Params(node8, false, err, 0, 8, publicKey, DKGPubkey8, new address[](0));
-        params[4] = Params(node9, false, err, 0, 8, publicKey, DKGPubkey9, new address[](0));
-        params[5] = Params(node11, false, err, 0, 8, publicKey, DKGPubkey11, new address[](0));
-        dkgHelper(params);
+        assertEq(controller.getGroup(0).size, 6);
+        assertEq(controller.getGroup(1).size, 6);
 
-        // group up group1 (1,2,3,7,10,12)
-        params = new Params[](6);
-        params[0] = Params(node1, false, err, 1, 3, publicKey, DKGPubkey1, new address[](0));
-        params[1] = Params(node2, false, err, 1, 3, publicKey, DKGPubkey2, new address[](0));
-        params[2] = Params(node3, false, err, 1, 3, publicKey, DKGPubkey3, new address[](0));
-        params[3] = Params(node7, false, err, 1, 3, publicKey, DKGPubkey7, new address[](0));
-        params[4] = Params(node10, false, err, 1, 3, publicKey, DKGPubkey10, new address[](0));
-        params[5] = Params(node12, false, err, 1, 3, publicKey, DKGPubkey12, new address[](0));
-        dkgHelper(params);
-
+        assertEq(controller.getGroup(0).epoch, 8);
+        assertEq(controller.getGroup(1).epoch, 3);
+        // Current state: group_0 (6,4,5,8,9,11), group_1 (7,1,3,2,10,12)
         // printGroupInfo(0);
         // printGroupInfo(1);
 
         // New node calls node register.
         registerIndex(13);
 
-        printGroupInfo(0);
-        printGroupInfo(1);
-        printGroupInfo(2);
+        assertEq(controller.getGroup(0).size, 3);
+        assertEq(controller.getGroup(1).size, 6);
+        assertEq(controller.getGroup(2).size, 4);
 
-        // ! Rebalanced to 3,4,6, but only group_1 functional.
+        assertEq(controller.getGroup(0).epoch, 9); // g.epoch++
+        assertEq(controller.getGroup(1).epoch, 3); // no change
+        assertEq(controller.getGroup(2).epoch, 1); // g.epoch++
 
-        // Todo: Make a group info printer that prints all groups that contain nodes, showing which nodes are in each group and their group status.
+        // Final State: group_0 (11,8,9), group_1 (7,1,3,2,10,12), group_2 (13,6,5,4))
+
+        // printGroupInfo(0);
+        // printGroupInfo(1);
+        // printGroupInfo(2);
     }
 
+    // [3,3] -> nodeRegister -> [3,3,1]
     function test33NodeRegister() public {
-        // Setup group_0 and group_1 so that they have 6 grouped nodes each
+        /*
+        group_0: 3 members
+        group_1: 3 members
+        A new node calls nodeRegister
+        Controller should create a new group_2, add the new node into group_2, then try to rebalance. 
+        Final network status should be (3,3,1) with group_2 not yet functional.
+        */
+
+        // Setup group_0 and group_1 so that they have 3 grouped nodes each.
+        // register and group 3 nodes (1,2,3)
         registerIndex(1);
         registerIndex(2);
         registerIndex(3);
-        // * commit dkg with 1-3 (group_0)
+        assertEq(controller.getGroup(0).epoch, 1);
 
+        bytes memory err;
+        Params[] memory params = new Params[](3);
+        params[0] = Params(node1, false, err, 0, 1, publicKey, partialPublicKey1, new address[](0));
+        params[1] = Params(node2, false, err, 0, 1, publicKey, partialPublicKey2, new address[](0));
+        params[2] = Params(node3, false, err, 0, 1, publicKey, partialPublicKey3, new address[](0));
+        dkgHelper(params);
+
+        // register and group 3 nodes (4,5,6)
         registerIndex(4);
-        // * group_1
         registerIndex(5);
         registerIndex(6);
-        // * commit dkg here.
+        assertEq(controller.getGroup(1).epoch, 1);
 
-        // ! how do I get the nodes into a (3,3) configuration???
+        params = new Params[](3);
+        params[0] = Params(node4, false, err, 1, 1, publicKey, partialPublicKey4, new address[](0));
+        params[1] = Params(node5, false, err, 1, 1, publicKey, partialPublicKey5, new address[](0));
+        params[2] = Params(node6, false, err, 1, 1, publicKey, partialPublicKey6, new address[](0));
+        dkgHelper(params);
+
+        // current state: group_0 (1,2,3), group_1 (4,5,6)
+
+        // New node calls node register.
+        registerIndex(7);
+
+        // node added to new group 2. Group 0 and 1 remain functional, group 2 not yet funcional
+        assertEq(controller.getGroup(2).size, 1);
+        assertEq(checkIsStrictlyMajorityConsensusReached(0), true);
+        assertEq(checkIsStrictlyMajorityConsensusReached(1), true);
+        assertEq(checkIsStrictlyMajorityConsensusReached(2), false);
+
+        // Final State: group_0 (1,2,3), group_1 (4,5,6), group_2 (7)
+        // Group 2 is not yet functional, but it is created. Group 0 and 1 are functional.
+
+        printGroupInfo(0);
+        printGroupInfo(1);
+        printGroupInfo(2);
+    }
+
+    // Ideal number of groups of size 3 -> new nodeRegister()
+    // [3,3,3,3,3] -> nodeRegister -> [3,3,3,3,4]
+    function test33333NodeRegister() public {
+        /*
+        (5 groups) group 0-4 have 3 members each [3,3,3,3,3]
+        A new node calls nodeRegister
+        Controller should add new node into group_0 resulting in network state [4,3,3,3,3].
+        */
+
+        // Setup groups 0,1,2,3,4 so that they have 3 grouped nodes each.
+        // group_0: register and group 3 nodes (1,2,3)
+        registerIndex(1);
+        registerIndex(2);
+        registerIndex(3);
+        assertEq(controller.getGroup(0).epoch, 1);
+        bytes memory err;
+        Params[] memory params = new Params[](3);
+        params[0] = Params(node1, false, err, 0, 1, publicKey, partialPublicKey1, new address[](0));
+        params[1] = Params(node2, false, err, 0, 1, publicKey, partialPublicKey2, new address[](0));
+        params[2] = Params(node3, false, err, 0, 1, publicKey, partialPublicKey3, new address[](0));
+        dkgHelper(params);
+
+        // group_1: register and group 3 nodes (4,5,6)
+        registerIndex(4);
+        registerIndex(5);
+        registerIndex(6);
+        assertEq(controller.getGroup(1).epoch, 1);
+        params = new Params[](3);
+        params[0] = Params(node4, false, err, 1, 1, publicKey, partialPublicKey4, new address[](0));
+        params[1] = Params(node5, false, err, 1, 1, publicKey, partialPublicKey5, new address[](0));
+        params[2] = Params(node6, false, err, 1, 1, publicKey, partialPublicKey6, new address[](0));
+        dkgHelper(params);
+
+        // group_2: register and group 3 nodes (7,8,9)
+        registerIndex(7);
+        registerIndex(8);
+        registerIndex(9);
+        assertEq(controller.getGroup(2).epoch, 1);
+        params = new Params[](3);
+        params[0] = Params(node7, false, err, 2, 1, publicKey, partialPublicKey7, new address[](0));
+        params[1] = Params(node8, false, err, 2, 1, publicKey, partialPublicKey8, new address[](0));
+        params[2] = Params(node9, false, err, 2, 1, publicKey, partialPublicKey9, new address[](0));
+        dkgHelper(params);
+
+        // group_3: register and group 3 nodes (10,11,12)
+        registerIndex(10);
+        registerIndex(11);
+        registerIndex(12);
+        assertEq(controller.getGroup(3).epoch, 1);
+        params = new Params[](3);
+        params[0] = Params(node10, false, err, 3, 1, publicKey, partialPublicKey10, new address[](0));
+        params[1] = Params(node11, false, err, 3, 1, publicKey, partialPublicKey11, new address[](0));
+        params[2] = Params(node12, false, err, 3, 1, publicKey, partialPublicKey12, new address[](0));
+        dkgHelper(params);
+
+        // group_4: register and group 3 nodes (13,14,15)
+        registerIndex(13);
+        registerIndex(14);
+        registerIndex(15);
+        assertEq(controller.getGroup(4).epoch, 1);
+        params = new Params[](3);
+        params[0] = Params(node13, false, err, 4, 1, publicKey, partialPublicKey13, new address[](0));
+        params[1] = Params(node14, false, err, 4, 1, publicKey, partialPublicKey14, new address[](0));
+        params[2] = Params(node15, false, err, 4, 1, publicKey, partialPublicKey15, new address[](0));
+        dkgHelper(params);
+
+        // current state: group_0 (1,2,3), group_1 (4,5,6), group_2 (7,8,9), group_3 (10,11,12), group_4 (13,14,15)
+        assertEq(controller.getGroup(0).size, 3);
+        assertEq(controller.getGroup(1).size, 3);
+        assertEq(controller.getGroup(2).size, 3);
+        assertEq(controller.getGroup(3).size, 3);
+        assertEq(controller.getGroup(4).size, 3);
+        assertEq(checkIsStrictlyMajorityConsensusReached(0), true);
+        assertEq(checkIsStrictlyMajorityConsensusReached(1), true);
+        assertEq(checkIsStrictlyMajorityConsensusReached(2), true);
+        assertEq(checkIsStrictlyMajorityConsensusReached(3), true);
+        assertEq(checkIsStrictlyMajorityConsensusReached(4), true);
+
+        // New node calls node register: It gets added to group_0, new event is emitted
+        registerIndex(16);
+        assertEq(controller.getGroup(0).size, 4);
+        assertEq(checkIsStrictlyMajorityConsensusReached(0), false);
+        assertEq(controller.getGroup(0).epoch, 2);
+
+        // Final State: [3,3,3,3,4]
+        // group_0 (1,2,3,16), group_1 (4,5,6), group_2 (7,8,9), group_3 (10,11,12), group_4 (13,14,15)
+        // group_0 nonfunctiona, waiting to be grouped by commitDKG. Remaining groups are functional
+
+        // printGroupInfo(0);
+        // printGroupInfo(1);
+        // printGroupInfo(2);
+        // printGroupInfo(3);
+        // printGroupInfo(4);
+    }
+
+    // ideal number of groups at max capacity -> nodeQuit()
+    // [6,6,6,6,6] -> nodeRegister -> [3,6,6,6,6,4]]
+    function test66666NodeRegister() public {
+        /*
+        (5 groups) group 0-4 have 6 members each [6,6,6,6,6]
+        A new node calls node register.
+        Controller should create a new group (group_5), add the new node to group_5, and then rebalance between group_0 and group_5.
+        Resulting network state should be [3,6,6,6,6,4]
+        */
+
+        // setup groups 0,1,2,3,4,5 so that they have 6 nodes each
+        registerIndex(1);
+        registerIndex(2);
+        registerIndex(3);
+        registerIndex(4);
+        registerIndex(5);
+        registerIndex(6);
+        registerIndex(7);
+        registerIndex(8);
+        registerIndex(9);
+        registerIndex(10);
+        registerIndex(11);
+        registerIndex(12);
+        registerIndex(13);
+        registerIndex(14);
+        registerIndex(15);
+        registerIndex(16);
+        registerIndex(17);
+        registerIndex(18);
+        registerIndex(19);
+        registerIndex(20);
+        registerIndex(21);
+        registerIndex(22);
+        registerIndex(23);
+        registerIndex(24);
+        registerIndex(25);
+        registerIndex(26);
+        registerIndex(27);
+        registerIndex(28);
+        registerIndex(29);
+        registerIndex(30);
+
+        // Epochs after registering 30 nodes
+        assertEq(controller.getGroup(0).epoch, 20);
+        assertEq(controller.getGroup(1).epoch, 3);
+        assertEq(controller.getGroup(2).epoch, 3);
+        assertEq(controller.getGroup(3).epoch, 3);
+        assertEq(controller.getGroup(4).epoch, 3);
+
+        // All groups of size 6
+        assertEq(controller.getGroup(0).size, 6);
+        assertEq(controller.getGroup(1).size, 6);
+        assertEq(controller.getGroup(2).size, 6);
+        assertEq(controller.getGroup(3).size, 6);
+        assertEq(controller.getGroup(4).size, 6);
+
+        // A new node calls node register
+        // Controller creates new group_5, adds the new node to it,
+        // and then rebalances between group_0 and group_5 (3,6,6,6,6,4)
+        registerIndex(31);
+        assertEq(controller.getGroup(0).size, 3);
+        assertEq(controller.getGroup(1).size, 6);
+        assertEq(controller.getGroup(2).size, 6);
+        assertEq(controller.getGroup(3).size, 6);
+        assertEq(controller.getGroup(4).size, 6);
+        assertEq(controller.getGroup(5).size, 4);
+
+        // grouping events emitted for group_0 and group_5
+        assertEq(controller.getGroup(0).epoch, 21); //g.epoch++
+        assertEq(controller.getGroup(5).epoch, 1); //g.epoch++
+
+        // final state: [3,6,6,6,6,4]
+
+        // printGroupInfo(0);
+        // printGroupInfo(1);
+        // printGroupInfo(2);
+        // printGroupInfo(3);
+        // printGroupInfo(4);
+        // printGroupInfo(5);
+    }
+
+    // [6,3] -> group_1 nodeQuit -> [4,4]
+    function test63Group1NodeQuit() public {
+        /*
+
+        */
+
+        // Register 12 nodes
+        registerIndex(1);
+        registerIndex(2);
+        registerIndex(3);
+        registerIndex(4);
+        registerIndex(5);
+        registerIndex(6);
+        registerIndex(7);
+        registerIndex(8);
+        registerIndex(9);
+        registerIndex(10);
+        registerIndex(11);
+        registerIndex(12);
+
+        // Current state: group_0 (6,4,5,8,9,11), group_1 (7,1,3,2,10,12)
+        assertEq(controller.getGroup(0).size, 6);
+        assertEq(controller.getGroup(1).size, 6);
+        assertEq(controller.getGroup(0).epoch, 8);
+        assertEq(controller.getGroup(1).epoch, 3);
+
+        // Reduce group_1 size to 3
+        vm.prank(node12);
+        controller.nodeQuit();
+        assertEq(controller.getGroup(1).epoch, 4); //g.epoch++
+        vm.prank(node10);
+        controller.nodeQuit();
+        assertEq(controller.getGroup(1).epoch, 5); //g.epoch++
+        vm.prank(node2);
+        controller.nodeQuit();
+        assertEq(controller.getGroup(1).epoch, 6); //g.epoch++
+        // size [6,3] reached
+        // current state: group_0 (6,4,5,8,9,11), group_1 (7,1,3)
+
+        // node3 from group_1 calls nodeQuit
+        // controller rebalances between group_0 and group_1 resulting in [4,4]
+        vm.prank(node3);
+        controller.nodeQuit();
+        assertEq(controller.getGroup(0).size, 4);
+        assertEq(controller.getGroup(1).size, 4);
+        assertEq(controller.getGroup(0).epoch, 9); //g.epoch++
+        assertEq(controller.getGroup(1).epoch, 7); //g.epoch++
+
+        // final state: [4,4]
+        // group_0 (11,4,9,8), group_1 (7,1,6,5)
+
+        printGroupInfo(0);
+        printGroupInfo(1);
+    }
+
+    function test63Group0NodeQuit() public {
+        /*
+        group_0: 6 members
+        group_1: 3 members
+        member in group_0 calls nodeQuit.
+        Then, the controller should emitDkgEvent for group_0 with the 5 remaining remmbers.
+        Resulting network state should be [5,3]
+        */
+
+        // Register 12 nodes
+        registerIndex(1);
+        registerIndex(2);
+        registerIndex(3);
+        registerIndex(4);
+        registerIndex(5);
+        registerIndex(6);
+        registerIndex(7);
+        registerIndex(8);
+        registerIndex(9);
+        registerIndex(10);
+        registerIndex(11);
+        registerIndex(12);
+
+        // Current state: group_0 (6,4,5,8,9,11), group_1 (7,1,3,2,10,12)
+        assertEq(controller.getGroup(0).size, 6);
+        assertEq(controller.getGroup(1).size, 6);
+        assertEq(controller.getGroup(0).epoch, 8);
+        assertEq(controller.getGroup(1).epoch, 3);
+
+        // Reduce group_1 size to 3
+        vm.prank(node12);
+        controller.nodeQuit();
+        assertEq(controller.getGroup(1).epoch, 4); //g.epoch++
+        vm.prank(node10);
+        controller.nodeQuit();
+        assertEq(controller.getGroup(1).epoch, 5); //g.epoch++
+        vm.prank(node2);
+        controller.nodeQuit();
+        assertEq(controller.getGroup(1).epoch, 6); //g.epoch++
+        // size [6,3] reached
+        // current state: group_0 (6,4,5,8,9,11), group_1 (7,1,3)
+
+        // node11 from group_0 calls nodeQuit
+        vm.prank(node11);
+        controller.nodeQuit();
+        assertEq(controller.getGroup(0).size, 5);
+        assertEq(controller.getGroup(1).size, 3);
+        assertEq(controller.getGroup(0).epoch, 9); // g.epoch++
+        assertEq(controller.getGroup(1).epoch, 6); // no change
+
+        // final state: [5,3]
+        // group_0 (6,4,5,8,9), group_1 (7,1,3)
+
+        printGroupInfo(0);
+        printGroupInfo(1);
     }
 }

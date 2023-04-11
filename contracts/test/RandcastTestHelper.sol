@@ -419,9 +419,9 @@ abstract contract RandcastTestHelper is Test {
         Controller.Group memory g = controller.getGroup(groupIndex);
 
         uint256 groupCount = controller.groupCount();
-        emit log("--------------------");
+        emit log("----------------------------------------");
         emit log_named_uint("printing group info for: groupIndex", groupIndex);
-        emit log("--------------------");
+        emit log("----------------------------------------");
         emit log_named_uint("Total groupCount", groupCount);
         emit log_named_uint("g.index", g.index);
         emit log_named_uint("g.epoch", g.epoch);
@@ -493,9 +493,9 @@ abstract contract RandcastTestHelper is Test {
     function printNodeInfo(address nodeAddress) public {
         // print node address
         emit log("\n");
-        emit log("--------------------");
+        emit log("----------------------------------------");
         emit log_named_address("printing info for node", nodeAddress);
-        emit log("--------------------");
+        emit log("----------------------------------------");
 
         Controller.Node memory node = controller.getNode(nodeAddress);
 
