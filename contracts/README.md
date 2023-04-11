@@ -24,6 +24,8 @@ forge coverage --report lcov
 
 ## Useful forge shell aliases
 
+```bash
 alias fw="forge test --watch --run-all"
 alias ft="forge test --watch -vvv --match-test"
 alias fc="forge coverage --report lcov"
+```
