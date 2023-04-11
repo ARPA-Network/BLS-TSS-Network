@@ -53,11 +53,16 @@ contract ControllerTest is RandcastTestHelper {
     }
 
     function testNodeRegister() public {
-        // printNodeInfo(node1);
+        // Fail on bad dkg public key
+        vm.expectRevert(abi.encodeWithSelector(Adapter.InvalidPublicKey.selector));
+        vm.prank(node1);
+        controller.nodeRegister(badKey);
+
+        // Register node 1
         vm.prank(node1);
         controller.nodeRegister(DKGPubkey1);
-        // printNodeInfo(node1);
 
+        // Assert node1 state is correct
         Controller.Node memory n = controller.getNode(node1);
         assertEq(n.idAddress, node1);
         assertEq(n.dkgPublicKey, DKGPubkey1);
@@ -65,6 +70,7 @@ contract ControllerTest is RandcastTestHelper {
         assertEq(n.pendingUntilBlock, 0);
         assertEq(n.staking, 50000);
 
+        // fail on already registered
         vm.expectRevert("Node is already registered");
         vm.prank(node1);
         controller.nodeRegister(DKGPubkey1);
