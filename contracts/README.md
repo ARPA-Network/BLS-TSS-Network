@@ -29,3 +29,10 @@ alias fw="forge test --watch --run-all"
 alias ft="forge test --watch -vvv --match-test"
 alias fc="forge coverage --report lcov"
 ```
+
+## Scenario Testing Notes
+
+```bash
+[DKGScenarioTests.md](./DKGScenarioTests.md): DKG Scenarios
+[ExtendedScenarioTests.md](./ExtendedScenarioTests.md): Rebalancing and Grouping Scenarios
+```
