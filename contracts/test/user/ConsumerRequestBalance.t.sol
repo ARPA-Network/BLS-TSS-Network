@@ -13,33 +13,70 @@ contract ConsumerRequestBalanceTest is RandcastTestHelper {
     RollDiceExample rollDiceExample;
     AdvancedGetShuffledArrayExample advancedGetShuffledArrayExample;
 
+    uint256 disqualifiedNodePenaltyAmount = 1000;
+    uint256 defaultNumberOfCommitters = 3;
+    uint256 defaultDkgPhaseDuration = 10;
+    uint256 groupMaxCapacity = 10;
+    uint256 idealNumberOfGroups = 5;
+    uint256 pendingBlockAfterQuit = 100;
+    uint256 dkgPostProcessReward = 100;
+    uint256 last_output = 2222222222222222;
+
+    uint16 minimumRequestConfirmations = 3;
+    uint32 maxGasLimit = 2000000;
+    uint32 stalenessSeconds = 30;
+    uint32 gasAfterPaymentCalculation = 80000;
+    // TODO this is not confirmed
+    uint32 gasExceptCallback = 575000;
+    int256 fallbackWeiPerUnitArpa = 1e12;
+    uint256 signatureTaskExclusiveWindow = 10;
+    uint256 rewardPerSignature = 50;
+    uint256 committerRewardPerSignature = 100;
+
     function setUp() public {
         skip(1000);
-        changePrank(admin);
+        vm.prank(admin);
         arpa = new ERC20("arpa token", "ARPA");
+        vm.prank(admin);
         oracle = new MockArpaEthOracle();
-        controller = new Controller(address(arpa), address(oracle));
+
+        address[] memory operators = new address[](5);
+        operators[0] = node1;
+        operators[1] = node2;
+        operators[2] = node3;
+        operators[3] = node4;
+        operators[4] = node5;
+        prepareStakingContract(stakingDeployer, address(arpa), operators);
+
+        vm.prank(admin);
+        controller = new ControllerForTest(address(arpa), last_output);
+
+        vm.prank(admin);
+        adapter = new Adapter(address(controller), address(arpa), address(oracle));
+
+        vm.prank(user);
         getRandomNumberExample = new GetRandomNumberExample(
-            address(controller)
-        );
-        rollDiceExample = new RollDiceExample(address(controller));
-        getShuffledArrayExample = new GetShuffledArrayExample(
-            address(controller)
-        );
-        advancedGetShuffledArrayExample = new AdvancedGetShuffledArrayExample(
-            address(controller)
+            address(adapter)
         );
 
-        uint256 nodeStakingAmount = 50000;
-        uint256 disqualifiedNodePenaltyAmount = 1000;
-        uint256 defaultNumberOfCommitters = 3;
-        uint256 defaultDkgPhaseDuration = 10;
-        uint256 groupMaxCapacity = 10;
-        uint256 idealNumberOfGroups = 5;
-        uint256 pendingBlockAfterQuit = 100;
-        uint256 dkgPostProcessReward = 100;
+        vm.prank(user);
+        rollDiceExample = new RollDiceExample(address(adapter));
+
+        vm.prank(user);
+        getShuffledArrayExample = new GetShuffledArrayExample(
+            address(adapter)
+        );
+
+        vm.prank(user);
+        advancedGetShuffledArrayExample = new AdvancedGetShuffledArrayExample(
+            address(adapter)
+        );
+
+        vm.prank(admin);
         controller.setControllerConfig(
-            nodeStakingAmount,
+            address(staking),
+            address(adapter),
+            operatorStakeAmount,
             disqualifiedNodePenaltyAmount,
             defaultNumberOfCommitters,
             defaultDkgPhaseDuration,
@@ -49,16 +86,8 @@ contract ConsumerRequestBalanceTest is RandcastTestHelper {
             dkgPostProcessReward
         );
 
-        uint16 minimumRequestConfirmations = 3;
-        uint32 maxGasLimit = 2000000;
-        uint32 stalenessSeconds = 30;
-        uint32 gasAfterPaymentCalculation = 30000;
-        uint32 gasExceptCallback = 357030;
-        int256 fallbackWeiPerUnitArpa = 1e12;
-        uint256 signatureTaskExclusiveWindow = 10;
-        uint256 rewardPerSignature = 50;
-        uint256 committerRewardPerSignature = 100;
-        controller.setAdapterConfig(
+        vm.prank(admin);
+        adapter.setAdapterConfig(
             minimumRequestConfirmations,
             maxGasLimit,
             stalenessSeconds,
@@ -68,15 +97,18 @@ contract ConsumerRequestBalanceTest is RandcastTestHelper {
             signatureTaskExclusiveWindow,
             rewardPerSignature,
             committerRewardPerSignature,
-            Adapter.FeeConfig(250000, 250000, 250000, 250000, 250000, 0, 0, 0, 0)
+            IAdapterOwner.FeeConfig(250000, 250000, 250000, 250000, 250000, 0, 0, 0, 0)
         );
+
+        vm.prank(stakingDeployer);
+        staking.setController(address(controller));
 
         prepareAnAvailableGroup();
     }
 
-    function testControllerAddress() public {
-        emit log_address(address(controller));
-        assertEq(rollDiceExample.controller(), address(controller));
+    function testAdapterAddress() public {
+        emit log_address(address(adapter));
+        assertEq(rollDiceExample.adapter(), address(adapter));
     }
 
     function testCannotRequestWithoutSubscription() public {
@@ -94,7 +126,6 @@ contract ConsumerRequestBalanceTest is RandcastTestHelper {
 
         uint96 fewArpaBalance = 1 * 1e18;
         deal(address(arpa), address(user), fewArpaBalance);
-        arpa.approve(address(controller), fewArpaBalance);
         prepareSubscription(address(rollDiceExample), fewArpaBalance);
 
         uint32 bunch = 10;
@@ -111,18 +142,17 @@ contract ConsumerRequestBalanceTest is RandcastTestHelper {
         //     weiPerUnitGas *
         //     (gasExceptCallback + callbackGasUsed) /
         //     uint256(weiPerUnitArpa);
-        // callbackGasUsed = 501766 gas
+        // callbackGasUsed = 501728 gas
         // WeiPerUnitArpa = 1e12 wei/arpa
         // weiPerUnitGas = 1e9 wei/gas
-        // gasExceptCallback  = 390000 gas
+        // TODO gasExceptCallback  = 575000 gas
         // flat fee = 250000 1e12 arpa wei
         // Actual: 904212000000000000000
-        // Expected: 892016000000000000000
-        uint256 expectedPayment = (1e18 * 1e9 * (390000 + 501766)) / 1e12 + 250000 * 1e12;
+        // Expected: 891728000000000000000
+        uint256 expectedPayment = (1e18 * 1e9 * (575000 + 501728)) / 1e12 + 250000 * 1e12;
 
         uint96 plentyOfArpaBalance = 1e6 * 1e18;
         deal(address(arpa), address(user), plentyOfArpaBalance);
-        arpa.approve(address(controller), plentyOfArpaBalance);
         uint64 subId = prepareSubscription(address(rollDiceExample), plentyOfArpaBalance);
 
         uint32 bunch = 10;
@@ -134,6 +164,7 @@ contract ConsumerRequestBalanceTest is RandcastTestHelper {
 
         changePrank(user);
         (uint96 afterBalance, uint96 inflightCost) = getBalance(subId);
+
         // the upper limit of delta is 5%
         // maxPercentDelta is an 18 decimal fixed point number, where 1e18 == 100%
         assertApproxEqRel(plentyOfArpaBalance - afterBalance, expectedPayment, 1e18 / 20);
@@ -151,10 +182,9 @@ contract ConsumerRequestBalanceTest is RandcastTestHelper {
         changePrank(user);
 
         // give the balance just enough for one request
-        // give more than 3 times actual payment(892016000000000000000) since we estimate 3 times max gas fee
-        uint96 someArpaBalance = 1e3 * 3 * 1e18;
+        // give more than 3 times actual payment(1076242000000000000000) since we estimate 3 times max gas fee(3320434000000000000000)
+        uint96 someArpaBalance = 1150 * 3 * 1e18;
         deal(address(arpa), address(user), someArpaBalance);
-        arpa.approve(address(controller), someArpaBalance);
         prepareSubscription(address(rollDiceExample), someArpaBalance);
         uint32 bunch = 10;
         rollDiceExample.rollDice(bunch);
@@ -170,7 +200,6 @@ contract ConsumerRequestBalanceTest is RandcastTestHelper {
 
         uint96 plentyOfArpaBalance = 1e6 * 1e18;
         deal(address(arpa), address(user), plentyOfArpaBalance);
-        arpa.approve(address(controller), plentyOfArpaBalance);
         uint64 subId = prepareSubscription(address(advancedGetShuffledArrayExample), plentyOfArpaBalance);
 
         uint32 upper = 10;
@@ -208,7 +237,6 @@ contract ConsumerRequestBalanceTest is RandcastTestHelper {
 
         uint96 plentyOfArpaBalance = 1e6 * 1e18;
         deal(address(arpa), address(user), plentyOfArpaBalance);
-        arpa.approve(address(controller), plentyOfArpaBalance);
         uint64 subId = prepareSubscription(address(advancedGetShuffledArrayExample), plentyOfArpaBalance);
 
         uint32 upper = 10;

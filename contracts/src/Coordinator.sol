@@ -127,13 +127,12 @@ contract Coordinator is Ownable {
 
     /// Returns the current phase of the DKG.
     function inPhase() public view returns (int8) {
+        // Phase 0 for after deployment before initialization.
         if (startBlock == 0) {
             return 0;
         }
 
         uint256 blocksSinceStart = block.number - startBlock;
-
-        // ! Phase 0 for after deployment before initialization.
 
         if (blocksSinceStart <= PHASE_DURATION) {
             return 1; // share
@@ -150,9 +149,7 @@ contract Coordinator is Ownable {
             return 4; // Commit DKG: Handled in controller
         }
 
-        // ! commit_dkg Phase 4
-
-        // revert("DKG Ended");
+        // DKG Ended, commit_dkg should be called before this
         return -1;
     }
 

@@ -5,3 +5,6 @@
 [submodule "contracts/lib/openzeppelin-contracts"]
 	path = contracts/lib/openzeppelin-contracts
 	url = https://github.com/OpenZeppelin/openzeppelin-contracts
+[submodule "contracts/lib/Staking-v0.1"]
+	path = contracts/lib/Staking-v0.1
+	url = https://github.com/ARPA-Network/Staking-v0.1

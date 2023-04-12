@@ -9,7 +9,6 @@ contract AdapterTest is RandcastTestHelper {
     GetRandomNumberExample getRandomNumberExample;
     uint64 subId;
 
-    uint256 nodeStakingAmount = 50000;
     uint256 disqualifiedNodePenaltyAmount = 1000;
     uint256 defaultNumberOfCommitters = 3;
     uint256 defaultDkgPhaseDuration = 10;
@@ -17,6 +16,7 @@ contract AdapterTest is RandcastTestHelper {
     uint256 idealNumberOfGroups = 5;
     uint256 pendingBlockAfterQuit = 100;
     uint256 dkgPostProcessReward = 100;
+    uint256 last_output = 2222222222222222;
 
     uint16 minimumRequestConfirmations = 3;
     uint32 maxGasLimit = 2000000;
@@ -43,16 +43,35 @@ contract AdapterTest is RandcastTestHelper {
     function setUp() public {
         skip(1000);
 
-        changePrank(admin);
+        vm.prank(admin);
         arpa = new ERC20("arpa token", "ARPA");
+        vm.prank(admin);
         oracle = new MockArpaEthOracle();
-        controller = new Controller(address(arpa), address(oracle));
+
+        address[] memory operators = new address[](5);
+        operators[0] = node1;
+        operators[1] = node2;
+        operators[2] = node3;
+        operators[3] = node4;
+        operators[4] = node5;
+        prepareStakingContract(stakingDeployer, address(arpa), operators);
+
+        vm.prank(admin);
+        controller = new ControllerForTest(address(arpa), last_output);
+
+        vm.prank(admin);
+        adapter = new Adapter(address(controller), address(arpa), address(oracle));
+
+        vm.prank(user);
         getRandomNumberExample = new GetRandomNumberExample(
-            address(controller)
+            address(adapter)
         );
 
+        vm.prank(admin);
         controller.setControllerConfig(
-            nodeStakingAmount,
+            address(staking),
+            address(adapter),
+            operatorStakeAmount,
             disqualifiedNodePenaltyAmount,
             defaultNumberOfCommitters,
             defaultDkgPhaseDuration,
@@ -62,7 +81,8 @@ contract AdapterTest is RandcastTestHelper {
             dkgPostProcessReward
         );
 
-        controller.setAdapterConfig(
+        vm.prank(admin);
+        adapter.setAdapterConfig(
             minimumRequestConfirmations,
             maxGasLimit,
             stalenessSeconds,
@@ -72,7 +92,7 @@ contract AdapterTest is RandcastTestHelper {
             signatureTaskExclusiveWindow,
             rewardPerSignature,
             committerRewardPerSignature,
-            Adapter.FeeConfig(
+            IAdapterOwner.FeeConfig(
                 fulfillmentFlatFeeArpaPPMTier1,
                 fulfillmentFlatFeeArpaPPMTier2,
                 fulfillmentFlatFeeArpaPPMTier3,
@@ -85,36 +105,36 @@ contract AdapterTest is RandcastTestHelper {
             )
         );
 
-        changePrank(user);
+        vm.prank(stakingDeployer);
+        staking.setController(address(controller));
+
         deal(address(arpa), address(user), plentyOfArpaBalance);
+
+        vm.prank(user);
         arpa.approve(address(controller), 3 * plentyOfArpaBalance);
 
+        changePrank(user);
         subId = prepareSubscription(address(getRandomNumberExample), plentyOfArpaBalance);
     }
 
-    function testControllerAddress() public {
-        emit log_address(address(controller));
-        assertEq(getRandomNumberExample.controller(), address(controller));
+    function testAdapterAddress() public {
+        emit log_address(address(adapter));
+        assertEq(getRandomNumberExample.adapter(), address(adapter));
     }
 
     function testUserContractOwner() public {
         emit log_address(address(getRandomNumberExample));
-        assertEq(getRandomNumberExample.owner(), admin);
+        assertEq(getRandomNumberExample.owner(), user);
     }
 
     function testCannotRequestByEOA() public {
         vm.stopPrank();
         deal(user, 1 * 1e18);
-        vm.expectRevert(
-            abi.encodeWithSelector(
-                Adapter.InvalidRequestByEOA.selector,
-                "Please request by extending GeneralRandcastConsumerBase so that we can callback with randomness."
-            )
-        );
+        vm.expectRevert(abi.encodeWithSelector(Adapter.InvalidRequestByEOA.selector));
 
         IAdapter.RandomnessRequestParams memory p;
         vm.broadcast(user);
-        controller.requestRandomness(p);
+        adapter.requestRandomness(p);
     }
 
     function testRequestRandomness() public {
@@ -127,10 +147,10 @@ contract AdapterTest is RandcastTestHelper {
             bytes32 requestId = getRandomNumberExample.getRandomNumber();
             emit log_bytes32(requestId);
             vm.stopBroadcast();
-            (, uint96 inflightCost,,,) = controller.getSubscription(subId);
+            (, uint96 inflightCost,,,) = adapter.getSubscription(subId);
             emit log_uint(inflightCost);
 
-            uint96 payment = controller.estimatePaymentAmount(
+            uint96 payment = adapter.estimatePaymentAmount(
                 getRandomNumberExample.callbackGasLimit(),
                 gasExceptCallback,
                 fulfillmentFlatFeeArpaPPMTier1,
@@ -139,7 +159,7 @@ contract AdapterTest is RandcastTestHelper {
 
             assertEq(inflightCost, payment * (i + 1));
 
-            Controller.Callback memory callback = controller.getPendingRequest(requestId);
+            Adapter.Callback memory callback = adapter.getPendingRequest(requestId);
             bytes memory actualSeed = abi.encodePacked(callback.seed, callback.blockNum);
 
             emit log_named_bytes("actualSeed", actualSeed);
@@ -158,12 +178,16 @@ contract AdapterTest is RandcastTestHelper {
         bytes32 requestId = getRandomNumberExample.getRandomNumber();
         emit log_bytes32(requestId);
 
+        Adapter.Callback memory callback = adapter.getPendingRequest(requestId);
+        bytes memory rawSeed = abi.encodePacked(callback.seed);
+        emit log_named_bytes("rawSeed", rawSeed);
+
         vm.startBroadcast(node1);
         fulfillRequest(requestId, 0);
         vm.stopBroadcast();
 
         vm.roll(block.number + 1);
-        assertEq(getRandomNumberExample.randomnessResults(0), controller.lastOutput());
+        assertEq(getRandomNumberExample.randomnessResults(0), adapter.getLastRandomness());
         assertEq(getRandomNumberExample.lengthOfRandomnessResults(), times);
     }
 }

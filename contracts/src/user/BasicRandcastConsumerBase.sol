@@ -8,11 +8,11 @@ import "../interfaces/IAdapter.sol";
  * @notice Extends this and overrides particular fulfill callback function to use randomness safely.
  */
 abstract contract BasicRandcastConsumerBase is IRequestTypeBase {
-    address public immutable controller;
+    address public immutable adapter;
     // Nonce on the user's side(count from 1) for generating real requestId,
-    // which should be identical to the nonce on controller's side, or it will be pointless.
+    // which should be identical to the nonce on adapter's side, or it will be pointless.
     uint256 public nonce = 1;
-    // Ignore fulfilling from controller check during fee estimation.
+    // Ignore fulfilling from adapter check during fee estimation.
     bool isEstimatingCallbackGasLimit;
 
     modifier calculateCallbackGasLimit() {
@@ -21,8 +21,8 @@ abstract contract BasicRandcastConsumerBase is IRequestTypeBase {
         isEstimatingCallbackGasLimit = false;
     }
 
-    constructor(address _controller) {
-        controller = _controller;
+    constructor(address _adapter) {
+        adapter = _adapter;
     }
 
     function fulfillRandomness(bytes32 requestId, uint256 randomness) internal virtual {}
@@ -46,21 +46,21 @@ abstract contract BasicRandcastConsumerBase is IRequestTypeBase {
             requestType, params, subId, seed, requestConfirmations, callbackGasLimit, callbackMaxGasPrice
         );
 
-        return IAdapter(controller).requestRandomness(p);
+        return IAdapter(adapter).requestRandomness(p);
     }
 
     function rawFulfillRandomness(bytes32 requestId, uint256 randomness) external {
-        require(isEstimatingCallbackGasLimit || msg.sender == controller, "Only controller can fulfill");
+        require(isEstimatingCallbackGasLimit || msg.sender == adapter, "Only adapter can fulfill");
         fulfillRandomness(requestId, randomness);
     }
 
     function rawFulfillRandomWords(bytes32 requestId, uint256[] memory randomWords) external {
-        require(isEstimatingCallbackGasLimit || msg.sender == controller, "Only controller can fulfill");
+        require(isEstimatingCallbackGasLimit || msg.sender == adapter, "Only adapter can fulfill");
         fulfillRandomWords(requestId, randomWords);
     }
 
     function rawFulfillShuffledArray(bytes32 requestId, uint256[] memory shuffledArray) external {
-        require(isEstimatingCallbackGasLimit || msg.sender == controller, "Only controller can fulfill");
+        require(isEstimatingCallbackGasLimit || msg.sender == adapter, "Only adapter can fulfill");
         fulfillShuffledArray(requestId, shuffledArray);
     }
 }
