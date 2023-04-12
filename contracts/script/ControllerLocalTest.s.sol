@@ -2,8 +2,8 @@
 pragma solidity ^0.8.13;
 
 import "forge-std/Script.sol";
-import "../src/interfaces/IAdapter.sol";
 import "../src/Controller.sol";
+import "../src/Adapter.sol";
 import "./MockArpaEthOracle.sol";
 import "./ArpaLocalTest.sol";
 import "openzeppelin-contracts/contracts/token/ERC20/IERC20.sol";
@@ -20,6 +20,7 @@ contract ControllerLocalTestScript is Script {
     uint256 idealNumberOfGroups = vm.envUint("IDEAL_NUMBER_OF_GROUPS");
     uint256 pendingBlockAfterQuit = vm.envUint("PENDING_BLOCK_AFTER_QUIT");
     uint256 dkgPostProcessReward = vm.envUint("DKG_POST_PROCESS_REWARD");
+    uint256 last_output = vm.envUint("LAST_OUTPUT");
 
     uint16 minimumRequestConfirmations = uint16(vm.envUint("MINIMUM_REQUEST_CONFIRMATIONS"));
     uint32 maxGasLimit = uint32(vm.envUint("MAX_GAS_LIMIT"));
@@ -54,6 +55,7 @@ contract ControllerLocalTestScript is Script {
 
     function run() external {
         Controller controller;
+        Adapter adapter;
         Staking staking;
         MockArpaEthOracle oracle;
         IERC20 arpa;
@@ -79,11 +81,15 @@ contract ControllerLocalTestScript is Script {
         staking = new Staking(params);
 
         vm.broadcast(deployerPrivateKey);
-        controller = new Controller(address(arpa), address(oracle));
+        controller = new Controller(address(arpa), last_output);
+
+        vm.broadcast(deployerPrivateKey);
+        adapter = new Adapter(address(controller), address(arpa), address(oracle));
 
         vm.broadcast(deployerPrivateKey);
         controller.setControllerConfig(
             address(staking),
+            address(adapter),
             operatorStakeAmount,
             disqualifiedNodePenaltyAmount,
             defaultNumberOfCommitters,
@@ -95,7 +101,7 @@ contract ControllerLocalTestScript is Script {
         );
 
         vm.broadcast(deployerPrivateKey);
-        controller.setAdapterConfig(
+        adapter.setAdapterConfig(
             minimumRequestConfirmations,
             maxGasLimit,
             stalenessSeconds,
@@ -105,7 +111,7 @@ contract ControllerLocalTestScript is Script {
             signatureTaskExclusiveWindow,
             rewardPerSignature,
             committerRewardPerSignature,
-            Adapter.FeeConfig(
+            IAdapterOwner.FeeConfig(
                 fulfillmentFlatFeeArpaPPMTier1,
                 fulfillmentFlatFeeArpaPPMTier2,
                 fulfillmentFlatFeeArpaPPMTier3,

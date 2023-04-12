@@ -17,6 +17,7 @@ contract ControllerTest is RandcastTestHelper {
     uint256 idealNumberOfGroups = 5;
     uint256 pendingBlockAfterQuit = 100;
     uint256 dkgPostProcessReward = 100;
+    uint64 lastOutput = 0x2222222222222222;
 
     address public owner = admin;
 
@@ -27,9 +28,17 @@ contract ControllerTest is RandcastTestHelper {
         vm.deal(node3, 1 * 10 ** 18);
         vm.deal(node4, 1 * 10 ** 18);
         vm.deal(node5, 1 * 10 ** 18);
+        vm.deal(node6, 1 * 10 ** 18);
+        vm.deal(node7, 1 * 10 ** 18);
+        vm.deal(node8, 1 * 10 ** 18);
+        vm.deal(node9, 1 * 10 ** 18);
+        vm.deal(node10, 1 * 10 ** 18);
+        vm.deal(node11, 1 * 10 ** 18);
 
         // deal owner and create controller
         vm.deal(owner, 1 * 10 ** 18);
+        vm.deal(stakingDeployer, 1 * 10 ** 18);
+
         vm.prank(owner);
         arpa = new ERC20("arpa token", "ARPA");
 
@@ -48,14 +57,12 @@ contract ControllerTest is RandcastTestHelper {
         prepareStakingContract(stakingDeployer, address(arpa), operators);
 
         vm.prank(owner);
-        MockArpaEthOracle oracle = new MockArpaEthOracle();
-
-        vm.prank(owner);
-        controller = new ControllerForTest(address(arpa), address(oracle));
+        controller = new ControllerForTest(address(arpa), lastOutput);
 
         vm.prank(owner);
         controller.setControllerConfig(
             address(staking),
+            address(0),
             operatorStakeAmount,
             disqualifiedNodePenaltyAmount,
             defaultNumberOfCommitters,
@@ -82,7 +89,7 @@ contract ControllerTest is RandcastTestHelper {
         assertEq(n.state, true);
         assertEq(n.pendingUntilBlock, 0);
 
-        vm.expectRevert("Node is already registered");
+        vm.expectRevert(abi.encodeWithSelector(Controller.NodeAlreadyRegistered.selector));
         vm.prank(node1);
         controller.nodeRegister(DKGPubkey1);
     }
@@ -91,21 +98,21 @@ contract ControllerTest is RandcastTestHelper {
         testCommitDkg();
         printGroupInfo(0);
         assertEq(controller.getGroup(0).size, 3);
-        controller.removeFromGroupForTest(address(0x1), 0, false);
+        controller.removeFromGroupForTest(0, 0);
         printGroupInfo(0);
         assertEq(controller.getGroup(0).size, 2);
     }
 
     function testRebalanceGroup() public {
-        emit log_named_uint("groupCount", controller.groupCount());
+        emit log_named_uint("groupCount", controller.getGroupCount());
         testCommitDkg();
-        emit log_named_uint("groupCount", controller.groupCount());
+        emit log_named_uint("groupCount", controller.getGroupCount());
         printGroupInfo(0);
 
         // Add 4th node, should create new group
         vm.prank(node4);
         controller.nodeRegister(DKGPubkey4);
-        emit log_named_uint("groupCount", controller.groupCount());
+        emit log_named_uint("groupCount", controller.getGroupCount());
         printGroupInfo(1);
 
         // The below needs further testing
@@ -130,11 +137,15 @@ contract ControllerTest is RandcastTestHelper {
         emit log("++++++ Rebalance 1 +++++++");
         bool output = controller.rebalanceGroupForTest(0, 1);
         assertEq(output, true);
+        assertEq(controller.getGroup(0).size, 5);
+        assertEq(controller.getGroup(1).size, 6);
         printGroupInfo(0);
         printGroupInfo(1);
         emit log("++++++ Rebalance 2 +++++++");
         output = controller.rebalanceGroupForTest(0, 1);
         assertEq(output, true);
+        assertEq(controller.getGroup(0).size, 6);
+        assertEq(controller.getGroup(1).size, 5);
         printGroupInfo(0);
         printGroupInfo(1);
     }
@@ -153,10 +164,6 @@ contract ControllerTest is RandcastTestHelper {
     }
 
     function testEmitGroupEvent() public {
-        // * fail emit group event if group does not exist
-        vm.expectRevert("Group does not exist");
-        controller.emitGroupEventForTest(99999);
-
         // * Register Three nodes and see if group struct is well formed
         uint256 groupIndex = 0;
         // printGroupInfo(groupIndex);
@@ -197,30 +204,30 @@ contract ControllerTest is RandcastTestHelper {
     }
 
     function testValidGroupIndices() public {
-        uint256[] memory groupIndices = controller.validGroupIndices();
+        uint256[] memory groupIndices = controller.getValidGroupIndices();
         assertEq(groupIndices.length, 0);
-        assertEq(controller.groupCount(), 0);
+        assertEq(controller.getGroupCount(), 0);
 
         testCommitDkg();
 
-        groupIndices = controller.validGroupIndices();
+        groupIndices = controller.getValidGroupIndices();
         // for (uint256 i = 0; i < groupIndices.length; i++) {
         //     emit log_named_uint("groupIndices[i]", groupIndices[i]);
         // }
         assertEq(groupIndices.length, 1);
-        assertEq(controller.groupCount(), 1);
+        assertEq(controller.getGroupCount(), 1);
     }
 
     function testFindOrCreateTargetGroup() public {
-        emit log_named_uint("groupCount", controller.groupCount());
+        emit log_named_uint("groupCount", controller.getGroupCount());
         testCommitDkg();
-        emit log_named_uint("groupCount", controller.groupCount());
+        emit log_named_uint("groupCount", controller.getGroupCount());
         printGroupInfo(1);
 
         // Add 4th node, should create new group
         vm.prank(node4);
         controller.nodeRegister(DKGPubkey4);
-        emit log_named_uint("groupCount", controller.groupCount());
+        emit log_named_uint("groupCount", controller.getGroupCount());
         printGroupInfo(2);
     }
 
@@ -277,8 +284,8 @@ contract ControllerTest is RandcastTestHelper {
 
         // Fail if group does not exist
         vm.prank(node1);
-        vm.expectRevert("Group does not exist");
-        Controller.CommitDkgParams memory params = Controller.CommitDkgParams(
+        vm.expectRevert(abi.encodeWithSelector(Controller.GroupNotExist.selector, 999));
+        IController.CommitDkgParams memory params = IController.CommitDkgParams(
             999, // wrong group index
             groupEpoch,
             publicKey,
@@ -289,8 +296,8 @@ contract ControllerTest is RandcastTestHelper {
 
         // Fail if group does not match Controller Group Epoch
         vm.prank(node1);
-        vm.expectRevert("Caller Group epoch does not match controller Group epoch");
-        params = Controller.CommitDkgParams(
+        vm.expectRevert(abi.encodeWithSelector(Controller.EpochMismatch.selector, groupIndex, 999, groupEpoch));
+        params = IController.CommitDkgParams(
             groupIndex,
             999, //  wrong epoch
             publicKey,
@@ -301,8 +308,8 @@ contract ControllerTest is RandcastTestHelper {
 
         // Fail if node is not a member of the group
         vm.prank(node5);
-        vm.expectRevert("Node is not a member of the group");
-        params = Controller.CommitDkgParams(groupIndex, groupEpoch, publicKey, partialPublicKey, disqualifiedNodes);
+        vm.expectRevert(abi.encodeWithSelector(Controller.NodeNotInGroup.selector, groupIndex, address(node5)));
+        params = IController.CommitDkgParams(groupIndex, groupEpoch, publicKey, partialPublicKey, disqualifiedNodes);
         controller.commitDkg(params);
 
         assertEq(checkIsStrictlyMajorityConsensusReached(groupIndex), false);
@@ -310,21 +317,23 @@ contract ControllerTest is RandcastTestHelper {
 
         // Succesful Commit: Node 1
         vm.prank(node1);
-        params = Controller.CommitDkgParams(groupIndex, groupEpoch, publicKey, partialPublicKey, disqualifiedNodes);
+        params = IController.CommitDkgParams(groupIndex, groupEpoch, publicKey, partialPublicKey, disqualifiedNodes);
         controller.commitDkg(params);
         assertEq(checkIsStrictlyMajorityConsensusReached(groupIndex), false);
         // printGroupInfo(groupIndex);
 
         //  Fail if CommitCache already contains PartialKey for this node
         vm.prank(node1);
-        vm.expectRevert("CommitCache already contains PartialKey for this node");
-        params = Controller.CommitDkgParams(groupIndex, groupEpoch, publicKey, partialPublicKey, disqualifiedNodes);
+        vm.expectRevert(
+            abi.encodeWithSelector(Controller.PartialKeyAlreadyRegistered.selector, groupIndex, address(node1))
+        );
+        params = IController.CommitDkgParams(groupIndex, groupEpoch, publicKey, partialPublicKey, disqualifiedNodes);
         controller.commitDkg(params);
         assertEq(checkIsStrictlyMajorityConsensusReached(groupIndex), false);
 
         // Succesful Commit: Node 2
         vm.prank(node2);
-        params = Controller.CommitDkgParams(
+        params = IController.CommitDkgParams(
             groupIndex,
             groupEpoch,
             publicKey,
@@ -337,7 +346,7 @@ contract ControllerTest is RandcastTestHelper {
 
         // Succesful Commit: Node 3
         vm.prank(node3);
-        params = Controller.CommitDkgParams(
+        params = IController.CommitDkgParams(
             groupIndex,
             groupEpoch,
             publicKey,
@@ -350,8 +359,6 @@ contract ControllerTest is RandcastTestHelper {
     }
 
     function testPickRandomIndex() public {
-        uint64 lastOutput = 0x2222222222222222;
-
         uint256[] memory indices = new uint256[](5);
         indices[0] = 0;
         indices[1] = 1;
@@ -385,7 +392,7 @@ contract ControllerTest is RandcastTestHelper {
     function testIsPartialKeyRegistered() public {
         testEmitGroupEvent();
         uint256 groupIndex = 1;
-        assertEq(controller.partialKeyRegistered(groupIndex, node1), false);
+        assertEq(controller.isPartialKeyRegistered(groupIndex, node1), false);
     }
 
     function testPostProcessDkg() public {
@@ -397,19 +404,20 @@ contract ControllerTest is RandcastTestHelper {
         ICoordinator coordinator = ICoordinator(coordinatorAddress);
         uint256 startBlock = coordinator.startBlock();
 
-        vm.expectRevert("Group does not exist");
+        vm.expectRevert(abi.encodeWithSelector(Controller.GroupNotExist.selector, 99999));
         controller.postProcessDkg(99999, 0); //(groupIndex, groupEpoch))
 
         vm.prank(node12);
-        vm.expectRevert("Node is not a member of the group");
+        vm.expectRevert(abi.encodeWithSelector(Controller.NodeNotInGroup.selector, groupIndex, node12));
         controller.postProcessDkg(groupIndex, 0); //(groupIndex, groupEpoch))
 
         vm.prank(node1);
-        vm.expectRevert("Caller Group epoch does not match Controller Group epoch");
+        vm.expectRevert(abi.encodeWithSelector(Controller.EpochMismatch.selector, groupIndex, 0, groupEpoch));
+
         controller.postProcessDkg(groupIndex, 0); //(groupIndex, groupEpoch))
 
         vm.prank(node1);
-        vm.expectRevert("DKG still in progress");
+        vm.expectRevert(abi.encodeWithSelector(Controller.DkgStillInProgress.selector, groupIndex, 1));
         controller.postProcessDkg(groupIndex, groupEpoch); //(groupIndex, groupEpoch))
 
         // Set the coordinator to completed phase
@@ -418,7 +426,7 @@ contract ControllerTest is RandcastTestHelper {
         // Succesful post process dkg: HAPPY PATH
         vm.startPrank(node1);
         controller.postProcessDkg(groupIndex, groupEpoch);
-        uint256 nodeRewards = controller.getRewards(node1);
+        uint256 nodeRewards = controller.getNodeReward(node1);
         emit log_named_uint("node1 rewards", nodeRewards);
         assertEq(nodeRewards, dkgPostProcessReward);
 
@@ -426,7 +434,7 @@ contract ControllerTest is RandcastTestHelper {
         address emptyCoordinatorAddress = controller.getCoordinator(groupIndex);
         assertEq(emptyCoordinatorAddress, address(0));
 
-        vm.expectRevert("Coordinator not found for groupIndex");
+        vm.expectRevert(abi.encodeWithSelector(Controller.CoordinatorNotFound.selector, groupIndex));
         controller.postProcessDkg(groupIndex, groupEpoch); //(groupIndex, groupEpoch))
         vm.stopPrank();
         // assert that coordinator has self destructed (cant test this yet)
@@ -434,35 +442,23 @@ contract ControllerTest is RandcastTestHelper {
 
     function testSlashNode() public {
         testPostProcessDkg();
-        Controller.Group memory g = controller.getGroup(0);
-        assertEq(g.members.length, 3);
-        assertEq(g.isStrictlyMajorityConsensusReached, true);
-        printGroupInfo(0);
 
         uint256 node1DelegationRewardBefore = staking.getDelegationReward(node1);
         emit log_named_uint("The delegation reward of node1 before slash", node1DelegationRewardBefore);
         // slash node1
         uint256 pendingBlock = 0;
-        bool handleGroup = true;
 
-        controller.slashNodeForTest(node1, disqualifiedNodePenaltyAmount, pendingBlock, handleGroup);
+        controller.slashNodeForTest(node1, disqualifiedNodePenaltyAmount, pendingBlock);
 
         // Assert staking penalty applied to node1
         emit log_named_uint("The delegation reward of node1 after slash", staking.getDelegationReward(node1));
         assertEq(node1DelegationRewardBefore - disqualifiedNodePenaltyAmount, staking.getDelegationReward(node1));
-
-        // assert node1 has been removed from the group
-        g = controller.getGroup(0);
-        assertEq(g.members.length, 2);
-        assertEq(g.isStrictlyMajorityConsensusReached, false);
-
-        printGroupInfo(0);
     }
 
     function testNodeQuit() public {
         // call nodeQuit with unregistered node: Fail
         vm.prank(node1);
-        vm.expectRevert("Node not registered.");
+        vm.expectRevert(abi.encodeWithSelector(Controller.NodeNotRegistered.selector));
         controller.nodeQuit();
 
         // register node, confirm initial stake amount

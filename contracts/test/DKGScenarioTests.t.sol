@@ -19,6 +19,7 @@ contract DKGScenarioTest is RandcastTestHelper {
     uint256 idealNumberOfGroups = 5;
     uint256 pendingBlockAfterQuit = 100;
     uint256 dkgPostProcessReward = 100;
+    uint64 lastOutput = 0x2222222222222222;
 
     address public owner = admin;
 
@@ -32,10 +33,9 @@ contract DKGScenarioTest is RandcastTestHelper {
 
         // deal owner and create controller
         vm.deal(owner, 1 * 10 ** 18);
-        vm.prank(owner);
 
+        vm.prank(owner);
         arpa = new ERC20("arpa token", "ARPA");
-        MockArpaEthOracle oracle = new MockArpaEthOracle();
 
         address[] memory operators = new address[](5);
         operators[0] = node1;
@@ -45,10 +45,11 @@ contract DKGScenarioTest is RandcastTestHelper {
         operators[4] = node5;
         prepareStakingContract(stakingDeployer, address(arpa), operators);
 
-        controller = new ControllerForTest(address(arpa), address(oracle));
+        controller = new ControllerForTest(address(arpa), lastOutput);
 
         controller.setControllerConfig(
             address(staking),
+            address(0),
             operatorStakeAmount,
             disqualifiedNodePenaltyAmount,
             defaultNumberOfCommitters,
@@ -93,7 +94,7 @@ contract DKGScenarioTest is RandcastTestHelper {
                 vm.expectRevert(params[i].revertMessage);
             }
             controller.commitDkg(
-                Controller.CommitDkgParams(
+                IController.CommitDkgParams(
                     params[i].groupIndex,
                     params[i].groupEpoch,
                     params[i].publicKey,
@@ -116,15 +117,15 @@ contract DKGScenarioTest is RandcastTestHelper {
         bytes memory err;
         Params[] memory params = new Params[](1);
 
-        err = bytes("Group does not exist");
+        err = abi.encodeWithSelector(Controller.GroupNotExist.selector, 999);
         params[0] = Params(node1, true, err, 999, 3, publicKey, partialPublicKey1, new address[](0));
         dkgHelper(params);
 
-        err = bytes("Caller Group epoch does not match controller Group epoch");
+        err = abi.encodeWithSelector(Controller.EpochMismatch.selector, 0, 999, 3);
         params[0] = Params(node1, true, err, 0, 999, publicKey, partialPublicKey1, new address[](0));
         dkgHelper(params);
 
-        err = bytes("Node is not a member of the group");
+        err = abi.encodeWithSelector(Controller.NodeNotInGroup.selector, 0, address(node6));
         params[0] = Params(node6, true, err, 0, 3, publicKey, partialPublicKey1, new address[](0));
         dkgHelper(params);
 
@@ -132,11 +133,11 @@ contract DKGScenarioTest is RandcastTestHelper {
         params[0] = Params(node1, true, err, 0, 3, publicKey, hex"AAAA", new address[](0));
         dkgHelper(params);
 
-        err = abi.encodeWithSelector(Adapter.InvalidPartialPublicKey.selector);
+        err = abi.encodeWithSelector(BLS.InvalidPartialPublicKey.selector);
         params[0] = Params(node1, true, err, 0, 3, publicKey, badKey, new address[](0));
         dkgHelper(params);
 
-        err = abi.encodeWithSelector(Adapter.InvalidPublicKey.selector);
+        err = abi.encodeWithSelector(BLS.InvalidPublicKey.selector);
         params[0] = Params(node1, true, err, 0, 3, badKey, partialPublicKey1, new address[](0));
         dkgHelper(params);
 
@@ -144,7 +145,7 @@ contract DKGScenarioTest is RandcastTestHelper {
         Params[] memory params2 = new Params[](2);
         params2[0] = Params(node1, false, err, 0, 3, publicKey, partialPublicKey1, new address[](0));
 
-        err = bytes("CommitCache already contains PartialKey for this node");
+        err = abi.encodeWithSelector(Controller.PartialKeyAlreadyRegistered.selector, 0, address(node1));
         params2[1] = Params(node1, true, err, 0, 3, publicKey, partialPublicKey1, new address[](0));
 
         dkgHelper(params2);

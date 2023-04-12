@@ -4,24 +4,24 @@ pragma solidity ^0.8.15;
 import "src/Controller.sol";
 
 contract ControllerForTest is Controller {
-    constructor(address arpa, address arpaEthFeed) Controller(arpa, arpaEthFeed) {}
+    using GroupLib for GroupLib.GroupData;
+
+    constructor(address arpa, uint256 lastOutput) Controller(arpa, lastOutput) {}
 
     // Give node staking reward penalty and freezeNode
-    function slashNodeForTest(address nodeIdAddress, uint256 stakingPenalty, uint256 pendingBlock, bool handleGroup)
-        public
-    {
-        slashNode(nodeIdAddress, stakingPenalty, pendingBlock, handleGroup);
+    function slashNodeForTest(address nodeIdAddress, uint256 stakingPenalty, uint256 pendingBlock) public {
+        slashNode(nodeIdAddress, stakingPenalty, pendingBlock);
     }
 
-    function removeFromGroupForTest(address nodeIdAddress, uint256 groupIndex, bool emitEventInstantly)
+    function removeFromGroupForTest(uint256 memberIndex, uint256 groupIndex)
         public
-        returns (bool)
+        returns (bool needRebalance, bool needEmitGroupEvent)
     {
-        return removeFromGroup(nodeIdAddress, groupIndex, emitEventInstantly);
+        return s_groupData.removeFromGroup(memberIndex, groupIndex);
     }
 
     function rebalanceGroupForTest(uint256 groupAIndex, uint256 groupBIndex) public returns (bool) {
-        return rebalanceGroup(groupAIndex, groupBIndex);
+        return s_groupData.rebalanceGroup(groupAIndex, groupBIndex, this.getLastOutput());
     }
 
     function minimumThresholdForTest(uint256 groupSize) public pure returns (uint256) {
@@ -33,7 +33,7 @@ contract ControllerForTest is Controller {
     }
 
     function getMemberIndexByAddressForTest(uint256 groupIndex, address nodeIdAddress) public view returns (int256) {
-        return getMemberIndexByAddress(groupIndex, nodeIdAddress);
+        return s_groupData.getMemberIndexByAddress(groupIndex, nodeIdAddress);
     }
 
     function pickRandomIndexForTest(uint256 seed, uint256[] memory indices, uint256 count)
