@@ -8,11 +8,16 @@ provider_endpoint: "http://127.0.0.1:8545"
 
 chain_id: 31337
 
-controller_address: "0x9fe46736679d2d9a65f0992f2272de9f3c7fa6e0"
+controller_address: "0x5fc8d32690cc91d4c39d9d3abcbd16989f875707"
+
+adapter_address: "0x0165878a594ca255338adfa4d48449f69242eb8f"
 
 data_path: "./data3.sqlite"
 
 account:
-  private_key: "2a871d0798f97d79848a013d4936a73bf4cc922c825d33c1cf7073dff6d409c6"
+  # 0xfabb0ac9d68b0b445fb7357272ff202c5651694a
+  private_key: "a267530f49f8280200edf313ee7af6b827f2a8bce2897751d06a843f644967b1"
 
 context_logging: false
+
+node_id: 3

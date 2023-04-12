@@ -22,14 +22,10 @@ use arpa_node_contract_client::{
     coordinator::CoordinatorClientBuilder, provider::ChainProviderBuilder,
 };
 use arpa_node_core::{
-    ChainIdentity, GeneralChainIdentity, MockChainIdentity, RandomnessTask, SchedulerError,
-    SchedulerResult,
+    ChainIdentity, GeneralChainIdentity, RandomnessTask, SchedulerError, SchedulerResult,
 };
 use arpa_node_dal::{
-    cache::{
-        InMemoryBLSTasksQueue, InMemoryBlockInfoCache, InMemoryGroupInfoCache,
-        InMemoryNodeInfoCache, InMemorySignatureResultCache, RandomnessResultCache,
-    },
+    cache::{InMemoryBlockInfoCache, InMemorySignatureResultCache, RandomnessResultCache},
     ContextInfoUpdater, NodeInfoUpdater,
     {BLSTasksFetcher, BLSTasksUpdater, GroupInfoFetcher, GroupInfoUpdater, NodeInfoFetcher},
 };
@@ -47,7 +43,7 @@ pub struct GeneralMainChain<
     N: NodeInfoFetcher<PC> + NodeInfoUpdater<PC> + ContextInfoUpdater,
     G: GroupInfoFetcher<PC> + GroupInfoUpdater<PC> + ContextInfoUpdater,
     T: BLSTasksFetcher<RandomnessTask> + BLSTasksUpdater<RandomnessTask>,
-    I: ChainIdentity + ControllerClientBuilder + CoordinatorClientBuilder + AdapterClientBuilder<PC>,
+    I: ChainIdentity + ControllerClientBuilder<PC> + CoordinatorClientBuilder + AdapterClientBuilder,
     PC: PairingCurve,
 > {
     id: usize,
@@ -60,39 +56,6 @@ pub struct GeneralMainChain<
     committer_randomness_result_cache:
         Arc<RwLock<InMemorySignatureResultCache<RandomnessResultCache>>>,
     c: PhantomData<PC>,
-}
-
-impl<PC: PairingCurve + Send + Sync + 'static>
-    GeneralMainChain<
-        InMemoryNodeInfoCache<PC>,
-        InMemoryGroupInfoCache<PC>,
-        InMemoryBLSTasksQueue<RandomnessTask>,
-        MockChainIdentity,
-        PC,
-    >
-{
-    pub fn new(
-        id: usize,
-        description: String,
-        chain_identity: MockChainIdentity,
-        node_cache: InMemoryNodeInfoCache<PC>,
-        group_cache: InMemoryGroupInfoCache<PC>,
-        randomness_tasks_cache: InMemoryBLSTasksQueue<RandomnessTask>,
-    ) -> Self {
-        GeneralMainChain {
-            id,
-            description,
-            chain_identity: Arc::new(RwLock::new(chain_identity)),
-            block_cache: Arc::new(RwLock::new(InMemoryBlockInfoCache::new())),
-            randomness_tasks_cache: Arc::new(RwLock::new(randomness_tasks_cache)),
-            committer_randomness_result_cache: Arc::new(RwLock::new(
-                InMemorySignatureResultCache::<RandomnessResultCache>::new(),
-            )),
-            node_cache: Arc::new(RwLock::new(node_cache)),
-            group_cache: Arc::new(RwLock::new(group_cache)),
-            c: PhantomData,
-        }
-    }
 }
 
 impl<PC: PairingCurve + Send + Sync + 'static>
@@ -154,9 +117,9 @@ impl<
             + Send
             + 'static,
         I: ChainIdentity
-            + ControllerClientBuilder
+            + ControllerClientBuilder<PC>
             + CoordinatorClientBuilder
-            + AdapterClientBuilder<PC>
+            + AdapterClientBuilder
             + ChainProviderBuilder
             + std::fmt::Debug
             + Clone
@@ -375,9 +338,9 @@ impl<
             + Send
             + 'static,
         I: ChainIdentity
-            + ControllerClientBuilder
+            + ControllerClientBuilder<PC>
             + CoordinatorClientBuilder
-            + AdapterClientBuilder<PC>
+            + AdapterClientBuilder
             + ChainProviderBuilder
             + std::fmt::Debug
             + Clone
@@ -543,9 +506,9 @@ impl<
             + Send
             + 'static,
         I: ChainIdentity
-            + ControllerClientBuilder
+            + ControllerClientBuilder<PC>
             + CoordinatorClientBuilder
-            + AdapterClientBuilder<PC>
+            + AdapterClientBuilder
             + ChainProviderBuilder
             + std::fmt::Debug
             + Clone
@@ -613,9 +576,9 @@ impl<
             + Send
             + 'static,
         I: ChainIdentity
-            + ControllerClientBuilder
+            + ControllerClientBuilder<PC>
             + CoordinatorClientBuilder
-            + AdapterClientBuilder<PC>
+            + AdapterClientBuilder
             + ChainProviderBuilder
             + std::fmt::Debug
             + Clone

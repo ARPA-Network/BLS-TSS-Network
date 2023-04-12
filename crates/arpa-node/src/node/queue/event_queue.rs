@@ -77,8 +77,14 @@ pub mod tests {
             .parse()
             .unwrap();
 
-        let chain_identity =
-            GeneralChainIdentity::new(0, 0, fake_wallet, "".to_string(), Address::random());
+        let chain_identity = GeneralChainIdentity::new(
+            0,
+            0,
+            fake_wallet,
+            "".to_string(),
+            Address::random(),
+            Address::random(),
+        );
 
         let chain_identity = Arc::new(RwLock::new(chain_identity));
 

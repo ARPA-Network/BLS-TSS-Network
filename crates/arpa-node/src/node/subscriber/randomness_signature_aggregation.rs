@@ -18,7 +18,7 @@ use tokio::sync::RwLock;
 
 #[derive(Debug)]
 pub struct RandomnessSignatureAggregationSubscriber<
-    I: ChainIdentity + AdapterClientBuilder<C>,
+    I: ChainIdentity + AdapterClientBuilder,
     C: PairingCurve,
 > {
     pub chain_id: usize,
@@ -29,7 +29,7 @@ pub struct RandomnessSignatureAggregationSubscriber<
     c: PhantomData<C>,
 }
 
-impl<I: ChainIdentity + AdapterClientBuilder<C>, C: PairingCurve>
+impl<I: ChainIdentity + AdapterClientBuilder, C: PairingCurve>
     RandomnessSignatureAggregationSubscriber<I, C>
 {
     pub fn new(
@@ -61,18 +61,14 @@ pub trait FulfillRandomnessHandler {
     ) -> NodeResult<()>;
 }
 
-pub struct GeneralFulfillRandomnessHandler<
-    I: ChainIdentity + AdapterClientBuilder<C>,
-    C: PairingCurve,
-> {
+pub struct GeneralFulfillRandomnessHandler<I: ChainIdentity + AdapterClientBuilder> {
     id_address: Address,
     chain_identity: Arc<RwLock<I>>,
-    c: PhantomData<C>,
 }
 
 #[async_trait]
-impl<I: ChainIdentity + AdapterClientBuilder<C> + Sync + Send, C: PairingCurve + Sync + Send>
-    FulfillRandomnessHandler for GeneralFulfillRandomnessHandler<I, C>
+impl<I: ChainIdentity + AdapterClientBuilder + Sync + Send> FulfillRandomnessHandler
+    for GeneralFulfillRandomnessHandler<I>
 {
     async fn handle(
         &self,
@@ -113,7 +109,7 @@ impl<I: ChainIdentity + AdapterClientBuilder<C> + Sync + Send, C: PairingCurve +
 
 #[async_trait]
 impl<
-        I: ChainIdentity + AdapterClientBuilder<C> + std::fmt::Debug + Sync + Send + 'static,
+        I: ChainIdentity + AdapterClientBuilder + std::fmt::Debug + Sync + Send + 'static,
         C: PairingCurve + std::fmt::Debug + Sync + Send + 'static,
     > Subscriber for RandomnessSignatureAggregationSubscriber<I, C>
 {
@@ -166,7 +162,6 @@ impl<
                     let handler = GeneralFulfillRandomnessHandler {
                         id_address,
                         chain_identity,
-                        c: PhantomData,
                     };
 
                     if let Err(e) = handler
@@ -201,7 +196,7 @@ impl<
 }
 
 impl<
-        I: ChainIdentity + AdapterClientBuilder<C> + std::fmt::Debug + Sync + Send + 'static,
+        I: ChainIdentity + AdapterClientBuilder + std::fmt::Debug + Sync + Send + 'static,
         C: PairingCurve + std::fmt::Debug + Sync + Send + 'static,
     > DebuggableSubscriber for RandomnessSignatureAggregationSubscriber<I, C>
 {

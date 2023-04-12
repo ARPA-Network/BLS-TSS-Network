@@ -55,9 +55,9 @@ pub(crate) struct NodeManagementServiceServer<
     G: GroupInfoFetcher<C> + GroupInfoUpdater<C> + ContextInfoUpdater,
     T: BLSTasksFetcher<RandomnessTask> + BLSTasksUpdater<RandomnessTask>,
     I: ChainIdentity
-        + ControllerClientBuilder
+        + ControllerClientBuilder<C>
         + CoordinatorClientBuilder
-        + AdapterClientBuilder<C>
+        + AdapterClientBuilder
         + ChainProviderBuilder,
     C: PairingCurve,
 > {
@@ -69,9 +69,9 @@ impl<
         G: GroupInfoFetcher<C> + GroupInfoUpdater<C> + ContextInfoUpdater,
         T: BLSTasksFetcher<RandomnessTask> + BLSTasksUpdater<RandomnessTask>,
         I: ChainIdentity
-            + ControllerClientBuilder
+            + ControllerClientBuilder<C>
             + CoordinatorClientBuilder
-            + AdapterClientBuilder<C>
+            + AdapterClientBuilder
             + ChainProviderBuilder,
         C: PairingCurve,
     > NodeManagementServiceServer<N, G, T, I, C>
@@ -107,9 +107,9 @@ impl<
             + Send
             + 'static,
         I: ChainIdentity
-            + ControllerClientBuilder
+            + ControllerClientBuilder<C>
             + CoordinatorClientBuilder
-            + AdapterClientBuilder<C>
+            + AdapterClientBuilder
             + ChainProviderBuilder
             + std::fmt::Debug
             + Clone
@@ -488,9 +488,9 @@ pub async fn start_management_server<
         + Send
         + 'static,
     I: ChainIdentity
-        + ControllerClientBuilder
+        + ControllerClientBuilder<C>
         + CoordinatorClientBuilder
-        + AdapterClientBuilder<C>
+        + AdapterClientBuilder
         + ChainProviderBuilder
         + std::fmt::Debug
         + Clone
@@ -529,9 +529,9 @@ struct LogLayer<
     G: GroupInfoFetcher<C> + GroupInfoUpdater<C> + ContextInfoUpdater + Clone,
     T: BLSTasksFetcher<RandomnessTask> + BLSTasksUpdater<RandomnessTask> + Clone,
     I: ChainIdentity
-        + ControllerClientBuilder
+        + ControllerClientBuilder<C>
         + CoordinatorClientBuilder
-        + AdapterClientBuilder<C>
+        + AdapterClientBuilder
         + ChainProviderBuilder
         + Clone,
     C: PairingCurve,
@@ -544,9 +544,9 @@ impl<
         G: GroupInfoFetcher<C> + GroupInfoUpdater<C> + ContextInfoUpdater + Clone,
         T: BLSTasksFetcher<RandomnessTask> + BLSTasksUpdater<RandomnessTask> + Clone,
         I: ChainIdentity
-            + ControllerClientBuilder
+            + ControllerClientBuilder<C>
             + CoordinatorClientBuilder
-            + AdapterClientBuilder<C>
+            + AdapterClientBuilder
             + ChainProviderBuilder
             + Clone,
         C: PairingCurve,
@@ -563,9 +563,9 @@ impl<
         G: GroupInfoFetcher<C> + GroupInfoUpdater<C> + ContextInfoUpdater + Clone,
         T: BLSTasksFetcher<RandomnessTask> + BLSTasksUpdater<RandomnessTask> + Clone,
         I: ChainIdentity
-            + ControllerClientBuilder
+            + ControllerClientBuilder<C>
             + CoordinatorClientBuilder
-            + AdapterClientBuilder<C>
+            + AdapterClientBuilder
             + ChainProviderBuilder
             + Clone,
         C: PairingCurve,
@@ -588,9 +588,9 @@ struct LogService<
     G: GroupInfoFetcher<C> + GroupInfoUpdater<C> + ContextInfoUpdater + Clone,
     T: BLSTasksFetcher<RandomnessTask> + BLSTasksUpdater<RandomnessTask> + Clone,
     I: ChainIdentity
-        + ControllerClientBuilder
+        + ControllerClientBuilder<C>
         + CoordinatorClientBuilder
-        + AdapterClientBuilder<C>
+        + AdapterClientBuilder
         + ChainProviderBuilder
         + Clone,
     C: PairingCurve,
@@ -625,9 +625,9 @@ impl<
             + Send
             + 'static,
         I: ChainIdentity
-            + ControllerClientBuilder
+            + ControllerClientBuilder<C>
             + CoordinatorClientBuilder
-            + AdapterClientBuilder<C>
+            + AdapterClientBuilder
             + ChainProviderBuilder
             + std::fmt::Debug
             + Clone

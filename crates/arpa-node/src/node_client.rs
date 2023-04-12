@@ -5,10 +5,8 @@ use arpa_node_contract_client::controller::{ControllerClientBuilder, ControllerT
 use arpa_node_core::format_now_date;
 use arpa_node_core::log::encoder::JsonEncoder;
 use arpa_node_core::GeneralChainIdentity;
-use arpa_node_core::MockChainIdentity;
 use arpa_node_core::RandomnessTask;
-use arpa_node_dal::cache::{InMemoryBLSTasksQueue, InMemoryGroupInfoCache, InMemoryNodeInfoCache};
-use arpa_node_dal::{NodeInfoFetcher, NodeInfoUpdater};
+use arpa_node_dal::NodeInfoFetcher;
 use arpa_node_sqlite_db::BLSTasksDBClient;
 use arpa_node_sqlite_db::GroupInfoDBClient;
 use arpa_node_sqlite_db::NodeInfoDBClient;
@@ -34,13 +32,8 @@ pub struct Opt {
     /// Mode to run.
     /// 1) new-run: First run on Randcast client. Loading data from config.yml settings.
     /// 2) re-run: Continue to run Randcast client from some kind of breakdown. Config in existing database data.sqlite will be used.
-    /// 3) demo: Run a demo with data in memory only.
-    #[structopt(short = "m", long, possible_values = &["new-run", "re-run", "demo"])]
+    #[structopt(short = "m", long, possible_values = &["new-run", "re-run"])]
     mode: String,
-
-    /// Set the index of the config file when running the node demo
-    #[structopt(short = "i", long, possible_values = &["1", "2", "3", "4", "5", "6"],required_if("mode", "demo"))]
-    demo_config_index: Option<u32>,
 
     /// Set the config path
     #[structopt(
@@ -98,12 +91,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let opt = Opt::from_args();
     println!("{:#?}", opt);
 
-    let node_id = if let Some(id) = opt.demo_config_index {
-        id.to_string()
-    } else {
-        String::from("running")
-    };
-
     let config_path_str = opt
         .config_path
         .clone()
@@ -118,23 +105,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         )
     });
 
-    let yaml_str = match node_id.as_str() {
-        "1" => include_str!("../conf/config_demo_1.yml"),
-        "2" => include_str!("../conf/config_demo_2.yml"),
-        "3" => include_str!("../conf/config_demo_3.yml"),
-        "4" => include_str!("../conf/config_demo_4.yml"),
-        "5" => include_str!("../conf/config_demo_5.yml"),
-        "6" => include_str!("../conf/config_demo_6.yml"),
-        _ => config_str,
-    };
-
     let mut config: Config =
-        serde_yaml::from_str(yaml_str).expect("Error loading configuration file");
+        serde_yaml::from_str(config_str).expect("Error loading configuration file");
     if config.data_path.is_none() {
         config.data_path = Some(String::from("data.sqlite"));
     }
 
-    init_log(&node_id, config.context_logging);
+    let node_id = &config.node_id.clone().unwrap_or("running".to_string());
+    init_log(node_id, config.context_logging);
 
     info!("{:?}", config);
 
@@ -194,6 +172,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     .controller_address
                     .parse()
                     .expect("bad format of controller_address"),
+                config
+                    .adapter_address
+                    .parse()
+                    .expect("bad format of adapter_address"),
             );
 
             let main_chain = GeneralMainChain::<
@@ -216,7 +198,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             let handle = context.deploy().await?;
 
             // TODO register node to randcast network, this should be moved to node_cmd_client(triggering manully to avoid accidental operation) in prod
-            let client = main_chain_identity.build_controller_client();
+            let client =
+                ControllerClientBuilder::<BN254>::build_controller_client(&main_chain_identity);
 
             client
                 .node_register(bincode::serialize(&dkg_public_key).unwrap())
@@ -263,6 +246,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     .controller_address
                     .parse()
                     .expect("bad format of controller_address"),
+                config
+                    .adapter_address
+                    .parse()
+                    .expect("bad format of adapter_address"),
             );
 
             let main_chain = GeneralMainChain::<
@@ -285,70 +272,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             let handle = context.deploy().await?;
 
             handle.wait_task().await;
-        }
-        "demo" => {
-            let id_address = format!("0x000000000000000000000000000000000000000{}", node_id)
-                .parse()
-                .unwrap();
-
-            let rng = &mut rand::thread_rng();
-
-            let (dkg_private_key, dkg_public_key) = G2Scheme::keypair(rng);
-
-            info!("dkg public_key: {}", point_to_hex(&dkg_public_key));
-
-            let mut node_cache = InMemoryNodeInfoCache::new(id_address);
-
-            node_cache
-                .set_node_rpc_endpoint(config.node_committer_rpc_endpoint.clone())
-                .await
-                .unwrap();
-
-            node_cache
-                .set_dkg_key_pair(dkg_private_key, dkg_public_key)
-                .await
-                .unwrap();
-
-            let group_cache = InMemoryGroupInfoCache::new();
-
-            let main_chain_identity = MockChainIdentity::new(
-                0,
-                config.chain_id,
-                id_address,
-                config.provider_endpoint.clone(),
-            );
-
-            let randomness_tasks_cache = InMemoryBLSTasksQueue::<RandomnessTask>::new();
-
-            let main_chain = GeneralMainChain::<
-                InMemoryNodeInfoCache<BN254>,
-                InMemoryGroupInfoCache<BN254>,
-                InMemoryBLSTasksQueue<RandomnessTask>,
-                MockChainIdentity,
-                BN254,
-            >::new(
-                0,
-                "main chain".to_string(),
-                main_chain_identity.clone(),
-                node_cache,
-                group_cache,
-                randomness_tasks_cache,
-            );
-
-            let context = GeneralContext::new(config, main_chain);
-
-            let handle = context.deploy().await?;
-
-            // register node to randcast network
-            let client = main_chain_identity.build_controller_client();
-
-            client
-                .node_register(bincode::serialize(&dkg_public_key).unwrap())
-                .await?;
-
-            handle.wait_task().await;
-
-            info!("client deployment finished!");
         }
         _ => panic!("unimplemented mode"),
     }

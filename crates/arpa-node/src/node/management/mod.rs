@@ -136,9 +136,9 @@ impl<
             + Send
             + 'static,
         I: ChainIdentity
-            + ControllerClientBuilder
+            + ControllerClientBuilder<C>
             + CoordinatorClientBuilder
-            + AdapterClientBuilder<C>
+            + AdapterClientBuilder
             + ChainProviderBuilder
             + std::fmt::Debug
             + Clone
@@ -210,9 +210,9 @@ impl<
             + Send
             + 'static,
         I: ChainIdentity
-            + ControllerClientBuilder
+            + ControllerClientBuilder<C>
             + CoordinatorClientBuilder
-            + AdapterClientBuilder<C>
+            + AdapterClientBuilder
             + ChainProviderBuilder
             + std::fmt::Debug
             + Clone
@@ -277,9 +277,9 @@ impl<
             + Send
             + 'static,
         I: ChainIdentity
-            + ControllerClientBuilder
+            + ControllerClientBuilder<C>
             + CoordinatorClientBuilder
-            + AdapterClientBuilder<C>
+            + AdapterClientBuilder
             + ChainProviderBuilder
             + std::fmt::Debug
             + Clone
@@ -397,9 +397,9 @@ impl<
             + Send
             + 'static,
         I: ChainIdentity
-            + ControllerClientBuilder
+            + ControllerClientBuilder<C>
             + CoordinatorClientBuilder
-            + AdapterClientBuilder<C>
+            + AdapterClientBuilder
             + ChainProviderBuilder
             + std::fmt::Debug
             + Clone
@@ -462,9 +462,9 @@ impl<
             + Send
             + 'static,
         I: ChainIdentity
-            + ControllerClientBuilder
+            + ControllerClientBuilder<C>
             + CoordinatorClientBuilder
-            + AdapterClientBuilder<C>
+            + AdapterClientBuilder
             + ChainProviderBuilder
             + std::fmt::Debug
             + Clone

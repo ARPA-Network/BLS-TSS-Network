@@ -18,19 +18,19 @@ pub mod tests {
     #[test]
     fn test_dkg_bls_over_bn254() {
         let seed_arr = [
-            "2bdda4dd3ed74cb9ed050c6b6144174040215e9b997cc13ef743048709027044",
-            "adba1e0e95a816030c7ab73a0ac0d519e51bb207562b225c169ba4fca9708aba",
-            "2aba4fa6a8d715baf9a8e4965940c548f9d7a715093459ab3746a5516a7b8317",
-            "8c766583fa9c65789080aee687f24be92eaa68775d583eccbc54468f21b7fd19",
-            "772e33591d14ca86452b2fa0b6c1f50e9a89eebc9d806aaebb6f825169f65639",
-            "8a767bde8c14db8d024b7b6dd98163398f60d86bc9a4ac814a213db6f489975d",
-            "13c4fe7022314f4e35623d61d30f71de31192dca0a19898ff36af659e969e7a1",
-            "249b38981df5bcd673f3bd50631aba97c5cc5b0dc7a85c94f11705ba950f5b0e",
-            "ee37dd8f5b0b97804d115493672502eb373eca189306b49126816808ac2adcb8",
-            "ccee934dfb6e63a7d154fb8cbbe6444659cf6d493b125bba2a931ce22414ddf8",
-            "c8bc8d6c91c5384f0cf6a93dceec05e9580951bf07d8d4839242ac4a566e0e02",
-            "d1c2a1c7ae81259aae2c94abf016febc938fdda8fd917fb88c50b3c9613c2b3a",
-            "f249c2d5758f9d37d62f3efc5e26a2509dd97a154b0daf661a4831b5b339fa1c",
+            "de7c516e867a427226866fa41566ad0eb0ff69f54e4408babd2f59c54238fa86",
+            "d33ade962639dfbe2c2cb144c8b81b9b41426183f4a8f9d97a3797267085e3e9",
+            "d43a01309e5ce06f563855ea4d63bfd19566144d62073344ca66a52fe459fcd2",
+            "edea6587954fc90bf55a2e710f2edda6d40cbc59050201e7e04b44af906eb1dc",
+            "3884a5de852ba49a376e504abed8501ce14c9fd7d0a8a4aaca2a81d9d87b35da",
+            "5e834c9e0ee3c1df597ce48258054d49ed258ecb6d31fbce6a78be9daf9afaa1",
+            "e0ab0f3bc77b9c2b203d07aaa5af51280d8bba6c5bb1cd54763959c1b8770854",
+            "428874369318654d220b552cd69526384de1a9854b9a194f3ee725424d32e4bd",
+            "640670d5370a0b1142d202dd8d733cdc5317af68692ed48653ec348d2432c6f6",
+            "1e049c83faf1abc374ad113f0e50995b4ed8a5be475156a346e773bb0d5cea7d",
+            "912879b65da7afad27afb740fed587019e3aac62a0731fcdb33a38a5e04a9dbc",
+            "34fa9bc41a34b4a1fb4dc01764f8f0cc61f6fc90284a603c49e393c220213552",
+            "a4371e17c84d644e0823a95223011a30b995e36afd180b719769ad6ce88ceeae",
         ];
 
         let block_num_arr = [1, 18, 35, 52, 69, 86, 103, 120, 137, 154, 1, 1, 1];
@@ -52,24 +52,31 @@ pub mod tests {
 
         // Get the public polynomial
         let public_poly = private_poly.commit();
+
+        println!("// Node Partial Public Keys");
+
         (0..n).for_each(|i| {
             let eval = public_poly.eval(i as Idx);
             println!(
-                "member {} pubkey: {:?}",
-                i,
+                "bytes partialPublicKey{} = hex{:?};",
+                i + 1,
                 hex::encode(bincode::serialize(&eval.value).unwrap())
             );
         });
+        println!("bytes badKey = \
+        hex\"111111550230862eccaa516975047156d5c7cdc299f5fce0aaf04e9246c1ab2122f8c83061984377026e4769de7cc228004221275241ee6a33622043a3c730fc183f7bff0be8b3e21d9d56bc5ed2566ce3193c9df3396bd8cdc457e7c57ecbc010092c9cf423391bff81f73b1b33ac475dbf2b941b23acc7aa26324a57e5951b\";");
         println!("");
 
         let threshold_public_key = public_poly.public_key();
 
+        println!("// Group Public Key");
         println!(
-            "threshold_public_key: {:?}",
+            "bytes publicKey = hex{:?};",
             hex::encode(bincode::serialize(threshold_public_key).unwrap())
         );
         // print_g2_point(threshold_public_key);
         println!("");
+        println!("// Partial Signatures");
 
         for i in 0..seed_arr.len() {
             let seed = hex::decode(seed_arr[i]).unwrap();
@@ -79,7 +86,7 @@ pub mod tests {
 
             // Generate the partial signatures
             let msg = [seed, block_num_bytes].concat();
-            println!("msg: {:?}", hex::encode(&msg));
+            println!("// msg: {:?}", hex::encode(&msg));
             // hex::decode("de7c516e867a427226866fa41566ad0eb0ff69f54e4408babd2f59c54238fa860000000000000000000000000000000000000000000000000000000000000001")
             // .unwrap();
 
@@ -89,11 +96,12 @@ pub mod tests {
                 .collect::<Vec<_>>();
 
             // each partial sig can be partially verified against the public polynomial
-            partials.iter().enumerate().for_each(|(i, partial)| {
+            partials.iter().enumerate().for_each(|(j, partial)| {
                 let eval: Eval<Vec<u8>> = bincode::deserialize(partial).unwrap();
                 println!(
-                    "member {} partial signature: {:?}",
-                    i,
+                    "uint256 partial{}_{} = 0x{};",
+                    i + 1,
+                    j + 1,
                     hex::encode(&eval.value)
                 );
                 SigScheme::partial_verify(&public_poly, &msg[..], &partial).unwrap();
@@ -104,7 +112,14 @@ pub mod tests {
 
             SigScheme::verify(&threshold_public_key, &msg[..], &threshold_sig).unwrap();
 
-            println!("signature: {:?}", hex::encode(&threshold_sig));
+            println!(
+                "uint256 signature{} = 0x{};",
+                i + 1,
+                hex::encode(&threshold_sig)
+            );
+            println!(
+                "uint256[] sig{} = [signature{}, partial{}_1, partial{}_2, partial{}_3, partial{}_4, partial{}_5];",i + 1,i + 1,i + 1,i + 1,i + 1,i + 1,i + 1
+            );
             // let sig_point: G1 = bincode::deserialize(&threshold_sig).unwrap();
             // print_g1_point(&sig_point);
             println!("");

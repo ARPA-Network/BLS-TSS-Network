@@ -10,29 +10,25 @@ use arpa_node_dal::{BLSTasksFetcher, BLSTasksUpdater};
 use async_trait::async_trait;
 use ethers::types::Address;
 use log::{error, info};
-use std::{marker::PhantomData, sync::Arc};
-use threshold_bls::group::PairingCurve;
+use std::sync::Arc;
 use tokio::sync::RwLock;
 use tokio_retry::{strategy::FixedInterval, RetryIf};
 
 pub struct NewRandomnessTaskListener<
     T: BLSTasksFetcher<RandomnessTask> + BLSTasksUpdater<RandomnessTask>,
-    I: ChainIdentity + AdapterClientBuilder<C>,
-    C: PairingCurve,
+    I: ChainIdentity + AdapterClientBuilder,
 > {
     chain_id: usize,
     id_address: Address,
     chain_identity: Arc<RwLock<I>>,
     randomness_tasks_cache: Arc<RwLock<T>>,
     eq: Arc<RwLock<EventQueue>>,
-    c: PhantomData<C>,
 }
 
 impl<
         T: BLSTasksFetcher<RandomnessTask> + BLSTasksUpdater<RandomnessTask>,
-        I: ChainIdentity + AdapterClientBuilder<C>,
-        C: PairingCurve,
-    > NewRandomnessTaskListener<T, I, C>
+        I: ChainIdentity + AdapterClientBuilder,
+    > NewRandomnessTaskListener<T, I>
 {
     pub fn new(
         chain_id: usize,
@@ -47,7 +43,6 @@ impl<
             chain_identity,
             randomness_tasks_cache,
             eq,
-            c: PhantomData,
         }
     }
 }
@@ -55,9 +50,8 @@ impl<
 #[async_trait]
 impl<
         T: BLSTasksFetcher<RandomnessTask> + BLSTasksUpdater<RandomnessTask> + Sync + Send,
-        I: ChainIdentity + AdapterClientBuilder<C> + Sync + Send,
-        C: PairingCurve + Sync + Send,
-    > EventPublisher<NewRandomnessTask> for NewRandomnessTaskListener<T, I, C>
+        I: ChainIdentity + AdapterClientBuilder + Sync + Send,
+    > EventPublisher<NewRandomnessTask> for NewRandomnessTaskListener<T, I>
 {
     async fn publish(&self, event: NewRandomnessTask) {
         self.eq.read().await.publish(event).await;
@@ -67,9 +61,8 @@ impl<
 #[async_trait]
 impl<
         T: BLSTasksFetcher<RandomnessTask> + BLSTasksUpdater<RandomnessTask> + Sync + Send + 'static,
-        I: ChainIdentity + AdapterClientBuilder<C> + Sync + Send,
-        C: PairingCurve + Sync + Send,
-    > Listener for NewRandomnessTaskListener<T, I, C>
+        I: ChainIdentity + AdapterClientBuilder + Sync + Send,
+    > Listener for NewRandomnessTaskListener<T, I>
 {
     async fn start(mut self) -> NodeResult<()> {
         let client = self

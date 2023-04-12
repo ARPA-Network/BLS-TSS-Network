@@ -19,7 +19,7 @@ pub struct ReadyToHandleRandomnessTaskListener<
     B: BlockInfoFetcher,
     G: GroupInfoFetcher<C>,
     T: BLSTasksUpdater<RandomnessTask>,
-    I: ChainIdentity + AdapterClientBuilder<C>,
+    I: ChainIdentity + AdapterClientBuilder,
     C: PairingCurve,
 > {
     chain_id: usize,
@@ -36,7 +36,7 @@ impl<
         B: BlockInfoFetcher,
         G: GroupInfoFetcher<C>,
         T: BLSTasksUpdater<RandomnessTask>,
-        I: ChainIdentity + AdapterClientBuilder<C>,
+        I: ChainIdentity + AdapterClientBuilder,
         C: PairingCurve,
     > ReadyToHandleRandomnessTaskListener<B, G, T, I, C>
 {
@@ -67,7 +67,7 @@ impl<
         B: BlockInfoFetcher + Sync + Send,
         G: GroupInfoFetcher<C> + Sync + Send,
         T: BLSTasksUpdater<RandomnessTask> + Sync + Send,
-        I: ChainIdentity + AdapterClientBuilder<C> + Sync + Send,
+        I: ChainIdentity + AdapterClientBuilder + Sync + Send,
         C: PairingCurve + Sync + Send,
     > EventPublisher<ReadyToHandleRandomnessTask>
     for ReadyToHandleRandomnessTaskListener<B, G, T, I, C>
@@ -82,7 +82,7 @@ impl<
         B: BlockInfoFetcher + Sync + Send,
         G: GroupInfoFetcher<C> + Sync + Send,
         T: BLSTasksUpdater<RandomnessTask> + Sync + Send,
-        I: ChainIdentity + AdapterClientBuilder<C> + Sync + Send,
+        I: ChainIdentity + AdapterClientBuilder + Sync + Send,
         C: PairingCurve + Sync + Send,
     > Listener for ReadyToHandleRandomnessTaskListener<B, G, T, I, C>
 {

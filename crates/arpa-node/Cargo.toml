@@ -9,17 +9,8 @@ name = "node-client"
 path = "src/node_client.rs"
 
 [[bin]]
-name = "node-cmd-client"
-path = "src/node_cmd_client.rs"
-
-[[bin]]
 name = "node-account-client"
 path = "src/node_account_client.rs"
-
-[[bin]]
-name = "user-client"
-path = "src/user_client.rs"
-
 
 [dependencies]
 arpa-node-log = { path = "./src/node/log" }
