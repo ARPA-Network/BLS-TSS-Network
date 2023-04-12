@@ -26,7 +26,7 @@ use tokio::sync::RwLock;
 pub struct InGroupingSubscriber<
     N: NodeInfoFetcher<C>,
     G: GroupInfoFetcher<C> + GroupInfoUpdater<C>,
-    I: ChainIdentity + ControllerClientBuilder + CoordinatorClientBuilder + std::fmt::Debug,
+    I: ChainIdentity + ControllerClientBuilder<C> + CoordinatorClientBuilder + std::fmt::Debug,
     C: PairingCurve,
 > {
     main_chain_identity: Arc<RwLock<I>>,
@@ -40,7 +40,7 @@ pub struct InGroupingSubscriber<
 impl<
         N: NodeInfoFetcher<C>,
         G: GroupInfoFetcher<C> + GroupInfoUpdater<C>,
-        I: ChainIdentity + ControllerClientBuilder + CoordinatorClientBuilder + std::fmt::Debug,
+        I: ChainIdentity + ControllerClientBuilder<C> + CoordinatorClientBuilder + std::fmt::Debug,
         C: PairingCurve,
     > InGroupingSubscriber<N, G, I, C>
 {
@@ -65,7 +65,7 @@ impl<
 pub struct AllInOneDKGHandler<
     F: Fn() -> R,
     R: RngCore,
-    I: ChainIdentity + ControllerClientBuilder + CoordinatorClientBuilder,
+    I: ChainIdentity + ControllerClientBuilder<C> + CoordinatorClientBuilder,
     N: NodeInfoFetcher<C>,
     G: GroupInfoFetcher<C> + GroupInfoUpdater<C>,
     C: PairingCurve,
@@ -80,7 +80,7 @@ pub struct AllInOneDKGHandler<
 impl<
         F: Fn() -> R,
         R: RngCore,
-        I: ChainIdentity + ControllerClientBuilder + CoordinatorClientBuilder,
+        I: ChainIdentity + ControllerClientBuilder<C> + CoordinatorClientBuilder,
         N: NodeInfoFetcher<C>,
         G: GroupInfoFetcher<C> + GroupInfoUpdater<C>,
         C: PairingCurve,
@@ -114,7 +114,7 @@ pub trait DKGHandler<F, R> {
 impl<
         F: Fn() -> R + Debug + Send + Sync + Copy + 'static,
         R: RngCore + 'static,
-        I: ChainIdentity + ControllerClientBuilder + CoordinatorClientBuilder + Sync + Send,
+        I: ChainIdentity + ControllerClientBuilder<C> + CoordinatorClientBuilder + Sync + Send,
         N: NodeInfoFetcher<C> + Sync + Send,
         G: GroupInfoFetcher<C> + GroupInfoUpdater<C> + Sync + Send,
         C: PairingCurve + Sync + Send + 'static,
@@ -196,7 +196,7 @@ impl<
             + Send
             + 'static,
         I: ChainIdentity
-            + ControllerClientBuilder
+            + ControllerClientBuilder<C>
             + CoordinatorClientBuilder
             + std::fmt::Debug
             + Sync
@@ -286,7 +286,7 @@ impl<
             + Send
             + 'static,
         I: ChainIdentity
-            + ControllerClientBuilder
+            + ControllerClientBuilder<C>
             + CoordinatorClientBuilder
             + std::fmt::Debug
             + Sync

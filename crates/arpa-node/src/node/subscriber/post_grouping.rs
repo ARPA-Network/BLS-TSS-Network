@@ -10,17 +10,19 @@ use arpa_node_core::ChainIdentity;
 use arpa_node_log::*;
 use async_trait::async_trait;
 use log::{debug, error, info};
-use std::sync::Arc;
+use std::{marker::PhantomData, sync::Arc};
+use threshold_bls::group::PairingCurve;
 use tokio::sync::RwLock;
 
 #[derive(Debug)]
-pub struct PostGroupingSubscriber<I: ChainIdentity + ControllerClientBuilder> {
+pub struct PostGroupingSubscriber<I: ChainIdentity + ControllerClientBuilder<C>, C: PairingCurve> {
     main_chain_identity: Arc<RwLock<I>>,
     eq: Arc<RwLock<EventQueue>>,
     ts: Arc<RwLock<SimpleDynamicTaskScheduler>>,
+    c: PhantomData<C>,
 }
 
-impl<I: ChainIdentity + ControllerClientBuilder> PostGroupingSubscriber<I> {
+impl<I: ChainIdentity + ControllerClientBuilder<C>, C: PairingCurve> PostGroupingSubscriber<I, C> {
     pub fn new(
         main_chain_identity: Arc<RwLock<I>>,
         eq: Arc<RwLock<EventQueue>>,
@@ -30,6 +32,7 @@ impl<I: ChainIdentity + ControllerClientBuilder> PostGroupingSubscriber<I> {
             main_chain_identity,
             eq,
             ts,
+            c: PhantomData,
         }
     }
 }
@@ -39,13 +42,19 @@ pub trait DKGPostProcessHandler {
     async fn handle(&self, group_index: usize, group_epoch: usize) -> NodeResult<()>;
 }
 
-pub struct GeneralDKGPostProcessHandler<I: ChainIdentity + ControllerClientBuilder> {
+pub struct GeneralDKGPostProcessHandler<
+    I: ChainIdentity + ControllerClientBuilder<C>,
+    C: PairingCurve,
+> {
     main_chain_identity: Arc<RwLock<I>>,
+    c: PhantomData<C>,
 }
 
 #[async_trait]
-impl<I: ChainIdentity + ControllerClientBuilder + Sync + Send> DKGPostProcessHandler
-    for GeneralDKGPostProcessHandler<I>
+impl<
+        I: ChainIdentity + ControllerClientBuilder<C> + Sync + Send,
+        C: PairingCurve + Sync + Send,
+    > DKGPostProcessHandler for GeneralDKGPostProcessHandler<I, C>
 {
     #[log_function]
     async fn handle(&self, group_index: usize, group_epoch: usize) -> NodeResult<()> {
@@ -62,8 +71,10 @@ impl<I: ChainIdentity + ControllerClientBuilder + Sync + Send> DKGPostProcessHan
 }
 
 #[async_trait]
-impl<I: ChainIdentity + ControllerClientBuilder + std::fmt::Debug + Sync + Send + 'static>
-    Subscriber for PostGroupingSubscriber<I>
+impl<
+        I: ChainIdentity + ControllerClientBuilder<C> + std::fmt::Debug + Sync + Send + 'static,
+        C: PairingCurve + std::fmt::Debug + Sync + Send + 'static,
+    > Subscriber for PostGroupingSubscriber<I, C>
 {
     #[log_function]
     async fn notify(&self, topic: Topic, payload: &(dyn DebuggableEvent)) -> NodeResult<()> {
@@ -78,7 +89,7 @@ impl<I: ChainIdentity + ControllerClientBuilder + std::fmt::Debug + Sync + Send 
 
         self.ts.write().await.add_task(TaskType::Subscriber(SubscriberType::PostGrouping),async move {
                 let handler = GeneralDKGPostProcessHandler {
-                    main_chain_identity
+                    main_chain_identity,c: PhantomData,
                 };
 
                 if let Err(e) = handler.handle(group_index, group_epoch).await {
@@ -102,7 +113,9 @@ impl<I: ChainIdentity + ControllerClientBuilder + std::fmt::Debug + Sync + Send 
     }
 }
 
-impl<I: ChainIdentity + ControllerClientBuilder + std::fmt::Debug + Sync + Send + 'static>
-    DebuggableSubscriber for PostGroupingSubscriber<I>
+impl<
+        I: ChainIdentity + ControllerClientBuilder<C> + std::fmt::Debug + Sync + Send + 'static,
+        C: PairingCurve + std::fmt::Debug + Sync + Send + 'static,
+    > DebuggableSubscriber for PostGroupingSubscriber<I, C>
 {
 }

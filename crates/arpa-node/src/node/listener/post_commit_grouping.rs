@@ -4,7 +4,7 @@ use crate::node::{
     event::dkg_success::DKGSuccess,
     queue::{event_queue::EventQueue, EventPublisher},
 };
-use arpa_node_contract_client::adapter::{AdapterClientBuilder, AdapterViews};
+use arpa_node_contract_client::controller::{ControllerClientBuilder, ControllerViews};
 use arpa_node_core::{ChainIdentity, DKGStatus};
 use arpa_node_dal::{GroupInfoFetcher, GroupInfoUpdater};
 use async_trait::async_trait;
@@ -16,7 +16,7 @@ use tokio_retry::{strategy::FixedInterval, RetryIf};
 
 pub struct PostCommitGroupingListener<
     G: GroupInfoFetcher<C> + GroupInfoUpdater<C>,
-    I: ChainIdentity + AdapterClientBuilder<C>,
+    I: ChainIdentity + ControllerClientBuilder<C>,
     C: PairingCurve,
 > {
     main_chain_identity: Arc<RwLock<I>>,
@@ -27,7 +27,7 @@ pub struct PostCommitGroupingListener<
 
 impl<
         G: GroupInfoFetcher<C> + GroupInfoUpdater<C>,
-        I: ChainIdentity + AdapterClientBuilder<C>,
+        I: ChainIdentity + ControllerClientBuilder<C>,
         C: PairingCurve,
     > PostCommitGroupingListener<G, I, C>
 {
@@ -48,7 +48,7 @@ impl<
 #[async_trait]
 impl<
         G: GroupInfoFetcher<C> + GroupInfoUpdater<C> + Sync + Send,
-        I: ChainIdentity + AdapterClientBuilder<C> + Sync + Send,
+        I: ChainIdentity + ControllerClientBuilder<C> + Sync + Send,
         C: PairingCurve + Send + Sync + 'static,
     > EventPublisher<DKGSuccess<C>> for PostCommitGroupingListener<G, I, C>
 {
@@ -60,18 +60,16 @@ impl<
 #[async_trait]
 impl<
         G: GroupInfoFetcher<C> + GroupInfoUpdater<C> + Sync + Send,
-        I: ChainIdentity + AdapterClientBuilder<C> + Sync + Send,
+        I: ChainIdentity + ControllerClientBuilder<C> + Sync + Send,
         C: PairingCurve + Sync + Send + 'static,
     > Listener for PostCommitGroupingListener<G, I, C>
 {
     async fn start(mut self) -> NodeResult<()> {
-        let id_address = self.main_chain_identity.read().await.get_id_address();
-
         let client = self
             .main_chain_identity
             .read()
             .await
-            .build_adapter_client(id_address);
+            .build_controller_client();
 
         let retry_strategy = FixedInterval::from_millis(2000);
 

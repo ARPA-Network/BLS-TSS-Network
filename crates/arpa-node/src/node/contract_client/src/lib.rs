@@ -6,8 +6,6 @@ use error::ContractClientResult;
 pub mod contract_stub;
 pub mod error;
 pub mod ethers;
-pub mod rpc_mock;
-pub mod rpc_stub;
 
 #[async_trait]
 pub trait ServiceClient<C> {
@@ -29,15 +27,13 @@ pub trait NonceManager {
 }
 
 pub mod controller {
-    use std::future::Future;
-
-    use arpa_node_core::{DKGTask, Node};
-
+    use crate::error::ContractClientResult;
+    use arpa_node_core::{DKGTask, Group, Node};
     use async_trait::async_trait;
     use ethers::types::H256;
     use ethers_core::types::Address;
-
-    use crate::error::ContractClientResult;
+    use std::future::Future;
+    use threshold_bls::group::PairingCurve;
 
     #[async_trait]
     pub trait ControllerTransactions {
@@ -60,8 +56,10 @@ pub mod controller {
     }
 
     #[async_trait]
-    pub trait ControllerViews {
+    pub trait ControllerViews<C: PairingCurve> {
         async fn get_node(&self, id_address: Address) -> ContractClientResult<Node>;
+
+        async fn get_group(&self, group_index: usize) -> ContractClientResult<Group<C>>;
     }
 
     #[async_trait]
@@ -75,8 +73,8 @@ pub mod controller {
         ) -> ContractClientResult<()>;
     }
 
-    pub trait ControllerClientBuilder {
-        type Service: ControllerTransactions + ControllerViews + ControllerLogs + Send + Sync;
+    pub trait ControllerClientBuilder<C: PairingCurve> {
+        type Service: ControllerTransactions + ControllerViews<C> + ControllerLogs + Send + Sync;
 
         fn build_controller_client(&self) -> Self::Service;
     }
@@ -140,12 +138,11 @@ pub mod coordinator {
 }
 
 pub mod adapter {
-    use arpa_node_core::{Group, PartialSignature, RandomnessTask};
+    use arpa_node_core::{PartialSignature, RandomnessTask};
     use async_trait::async_trait;
     use ethers::types::{H256, U256};
     use ethers_core::types::Address;
     use std::{collections::HashMap, future::Future};
-    use threshold_bls::group::PairingCurve;
 
     use crate::error::ContractClientResult;
 
@@ -163,10 +160,8 @@ pub mod adapter {
     }
 
     #[async_trait]
-    pub trait AdapterViews<C: PairingCurve> {
-        async fn get_group(&self, group_index: usize) -> ContractClientResult<Group<C>>;
-
-        async fn get_last_output(&self) -> ContractClientResult<U256>;
+    pub trait AdapterViews {
+        async fn get_last_randomness(&self) -> ContractClientResult<U256>;
 
         async fn is_task_pending(&self, request_id: &[u8]) -> ContractClientResult<bool>;
     }
@@ -182,8 +177,8 @@ pub mod adapter {
         ) -> ContractClientResult<()>;
     }
 
-    pub trait AdapterClientBuilder<C: PairingCurve> {
-        type Service: AdapterTransactions + AdapterViews<C> + AdapterLogs + Send + Sync;
+    pub trait AdapterClientBuilder {
+        type Service: AdapterTransactions + AdapterViews + AdapterLogs + Send + Sync;
 
         fn build_adapter_client(&self, main_id_address: Address) -> Self::Service;
     }

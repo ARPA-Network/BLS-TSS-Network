@@ -359,6 +359,7 @@ pub mod coordinator_tests {
             wallet,
             anvil.endpoint(),
             Address::random(),
+            Address::random(),
         );
 
         let client = CoordinatorClient::new(coordinator_contract.address(), &main_chain_identity);
