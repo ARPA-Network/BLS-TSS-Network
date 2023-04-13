@@ -1,3 +1,4 @@
+use arpa_node_core::WalletSigner;
 use ethers::providers::Http as HttpProvider;
 use ethers::{
     prelude::{signer::SignerMiddlewareError, ContractError, ProviderError},
@@ -6,8 +7,6 @@ use ethers::{
 };
 use rustc_hex::FromHexError;
 use thiserror::Error;
-
-use crate::ethers::WalletSigner;
 
 pub type ContractClientResult<A> = Result<A, ContractClientError>;
 
@@ -41,6 +40,6 @@ pub enum ContractClientError {
     HandlingLogSubscriptionError(#[from] anyhow::Error),
     #[error("can't fetch transaction receipt")]
     NoTransactionReceipt,
-    #[error("Transaction failed without specific reason")]
+    #[error("Transaction failed with status equal to 0x0")]
     TransactionFailed,
 }
