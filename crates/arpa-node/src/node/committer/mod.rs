@@ -2,7 +2,7 @@ pub mod client;
 pub mod server;
 
 use crate::node::error::NodeResult;
-use arpa_node_core::TaskType;
+use arpa_node_core::BLSTaskType;
 use arpa_node_dal::GroupInfoFetcher;
 use async_trait::async_trait;
 use ethers::types::Address;
@@ -20,9 +20,9 @@ pub(crate) trait CommitterService {
     async fn commit_partial_signature(
         self,
         chain_id: usize,
-        task_type: TaskType,
-        message: Vec<u8>,
+        task_type: BLSTaskType,
         request_id: Vec<u8>,
+        message: Vec<u8>,
         partial_signature: Vec<u8>,
     ) -> NodeResult<bool>;
 }
