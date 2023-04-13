@@ -10,7 +10,7 @@ dkg-core = { path = "../../../../dkg-core" }
 threshold-bls = { path = "../../../../threshold-bls", default-features = false, features = ["bn254"] }
 
 tokio = { version = "1.20.1", features = ["full"] }
-ethers-core = "1.0.0"
+ethers-core = "1.0.2"
 thiserror = "1.0.15"
 anyhow = "1.0.31"
 serde = "1.0.106"
