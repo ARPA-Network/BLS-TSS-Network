@@ -8,7 +8,7 @@ use crate::node::{
         ready_to_handle_randomness_task::ReadyToHandleRandomnessTaskListener, Listener,
     },
     queue::event_queue::EventQueue,
-    scheduler::{fixed::SimpleFixedTaskScheduler, ListenerType, TaskScheduler, TaskType},
+    scheduler::{fixed::SimpleFixedTaskScheduler, TaskScheduler},
     subscriber::{
         block::BlockSubscriber, in_grouping::InGroupingSubscriber,
         post_grouping::PostGroupingSubscriber,
@@ -22,7 +22,8 @@ use arpa_node_contract_client::{
     coordinator::CoordinatorClientBuilder, provider::ChainProviderBuilder,
 };
 use arpa_node_core::{
-    ChainIdentity, GeneralChainIdentity, RandomnessTask, SchedulerError, SchedulerResult,
+    ChainIdentity, GeneralChainIdentity, ListenerDescriptor, ListenerType, RandomnessTask,
+    SchedulerResult, TaskType, CONFIG,
 };
 use arpa_node_dal::{
     cache::{InMemoryBlockInfoCache, InMemorySignatureResultCache, RandomnessResultCache},
@@ -68,7 +69,6 @@ impl<PC: PairingCurve + Send + Sync + 'static>
     >
 {
     pub fn new(
-        id: usize,
         description: String,
         chain_identity: GeneralChainIdentity,
         node_cache: NodeInfoDBClient<PC>,
@@ -76,7 +76,7 @@ impl<PC: PairingCurve + Send + Sync + 'static>
         randomness_tasks_cache: BLSTasksDBClient<RandomnessTask, PC>,
     ) -> Self {
         GeneralMainChain {
-            id,
+            id: chain_identity.get_chain_id(),
             description,
             chain_identity: Arc::new(RwLock::new(chain_identity)),
             block_cache: Arc::new(RwLock::new(InMemoryBlockInfoCache::new())),
@@ -143,136 +143,147 @@ impl<
         &self,
         eq: Arc<RwLock<EventQueue>>,
         fs: Arc<RwLock<SimpleFixedTaskScheduler>>,
-        task_type: TaskType,
+        listener: ListenerDescriptor,
     ) -> SchedulerResult<()> {
-        match task_type {
-            TaskType::Listener(e) => match e {
-                ListenerType::Block => {
-                    let p_block = BlockListener::new(self.id(), self.get_chain_identity(), eq);
+        match listener.l_type {
+            ListenerType::Block => {
+                let p_block = BlockListener::new(self.id(), self.get_chain_identity(), eq);
 
-                    fs.write()
-                        .await
-                        .add_task(TaskType::Listener(ListenerType::Block), async move {
-                            if let Err(e) = p_block.start().await {
-                                error!("{:?}", e);
-                            };
-                        })
-                }
-                ListenerType::PreGrouping => {
-                    let p_pre_grouping = PreGroupingListener::new(
-                        self.get_chain_identity(),
-                        self.get_group_cache(),
-                        eq,
-                    );
+                fs.write()
+                    .await
+                    .add_task(TaskType::Listener(ListenerType::Block), async move {
+                        if let Err(e) = p_block
+                            .start(listener.interval_millis, listener.use_jitter)
+                            .await
+                        {
+                            error!("{:?}", e);
+                        };
+                    })
+            }
+            ListenerType::PreGrouping => {
+                let p_pre_grouping =
+                    PreGroupingListener::new(self.get_chain_identity(), self.get_group_cache(), eq);
 
-                    fs.write().await.add_task(
-                        TaskType::Listener(ListenerType::PreGrouping),
-                        async move {
-                            if let Err(e) = p_pre_grouping.start().await {
-                                error!("{:?}", e);
-                            };
-                        },
-                    )
-                }
-                ListenerType::PostCommitGrouping => {
-                    let p_post_commit_grouping = PostCommitGroupingListener::new(
-                        self.get_chain_identity(),
-                        self.get_group_cache(),
-                        eq,
-                    );
+                fs.write().await.add_task(
+                    TaskType::Listener(ListenerType::PreGrouping),
+                    async move {
+                        if let Err(e) = p_pre_grouping
+                            .start(listener.interval_millis, listener.use_jitter)
+                            .await
+                        {
+                            error!("{:?}", e);
+                        };
+                    },
+                )
+            }
+            ListenerType::PostCommitGrouping => {
+                let p_post_commit_grouping = PostCommitGroupingListener::new(
+                    self.get_chain_identity(),
+                    self.get_group_cache(),
+                    eq,
+                );
 
-                    fs.write().await.add_task(
-                        TaskType::Listener(ListenerType::PostCommitGrouping),
-                        async move {
-                            if let Err(e) = p_post_commit_grouping.start().await {
-                                error!("{:?}", e);
-                            };
-                        },
-                    )
-                }
-                ListenerType::PostGrouping => {
-                    let p_post_grouping = PostGroupingListener::new(
-                        self.get_block_cache(),
-                        self.get_group_cache(),
-                        eq,
-                    );
+                fs.write().await.add_task(
+                    TaskType::Listener(ListenerType::PostCommitGrouping),
+                    async move {
+                        if let Err(e) = p_post_commit_grouping
+                            .start(listener.interval_millis, listener.use_jitter)
+                            .await
+                        {
+                            error!("{:?}", e);
+                        };
+                    },
+                )
+            }
+            ListenerType::PostGrouping => {
+                let p_post_grouping =
+                    PostGroupingListener::new(self.get_block_cache(), self.get_group_cache(), eq);
 
-                    fs.write().await.add_task(
-                        TaskType::Listener(ListenerType::PostGrouping),
-                        async move {
-                            if let Err(e) = p_post_grouping.start().await {
-                                error!("{:?}", e);
-                            };
-                        },
-                    )
-                }
-                ListenerType::NewRandomnessTask => {
-                    let id_address = self.get_node_cache().read().await.get_id_address().unwrap();
+                fs.write().await.add_task(
+                    TaskType::Listener(ListenerType::PostGrouping),
+                    async move {
+                        if let Err(e) = p_post_grouping
+                            .start(listener.interval_millis, listener.use_jitter)
+                            .await
+                        {
+                            error!("{:?}", e);
+                        };
+                    },
+                )
+            }
+            ListenerType::NewRandomnessTask => {
+                let id_address = self.get_node_cache().read().await.get_id_address().unwrap();
 
-                    let p_new_randomness_task = NewRandomnessTaskListener::new(
+                let p_new_randomness_task = NewRandomnessTaskListener::new(
+                    self.id(),
+                    id_address,
+                    self.get_chain_identity(),
+                    self.get_randomness_tasks_cache(),
+                    eq,
+                );
+
+                fs.write().await.add_task(
+                    TaskType::Listener(ListenerType::NewRandomnessTask),
+                    async move {
+                        if let Err(e) = p_new_randomness_task
+                            .start(listener.interval_millis, listener.use_jitter)
+                            .await
+                        {
+                            error!("{:?}", e);
+                        };
+                    },
+                )
+            }
+            ListenerType::ReadyToHandleRandomnessTask => {
+                let id_address = self.get_node_cache().read().await.get_id_address().unwrap();
+
+                let p_ready_to_handle_randomness_task = ReadyToHandleRandomnessTaskListener::new(
+                    self.id(),
+                    id_address,
+                    self.get_chain_identity(),
+                    self.get_block_cache(),
+                    self.get_group_cache(),
+                    self.get_randomness_tasks_cache(),
+                    eq,
+                );
+
+                fs.write().await.add_task(
+                    TaskType::Listener(ListenerType::ReadyToHandleRandomnessTask),
+                    async move {
+                        if let Err(e) = p_ready_to_handle_randomness_task
+                            .start(listener.interval_millis, listener.use_jitter)
+                            .await
+                        {
+                            error!("{:?}", e);
+                        };
+                    },
+                )
+            }
+            ListenerType::RandomnessSignatureAggregation => {
+                let id_address = self.get_node_cache().read().await.get_id_address().unwrap();
+
+                let p_randomness_signature_aggregation =
+                    RandomnessSignatureAggregationListener::new(
                         self.id(),
                         id_address,
-                        self.get_chain_identity(),
-                        self.get_randomness_tasks_cache(),
+                        self.get_block_cache(),
+                        self.get_group_cache(),
+                        self.get_randomness_result_cache(),
                         eq,
                     );
 
-                    fs.write().await.add_task(
-                        TaskType::Listener(ListenerType::NewRandomnessTask),
-                        async move {
-                            if let Err(e) = p_new_randomness_task.start().await {
-                                error!("{:?}", e);
-                            };
-                        },
-                    )
-                }
-                ListenerType::ReadyToHandleRandomnessTask => {
-                    let id_address = self.get_node_cache().read().await.get_id_address().unwrap();
-
-                    let p_ready_to_handle_randomness_task =
-                        ReadyToHandleRandomnessTaskListener::new(
-                            self.id(),
-                            id_address,
-                            self.get_chain_identity(),
-                            self.get_block_cache(),
-                            self.get_group_cache(),
-                            self.get_randomness_tasks_cache(),
-                            eq,
-                        );
-
-                    fs.write().await.add_task(
-                        TaskType::Listener(ListenerType::ReadyToHandleRandomnessTask),
-                        async move {
-                            if let Err(e) = p_ready_to_handle_randomness_task.start().await {
-                                error!("{:?}", e);
-                            };
-                        },
-                    )
-                }
-                ListenerType::RandomnessSignatureAggregation => {
-                    let id_address = self.get_node_cache().read().await.get_id_address().unwrap();
-
-                    let p_randomness_signature_aggregation =
-                        RandomnessSignatureAggregationListener::new(
-                            self.id(),
-                            id_address,
-                            self.get_block_cache(),
-                            self.get_group_cache(),
-                            self.get_randomness_result_cache(),
-                            eq,
-                        );
-
-                    fs.write().await.add_task(
-                        TaskType::Listener(ListenerType::RandomnessSignatureAggregation),
-                        async move {
-                            if let Err(e) = p_randomness_signature_aggregation.start().await {
-                                error!("{:?}", e);
-                            };
-                        },
-                    )
-                }
-            },
-            _ => Err(SchedulerError::TaskNotFound),
+                fs.write().await.add_task(
+                    TaskType::Listener(ListenerType::RandomnessSignatureAggregation),
+                    async move {
+                        if let Err(e) = p_randomness_signature_aggregation
+                            .start(listener.interval_millis, listener.use_jitter)
+                            .await
+                        {
+                            error!("{:?}", e);
+                        };
+                    },
+                )
+            }
         }
     }
 
@@ -280,13 +291,13 @@ impl<
         &self,
         context: &GeneralContext<N, G, T, I, PC>,
     ) -> SchedulerResult<()> {
-        match &context.get_config().listeners {
+        match &CONFIG.get().unwrap().listeners {
             Some(listeners) => {
                 for listener in listeners {
                     self.init_listener(
                         context.get_event_queue(),
                         context.get_fixed_task_handler(),
-                        TaskType::Listener(listener.clone()),
+                        *listener,
                     )
                     .await?;
                 }
@@ -358,7 +369,7 @@ impl<
         self.init_listener(
             context.get_event_queue(),
             context.get_fixed_task_handler(),
-            TaskType::Listener(ListenerType::Block),
+            ListenerDescriptor::build(ListenerType::Block),
         )
         .await?;
 
@@ -369,19 +380,19 @@ impl<
         self.init_listener(
             context.get_event_queue(),
             context.get_fixed_task_handler(),
-            TaskType::Listener(ListenerType::PreGrouping),
+            ListenerDescriptor::build(ListenerType::PreGrouping),
         )
         .await?;
         self.init_listener(
             context.get_event_queue(),
             context.get_fixed_task_handler(),
-            TaskType::Listener(ListenerType::PostCommitGrouping),
+            ListenerDescriptor::build(ListenerType::PostCommitGrouping),
         )
         .await?;
         self.init_listener(
             context.get_event_queue(),
             context.get_fixed_task_handler(),
-            TaskType::Listener(ListenerType::PostGrouping),
+            ListenerDescriptor::build(ListenerType::PostGrouping),
         )
         .await?;
 
@@ -392,19 +403,19 @@ impl<
         self.init_listener(
             context.get_event_queue(),
             context.get_fixed_task_handler(),
-            TaskType::Listener(ListenerType::NewRandomnessTask),
+            ListenerDescriptor::build(ListenerType::NewRandomnessTask),
         )
         .await?;
         self.init_listener(
             context.get_event_queue(),
             context.get_fixed_task_handler(),
-            TaskType::Listener(ListenerType::ReadyToHandleRandomnessTask),
+            ListenerDescriptor::build(ListenerType::ReadyToHandleRandomnessTask),
         )
         .await?;
         self.init_listener(
             context.get_event_queue(),
             context.get_fixed_task_handler(),
-            TaskType::Listener(ListenerType::RandomnessSignatureAggregation),
+            ListenerDescriptor::build(ListenerType::RandomnessSignatureAggregation),
         )
         .await?;
 
@@ -441,6 +452,7 @@ impl<
 
         let s_post_grouping = PostGroupingSubscriber::new(
             self.get_chain_identity(),
+            self.get_group_cache(),
             context.get_event_queue(),
             context.get_dynamic_task_handler(),
         );
