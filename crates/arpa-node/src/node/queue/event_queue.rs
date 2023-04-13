@@ -52,7 +52,7 @@ pub mod tests {
         queue::event_queue::EventQueue,
         subscriber::{block::BlockSubscriber, Subscriber},
     };
-    use arpa_node_core::GeneralChainIdentity;
+    use arpa_node_core::{Config, GeneralChainIdentity};
     use arpa_node_dal::cache::InMemoryBlockInfoCache;
     use arpa_node_dal::BlockInfoFetcher;
     use ethers::types::Address;
@@ -61,6 +61,8 @@ pub mod tests {
 
     #[tokio::test]
     async fn test() {
+        Config::default().initialize();
+
         let eq = Arc::new(RwLock::new(EventQueue::new()));
 
         let chain_id = 1;
@@ -79,9 +81,9 @@ pub mod tests {
 
         let chain_identity = GeneralChainIdentity::new(
             0,
-            0,
             fake_wallet,
-            "".to_string(),
+            "localhost:8545".to_string(),
+            3000,
             Address::random(),
             Address::random(),
         );
