@@ -10,7 +10,6 @@ threshold-bls = { path = "../../../../threshold-bls", default-features = false, 
 arpa-node-core = { path = "../../node/core" }
 
 tokio = { version = "1.20.1", features = ["full"] }
-ethers-core = "1.0.0"
 thiserror = "1.0.15"
 anyhow = "1.0.31"
 serde = "1.0.106"
@@ -19,9 +18,9 @@ async-trait = "0.1.35"
 bincode = "1.2.1"
 tonic = "0.8"
 prost = "0.11"
-ethers = { version = "1.0.0", features = ["abigen"] }
+ethers = { version = "1.0.2", features = ["abigen"] }
 rustc-hex = "2.1.0"
-lazy_static = "1.4.0"
+tokio-retry = "0.3"
 
 [lib]
 name = "arpa_node_contract_client"
@@ -30,4 +29,4 @@ path = "src/lib.rs"
 [build-dependencies]
 tonic-build = "0.8"
 prost-build = "0.11"
-ethers-contract-abigen = "1.0.0"
+ethers-contract-abigen = "1.0.2"

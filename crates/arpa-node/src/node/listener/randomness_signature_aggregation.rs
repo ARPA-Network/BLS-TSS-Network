@@ -25,7 +25,7 @@ pub struct RandomnessSignatureAggregationListener<
     group_cache: Arc<RwLock<G>>,
     randomness_signature_cache: Arc<RwLock<C>>,
     eq: Arc<RwLock<EventQueue>>,
-    c: PhantomData<PC>,
+    pc: PhantomData<PC>,
 }
 
 impl<
@@ -50,7 +50,7 @@ impl<
             group_cache,
             randomness_signature_cache,
             eq,
-            c: PhantomData,
+            pc: PhantomData,
         }
     }
 }
@@ -77,29 +77,27 @@ impl<
         PC: PairingCurve + Sync + Send,
     > Listener for RandomnessSignatureAggregationListener<B, G, C, PC>
 {
-    async fn start(mut self) -> NodeResult<()> {
-        loop {
-            let is_committer = self.group_cache.read().await.is_committer(self.id_address);
+    async fn listen(&self) -> NodeResult<()> {
+        let is_committer = self.group_cache.read().await.is_committer(self.id_address);
 
-            if let Ok(true) = is_committer {
-                let current_block_height = self.block_cache.read().await.get_block_height();
+        if let Ok(true) = is_committer {
+            let current_block_height = self.block_cache.read().await.get_block_height();
 
-                let ready_signatures = self
-                    .randomness_signature_cache
-                    .write()
-                    .await
-                    .get_ready_to_commit_signatures(current_block_height);
+            let ready_signatures = self
+                .randomness_signature_cache
+                .write()
+                .await
+                .get_ready_to_commit_signatures(current_block_height);
 
-                if !ready_signatures.is_empty() {
-                    self.publish(ReadyToFulfillRandomnessTask {
-                        chain_id: self.chain_id,
-                        tasks: ready_signatures,
-                    })
-                    .await;
-                }
+            if !ready_signatures.is_empty() {
+                self.publish(ReadyToFulfillRandomnessTask {
+                    chain_id: self.chain_id,
+                    tasks: ready_signatures,
+                })
+                .await;
             }
-
-            tokio::time::sleep(std::time::Duration::from_millis(1000)).await;
         }
+
+        Ok(())
     }
 }

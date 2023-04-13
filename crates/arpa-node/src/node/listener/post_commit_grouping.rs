@@ -1,35 +1,30 @@
 use super::Listener;
 use crate::node::{
-    error::{NodeError, NodeResult},
+    error::NodeResult,
     event::dkg_success::DKGSuccess,
     queue::{event_queue::EventQueue, EventPublisher},
 };
 use arpa_node_contract_client::controller::{ControllerClientBuilder, ControllerViews};
 use arpa_node_core::{ChainIdentity, DKGStatus};
-use arpa_node_dal::{GroupInfoFetcher, GroupInfoUpdater};
+use arpa_node_dal::GroupInfoFetcher;
 use async_trait::async_trait;
-use log::error;
 use std::{marker::PhantomData, sync::Arc};
 use threshold_bls::group::PairingCurve;
 use tokio::sync::RwLock;
-use tokio_retry::{strategy::FixedInterval, RetryIf};
 
 pub struct PostCommitGroupingListener<
-    G: GroupInfoFetcher<C> + GroupInfoUpdater<C>,
-    I: ChainIdentity + ControllerClientBuilder<C>,
-    C: PairingCurve,
+    G: GroupInfoFetcher<PC>,
+    I: ChainIdentity + ControllerClientBuilder<PC>,
+    PC: PairingCurve,
 > {
     main_chain_identity: Arc<RwLock<I>>,
     group_cache: Arc<RwLock<G>>,
     eq: Arc<RwLock<EventQueue>>,
-    c: PhantomData<C>,
+    pc: PhantomData<PC>,
 }
 
-impl<
-        G: GroupInfoFetcher<C> + GroupInfoUpdater<C>,
-        I: ChainIdentity + ControllerClientBuilder<C>,
-        C: PairingCurve,
-    > PostCommitGroupingListener<G, I, C>
+impl<G: GroupInfoFetcher<PC>, I: ChainIdentity + ControllerClientBuilder<PC>, PC: PairingCurve>
+    PostCommitGroupingListener<G, I, PC>
 {
     pub fn new(
         main_chain_identity: Arc<RwLock<I>>,
@@ -40,83 +35,49 @@ impl<
             main_chain_identity,
             group_cache,
             eq,
-            c: PhantomData,
+            pc: PhantomData,
         }
     }
 }
 
 #[async_trait]
 impl<
-        G: GroupInfoFetcher<C> + GroupInfoUpdater<C> + Sync + Send,
-        I: ChainIdentity + ControllerClientBuilder<C> + Sync + Send,
-        C: PairingCurve + Send + Sync + 'static,
-    > EventPublisher<DKGSuccess<C>> for PostCommitGroupingListener<G, I, C>
+        G: GroupInfoFetcher<PC> + Sync + Send,
+        I: ChainIdentity + ControllerClientBuilder<PC> + Sync + Send,
+        PC: PairingCurve + Send + Sync + 'static,
+    > EventPublisher<DKGSuccess<PC>> for PostCommitGroupingListener<G, I, PC>
 {
-    async fn publish(&self, event: DKGSuccess<C>) {
+    async fn publish(&self, event: DKGSuccess<PC>) {
         self.eq.read().await.publish(event).await;
     }
 }
 
 #[async_trait]
 impl<
-        G: GroupInfoFetcher<C> + GroupInfoUpdater<C> + Sync + Send,
-        I: ChainIdentity + ControllerClientBuilder<C> + Sync + Send,
-        C: PairingCurve + Sync + Send + 'static,
-    > Listener for PostCommitGroupingListener<G, I, C>
+        G: GroupInfoFetcher<PC> + Sync + Send,
+        I: ChainIdentity + ControllerClientBuilder<PC> + Sync + Send,
+        PC: PairingCurve + Sync + Send + 'static,
+    > Listener for PostCommitGroupingListener<G, I, PC>
 {
-    async fn start(mut self) -> NodeResult<()> {
-        let client = self
-            .main_chain_identity
-            .read()
-            .await
-            .build_controller_client();
+    async fn listen(&self) -> NodeResult<()> {
+        let dkg_status = self.group_cache.read().await.get_dkg_status();
 
-        let retry_strategy = FixedInterval::from_millis(2000);
+        if let Ok(DKGStatus::CommitSuccess) = dkg_status {
+            let group_index = self.group_cache.read().await.get_index()?;
 
-        loop {
-            if let Err(err) = RetryIf::spawn(
-                retry_strategy.clone(),
-                || async {
-                    let dkg_status = self.group_cache.read().await.get_dkg_status();
+            let client = self
+                .main_chain_identity
+                .read()
+                .await
+                .build_controller_client();
 
-                    if let Ok(DKGStatus::CommitSuccess) = dkg_status {
-                        let group_index = self.group_cache.read().await.get_index()?;
-
-                        let group_epoch = self.group_cache.read().await.get_epoch()?;
-
-                        if let Ok(group) = client.get_group(group_index).await {
-                            if group.state {
-                                let res = self
-                                    .group_cache
-                                    .write()
-                                    .await
-                                    .update_dkg_status(
-                                        group_index,
-                                        group_epoch,
-                                        DKGStatus::WaitForPostProcess,
-                                    )
-                                    .await?;
-
-                                if res {
-                                    self.publish(DKGSuccess { group }).await;
-                                }
-                            }
-                        }
-                    }
-
-                    NodeResult::Ok(())
-                },
-                |e: &NodeError| {
-                    error!("listener is interrupted. Retry... Error: {:?}, ", e);
-                    true
-                },
-            )
-            .await
-            {
-                error!("{:?}", err);
+            if let Ok(group) = client.get_group(group_index).await {
+                if group.state {
+                    self.publish(DKGSuccess { group }).await;
+                }
             }
-
-            tokio::time::sleep(std::time::Duration::from_millis(2000)).await;
         }
+
+        Ok(())
     }
 }

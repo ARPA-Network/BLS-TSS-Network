@@ -1,7 +1,5 @@
 syntax = "proto3";
 
-import "google/protobuf/empty.proto";
-
 package committer;
 
 service CommitterService {
@@ -12,12 +10,12 @@ service CommitterService {
 message CommitPartialSignatureRequest {
   string id_address = 1;
   uint32 chain_id = 2;
-  enum TaskType {
+  enum BLSTaskType {
     Randomness = 0;
     GroupRelay = 1;
     GroupRelayConfirmation = 2;
   }
-  TaskType task_type = 3;
+  BLSTaskType task_type = 3;
   bytes request_id = 4;
   bytes message = 5;
   bytes partial_signature = 6;

@@ -1,6 +1,6 @@
 use super::Listener;
 use crate::node::{
-    error::{NodeError, NodeResult},
+    error::NodeResult,
     event::new_randomness_task::NewRandomnessTask,
     queue::{event_queue::EventQueue, EventPublisher},
 };
@@ -9,10 +9,9 @@ use arpa_node_core::{ChainIdentity, RandomnessTask};
 use arpa_node_dal::{BLSTasksFetcher, BLSTasksUpdater};
 use async_trait::async_trait;
 use ethers::types::Address;
-use log::{error, info};
+use log::info;
 use std::sync::Arc;
 use tokio::sync::RwLock;
-use tokio_retry::{strategy::FixedInterval, RetryIf};
 
 pub struct NewRandomnessTaskListener<
     T: BLSTasksFetcher<RandomnessTask> + BLSTasksUpdater<RandomnessTask>,
@@ -64,64 +63,44 @@ impl<
         I: ChainIdentity + AdapterClientBuilder + Sync + Send,
     > Listener for NewRandomnessTaskListener<T, I>
 {
-    async fn start(mut self) -> NodeResult<()> {
+    async fn listen(&self) -> NodeResult<()> {
         let client = self
             .chain_identity
             .read()
             .await
             .build_adapter_client(self.id_address);
+        let chain_id = self.chain_id;
 
-        let retry_strategy = FixedInterval::from_millis(2000);
-
-        if let Err(err) = RetryIf::spawn(
-            retry_strategy.clone(),
-            || async {
-                let chain_id = self.chain_id;
+        client
+            .subscribe_randomness_task(move |randomness_task| {
                 let randomness_tasks_cache = self.randomness_tasks_cache.clone();
                 let eq = self.eq.clone();
 
-                client
-                    .subscribe_randomness_task(move |randomness_task| {
-                        let randomness_tasks_cache = randomness_tasks_cache.clone();
-                        let eq = eq.clone();
+                async move {
+                    let contained_res = randomness_tasks_cache
+                        .read()
+                        .await
+                        .contains(&randomness_task.request_id)
+                        .await;
+                    if let Ok(false) = contained_res {
+                        info!("received new randomness task. {:?}", randomness_task);
 
-                        async move {
-                            let contained_res = randomness_tasks_cache
-                                .read()
-                                .await
-                                .contains(&randomness_task.request_id)
-                                .await;
-                            if let Ok(false) = contained_res {
-                                info!("received new randomness task. {:?}", randomness_task);
+                        randomness_tasks_cache
+                            .write()
+                            .await
+                            .add(randomness_task.clone())
+                            .await
+                            .map_err(anyhow::Error::from)?;
 
-                                randomness_tasks_cache
-                                    .write()
-                                    .await
-                                    .add(randomness_task.clone())
-                                    .await
-                                    .map_err(anyhow::Error::from)?;
-
-                                eq.read()
-                                    .await
-                                    .publish(NewRandomnessTask::new(chain_id, randomness_task))
-                                    .await;
-                            }
-                            Ok(())
-                        }
-                    })
-                    .await?;
-
-                Ok(())
-            },
-            |e: &NodeError| {
-                error!("listener is interrupted. Retry... Error: {:?}, ", e);
-                true
-            },
-        )
-        .await
-        {
-            error!("{:?}", err);
-        }
+                        eq.read()
+                            .await
+                            .publish(NewRandomnessTask::new(chain_id, randomness_task))
+                            .await;
+                    }
+                    Ok(())
+                }
+            })
+            .await?;
 
         Ok(())
     }

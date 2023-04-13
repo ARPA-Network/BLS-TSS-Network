@@ -1,11 +1,8 @@
 pub mod types;
-use crate::node::{
-    queue::event_queue::EventQueue,
-    scheduler::{fixed::SimpleFixedTaskScheduler, TaskType},
-};
+use crate::node::{queue::event_queue::EventQueue, scheduler::fixed::SimpleFixedTaskScheduler};
 
 use super::ContextFetcher;
-use arpa_node_core::SchedulerResult;
+use arpa_node_core::{ListenerDescriptor, SchedulerResult};
 use async_trait::async_trait;
 use std::sync::Arc;
 use tokio::sync::RwLock;
@@ -30,7 +27,7 @@ pub(crate) trait Chain {
         &self,
         eq: Arc<RwLock<EventQueue>>,
         fs: Arc<RwLock<SimpleFixedTaskScheduler>>,
-        task_type: TaskType,
+        listener: ListenerDescriptor,
     ) -> SchedulerResult<()>;
 
     async fn init_listeners(&self, context: &Self::Context) -> SchedulerResult<()>;

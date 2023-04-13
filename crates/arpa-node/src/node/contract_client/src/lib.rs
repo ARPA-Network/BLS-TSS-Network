@@ -1,7 +1,13 @@
-use crate::ethers::WalletSigner;
+use crate::error::ContractClientError;
+use ::ethers::abi::Detokenize;
+use ::ethers::types::U64;
 use ::ethers::{prelude::builders::ContractCall, types::H256};
+use arpa_node_core::{jitter, WalletSigner, CONFIG};
 use async_trait::async_trait;
 use error::ContractClientResult;
+use log::{error, info};
+use tokio_retry::strategy::ExponentialBackoff;
+use tokio_retry::{Retry, RetryIf};
 
 pub mod contract_stub;
 pub mod error;
@@ -14,24 +20,112 @@ pub trait ServiceClient<C> {
 
 #[async_trait]
 pub trait TransactionCaller {
-    async fn call_contract_function(
-        &self,
+    async fn call_contract_transaction(
         info: &str,
         call: ContractCall<WalletSigner, ()>,
-    ) -> ContractClientResult<H256>;
+    ) -> ContractClientResult<H256> {
+        let contract_transaction_retry_descriptor = CONFIG
+            .get()
+            .unwrap()
+            .time_limits
+            .unwrap()
+            .contract_transaction_retry_descriptor;
+        let retry_strategy =
+            ExponentialBackoff::from_millis(contract_transaction_retry_descriptor.base)
+                .factor(contract_transaction_retry_descriptor.factor)
+                .map(|e| {
+                    if contract_transaction_retry_descriptor.use_jitter {
+                        jitter(e)
+                    } else {
+                        e
+                    }
+                })
+                .take(contract_transaction_retry_descriptor.max_attempts);
+
+        let transaction_hash = RetryIf::spawn(
+            retry_strategy,
+            || async {
+                let pending_tx = call.send().await.map_err(|e| {
+                    let e: ContractClientError = e.into();
+                    e
+                })?;
+
+                info!(
+                    "Calling contract transaction {}: {:?}",
+                    info,
+                    pending_tx.tx_hash()
+                );
+
+                let receipt = pending_tx
+                    .await
+                    .map_err(|e| {
+                        let e: ContractClientError = e.into();
+                        e
+                    })?
+                    .ok_or(ContractClientError::NoTransactionReceipt)?;
+
+                if receipt.status == Some(U64::from(0)) {
+                    error!("Transaction failed({}), receipt: {:?}", info, receipt);
+                    return Err(ContractClientError::TransactionFailed);
+                } else {
+                    info!("Transaction successful({}), receipt: {:?}", info, receipt);
+                }
+
+                Ok(receipt.transaction_hash)
+            },
+            |e: &ContractClientError| !matches!(e, ContractClientError::TransactionFailed),
+        )
+        .await?;
+
+        Ok(transaction_hash)
+    }
 }
 
 #[async_trait]
-pub trait NonceManager {
-    async fn increment_or_initialize_nonce(&self) -> ContractClientResult<u64>;
+pub trait ViewCaller {
+    async fn call_contract_view<D: Detokenize + std::fmt::Debug + Send + Sync + 'static>(
+        info: &str,
+        call: ContractCall<WalletSigner, D>,
+    ) -> ContractClientResult<D> {
+        let contract_view_retry_descriptor = CONFIG
+            .get()
+            .unwrap()
+            .time_limits
+            .unwrap()
+            .contract_view_retry_descriptor;
+        let retry_strategy = ExponentialBackoff::from_millis(contract_view_retry_descriptor.base)
+            .factor(contract_view_retry_descriptor.factor)
+            .map(|e| {
+                if contract_view_retry_descriptor.use_jitter {
+                    jitter(e)
+                } else {
+                    e
+                }
+            })
+            .take(contract_view_retry_descriptor.max_attempts);
+
+        let res = Retry::spawn(retry_strategy, || async {
+            let result = call.call().await.map_err(|e| {
+                let e: ContractClientError = e.into();
+                e
+            })?;
+
+            info!("Calling contract view {}: {:?}", info, result);
+
+            Result::<D, ContractClientError>::Ok(result)
+        })
+        .await?;
+
+        Ok(res)
+    }
 }
 
 pub mod controller {
     use crate::error::ContractClientResult;
     use arpa_node_core::{DKGTask, Group, Node};
     use async_trait::async_trait;
+    use ethers::core::types::Address;
     use ethers::types::H256;
-    use ethers_core::types::Address;
     use std::future::Future;
     use threshold_bls::group::PairingCurve;
 
@@ -60,6 +154,8 @@ pub mod controller {
         async fn get_node(&self, id_address: Address) -> ContractClientResult<Node>;
 
         async fn get_group(&self, group_index: usize) -> ContractClientResult<Group<C>>;
+
+        async fn get_coordinator(&self, group_index: usize) -> ContractClientResult<Address>;
     }
 
     #[async_trait]
@@ -83,8 +179,8 @@ pub mod controller {
 pub mod coordinator {
     use async_trait::async_trait;
     use dkg_core::BoardPublisher;
+    use ethers::core::types::Address;
     use ethers::types::H256;
-    use ethers_core::types::Address;
     use thiserror::Error;
     use threshold_bls::{group::Curve, schemes::bn254::G2Curve};
 
@@ -140,16 +236,14 @@ pub mod coordinator {
 pub mod adapter {
     use arpa_node_core::{PartialSignature, RandomnessTask};
     use async_trait::async_trait;
+    use ethers::core::types::Address;
     use ethers::types::{H256, U256};
-    use ethers_core::types::Address;
     use std::{collections::HashMap, future::Future};
 
     use crate::error::ContractClientResult;
 
     #[async_trait]
     pub trait AdapterTransactions {
-        async fn request_randomness(&self, seed: U256) -> ContractClientResult<H256>;
-
         async fn fulfill_randomness(
             &self,
             group_index: usize,

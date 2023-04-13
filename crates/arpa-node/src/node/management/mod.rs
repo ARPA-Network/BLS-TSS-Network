@@ -9,7 +9,7 @@ use super::{
         ContextFetcher,
     },
     error::{NodeError, NodeResult},
-    scheduler::{FixedTaskScheduler, ListenerType, TaskType},
+    scheduler::FixedTaskScheduler,
 };
 use anyhow::Result;
 use arpa_node_contract_client::{
@@ -19,8 +19,8 @@ use arpa_node_contract_client::{
     provider::ChainProviderBuilder,
 };
 use arpa_node_core::{
-    ChainIdentity, DKGStatus, Group, PartialSignature, RandomnessTask, SchedulerResult,
-    TaskType as BLSTaskType,
+    BLSTaskType, ChainIdentity, DKGStatus, Group, ListenerDescriptor, ListenerType,
+    PartialSignature, RandomnessTask, SchedulerResult, TaskType,
 };
 use arpa_node_dal::{
     error::DataAccessResult, BLSTasksFetcher, BLSTasksUpdater, ContextInfoUpdater,
@@ -238,7 +238,7 @@ impl<
             .init_listener(
                 self.get_event_queue(),
                 self.get_fixed_task_handler(),
-                TaskType::Listener(task_type),
+                ListenerDescriptor::build(task_type),
             )
             .await
     }
@@ -606,8 +606,8 @@ impl<
             .commit_partial_signature(
                 chain_id,
                 BLSTaskType::Randomness,
-                msg,
                 randomness_task_request_id,
+                msg,
                 partial,
             )
             .await?;

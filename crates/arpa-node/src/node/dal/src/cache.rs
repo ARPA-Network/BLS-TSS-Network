@@ -8,8 +8,7 @@ use super::{
 };
 use arpa_node_core::log::encoder;
 use arpa_node_core::{
-    BLSTask, BLSTaskError, DKGStatus, DKGTask, Group, Member, RandomnessTask, Task,
-    RANDOMNESS_TASK_EXCLUSIVE_WINDOW,
+    BLSTask, BLSTaskError, DKGStatus, DKGTask, Group, Member, RandomnessTask, Task, CONFIG,
 };
 use async_trait::async_trait;
 use dkg_core::primitives::DKGOutput;
@@ -544,6 +543,13 @@ impl BLSTasksUpdater<RandomnessTask> for InMemoryBLSTasksQueue<RandomnessTask> {
         current_block_height: usize,
         current_group_index: usize,
     ) -> DataAccessResult<Vec<RandomnessTask>> {
+        let randomness_task_exclusive_window = CONFIG
+            .get()
+            .unwrap()
+            .time_limits
+            .unwrap()
+            .randomness_task_exclusive_window;
+
         let available_tasks = self
             .bls_tasks
             .iter_mut()
@@ -551,7 +557,7 @@ impl BLSTasksUpdater<RandomnessTask> for InMemoryBLSTasksQueue<RandomnessTask> {
             .filter(|(_, task)| {
                 task.task.group_index == current_group_index
                     || current_block_height
-                        > task.task.assignment_block_height + RANDOMNESS_TASK_EXCLUSIVE_WINDOW
+                        > task.task.assignment_block_height + randomness_task_exclusive_window
             })
             .map(|(_, task)| {
                 task.state = true;

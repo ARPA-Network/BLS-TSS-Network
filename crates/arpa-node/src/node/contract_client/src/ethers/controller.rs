@@ -1,6 +1,3 @@
-use super::{provider::NONCE, WalletSigner};
-use crate::ethers::builders::ContractCall;
-use crate::TransactionCaller;
 use crate::{
     contract_stub::controller::{
         CommitDkgParams, Controller, DkgTaskFilter, Group as ContractGroup,
@@ -9,17 +6,18 @@ use crate::{
         ControllerClientBuilder, ControllerLogs, ControllerTransactions, ControllerViews,
     },
     error::{ContractClientError, ContractClientResult},
-    NonceManager, ServiceClient,
+    ServiceClient,
 };
+use crate::{TransactionCaller, ViewCaller};
 use arpa_node_core::{
-    u256_to_vec, ChainIdentity, DKGTask, GeneralChainIdentity, Group, Member, Node,
+    u256_to_vec, ChainIdentity, DKGTask, GeneralChainIdentity, Group, Member, Node, WalletSigner,
 };
 use async_trait::async_trait;
 use ethers::prelude::*;
 use log::info;
 use std::collections::BTreeMap;
 use std::marker::PhantomData;
-use std::{convert::TryFrom, future::Future, sync::Arc, time::Duration};
+use std::{future::Future, sync::Arc};
 use threshold_bls::group::PairingCurve;
 
 pub struct ControllerClient {
@@ -29,22 +27,9 @@ pub struct ControllerClient {
 
 impl ControllerClient {
     pub fn new(controller_address: Address, identity: &GeneralChainIdentity) -> Self {
-        let provider = Provider::<Http>::try_from(identity.get_provider_rpc_endpoint())
-            .unwrap()
-            .interval(Duration::from_millis(3000));
-
-        // instantiate the client with the wallet
-        let signer = Arc::new(SignerMiddleware::new(
-            provider,
-            identity
-                .get_signer()
-                .clone()
-                .with_chain_id(identity.get_chain_id() as u32),
-        ));
-
         ControllerClient {
             controller_address,
-            signer,
+            signer: identity.get_signer(),
         }
     }
 }
@@ -69,58 +54,10 @@ impl ServiceClient<ControllerContract> for ControllerClient {
 }
 
 #[async_trait]
-impl TransactionCaller for ControllerClient {
-    async fn call_contract_function(
-        &self,
-        info: &str,
-        call: ContractCall<WalletSigner, ()>,
-    ) -> ContractClientResult<H256> {
-        let pending_tx = call.send().await.map_err(|e| {
-            let e: ContractClientError = e.into();
-            e
-        })?;
-
-        info!(
-            "Calling contract function {}: {:?}",
-            info,
-            pending_tx.tx_hash()
-        );
-
-        let receipt = pending_tx
-            .await
-            .map_err(|e| {
-                let e: ContractClientError = e.into();
-                e
-            })?
-            .ok_or(ContractClientError::NoTransactionReceipt)?;
-
-        if receipt.status == Some(U64::from(0)) {
-            return Err(ContractClientError::TransactionFailed);
-        } else {
-            info!("Transaction successful({}), receipt: {:?}", info, receipt);
-        }
-
-        Ok(receipt.transaction_hash)
-    }
-}
+impl TransactionCaller for ControllerClient {}
 
 #[async_trait]
-impl NonceManager for ControllerClient {
-    async fn increment_or_initialize_nonce(&self) -> ContractClientResult<u64> {
-        let mut nonce = NONCE.lock().await;
-        if *nonce == -1 {
-            let tx_count = self
-                .signer
-                .get_transaction_count(self.signer.address(), None)
-                .await?;
-            *nonce = tx_count.as_u64() as i64;
-        } else {
-            *nonce += 1;
-        }
-
-        Ok(*nonce as u64)
-    }
-}
+impl ViewCaller for ControllerClient {}
 
 #[async_trait]
 impl ControllerTransactions for ControllerClient {
@@ -128,11 +65,9 @@ impl ControllerTransactions for ControllerClient {
         let controller_contract =
             ServiceClient::<ControllerContract>::prepare_service_client(self).await?;
 
-        let nonce = self.increment_or_initialize_nonce().await?;
-        let mut call = controller_contract.node_register(id_public_key.into());
-        call.tx.set_nonce(nonce);
+        let call = controller_contract.node_register(id_public_key.into());
 
-        self.call_contract_function("node_register", call).await
+        ControllerClient::call_contract_transaction("node_register", call).await
     }
 
     async fn commit_dkg(
@@ -146,17 +81,15 @@ impl ControllerTransactions for ControllerClient {
         let controller_contract =
             ServiceClient::<ControllerContract>::prepare_service_client(self).await?;
 
-        let nonce = self.increment_or_initialize_nonce().await?;
-        let mut call = controller_contract.commit_dkg(CommitDkgParams {
+        let call = controller_contract.commit_dkg(CommitDkgParams {
             group_index: group_index.into(),
             group_epoch: group_epoch.into(),
             public_key: public_key.into(),
             partial_public_key: partial_public_key.into(),
             disqualified_nodes,
         });
-        call.tx.set_nonce(nonce);
 
-        self.call_contract_function("commit_dkg", call).await
+        ControllerClient::call_contract_transaction("commit_dkg", call).await
     }
 
     async fn post_process_dkg(
@@ -167,40 +100,31 @@ impl ControllerTransactions for ControllerClient {
         let controller_contract =
             ServiceClient::<ControllerContract>::prepare_service_client(self).await?;
 
-        let nonce = self.increment_or_initialize_nonce().await?;
-        let mut call = controller_contract.post_process_dkg(group_index.into(), group_epoch.into());
-        call.tx.set_nonce(nonce);
+        let call = controller_contract.post_process_dkg(group_index.into(), group_epoch.into());
 
-        self.call_contract_function("post_process_dkg", call).await
+        ControllerClient::call_contract_transaction("post_process_dkg", call).await
     }
 }
 
 #[async_trait]
 impl<C: PairingCurve> ControllerViews<C> for ControllerClient {
     async fn get_group(&self, group_index: usize) -> ContractClientResult<Group<C>> {
-        let adapter_contract =
+        let controller_contract =
             ServiceClient::<ControllerContract>::prepare_service_client(self).await?;
 
-        let res = adapter_contract
-            .get_group(group_index.into())
-            .call()
-            .await
-            .map(parse_contract_group)
-            .map_err(|e| {
-                let e: ContractClientError = e.into();
-                e
-            })?;
-
-        Ok(res)
+        ControllerClient::call_contract_view(
+            "get_group",
+            controller_contract.get_group(group_index.into()),
+        )
+        .await
+        .map(parse_contract_group)
     }
 
     async fn get_node(&self, id_address: Address) -> ContractClientResult<Node> {
         let controller_contract =
             ServiceClient::<ControllerContract>::prepare_service_client(self).await?;
 
-        let res = controller_contract
-            .get_node(id_address)
-            .call()
+        ControllerClient::call_contract_view("get_node", controller_contract.get_node(id_address))
             .await
             .map(|n| Node {
                 id_address: n.id_address,
@@ -209,12 +133,17 @@ impl<C: PairingCurve> ControllerViews<C> for ControllerClient {
                 pending_until_block: n.pending_until_block.as_usize(),
                 staking: U256::zero(),
             })
-            .map_err(|e| {
-                let e: ContractClientError = e.into();
-                e
-            })?;
+    }
 
-        Ok(res)
+    async fn get_coordinator(&self, group_index: usize) -> ContractClientResult<Address> {
+        let controller_contract =
+            ServiceClient::<ControllerContract>::prepare_service_client(self).await?;
+
+        ControllerClient::call_contract_view(
+            "get_coordinator",
+            controller_contract.get_coordinator(group_index.into()),
+        )
+        .await
     }
 }
 

@@ -8,7 +8,7 @@ use crate::core::RandomnessTaskQuery;
 use arpa_node_core::u256_to_vec;
 use arpa_node_core::Group;
 use arpa_node_core::Member;
-use arpa_node_core::RANDOMNESS_TASK_EXCLUSIVE_WINDOW;
+use arpa_node_core::CONFIG;
 use arpa_node_core::{address_to_string, format_now_date, RandomnessTask, Task};
 use arpa_node_dal::cache::InMemoryGroupInfoCache;
 use arpa_node_dal::cache::InMemoryNodeInfoCache;
@@ -822,9 +822,15 @@ impl<C: PairingCurve + Sync + Send> BLSTasksUpdater<RandomnessTask>
         current_block_height: usize,
         current_group_index: usize,
     ) -> DataAccessResult<Vec<RandomnessTask>> {
+        let randomness_task_exclusive_window = CONFIG
+            .get()
+            .unwrap()
+            .time_limits
+            .unwrap()
+            .randomness_task_exclusive_window;
         let before_assignment_block_height =
-            if current_block_height > RANDOMNESS_TASK_EXCLUSIVE_WINDOW {
-                current_block_height - RANDOMNESS_TASK_EXCLUSIVE_WINDOW
+            if current_block_height > randomness_task_exclusive_window {
+                current_block_height - randomness_task_exclusive_window
             } else {
                 0
             };
@@ -859,10 +865,11 @@ pub mod sqlite_tests {
     use crate::test_helper;
     use crate::DBError;
     use crate::SqliteDB;
+    use arpa_node_core::Config;
     use arpa_node_core::DKGStatus;
     use arpa_node_core::DKGTask;
     use arpa_node_core::RandomnessTask;
-    use arpa_node_core::RANDOMNESS_TASK_EXCLUSIVE_WINDOW;
+    use arpa_node_core::DEFAULT_RANDOMNESS_TASK_EXCLUSIVE_WINDOW;
     use arpa_node_dal::error::GroupError;
     use arpa_node_dal::BLSTasksFetcher;
     use arpa_node_dal::BLSTasksUpdater;
@@ -884,6 +891,8 @@ pub mod sqlite_tests {
     const CIPHER_KEY: &str = "passphrase";
 
     fn setup() {
+        Config::default().initialize();
+
         if PathBuf::from(DB_PATH).exists() {
             fs::remove_file(DB_PATH).expect("could not remove file");
         }
@@ -1280,13 +1289,13 @@ pub mod sqlite_tests {
         assert_eq!(false, db.is_handled(&request_id).await.unwrap());
 
         let available_tasks = db
-            .check_and_get_available_tasks(100 + RANDOMNESS_TASK_EXCLUSIVE_WINDOW, 1)
+            .check_and_get_available_tasks(100 + DEFAULT_RANDOMNESS_TASK_EXCLUSIVE_WINDOW, 1)
             .await
             .unwrap();
         assert_eq!(0, available_tasks.len());
 
         let available_tasks = db
-            .check_and_get_available_tasks(100 + RANDOMNESS_TASK_EXCLUSIVE_WINDOW + 1, 1)
+            .check_and_get_available_tasks(100 + DEFAULT_RANDOMNESS_TASK_EXCLUSIVE_WINDOW + 1, 1)
             .await
             .unwrap();
         assert_eq!(1, available_tasks.len());
@@ -1300,7 +1309,7 @@ pub mod sqlite_tests {
         assert_eq!(true, db.is_handled(&request_id).await.unwrap());
 
         let available_tasks = db
-            .check_and_get_available_tasks(100 + RANDOMNESS_TASK_EXCLUSIVE_WINDOW + 1, 1)
+            .check_and_get_available_tasks(100 + DEFAULT_RANDOMNESS_TASK_EXCLUSIVE_WINDOW + 1, 1)
             .await
             .unwrap();
         assert_eq!(0, available_tasks.len());

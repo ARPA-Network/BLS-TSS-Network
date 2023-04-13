@@ -4,90 +4,29 @@ use super::{
 };
 use crate::node::{
     committer::server as committer_server,
-    error::ConfigError,
     management::server as management_server,
     queue::event_queue::EventQueue,
     scheduler::{
-        dynamic::SimpleDynamicTaskScheduler, fixed::SimpleFixedTaskScheduler, ListenerType,
-        RpcServerType, TaskScheduler, TaskType,
+        dynamic::SimpleDynamicTaskScheduler, fixed::SimpleFixedTaskScheduler, TaskScheduler,
     },
 };
 use arpa_node_contract_client::{
     adapter::AdapterClientBuilder, controller::ControllerClientBuilder,
     coordinator::CoordinatorClientBuilder, provider::ChainProviderBuilder,
 };
-use arpa_node_core::{ChainIdentity, RandomnessTask, SchedulerResult};
+use arpa_node_core::{
+    ChainIdentity, RandomnessTask, RpcServerType, SchedulerResult, TaskType, CONFIG,
+    DEFAULT_DYNAMIC_TASK_CLEANER_INTERVAL_MILLIS,
+};
 use arpa_node_dal::{
     BLSTasksFetcher, BLSTasksUpdater, ContextInfoUpdater, GroupInfoFetcher, GroupInfoUpdater,
     NodeInfoFetcher, NodeInfoUpdater,
 };
 use async_trait::async_trait;
-use ethers::{
-    prelude::k256::ecdsa::SigningKey,
-    signers::{coins_bip39::English, LocalWallet, MnemonicBuilder, Wallet},
-};
 use log::error;
-use serde::{Deserialize, Serialize};
-use std::{env, sync::Arc};
+use std::sync::Arc;
 use threshold_bls::group::PairingCurve;
 use tokio::sync::RwLock;
-
-#[derive(Debug, Serialize, Deserialize)]
-pub struct Config {
-    pub node_committer_rpc_endpoint: String,
-    pub node_management_rpc_endpoint: String,
-    pub node_management_rpc_token: String,
-    pub provider_endpoint: String,
-    pub chain_id: usize,
-    pub controller_address: String,
-    pub adapter_address: String,
-    // Data file for persistence
-    pub data_path: Option<String>,
-    pub account: Account,
-    pub listeners: Option<Vec<ListenerType>>,
-    pub context_logging: bool,
-    pub node_id: Option<String>,
-}
-
-impl Config {
-    pub fn get_node_management_rpc_token(&self) -> Result<String, ConfigError> {
-        if self.node_management_rpc_token.eq("env") {
-            let token = env::var("ARPA_NODE_MANAGEMENT_SERVER_TOKEN")?;
-            return Ok(token);
-        }
-        Ok(self.node_management_rpc_token.clone())
-    }
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-pub struct Adapter {
-    pub id: usize,
-    pub name: String,
-    pub endpoint: String,
-    pub account: Account,
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-pub struct Account {
-    pub hdwallet: Option<HDWallet>,
-    pub keystore: Option<Keystore>,
-    // not recommended
-    pub private_key: Option<String>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct Keystore {
-    pub path: String,
-    pub password: String,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct HDWallet {
-    pub mnemonic: String,
-    pub path: Option<String>,
-    pub index: u32,
-    pub passphrase: Option<String>,
-}
 
 #[derive(Debug)]
 pub struct GeneralContext<
@@ -97,7 +36,6 @@ pub struct GeneralContext<
     I: ChainIdentity + ControllerClientBuilder<C> + CoordinatorClientBuilder + AdapterClientBuilder,
     C: PairingCurve,
 > {
-    config: Config,
     main_chain: GeneralMainChain<N, G, T, I, C>,
     eq: Arc<RwLock<EventQueue>>,
     ts: Arc<RwLock<SimpleDynamicTaskScheduler>>,
@@ -119,9 +57,8 @@ impl<
         C: PairingCurve,
     > GeneralContext<N, G, T, I, C>
 {
-    pub fn new(config: Config, main_chain: GeneralMainChain<N, G, T, I, C>) -> Self {
+    pub fn new(main_chain: GeneralMainChain<N, G, T, I, C>) -> Self {
         GeneralContext {
-            config,
             main_chain,
             eq: Arc::new(RwLock::new(EventQueue::new())),
             ts: Arc::new(RwLock::new(SimpleDynamicTaskScheduler::new())),
@@ -183,7 +120,8 @@ impl<
             .unwrap()
             .to_string();
 
-        let management_server_rpc_endpoint = self.config.node_management_rpc_endpoint.clone();
+        let management_server_rpc_endpoint =
+            CONFIG.get().unwrap().node_management_rpc_endpoint.clone();
 
         let context = Arc::new(RwLock::new(self));
 
@@ -238,10 +176,6 @@ impl<
         C: PairingCurve + std::fmt::Debug + Clone + Sync + Send + 'static,
     > ContextFetcher<GeneralContext<N, G, T, I, C>> for GeneralContext<N, G, T, I, C>
 {
-    fn get_config(&self) -> &Config {
-        &self.config
-    }
-
     fn get_main_chain(&self) -> &<GeneralContext<N, G, T, I, C> as Context>::MainChain {
         &self.main_chain
     }
@@ -277,7 +211,10 @@ impl TaskWaiter for ContextHandle {
                 }
             }
 
-            tokio::time::sleep(std::time::Duration::from_millis(1000)).await;
+            tokio::time::sleep(std::time::Duration::from_millis(
+                DEFAULT_DYNAMIC_TASK_CLEANER_INTERVAL_MILLIS,
+            ))
+            .await;
         }
     }
 }
@@ -380,65 +317,5 @@ impl<
                 error!("{:?}", e);
             };
         })
-    }
-}
-
-pub fn build_wallet_from_config(account: &Account) -> Result<Wallet<SigningKey>, ConfigError> {
-    if account.hdwallet.is_some() {
-        let mut hd = account.hdwallet.clone().unwrap();
-        if hd.mnemonic.eq("env") {
-            hd.mnemonic = env::var("ARPA_NODE_HD_ACCOUNT_MNEMONIC")?;
-        }
-        let mut wallet = MnemonicBuilder::<English>::default().phrase(&*hd.mnemonic);
-
-        if hd.path.is_some() {
-            wallet = wallet.derivation_path(&hd.path.unwrap()).unwrap();
-        }
-        if hd.passphrase.is_some() {
-            wallet = wallet.password(&hd.passphrase.unwrap());
-        }
-        return Ok(wallet.index(hd.index).unwrap().build()?);
-    } else if account.keystore.is_some() {
-        let mut keystore = account.keystore.clone().unwrap();
-        if keystore.password.eq("env") {
-            keystore.password = env::var("ARPA_NODE_ACCOUNT_KEYSTORE_PASSWORD")?;
-        }
-        return Ok(LocalWallet::decrypt_keystore(
-            &keystore.path,
-            &keystore.password,
-        )?);
-    } else if account.private_key.is_some() {
-        let mut private_key = account.private_key.clone().unwrap();
-        if private_key.eq("env") {
-            private_key = env::var("ARPA_NODE_ACCOUNT_PRIVATE_KEY")?;
-        }
-        return Ok(private_key.parse::<Wallet<SigningKey>>()?);
-    }
-
-    Err(ConfigError::LackOfAccount)
-}
-
-#[cfg(test)]
-mod tests {
-    use std::fs::read_to_string;
-
-    use crate::node::{context::types::Config, scheduler::ListenerType};
-
-    #[test]
-    fn test_enum_serialization() {
-        let listener_type = ListenerType::Block;
-        let serialize = serde_json::to_string(&listener_type).unwrap();
-        println!("serialize = {}", serialize);
-    }
-
-    #[test]
-    fn test_deserialization_from_config() {
-        let config_str = &read_to_string("conf/config.yml").unwrap_or_else(|_| {
-            panic!("Error loading configuration file, please check the configuration!")
-        });
-
-        let config: Config =
-            serde_yaml::from_str(config_str).expect("Error loading configuration file");
-        println!("listeners = {:?}", config.listeners);
     }
 }

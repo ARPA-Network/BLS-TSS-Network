@@ -3,9 +3,8 @@ use arpa_node_core::SchedulerError;
 use arpa_node_dal::error::DataAccessError;
 use arpa_node_sqlite_db::DBError;
 use dkg_core::{primitives::DKGError, NodeError as DKGNodeError};
-use ethers::{providers::ProviderError, signers::WalletError};
+use ethers::providers::ProviderError;
 use rustc_hex::FromHexError;
-use std::env::VarError;
 use thiserror::Error;
 use threshold_bls::sig::BLSError;
 
@@ -84,16 +83,4 @@ pub enum NodeError {
 
     #[error("DKG has ended")]
     DKGEnded,
-}
-
-#[derive(Debug, Error)]
-pub enum ConfigError {
-    #[error("please provide at least a hdwallet, keystore or plain private key(not recommended)")]
-    LackOfAccount,
-    #[error("bad format")]
-    BadFormat,
-    #[error(transparent)]
-    EnvVarNotExisted(#[from] VarError),
-    #[error(transparent)]
-    BuildingAccountError(#[from] WalletError),
 }
