@@ -4,6 +4,7 @@ use crate::node::{
     event::{dkg_success::DKGSuccess, types::Topic},
     queue::{event_queue::EventQueue, EventSubscriber},
 };
+use arpa_node_core::DKGStatus;
 use arpa_node_dal::GroupInfoUpdater;
 use async_trait::async_trait;
 use log::{debug, info};
@@ -43,16 +44,29 @@ impl<
             .unwrap()
             .clone();
 
-        self.group_cache
+        if self
+            .group_cache
             .write()
             .await
-            .save_committers(group.index, group.epoch, group.committers)
-            .await?;
+            .update_dkg_status(group.index, group.epoch, DKGStatus::WaitForPostProcess)
+            .await?
+        {
+            info!(
+                "DKG status updated to WaitForPostProcess for group {} epoch {}",
+                group.index, group.epoch
+            );
 
-        info!(
-            "Group index:{} epoch:{} is available, committers saved.",
-            group.index, group.epoch
-        );
+            self.group_cache
+                .write()
+                .await
+                .save_committers(group.index, group.epoch, group.committers)
+                .await?;
+
+            info!(
+                "Group index:{} epoch:{} is available, committers saved.",
+                group.index, group.epoch
+            );
+        }
 
         Ok(())
     }
