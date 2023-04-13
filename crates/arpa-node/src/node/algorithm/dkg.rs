@@ -1,5 +1,6 @@
 use crate::node::error::{NodeError, NodeResult};
 use arpa_node_contract_client::coordinator::{CoordinatorTransactions, CoordinatorViews};
+use arpa_node_core::CONFIG;
 use async_trait::async_trait;
 use core::fmt::Debug;
 use dkg_core::{
@@ -9,10 +10,7 @@ use dkg_core::{
 use log::info;
 use rand::RngCore;
 use rustc_hex::ToHex;
-use std::{
-    io::{self, Write},
-    marker::PhantomData,
-};
+use std::marker::PhantomData;
 use threshold_bls::{group::Curve, poly::Idx};
 
 #[async_trait]
@@ -181,11 +179,15 @@ async fn wait_for_phase(dkg: &impl CoordinatorViews, num: usize) -> NodeResult<(
             break;
         }
 
-        print!(".");
-        io::stdout().flush().unwrap();
-
-        // 1s for demonstration, should be changed to block mining interval
-        tokio::time::sleep(std::time::Duration::from_millis(1000)).await;
+        tokio::time::sleep(std::time::Duration::from_millis(
+            CONFIG
+                .get()
+                .unwrap()
+                .time_limits
+                .unwrap()
+                .dkg_wait_for_phase_interval_millis,
+        ))
+        .await;
     }
 
     info!("In Phase {}. Moving to the next step.", num);

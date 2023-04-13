@@ -1,7 +1,7 @@
 pub mod chain;
 pub mod types;
 
-use self::types::{Config, ContextHandle};
+use self::types::ContextHandle;
 
 use crate::node::{
     queue::event_queue::EventQueue,
@@ -24,8 +24,6 @@ pub trait TaskWaiter {
 }
 
 pub(crate) trait ContextFetcher<T: Context> {
-    fn get_config(&self) -> &Config;
-
     fn get_main_chain(&self) -> &T::MainChain;
 
     fn get_fixed_task_handler(&self) -> Arc<RwLock<SimpleFixedTaskScheduler>>;

@@ -6,10 +6,6 @@ use std::collections::BTreeMap;
 use std::hash::{Hash, Hasher};
 use threshold_bls::group::PairingCurve;
 
-pub const GROUP_MAX_CAPACITY: usize = 10;
-
-pub const RANDOMNESS_TASK_EXCLUSIVE_WINDOW: usize = 10;
-
 pub struct Node {
     pub id_address: Address,
     pub id_public_key: Vec<u8>,
@@ -37,12 +33,10 @@ impl<C: PairingCurve> From<NodeGroup<C>> for ContractGroup {
         ContractGroup {
             index: g.index,
             epoch: g.epoch,
-            capacity: GROUP_MAX_CAPACITY,
             size: g.size,
             threshold: g.threshold,
-            is_strictly_majority_consensus_reached: true,
+            is_strictly_majority_consensus_reached: g.state,
             public_key,
-            fail_randomness_task_count: 0,
             members,
             committers,
             commit_cache: BTreeMap::new(),
@@ -70,12 +64,10 @@ impl<C: PairingCurve> From<NodeMember<C>> for ContractMember {
 pub struct ContractGroup {
     pub index: usize,
     pub epoch: usize,
-    pub capacity: usize,
     pub size: usize,
     pub threshold: usize,
     pub is_strictly_majority_consensus_reached: bool,
     pub public_key: Vec<u8>,
-    pub fail_randomness_task_count: usize,
     pub members: BTreeMap<String, ContractMember>,
     pub committers: Vec<String>,
     pub commit_cache: BTreeMap<String, CommitCache>,

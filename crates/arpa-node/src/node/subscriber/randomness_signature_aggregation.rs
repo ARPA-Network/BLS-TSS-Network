@@ -4,10 +4,10 @@ use crate::node::{
     error::{NodeError, NodeResult},
     event::{ready_to_fulfill_randomness_task::ReadyToFulfillRandomnessTask, types::Topic},
     queue::{event_queue::EventQueue, EventSubscriber},
-    scheduler::{dynamic::SimpleDynamicTaskScheduler, SubscriberType, TaskScheduler, TaskType},
+    scheduler::{dynamic::SimpleDynamicTaskScheduler, TaskScheduler},
 };
 use arpa_node_contract_client::adapter::{AdapterClientBuilder, AdapterTransactions, AdapterViews};
-use arpa_node_core::{ChainIdentity, PartialSignature};
+use arpa_node_core::{ChainIdentity, PartialSignature, SubscriberType, TaskType};
 use arpa_node_dal::cache::RandomnessResultCache;
 use async_trait::async_trait;
 use ethers::types::Address;

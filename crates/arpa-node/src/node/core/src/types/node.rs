@@ -148,28 +148,29 @@ pub struct PartialSignature {
     pub signature: Vec<u8>,
 }
 
-pub enum TaskType {
+#[derive(Clone, Debug)]
+pub enum BLSTaskType {
     Randomness,
     GroupRelay,
     GroupRelayConfirmation,
 }
 
-impl TaskType {
+impl BLSTaskType {
     pub fn to_i32(&self) -> i32 {
         match self {
-            TaskType::Randomness => 0,
-            TaskType::GroupRelay => 1,
-            TaskType::GroupRelayConfirmation => 2,
+            BLSTaskType::Randomness => 0,
+            BLSTaskType::GroupRelay => 1,
+            BLSTaskType::GroupRelayConfirmation => 2,
         }
     }
 }
 
-impl From<i32> for TaskType {
+impl From<i32> for BLSTaskType {
     fn from(b: i32) -> Self {
         match b {
-            1 => TaskType::GroupRelay,
-            2 => TaskType::GroupRelayConfirmation,
-            _ => TaskType::Randomness,
+            1 => BLSTaskType::GroupRelay,
+            2 => BLSTaskType::GroupRelayConfirmation,
+            _ => BLSTaskType::Randomness,
         }
     }
 }
