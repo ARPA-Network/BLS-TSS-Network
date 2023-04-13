@@ -66,7 +66,7 @@ def exec_script(script_name):
     """
     os.chdir("contracts")
     cmd = ("forge script script/" + script_name
-        + " --fork-url http://localhost:8545 --broadcast --slow --revert-strings debug")
+        + " --fork-url http://localhost:8545 --optimize --broadcast --slow")
     os.system(cmd)
     os.chdir("..")
 

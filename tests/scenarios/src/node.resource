@@ -140,15 +140,36 @@ Get Address By Index
 Add ARPA
     [Documentation]    Test Add ARPA
     [Arguments]    ${address}    ${amount}
-    ${from} =    Get Address By Index    20
+    ${from} =    Get Value From Env    ADMIN_ADDRESS
     ${result} =    Run    cast send ${ARPA_CONTRACT_ADDRESS} "mint(address to, uint256 amount)" ${address} ${amount} --from=${from}
+    RETURN    ${result}
 
-Add Balance And Run Node
+Approve ARPA
+    [Documentation]    Test Approve
+    [Arguments]    ${address}    ${amount}
+    ${stake_contract_address} =    Get Value From Env    STAKING_ADDRESS
+    ${result} =    Run    cast send ${ARPA_CONTRACT_ADDRESS} "approve(address spender, uint256 amount)" ${stake_contract_address} ${amount} --from=${address}
+    RETURN    ${result}
+
+Stake ARPA
+    [Documentation]    Test Stake
+    [Arguments]    ${node_index}    ${amount}
+    ${address} =    Get Address By Index    ${node_index}
+    ${stake_contract_address} =    Get Value From Env    STAKING_ADDRESS
+    ${result} =    Run    cast send ${stake_contract_address} "stake(uint256 amount)" ${amount} --from=${address}
+    RETURN    ${result}
+
+Stake And Run Node
     [Arguments]    ${node_index}
     ${address} =    Get Address By Index    ${node_index}
-    Add ARPA    ${address}    100000
+
+    ${amount} =    Get Value From Env    OPERATOR_STAKE_AMOUNT
+    ${result} =    Add ARPA    ${address}    ${amount}
+    ${result} =    Approve ARPA    ${address}    ${amount}
+    ${result} =    Stake ARPA    ${node_index}    ${amount}
+    
     ${proc} =    Start Node    ${node_index}
-    ${register_result} =    Get Keyword From Log    ${proc}    Transaction successful(node_register)
+    ${register_result} =    Get Keyword From Log    ${proc}    Transaction successful(node_register)    200
     Should Not Be Empty    ${register_result}    True
     ${list} =    Add Process To List    ${proc}    ${NODE_PROCESS_LIST}
     Set Global Variable    $NODE_PROCESS_LIST    ${list}

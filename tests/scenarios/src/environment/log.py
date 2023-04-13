@@ -67,8 +67,8 @@ def all_nodes_have_keyword(keyword, node_process_list, retry_time=30):
             return False
     return True
 
-def clear_log():
+def clear_log(path='crates/arpa-node/log/running/node.log'):
     """
     Clear the node log file
     """
-    open('crates/arpa-node/log/running/node.log', 'w', encoding='UTF-8').close()
+    open(path, 'w', encoding='UTF-8').close()

@@ -42,15 +42,16 @@ Resource            src/node.resource
 Normal Node Registration
     [Documentation]
     ...    This test case is to test the normal node registration process.
-    ${node1} =    Add Balance And Run Node    1
-    ${node2} =    Add Balance And Run Node    2
-    ${node3} =    Add Balance And Run Node    3
+    Set Enviorment And Deploy Contract
+    ${node1} =    Stake And Run Node    1
+    ${node2} =    Stake And Run Node    2
+    ${node3} =    Stake And Run Node    3
     ${address} =    Get Address By Index    1
-    Get Node    ${address}
+    #Get Node    ${address}
     ${address} =    Get Address By Index    2
-    Get Node    ${address}
+    #Get Node    ${address}
     ${address} =    Get Address By Index    3
-    Get Node    ${address}
+    #Get Node    ${address}
     ${log_phase_1} =    All Nodes Have Keyword    Waiting for Phase 1 to start    ${NODE_PROCESS_LIST}
     Mine Blocks    9
     ${log_phase_2} =    All Nodes Have Keyword    Waiting for Phase 2 to start    ${NODE_PROCESS_LIST}
@@ -63,10 +64,10 @@ Normal Node Registration
     ${log_received_randomness_task} =    All Nodes Have Keyword    received new randomness task    ${NODE_PROCESS_LIST}
     Sleep    5s
     Mine Blocks    6
-    Sleep    5s
+    Sleep    10s
     Check Randomness
     Kill Node    ${node1}
     Kill Node    ${node2}
     Kill Node    ${node3}
     Set Global Variable    ${NODE_PROCESS_LIST}    ${EMPTY_LIST}
-    Teardown Scenario Testing Environment
+    #Teardown Scenario Testing Environment

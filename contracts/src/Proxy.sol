@@ -127,6 +127,8 @@ contract Proxy is Ownable {
     }
 
     function setControllerConfig(
+        address stakingContract,
+        address adapterContract,
         uint256 nodeStakingAmount,
         uint256 disqualifiedNodePenaltyAmount,
         uint256 defaultNumberOfCommitters,
@@ -135,10 +137,12 @@ contract Proxy is Ownable {
         uint256 idealNumberOfGroups,
         uint256 pendingBlockAfterQuit,
         uint256 dkgPostProcessReward
-    ) external payable {
+    ) external {
         implementation().delegatecall(
             abi.encodeWithSignature(
-                "setControllerConfig(uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256)",
+                "setControllerConfig(address,address,uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256)",
+                stakingContract,
+                adapterContract,
                 nodeStakingAmount,
                 disqualifiedNodePenaltyAmount,
                 defaultNumberOfCommitters,
@@ -149,35 +153,6 @@ contract Proxy is Ownable {
                 dkgPostProcessReward
             )
         );
-    }
-
-    function setAdapterConfig(
-        uint16 minimumRequestConfirmations,
-        uint32 maxGasLimit,
-        uint32 stalenessSeconds,
-        uint32 gasAfterPaymentCalculation,
-        uint32 gasExceptCallback,
-        int256 fallbackWeiPerUnitArpa,
-        uint256 signatureTaskExclusiveWindow,
-        uint256 rewardPerSignature,
-        uint256 committerRewardPerSignature,
-        Adapter.FeeConfig memory feeConfig
-    ) external payable {
-         implementation().delegatecall(
-            abi.encodeWithSignature(
-                "setAdapterConfig(uint16,uint32,uint32,uint32,uint32,int256,uint256,uint256,uint256,(uint32,uint32,uint32,uint32,uint32,uint24,uint24,uint24,uint24))",
-                minimumRequestConfirmations,
-                maxGasLimit,
-                stalenessSeconds,
-                gasAfterPaymentCalculation,
-                gasExceptCallback,
-                fallbackWeiPerUnitArpa,
-                signatureTaskExclusiveWindow,
-                rewardPerSignature,
-                committerRewardPerSignature,
-                feeConfig
-            )
-         );
     }
 
     fallback() external payable {

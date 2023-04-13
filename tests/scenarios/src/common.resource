@@ -15,6 +15,7 @@ ${WRAPPED_ETHER_CONTRACT_ADDRESS}       0xc02aaa39b223fe8d0a0e5c4f27ead9083c756c
 ${NODE_ACCOUNT_LIST}
 ${NODE_PROCESS_LIST}
 ${EMPTY_LIST}
+${LOG_PATH}                             crates/arpa-node/log/running/
 
 # ARPA ERC20 information:
 ${FORK_RPC_URL}                         https://mainnet.infura.io/v3/e263f48ae1f545198575c7c7d4088f57
@@ -22,7 +23,7 @@ ${ARPA_HOLDER_ADDRESS}                  0xf977814e90da44bfa03b6295a0616a897441ac
 ${ARPA_CONTRACT_ADDRESS}                0xBA50933C268F567BDC86E1aC131BE072C6B0b71a
 ${USER_CONTRACT_ADDRESS}                0xbCF26943C0197d2eE0E5D05c716Be60cc2761508
 ${ACCOUNT_PATH}                         ACCOUNT_PATH
-${NUM_ACCOUNTS}                         20
+${NUM_ACCOUNTS}                         40
 ${BALANCE}                              1000
 
 # Ethereum RPC client, Cast CLI command and arguments:
@@ -65,12 +66,12 @@ Start Local Ethereum Chain
     IF  ${BLOCK_TIME} == 0
         ${anvil_process_handle} =    Start Process    anvil
         ...    --accounts    ${NUM_ACCOUNTS}
-        ...    --balance    1000000
+        ...    stdout=${LOG_PATH}/anvil-chain.log
     ELSE
         ${anvil_process_handle} =    Start Process    anvil
-        ...    --accounts    ${NUM_ACCOUNTS}
-        ...    --balance    1000000
         ...    --block-time    ${BLOCK_TIME}
+        ...    --accounts    ${NUM_ACCOUNTS}
+        ...    stdout=${LOG_PATH}/anvil-chain.log
     END
 
     Process Should Be Running    ${anvil_process_handle}

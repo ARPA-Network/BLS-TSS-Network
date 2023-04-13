@@ -36,7 +36,7 @@ def get_value_from_env(name):
     """
     Get value from .env file.
     """
-    load_dotenv("contracts/.env")
+    load_dotenv("tests/scenarios/.env")
     value = os.environ.get(name)
     return value
 
@@ -44,7 +44,7 @@ def set_value_to_env(name, value):
     """
     Set value to .env file.
     """
-    load_dotenv("contracts/.env")
+    load_dotenv("tests/scenarios/.env")
     os.environ[name] = value
     value = os.environ.get(name)
     print("Set value to env: ", name, value)

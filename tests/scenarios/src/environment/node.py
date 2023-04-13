@@ -73,20 +73,23 @@ def parse_chain_result_to_account_list():
         private_keys = []
         # looping over lines in the opened file
         for line in file:
-            # locating accounts
-            matches = re.finditer('(0x)?[A-Fa-f0-9]{40}', line)
-            for m in matches:
-                accounts.append(m.group())
-
+            is_private_key = False
             # locating private keys
             matches = re.finditer('(0x)?[A-Fa-f0-9]{64}', line)
             for m in matches:
                 private_keys.append(m.group())
+                is_private_key = True
+            if is_private_key:
+                continue
+            # locating accounts
+            matches = re.finditer('(0x)?[A-Fa-f0-9]{40}', line)
+            for m in matches:
+                accounts.append(m.group())
         # Create a list of Account objects using the namedtuple syntax
         account_list = [Account(a,k) for a,k in zip(accounts, private_keys)]
         return account_list
 
-def create_node_config(controller_address):
+def create_node_config(controller_address, adapter_address):
     """
     Create the node config files.
     """
@@ -110,18 +113,21 @@ provider_endpoint: "http://127.0.0.1:8545"
 chain_id: 31337
 
 controller_address: "{controller_address}"
+adapter_address: "{adapter_address}"
 
 data_path: "./data{i + 1}.sqlite"
 
 account:
   private_key: \"{key}\"
 
-context_logging: false"""
+context_logging: false
+node_id: {i + 1}"""
         # Write out to file
         with open('tests/scenarios/src/environment/node_config/'+file_name, 'w',
                   encoding='utf-8') as file:
             file.write(content)
         i += 1
+
 
 def start_node(node_idx):
     """

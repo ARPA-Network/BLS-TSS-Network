@@ -39,16 +39,20 @@ Set Enviorment And Deploy Contract
     Clear Log
     Setup Scenario Testing Environment
     ${result} =    Run    cd contracts/;forge build -o out/ --revert-strings debug
-    Deploy Controller
+    #Temp!!!!!!!!!!!
+    ${result} =    Exec Script    ControllerLocalTestProxy.s.sol:ControllerLocalTestProxyScript
+    ${result} =    Exec Script    StakeOperatorLocalTest.s.sol:StakeOperatorLocalTestScript
+    #Deploy Controller
     Build Proxy Contract
-    ${result} =    Exec Script    ${PROXY_CONFIG_SCRIPT}
     Set ARPA Address
-    ${result} =    Create Node Config    ${PROXY_CONTRACT_ADDRESS}
+    ${adapter_address} =    Get Value From Env    ADAPTER_ADDRESS
+    ${result} =    Create Node Config    ${PROXY_CONTRACT_ADDRESS}    ${adapter_address}
     Kill Previous Node
 
 Build Proxy Contract
-    ${address} =    Get Contract Address from File    contracts/broadcast/ProxyConfigLocalTest.s.sol/31337/run-latest.json
-    Set Global Variable    $PROXY_CONTRACT_ADDRESS    ${address[0]}
+    ${address} =    Get Value From Env    PROXY_ADDRESS
+    ${address} =    To Checksum Address    ${address}
+    Set Global Variable    $PROXY_CONTRACT_ADDRESS    ${address}
     ${proxy_contract} =    Get Contract    contracts/${PROXY_OUTPUT}Proxy.sol/Proxy.json    ${PROXY_CONTRACT_ADDRESS}
     Set Global Variable    $PROXY_CONTRACT   ${proxy_contract}
     ${controller_contract} =    Get Contract    contracts/${PROXY_OUTPUT}Controller.sol/Controller.json    ${PROXY_CONTRACT_ADDRESS}
@@ -56,14 +60,16 @@ Build Proxy Contract
 
 Deploy User Contract And Request Randomness
     [Documentation]    Deploy the user contract
-    ${contract_output} =    Exec Script    ${REQUEST_RANDOMNESS_SCRIPT}
-    ${contract_address} =    Get Contract Address from File    contracts/broadcast/GetRandomNumberProxy.s.sol/31337/run-latest.json
+    #${contract_output} =    Exec Script    ${REQUEST_RANDOMNESS_SCRIPT}
+    ${contract_output} =    Exec Script    GetRandomNumberLocalTest.s.sol:GetRandomNumberLocalTestScript
+    ${contract_address} =    Get Contract Address From File    contracts/broadcast/GetRandomNumberLocalTest.s.sol/31337/run-latest.json
     Set Global Variable    $USER_CONTRACT_ADDRESS    ${contract_address[0]}
 
 Check Randomness
     [Documentation]    Check the randomness
     ${last_output} =    Run    cast call ${USER_CONTRACT_ADDRESS} "lastRandomnessResult()(uint256)"
     Log    ${last_output}
+    RETURN    ${last_output}
 
 Set ARPA Address
     ${address} =    Get Value From Env    ARPA_ADDRESS
