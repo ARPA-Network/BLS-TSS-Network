@@ -46,12 +46,7 @@ Normal Node Registration
     ${node1} =    Stake And Run Node    1
     ${node2} =    Stake And Run Node    2
     ${node3} =    Stake And Run Node    3
-    ${address} =    Get Address By Index    1
-    #Get Node    ${address}
-    ${address} =    Get Address By Index    2
-    #Get Node    ${address}
-    ${address} =    Get Address By Index    3
-    #Get Node    ${address}
+
     ${log_phase_1} =    All Nodes Have Keyword    Waiting for Phase 1 to start    ${NODE_PROCESS_LIST}
     Mine Blocks    9
     ${log_phase_2} =    All Nodes Have Keyword    Waiting for Phase 2 to start    ${NODE_PROCESS_LIST}
@@ -64,7 +59,7 @@ Normal Node Registration
     ${log_received_randomness_task} =    All Nodes Have Keyword    received new randomness task    ${NODE_PROCESS_LIST}
     Sleep    5s
     Mine Blocks    6
-    Sleep    10s
+    ${result} =    Have Node Got Keyword    fulfill randomness successfully    ${NODE_PROCESS_LIST}
     Check Randomness
     Kill Node    ${node1}
     Kill Node    ${node2}

@@ -20,7 +20,6 @@ def get_log_info(log, keyword):
                 return message
         except ValueError:
             continue
-
     return None
 
 
@@ -41,16 +40,19 @@ def get_keyword_from_log(process, keyword, retry_time=30):
     return None
 
 
-def have_node_got_keyword(keyword, node_process_list, retry_time=30):
+def have_node_got_keyword(keyword, node_process_list, retry_time=10):
     """
     Get a keyword from all nodes
     :param keyword: keyword to look for in the log
     :return: whether the relevant information was found for the keyword
     """
-    for node in node_process_list:
-        log_info = get_keyword_from_log(node, keyword, retry_time)
-        if log_info is not None:
-            return True
+    while retry_time > 0:
+        retry_time = retry_time - 1
+        for node in node_process_list:
+            log_info = get_keyword_from_log(node, keyword, 1)
+            if log_info is not None:
+                return True
+        time.sleep(1)
     return False
 
 

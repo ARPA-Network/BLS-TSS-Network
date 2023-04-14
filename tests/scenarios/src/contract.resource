@@ -20,8 +20,7 @@ ${PROXY_CONTRACT_ADDRESS}
 ${PROXY_OUTPUT}                          out/
 ${PROXY_CONTRACT}
 ${CONTROLLER_CONTRACT}
-${COORDINATOR_CONTRACT}
-${COORDINATOR_CONTRACT}
+${STAKE_CONTRACT}
 ${DEPLOY_CONTROLLER_SCRIPT}              DeployControllerLocalTest.s.sol:DeployControllerTestScript
 ${PROXY_CONFIG_SCRIPT}                   ProxyConfigLocalTest.s.sol:ProxyConfigLocalTestScript
 ${REQUEST_RANDOMNESS_SCRIPT}             GetRandomNumberProxy.s.sol:GetRandomNumberProxyScript
@@ -39,28 +38,31 @@ Set Enviorment And Deploy Contract
     Clear Log
     Setup Scenario Testing Environment
     ${result} =    Run    cd contracts/;forge build -o out/ --revert-strings debug
-    #Temp!!!!!!!!!!!
     ${result} =    Exec Script    ControllerLocalTestProxy.s.sol:ControllerLocalTestProxyScript
+    #${result} =    Exec Script    ControllerLocalTest.s.sol:ControllerLocalTestScript
     ${result} =    Exec Script    StakeOperatorLocalTest.s.sol:StakeOperatorLocalTestScript
-    #Deploy Controller
-    Build Proxy Contract
+    Bound Contract ABI
     Set ARPA Address
     ${adapter_address} =    Get Value From Env    ADAPTER_ADDRESS
     ${result} =    Create Node Config    ${PROXY_CONTRACT_ADDRESS}    ${adapter_address}
     Kill Previous Node
 
-Build Proxy Contract
-    ${address} =    Get Value From Env    PROXY_ADDRESS
-    ${address} =    To Checksum Address    ${address}
-    Set Global Variable    $PROXY_CONTRACT_ADDRESS    ${address}
+Bound Contract ABI
+    [Documentation]    Bound contract ABI to handle contract function call
+    ${proxy_address} =    Get Value From Env    PROXY_ADDRESS
+    ${proxy_address} =    To Checksum Address    ${proxy_address}
+    Set Global Variable    $PROXY_CONTRACT_ADDRESS    ${proxy_address}
     ${proxy_contract} =    Get Contract    contracts/${PROXY_OUTPUT}Proxy.sol/Proxy.json    ${PROXY_CONTRACT_ADDRESS}
     Set Global Variable    $PROXY_CONTRACT   ${proxy_contract}
     ${controller_contract} =    Get Contract    contracts/${PROXY_OUTPUT}Controller.sol/Controller.json    ${PROXY_CONTRACT_ADDRESS}
     Set Global Variable    $CONTROLLER_CONTRACT   ${controller_contract}
+    ${stake_address} =    Get Value From Env    STAKING_ADDRESS
+    ${stake_address} =    To Checksum Address    ${stake_address}
+    ${stake_contract} =    Get Contract    contracts/${PROXY_OUTPUT}IStaking.sol/IStaking.json    ${stake_address}
+    Set Global Variable    $STAKE_CONTRACT   ${stake_contract}
 
 Deploy User Contract And Request Randomness
     [Documentation]    Deploy the user contract
-    #${contract_output} =    Exec Script    ${REQUEST_RANDOMNESS_SCRIPT}
     ${contract_output} =    Exec Script    GetRandomNumberLocalTest.s.sol:GetRandomNumberLocalTestScript
     ${contract_address} =    Get Contract Address From File    contracts/broadcast/GetRandomNumberLocalTest.s.sol/31337/run-latest.json
     Set Global Variable    $USER_CONTRACT_ADDRESS    ${contract_address[0]}
@@ -186,31 +188,36 @@ Deploy Coordinator To Test
 
 Get Shares
     [Documentation]    Get Shares
-    ${result} =    Contract Function Call    ${COORDINATOR_CONTRACT}    getShares
+    [Arguments]    ${coordinator_contract}
+    ${result} =    Contract Function Call    ${coordinator_contract}    getShares
     Log    Shares: ${result}
     RETURN    ${result}
 
 Get Justifications
     [Documentation]    Get justifications
-    ${result} =    Contract Function Call    ${COORDINATOR_CONTRACT}    getJustifications
+    [Arguments]    ${coordinator_contract}
+    ${result} =    Contract Function Call    ${coordinator_contract}    getJustifications
     Log    Justifications: ${result}
     RETURN    ${result}
 
 Get Participants
     [Documentation]    Get Participants
-    ${result} =    Contract Function Call    ${COORDINATOR_CONTRACT}    getParticipants
+    [Arguments]    ${coordinator_contract}
+    ${result} =    Contract Function Call    ${coordinator_contract}    getParticipants
     Log    Participants: ${result}
     RETURN    ${result}
 
 Get DkgKeys
     [Documentation]    Get DkgKeys
-    ${result} =    Contract Function Call    ${COORDINATOR_CONTRACT}    getDkgKeys
+    [Arguments]    ${coordinator_contract}
+    ${result} =    Contract Function Call    ${coordinator_contract}    getDkgKeys
     Log    DkgKeys: ${result}
     RETURN    ${result}
 
 In Phase
     [Documentation]    get Phase
-    ${result} =    Contract Function Call    ${COORDINATOR_CONTRACT}    inPhase
+    [Arguments]    ${coordinator_contract}
+    ${result} =    Contract Function Call    ${coordinator_contract}    inPhase
     Log    Phase: ${result}
     RETURN    ${result}
 
@@ -227,7 +234,7 @@ Get Reward
     RETURN    ${result}
 
 Get Node Staking
-    [Documentation]    Gets the ARPA balance of a given address
+    [Documentation]    Gets the Staking amount of a given node
     [Arguments]    ${address}
-    ${result} =    Get Node    ${address}
-    RETURN    ${result[4]}
+    ${result} =    Contract Function Call    ${STAKE_CONTRACT}    getStake    ${address}
+    RETURN    ${result}
