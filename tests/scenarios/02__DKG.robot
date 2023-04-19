@@ -176,22 +176,23 @@ Test Rebalance
     Set Global Variable    $BLOCK_TIME    1
     Set Enviorment And Deploy Contract
     Sleep    3s
-    # Set Global Variable    $NODE_PROCESS_LIST    ${EMPTY_LIST}
-    # ${node1} =    Stake And Run Node    1
-    # ${node2} =    Stake And Run Node    2
-    # ${node3} =    Stake And Run Node    3
-    # #${node4} =    Stake And Run Node    4
-    # #${node5} =    Stake And Run Node    5
-    # Sleep    3s
-    # ${result} =    Get Group    0
-    # ${commit_result} =    Have Node Got Keyword    Group index:0 epoch:1 is available    ${NODE_PROCESS_LIST}
+    
+    ${node1} =    Stake And Run Node    1
+    ${node2} =    Stake And Run Node    2
+    ${node3} =    Stake And Run Node    3
+    ${node4} =    Stake And Run Node    4
+    ${node5} =    Stake And Run Node    5
 
-    # Sleep    3s
-    # Group Node Number Should Be    0    3
+    ${result} =    All Nodes Have Keyword    Transaction successful(node_register)    ${NODE_PROCESS_LIST}
+    Should Be True    ${result}
+    ${group_result} =    Have Node Got Keyword    Group index:0 epoch:3 is available    ${NODE_PROCESS_LIST}    
+    Group Node Number Should Be    0    5
+    Sleep    20s
 
-    # ${node6} =    Stake And Run Node    6
-    # ${commit_result} =    All Nodes Have Keyword    commit_dkg    ${NODE_PROCESS_LIST}
-    # Sleep    5s
-    # Group Node Number Should Be    0    3
-    # Group Node Number Should Be    1    3
-    # Teardown Scenario Testing Environment
+    ${node6} =    Stake And Run Node    6
+    ${group_result_0} =    Have Node Got Keyword    Group index:0 epoch:4 is available    ${NODE_PROCESS_LIST}
+    ${group_result_1} =    Have Node Got Keyword    Group index:1 epoch:0 is available    ${NODE_PROCESS_LIST}
+
+    Group Node Number Should Be    0    3
+    Group Node Number Should Be    1    3
+    Teardown Scenario Testing Environment

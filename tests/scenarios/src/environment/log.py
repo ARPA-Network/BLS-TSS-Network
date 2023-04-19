@@ -73,4 +73,4 @@ def clear_log(path='crates/arpa-node/log/running/node.log'):
     """
     Clear the node log file
     """
-    open(path, 'w', encoding='UTF-8').close()
+    #open(path, 'w', encoding='UTF-8').close()

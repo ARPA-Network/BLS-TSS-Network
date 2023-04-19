@@ -33,7 +33,7 @@ ${LOCAL_ETHEREUM_CHAIN_PROCESS_HANDLE}
 ${BLOCK_TIME}                           0
 
 *** Keywords ***
-Setup Scenario Testing Environment
+Setup Chain Environment
     [Documentation]    Sets up the scenario testing encironment
     Start Local Ethereum Chain
     Local Ethereum Chain Should Be Up And Running

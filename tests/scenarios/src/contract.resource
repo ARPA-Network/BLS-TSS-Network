@@ -36,16 +36,17 @@ ${MODIFIRD_PARTIAL_PUB_KEY}              0x02
 Set Enviorment And Deploy Contract
     [Documentation]    Set enviorment and deploy proxy contract
     Clear Log
-    Setup Scenario Testing Environment
+    Setup Chain Environment
     ${result} =    Run    cd contracts/;forge build -o out/ --revert-strings debug
-    ${result} =    Exec Script    ControllerLocalTestProxy.s.sol:ControllerLocalTestProxyScript
-    #${result} =    Exec Script    ControllerLocalTest.s.sol:ControllerLocalTestScript
+    #${result} =    Exec Script    ControllerLocalTestProxy.s.sol:ControllerLocalTestProxyScript
+    ${result} =    Exec Script    ControllerLocalTest.s.sol:ControllerLocalTestScript
     ${result} =    Exec Script    StakeOperatorLocalTest.s.sol:StakeOperatorLocalTestScript
     Bound Contract ABI
     Set ARPA Address
     ${adapter_address} =    Get Value From Env    ADAPTER_ADDRESS
     ${result} =    Create Node Config    ${PROXY_CONTRACT_ADDRESS}    ${adapter_address}
     Kill Previous Node
+    Set Global Variable    $NODE_PROCESS_LIST    ${EMPTY_LIST}
 
 Bound Contract ABI
     [Documentation]    Bound contract ABI to handle contract function call

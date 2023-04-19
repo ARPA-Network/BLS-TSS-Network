@@ -120,8 +120,54 @@ data_path: "./data{i + 1}.sqlite"
 account:
   private_key: \"{key}\"
 
+listeners:
+  - l_type: Block
+    interval_millis: 0
+    use_jitter: true
+  - l_type: NewRandomnessTask
+    interval_millis: 0
+    use_jitter: true
+  - l_type: PreGrouping
+    interval_millis: 0
+    use_jitter: true
+  - l_type: PostCommitGrouping
+    interval_millis: 1000
+    use_jitter: false
+  - l_type: PostGrouping
+    interval_millis: 1000
+    use_jitter: false
+  - l_type: ReadyToHandleRandomnessTask
+    interval_millis: 1000
+    use_jitter: false
+  - l_type: RandomnessSignatureAggregation
+    interval_millis: 1000
+    use_jitter: false
+
+time_limits:
+  dkg_timeout_duration: 40
+  randomness_task_exclusive_window: 10
+  listener_interval_millis: 1000
+  dkg_wait_for_phase_interval_millis: 1000
+  provider_polling_interval_millis: 1000
+  contract_transaction_retry_descriptor:
+    base: 2
+    factor: 1000
+    max_attempts: 3
+    use_jitter: true
+  contract_view_retry_descriptor:
+    base: 2
+    factor: 500
+    max_attempts: 5
+    use_jitter: true
+  commit_partial_signature_retry_descriptor:
+    base: 2
+    factor: 1000
+    max_attempts: 5
+    use_jitter: false
+
 context_logging: false
-node_id: {i + 1}"""
+node_id: {i + 1}
+"""
         # Write out to file
         with open('tests/scenarios/src/environment/node_config/'+file_name, 'w',
                   encoding='utf-8') as file:

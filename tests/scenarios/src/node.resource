@@ -169,8 +169,6 @@ Stake And Run Node
     ${result} =    Stake ARPA    ${node_index}    ${amount}
     
     ${proc} =    Start Node    ${node_index}
-    ${register_result} =    Get Keyword From Log    ${proc}    Transaction successful(node_register)    200
-    Should Not Be Empty    ${register_result}    True
     ${list} =    Add Process To List    ${proc}    ${NODE_PROCESS_LIST}
     Set Global Variable    $NODE_PROCESS_LIST    ${list}
     RETURN    ${proc}
