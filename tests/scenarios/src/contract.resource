@@ -38,8 +38,8 @@ Set Enviorment And Deploy Contract
     Clear Log
     Setup Chain Environment
     ${result} =    Run    cd contracts/;forge build -o out/ --revert-strings debug
-    #${result} =    Exec Script    ControllerLocalTestProxy.s.sol:ControllerLocalTestProxyScript
-    ${result} =    Exec Script    ControllerLocalTest.s.sol:ControllerLocalTestScript
+    ${result} =    Exec Script    ControllerLocalTestProxy.s.sol:ControllerLocalTestProxyScript
+    #${result} =    Exec Script    ControllerLocalTest.s.sol:ControllerLocalTestScript
     ${result} =    Exec Script    StakeOperatorLocalTest.s.sol:StakeOperatorLocalTestScript
     Bound Contract ABI
     Set ARPA Address
