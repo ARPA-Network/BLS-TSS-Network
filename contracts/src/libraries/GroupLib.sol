@@ -372,7 +372,8 @@ library GroupLib {
 
         // get the group index of the group with the minimum size, as well as the min size
         uint256 indexOfMinSize;
-        uint256 minSize;
+        uint256 minSize = groupData.s_groupMaxCapacity;
+        // uint256 minSize;
         for (uint256 i = 0; i < groupData.s_groupCount; i++) {
             IController.Group memory g = groupData.s_groups[i];
             if (g.size < minSize) {
