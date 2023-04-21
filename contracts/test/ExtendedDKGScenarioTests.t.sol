@@ -76,10 +76,10 @@ contract ExtendedDKGScenarioTest is RandcastTestHelper {
 
         // deploy controller
         vm.prank(owner);
-        controller = new ControllerForTest(address(arpa), lastOutput); // ! lasatOutput / using ControllerForTest
+        controller = new ControllerForTest(address(arpa), lastOutput);
 
         vm.prank(owner);
-        controller.setControllerConfig( // ! new setControllerConfig
+        controller.setControllerConfig(
             address(staking),
             address(0),
             operatorStakeAmount,
@@ -140,14 +140,6 @@ contract ExtendedDKGScenarioTest is RandcastTestHelper {
     }
 
     // * Commit DKG Helper Functions
-
-    // function setPhase(uint256 groupIndex, uint256 phase) public {
-    //     address coordinatorAddress = controller.getCoordinator(groupIndex);
-    //     ICoordinator coordinator = ICoordinator(coordinatorAddress);
-    //     uint256 startBlock = coordinator.startBlock();
-    //     vm.roll(startBlock + 1 + phase * defaultDkgPhaseDuration);
-    // }
-
     struct Params {
         address nodeIdAddress;
         bool shouldRevert;
@@ -180,10 +172,6 @@ contract ExtendedDKGScenarioTest is RandcastTestHelper {
     // * ////////////////////////////////////////////////////////////////////////////////
     // * Extended Scenario Tests Begin (Rebalancing, Regrouping, Various Edgecases etc..)
     // * ////////////////////////////////////////////////////////////////////////////////
-
-    function testZ() public {
-        registerIndex(1);
-    }
 
     //  Regroup remaining nodes after nodeQuit: (5 -> 4)
     function test5NodeQuit() public {
@@ -238,12 +226,11 @@ contract ExtendedDKGScenarioTest is RandcastTestHelper {
         assertEq(checkIsStrictlyMajorityConsensusReached(0), true);
         assertEq(controller.getGroup(0).members.length, 4);
         assertEq(controller.getGroup(0).size, 4);
-        printGroupInfo(0);
+        // printGroupInfo(0);
     }
 
     //  Rebalance two groups after nodeQuit results in group falling below threshold (5,3) -> (3,4)
     function test53NodeQuit() public {
-        // ! wrong epoch
         /*
         group_0: 5 members
         group_1: 3 members
@@ -426,9 +413,7 @@ contract ExtendedDKGScenarioTest is RandcastTestHelper {
 
         assertEq(controller.getGroup(0).epoch, 8);
         assertEq(controller.getGroup(1).epoch, 3);
-        // Current state: group_0 (6,4,5,8,9,11), group_1 (7,1,3,2,10,12)
-        // printGroupInfo(0);
-        // printGroupInfo(1);
+        // Current state: group_0 (1,6,3,8,9,11), group_1 (7,2,5,4,10,12)
 
         // New node calls node register.
         registerIndex(13);
@@ -441,7 +426,7 @@ contract ExtendedDKGScenarioTest is RandcastTestHelper {
         assertEq(controller.getGroup(1).epoch, 3); // no change
         assertEq(controller.getGroup(2).epoch, 1); // g.epoch++
 
-        // Final State: group_0 (11,8,9), group_1 (7,1,3,2,10,12), group_2 (13,6,5,4))
+        // Final State: group_0 (1,11,3), group_1 (7,2,5,4,10,12), group_2 (13,6,9,8)
 
         // printGroupInfo(0);
         // printGroupInfo(1);
@@ -498,15 +483,14 @@ contract ExtendedDKGScenarioTest is RandcastTestHelper {
         // Final State: group_0 (1,2,3), group_1 (4,5,6), group_2 (7)
         // Group 2 is not yet functional, but it is created. Group 0 and 1 are functional.
 
-        printGroupInfo(0);
-        printGroupInfo(1);
-        printGroupInfo(2);
+        // printGroupInfo(0);
+        // printGroupInfo(1);
+        // printGroupInfo(2);
     }
 
     // Ideal number of groups of size 3 -> new nodeRegister()
-    // [3,3,3,3,3] -> nodeRegister -> [3,3,3,3,4]
+    // [3,3,3,3,3] -> nodeRegister -> [4,3,3,3,3]
     function test33333NodeRegister() public {
-        // ! coordinator not found
         /*
         (5 groups) group 0-4 have 3 members each [3,3,3,3,3]
         A new node calls nodeRegister
@@ -588,7 +572,7 @@ contract ExtendedDKGScenarioTest is RandcastTestHelper {
         assertEq(checkIsStrictlyMajorityConsensusReached(0), false);
         assertEq(controller.getGroup(0).epoch, 2);
 
-        // Final State: [3,3,3,3,4]
+        // Final State: [4,3,3,3,3]
         // group_0 (1,2,3,16), group_1 (4,5,6), group_2 (7,8,9), group_3 (10,11,12), group_4 (13,14,15)
         // group_0 nonfunctiona, waiting to be grouped by commitDKG. Remaining groups are functional
 
@@ -735,8 +719,8 @@ contract ExtendedDKGScenarioTest is RandcastTestHelper {
         // final state: [4,4]
         // group_0 (1,11,3,8), group_1 (5,4,6,9)
 
-        printGroupInfo(0);
-        printGroupInfo(1);
+        // printGroupInfo(0);
+        // printGroupInfo(1);
     }
 
     function test63Group0NodeQuit() public {
@@ -762,7 +746,7 @@ contract ExtendedDKGScenarioTest is RandcastTestHelper {
         registerIndex(11);
         registerIndex(12);
 
-        // Current state: group_0 (6,4,5,8,9,11), group_1 (7,1,3,2,10,12)
+        // Current state: group_0 (1,6,3,8,9,11), group_1 (7,2,5,4,10,12)
         assertEq(controller.getGroup(0).size, 6);
         assertEq(controller.getGroup(1).size, 6);
         assertEq(controller.getGroup(0).epoch, 8);
@@ -779,7 +763,7 @@ contract ExtendedDKGScenarioTest is RandcastTestHelper {
         controller.nodeQuit();
         assertEq(controller.getGroup(1).epoch, 6); //g.epoch++
         // size [6,3] reached
-        // current state: group_0 (6,4,5,8,9,11), group_1 (7,1,3)
+        // current state: group_0 (1,6,3,8,9,11), group_1 (7,4,5)
 
         // node11 from group_0 calls nodeQuit
         vm.prank(node11);
@@ -790,9 +774,9 @@ contract ExtendedDKGScenarioTest is RandcastTestHelper {
         assertEq(controller.getGroup(1).epoch, 6); // no change
 
         // final state: [5,3]
-        // group_0 (6,4,5,8,9), group_1 (7,1,3)
+        // group_0 (1,6,3,8,9), group_1 (7,4,5)
 
-        printGroupInfo(0);
-        printGroupInfo(1);
+        // printGroupInfo(0);
+        // printGroupInfo(1);
     }
 }
