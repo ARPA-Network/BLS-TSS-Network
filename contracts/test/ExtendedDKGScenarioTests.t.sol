@@ -158,7 +158,7 @@ contract ExtendedDKGScenarioTest is RandcastTestHelper {
                 vm.expectRevert(params[i].revertMessage);
             }
             controller.commitDkg(
-                IController.CommitDkgParams( // ! IController
+                IController.CommitDkgParams(
                     params[i].groupIndex,
                     params[i].groupEpoch,
                     params[i].publicKey,
@@ -285,7 +285,7 @@ contract ExtendedDKGScenarioTest is RandcastTestHelper {
         assertEq(checkIsStrictlyMajorityConsensusReached(0), false);
         assertEq(checkIsStrictlyMajorityConsensusReached(1), false);
 
-        registerIndex(8); // added to group_1, only group_1 epoch is incremented // ! problem here
+        registerIndex(8); // added to group_1, only group_1 epoch is incremented
         assertEq(controller.getGroup(0).epoch, 5); // no change
         assertEq(controller.getGroup(1).epoch, 2); // g.epoch++
         assertEq(controller.getGroup(0).size, 4);
