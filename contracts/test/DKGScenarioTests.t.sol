@@ -9,8 +9,6 @@ import "openzeppelin-contracts/contracts/utils/Strings.sol";
 import "src/interfaces/ICoordinator.sol";
 import "./RandcastTestHelper.sol";
 
-// Suggested usage: forge test --match-contract Controller -vv
-
 contract DKGScenarioTest is RandcastTestHelper {
     uint256 disqualifiedNodePenaltyAmount = 1000;
     uint256 defaultNumberOfCommitters = 3;
@@ -151,7 +149,7 @@ contract DKGScenarioTest is RandcastTestHelper {
         dkgHelper(params2);
     }
 
-    // ! Happy Path
+    // * Happy Path
     function testDkgHappyPath() public {
         Params[] memory params = new Params[](5);
         bytes memory err;
@@ -168,7 +166,7 @@ contract DKGScenarioTest is RandcastTestHelper {
         assertEq(controller.getGroup(0).size, 5);
     }
 
-    // ! 1 Disqualified Node
+    // * 1 Disqualified Node
     function test1Dq4Reporter() public {
         Params[] memory params = new Params[](5);
         bytes memory err;
@@ -261,7 +259,7 @@ contract DKGScenarioTest is RandcastTestHelper {
         assertEq(controller.getGroup(0).size, 5);
     }
 
-    // ! 2 Disqualified Nodes
+    // * 2 Disqualified Nodes
 
     function test2Dq4Reporter() public {
         Params[] memory params = new Params[](5);
@@ -345,7 +343,7 @@ contract DKGScenarioTest is RandcastTestHelper {
         assertEq(controller.getGroup(0).size, 5);
     }
 
-    // ! 3 Disqualified Nodes (???)
+    // * 3 Disqualified Nodes (???)
     function test3Dq3Reporter() public {
         Params[] memory params = new Params[](5);
         bytes memory err;
@@ -377,7 +375,7 @@ contract DKGScenarioTest is RandcastTestHelper {
         // // assertEq(nodeStakingAmount - disqualifiedNodePenaltyAmount, staking.getDelegationReward(node1));
     }
 
-    // ! PPDKG with 3 Disqualified Nodes
+    // * PPDKG with 3 Disqualified Nodes
     function testPPDKG3Dq3Reporter() public {
         test3Dq3Reporter();
         // printGroupInfo(0);
@@ -408,7 +406,7 @@ contract DKGScenarioTest is RandcastTestHelper {
         assertEq(node3DelegationRewardBefore - disqualifiedNodePenaltyAmount, staking.getDelegationReward(node3));
     }
 
-    // !  Disqualified Node Mixed Reporting
+    // *  Disqualified Node Mixed Reporting
     function testMixed1Dq5Reporter5Target() public {
         // 5 nodes all report different disqualified nodes (1 reports 2 reports 3 ...)
         Params[] memory params = new Params[](5);
@@ -433,15 +431,13 @@ contract DKGScenarioTest is RandcastTestHelper {
         dkgHelper(params);
         // printGroupInfo(0);
 
-        // When non-disqualified majority members < g.threshold (3), group is not formed, nodes are not slashed.
-
         // assert group state is correct
         assertEq(checkIsStrictlyMajorityConsensusReached(0), false);
         assertEq(controller.getGroup(0).members.length, 5);
         assertEq(controller.getGroup(0).size, 5);
     }
 
-    // ! PPDKG Node Mixed Reporting
+    // * PPDKG Node Mixed Reporting
     function testPPDKGMixed1Dq5Reporter5Target() public {
         testMixed1Dq5Reporter5Target();
         printGroupInfo(0);
