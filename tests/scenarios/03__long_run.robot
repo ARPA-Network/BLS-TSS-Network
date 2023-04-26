@@ -22,22 +22,24 @@ DKG Happy Path1
     ${node2} =    Stake And Run Node    2
     ${node3} =    Stake And Run Node    3
 
-    ${log_group_available} =   Get Keyword From Log    ${node2}    Group index:
+    ${log_group_available} =       All Nodes Have Keyword    Group index:    ${NODE_PROCESS_LIST}
+    Wait For Process    timeout=20s
     Group Node Number Should Be    0    3
     ${current_randomness} =    Set Variable    1
     ${last_randomness} =    Set Variable    0
 
     WHILE    ${current_randomness} != ${last_randomness}
         Deploy User Contract And Request Randomness
-        ${log_received_randomness_task} =    Get Keyword From Log   ${node1}    received new randomness task
-        Sleep    10s
+        Wait For Process    timeout=20s
+        ${log_received_randomness_task} =       All Nodes Have Keyword    received new randomness task
+        ...    ${NODE_PROCESS_LIST}    100
         ${last_randomness} =    Set Variable    ${current_randomness}
         ${current_randomness} =    Check Randomness
-        Sleep    1m
+        Wait For Process    timeout=1m
     END
 
     Kill Node    ${node1}
     Kill Node    ${node2}
     Kill Node    ${node3}
     Set Global Variable    ${NODE_PROCESS_LIST}    ${EMPTY_LIST}
-    Teardown Scenario Testing Environment
+    #Teardown Scenario Testing Environment

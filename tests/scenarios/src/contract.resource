@@ -17,14 +17,15 @@ Resource            common.resource
 ${PROXY_CONTRACT_PATH}                   src/Proxy.sol:Proxy
 ${PROXY_CONTRACT_DEPLOYER_KEY}           0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80
 ${PROXY_CONTRACT_ADDRESS}
-${PROXY_OUTPUT}                          out/
+${PROXY_OUTPUT}                          contracts/out/
 ${PROXY_CONTRACT}
 ${CONTROLLER_CONTRACT}
 ${STAKE_CONTRACT}
 ${DEPLOY_CONTROLLER_SCRIPT}              DeployControllerLocalTest.s.sol:DeployControllerTestScript
 ${PROXY_CONFIG_SCRIPT}                   ProxyConfigLocalTest.s.sol:ProxyConfigLocalTestScript
 ${REQUEST_RANDOMNESS_SCRIPT}             GetRandomNumberProxy.s.sol:GetRandomNumberProxyScript
-
+${USER_CONTRACT_ADDRESS}
+${USER_CONTRACT}
 # Test value:
 ${TEST_NODE_ADDRESS}                     0x70997970c51812dc3a010c7d01b50e0d17dc79c8
 ${TEST_PRIVATE_KEY}                      0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80
@@ -53,20 +54,28 @@ Bound Contract ABI
     ${proxy_address} =    Get Value From Env    PROXY_ADDRESS
     ${proxy_address} =    To Checksum Address    ${proxy_address}
     Set Global Variable    $PROXY_CONTRACT_ADDRESS    ${proxy_address}
-    ${proxy_contract} =    Get Contract    contracts/${PROXY_OUTPUT}Proxy.sol/Proxy.json    ${PROXY_CONTRACT_ADDRESS}
+    ${proxy_contract} =    Get Contract    ${PROXY_OUTPUT}Proxy.sol/Proxy.json    ${PROXY_CONTRACT_ADDRESS}
     Set Global Variable    $PROXY_CONTRACT   ${proxy_contract}
-    ${controller_contract} =    Get Contract    contracts/${PROXY_OUTPUT}Controller.sol/Controller.json    ${PROXY_CONTRACT_ADDRESS}
+    ${controller_contract} =    Get Contract    ${PROXY_OUTPUT}Controller.sol/Controller.json    ${PROXY_CONTRACT_ADDRESS}
     Set Global Variable    $CONTROLLER_CONTRACT   ${controller_contract}
     ${stake_address} =    Get Value From Env    STAKING_ADDRESS
     ${stake_address} =    To Checksum Address    ${stake_address}
-    ${stake_contract} =    Get Contract    contracts/${PROXY_OUTPUT}IStaking.sol/IStaking.json    ${stake_address}
+    ${stake_contract} =    Get Contract    ${PROXY_OUTPUT}IStaking.sol/IStaking.json    ${stake_address}
     Set Global Variable    $STAKE_CONTRACT   ${stake_contract}
 
 Deploy User Contract And Request Randomness
     [Documentation]    Deploy the user contract
-    ${contract_output} =    Exec Script    GetRandomNumberLocalTest.s.sol:GetRandomNumberLocalTestScript
-    ${contract_address} =    Get Contract Address From File    contracts/broadcast/GetRandomNumberLocalTest.s.sol/31337/run-latest.json
-    Set Global Variable    $USER_CONTRACT_ADDRESS    ${contract_address[0]}
+    ${user_contract_address} =    Set Variable    ${USER_CONTRACT_ADDRESS}
+    ${user_contract} =    Get Contract    ${PROXY_OUTPUT}GetRandomNumberExample.sol/GetRandomNumberExample.json    ${user_contract_address}
+    Set Global Variable    $USER_CONTRACT   ${user_contract}
+    IF  ${user_contract_address == ''}
+        ${contract_output} =    Exec Script    GetRandomNumberLocalTest.s.sol:GetRandomNumberLocalTestScript
+        ${contract_address} =    Get Contract Address From File    contracts/broadcast/GetRandomNumberLocalTest.s.sol/31337/run-latest.json
+        Set Global Variable    $USER_CONTRACT_ADDRESS    ${contract_address[0]}
+        ${result} =    All Nodes Have Keyword    received new randomness task    ${NODE_PROCESS_LIST}
+    ELSE
+        ${request_id} =    Contract Function Transact    ${USER_CONTRACT}    getRandomNumber
+    END
 
 Check Randomness
     [Documentation]    Check the randomness
@@ -172,7 +181,7 @@ Get Coordinator Instance
     [Documentation]    Get coordinator instance of a given group
     [Arguments]    ${index}
     ${address} =    Get Coordinator    ${index}
-    ${coordinator_contract} =    Get Contract    contracts/${PROXY_OUTPUT}Coordinator.sol/Coordinator.json    ${address}
+    ${coordinator_contract} =    Get Contract    ${PROXY_OUTPUT}Coordinator.sol/Coordinator.json    ${address}
     Set Global Variable    $COORDINATOR_CONTRACT   ${coordinator_contract}
     RETURN    ${coordinator_contract}
 
@@ -184,7 +193,7 @@ Deploy Coordinator To Test
     ${address} =    Fetch From Right    ${lines}    Deployed to: 
     ${address} =    Strip String    ${address}
     Length Should Be    ${address}    42
-    ${coordinator_contract} =    Get Contract    contracts/${PROXY_OUTPUT}Coordinator.sol/Coordinator.json    ${address}
+    ${coordinator_contract} =    Get Contract    ${PROXY_OUTPUT}Coordinator.sol/Coordinator.json    ${address}
     Set Global Variable    $COORDINATOR_CONTRACT   ${coordinator_contract}
 
 Get Shares

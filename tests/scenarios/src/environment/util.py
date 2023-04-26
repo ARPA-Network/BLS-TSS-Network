@@ -48,4 +48,4 @@ def set_value_to_env(name, value):
     os.environ[name] = value
     value = os.environ.get(name)
     print("Set value to env: ", name, value)
-    os.system("source contracts/.env")
+    os.system("source tests/scenarios/.env")

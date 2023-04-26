@@ -23,7 +23,7 @@ def get_log_info(log, keyword):
     return None
 
 
-def get_keyword_from_log(process, keyword, retry_time=30):
+def get_keyword_from_log(node_idx, keyword, retry_time=30):
     """
     Run a command as a sub-process and check the logs for a given keyword
     :param process: sub-process object
@@ -33,10 +33,12 @@ def get_keyword_from_log(process, keyword, retry_time=30):
     i =  0
     while i < retry_time:
         i = i + 1
-        log_info = get_log_info(iter(process.stdout.readline, b''), keyword)
-        if log_info is not None:
-            return log_info
-        time.sleep(1)
+        log_path = ("crates/arpa-node/log/running/node{}.log").format(node_idx)
+        with open(log_path, 'r', encoding='UTF-8') as process:
+            log_info = get_log_info(process, keyword)
+            if log_info is not None:
+                return log_info
+        time.sleep(2)
     return None
 
 
@@ -48,11 +50,12 @@ def have_node_got_keyword(keyword, node_process_list, retry_time=10):
     """
     while retry_time > 0:
         retry_time = retry_time - 1
-        for node in node_process_list:
-            log_info = get_keyword_from_log(node, keyword, 1)
+        node_idx = 1
+        while node_idx <= len(node_process_list):
+            log_info = get_keyword_from_log(node_idx, keyword, 30)
             if log_info is not None:
                 return True
-        time.sleep(1)
+            node_idx = node_idx + 1
     return False
 
 
@@ -62,15 +65,21 @@ def all_nodes_have_keyword(keyword, node_process_list, retry_time=30):
     :param keyword: keyword to look for in the log
     :return: dictionary with the relevant information found for the keyword
     """
-    for node in node_process_list:
-        log_info = get_keyword_from_log(node, keyword, retry_time)
+    node_idx = 1
+    while node_idx <= len(node_process_list):
+        log_info = get_keyword_from_log(node_idx, keyword, retry_time)
         if log_info is None:
-            print("Node " + str(node.pid) + " does not have the keyword " + keyword)
             return False
+        node_idx = node_idx + 1
+    clear_log()
     return True
 
-def clear_log(path='crates/arpa-node/log/running/node.log'):
+def clear_log(path='crates/arpa-node/log/running/'):
     """
     Clear the node log file
     """
-    #open(path, 'w', encoding='UTF-8').close()
+    node_idx = 1
+    while node_idx <= 10:
+        open_path = path + 'node' + str(node_idx) + '.log'
+        open(open_path, 'w', encoding='UTF-8').close()
+        node_idx = node_idx + 1

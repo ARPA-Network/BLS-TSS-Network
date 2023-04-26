@@ -3,9 +3,8 @@ This module contains necessary packages to interact with web3 and blockchain
 """
 import json
 import os
-import subprocess
-import sys
-from web3 import Web3
+
+from web3 import Web3 
 
 def get_abi(file_name):
     """
@@ -70,29 +69,6 @@ def exec_script(script_name):
     os.system(cmd)
     os.chdir("..")
 
-
-def deploy_controller():
-    """
-    Deploy controller contract. becuase the controller contract is too large,
-    need to input 'y' to continue.
-    """
-    cmd = ["forge", "script", "script/DeployControllerLocalTest.s.sol:DeployControllerTestScript",
-           "--fork-url", "http://localhost:8545", "--broadcast", "--slow", "--revert-strings", "debug"]
-    pty_cmd = cmd = [sys.executable,
-       '-c',
-       'import pty, sys; pty.spawn(sys.argv[1:])',
-       *cmd]
-    proc = subprocess.Popen(
-        pty_cmd,
-        stdin=subprocess.PIPE,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.STDOUT,
-        cwd="contracts",
-    )
-    out = proc.communicate(b"y")[0]
-    print(out.decode('utf-8'))
-    proc.wait()
-
 def get_contract_address_from_file(file_name):
     """
     Get contract address from receipt file.
@@ -107,3 +83,14 @@ def get_contract_address_from_file(file_name):
         if contract_address is not None:
             contract_addresses.append(contract_address)
     return contract_addresses
+
+def get_event(contract, event_name):
+    """
+    Get event from contract.
+    """
+    event = getattr(contract.events, event_name)
+    filter = event.create_filter(fromBlock=0)
+    log = filter.get_new_entries()
+    return log[0]
+
+

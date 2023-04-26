@@ -20,8 +20,7 @@ ${LOG_PATH}                             crates/arpa-node/log/running/
 # ARPA ERC20 information:
 ${FORK_RPC_URL}                         https://mainnet.infura.io/v3/e263f48ae1f545198575c7c7d4088f57
 ${ARPA_HOLDER_ADDRESS}                  0xf977814e90da44bfa03b6295a0616a897441acec
-${ARPA_CONTRACT_ADDRESS}                0xBA50933C268F567BDC86E1aC131BE072C6B0b71a
-${USER_CONTRACT_ADDRESS}                0xbCF26943C0197d2eE0E5D05c716Be60cc2761508
+${ARPA_CONTRACT_ADDRESS}                0xBA50933C268F567BDC86E1aC131BE072C6B0b71a                
 ${ACCOUNT_PATH}                         ACCOUNT_PATH
 ${NUM_ACCOUNTS}                         40
 ${BALANCE}                              1000

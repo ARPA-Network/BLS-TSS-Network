@@ -187,7 +187,8 @@ def start_node(node_idx):
        "{}/tests/scenarios/src/environment/node_config/config{}.yml"
       ).format(root_path, node_idx)
     print(cmd)
-    proc = subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE,
+    log_path = ("crates/arpa-node/log/running/node{}.log").format(node_idx)
+    proc = subprocess.Popen(cmd, shell=True, stdout=open(log_path, "w"),
                             stderr=subprocess.STDOUT, cwd=root_path)
     return proc
 

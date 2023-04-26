@@ -40,16 +40,17 @@ Resource            src/node.resource
 
 #     ${log_phase_1} =    All Nodes Have Keyword    Waiting for Phase 1 to start    ${NODE_PROCESS_LIST}
 #     Mine Blocks    8
-#     ${log_phase_2} =   Get Keyword From Log    ${node2}    Waiting for Phase 2 to start
+#     ${log_phase_2} =   Get Keyword From Log    2    Waiting for Phase 2 to start
 #     Mine Blocks    9
-#     ${log_group_available} =   Get Keyword From Log    ${node2}    Group index:
+#     ${log_group_available} =   Get Keyword From Log    2    Group index:
 #     Group Node Number Should Be    0    3
 
 #     ${disqulified_node_staking_after_slash} =    Get Node Staking    ${address4}
 #     #Should Be Equal As Integers    ${disqulified_node_staking_before_slash}    ${disqulified_node_staking_after_slash + 1000}
-
+#     ${slash_event} =    Get Event    ${CONTROLLER_CONTRACT}    NodeSlashed
+#     Should Be Equal As Strings    ${slash_event['args']['nodeIdAddress']}    ${address4}
 #     Deploy User Contract And Request Randomness
-#     ${log_received_randomness_task} =    Get Keyword From Log   ${node1}    received new randomness task
+#     ${log_received_randomness_task} =    Get Keyword From Log   1    received new randomness task
 #     Sleep    5s
 #     Mine Blocks    6
 #     Sleep    10s
@@ -81,9 +82,9 @@ Resource            src/node.resource
 
 #     ${log_phase_1} =    All Nodes Have Keyword    Waiting for Phase 1 to start    ${NODE_PROCESS_LIST}
 #     Mine Blocks    8
-#     ${log_phase_2} =   Get Keyword From Log    ${node2}    Waiting for Phase 2 to start
+#     ${log_phase_2} =   Get Keyword From Log    2    Waiting for Phase 2 to start
 #     Mine Blocks    9
-#     ${log_group_available} =   Get Keyword From Log    ${node2}    Group index:
+#     ${log_group_available} =       ${node2}    Group index:
 #     Group Node Number Should Be    0    4
 #     ${group} =   Get Group    0
 #     ${ckeck_result} =    Check Group Status    ${group}
@@ -185,13 +186,14 @@ Test Rebalance
 
     ${result} =    All Nodes Have Keyword    Transaction successful(node_register)    ${NODE_PROCESS_LIST}
     Should Be True    ${result}
+    ${get_share} =    All Nodes Have Keyword    Calling contract view get_shares    ${NODE_PROCESS_LIST}
     ${group_result} =    Have Node Got Keyword    Group index:0 epoch:3 is available    ${NODE_PROCESS_LIST}    
     Group Node Number Should Be    0    5
-    Sleep    20s
 
     ${node6} =    Stake And Run Node    6
-    ${group_result_0} =    Have Node Got Keyword    Group index:0 epoch:4 is available    ${NODE_PROCESS_LIST}
-    ${group_result_1} =    Have Node Got Keyword    Group index:1 epoch:0 is available    ${NODE_PROCESS_LIST}
+    ${result} =        Get Keyword From Log    6    Transaction successful(node_register)
+    ${get_share} =    All Nodes Have Keyword    Calling contract view get_shares    ${NODE_PROCESS_LIST}
+    ${group_result} =    Get Keyword From Log    6    is available
 
     Group Node Number Should Be    0    3
     Group Node Number Should Be    1    3

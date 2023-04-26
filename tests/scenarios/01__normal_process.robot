@@ -51,7 +51,7 @@ Normal Node Registration
     Mine Blocks    9
     ${log_phase_2} =    All Nodes Have Keyword    Waiting for Phase 2 to start    ${NODE_PROCESS_LIST}
     Mine Blocks    9
-    ${log_received_randomness_task} =    All Nodes Have Keyword    Group index:0 epoch:1 is available    ${NODE_PROCESS_LIST}
+    ${log_group} =    All Nodes Have Keyword    Group index:0 epoch:1 is available    ${NODE_PROCESS_LIST}
     ${result} =    Get Group    0
     Group Node Number Should Be    0    3
     ${result} =    Get Coordinator    0
@@ -60,9 +60,10 @@ Normal Node Registration
     Sleep    5s
     Mine Blocks    6
     ${result} =    Have Node Got Keyword    fulfill randomness successfully    ${NODE_PROCESS_LIST}
+    Sleep    5s
     Check Randomness
     Kill Node    ${node1}
     Kill Node    ${node2}
     Kill Node    ${node3}
     Set Global Variable    ${NODE_PROCESS_LIST}    ${EMPTY_LIST}
-    #Teardown Scenario Testing Environment
+    Teardown Scenario Testing Environment
