@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: MIT
 pragma solidity >=0.8.10;
 
-import "openzeppelin-contracts/contracts/access/Ownable.sol";
 import "openzeppelin-contracts/contracts/token/ERC20/IERC20.sol";
 import "openzeppelin-contracts/contracts/token/ERC20/utils/SafeERC20.sol";
-
+import "openzeppelin-contracts-upgradeable/contracts/access/OwnableUpgradeable.sol";
+import "openzeppelin-contracts-upgradeable/contracts/proxy/utils/UUPSUpgradeable.sol";
 import "./interfaces/IAdapter.sol";
 import "./interfaces/IAdapterOwner.sol";
 import "./interfaces/IController.sol";
@@ -15,7 +15,7 @@ import "./utils/RequestIdBase.sol";
 import "./utils/RandomnessHandler.sol";
 import {BLS} from "./libraries/BLS.sol";
 
-contract Adapter is IAdapter, IAdapterOwner, RequestIdBase, RandomnessHandler, Ownable {
+contract Adapter is UUPSUpgradeable, IAdapter, IAdapterOwner, RequestIdBase, RandomnessHandler, OwnableUpgradeable {
     using SafeERC20 for IERC20;
     using Address for address;
 
@@ -29,13 +29,14 @@ contract Adapter is IAdapter, IAdapterOwner, RequestIdBase, RandomnessHandler, O
     uint16 public constant MAX_REQUEST_CONFIRMATIONS = 200;
 
     // *State Variables*
-    IERC20 private immutable i_ARPA;
-    AggregatorV3Interface private immutable i_ARPA_ETH_Feed;
+    IERC20 private i_ARPA;
+    AggregatorV3Interface private i_ARPA_ETH_Feed;
     IController private s_controller;
 
     // Randomness Task State
     uint256 private s_lastAssignedGroupIndex;
     uint256 private s_lastRandomness;
+    uint256 private s_randomnessCount;
 
     AdapterConfig private s_config;
     FeeConfig private s_feeConfig;
@@ -88,7 +89,13 @@ contract Adapter is IAdapter, IAdapterOwner, RequestIdBase, RandomnessHandler, O
         uint256 callbackMaxGasPrice
     );
     event RandomnessRequestResult(
-        bytes32 indexed requestId, uint256 indexed groupIndex, uint256 randommness, uint256 payment, bool success
+        bytes32 indexed requestId,
+        uint256 indexed groupIndex,
+        address indexed committer,
+        address[] participantMembers,
+        uint256 randommness,
+        uint256 payment,
+        bool success
     );
 
     // *Errors*
@@ -129,11 +136,15 @@ contract Adapter is IAdapter, IAdapterOwner, RequestIdBase, RandomnessHandler, O
         _;
     }
 
-    constructor(address controller, address arpa, address arpaEthFeed) {
+    function initialize(address controller, address arpa, address arpaEthFeed) public initializer {
         s_controller = IController(controller);
         i_ARPA = IERC20(arpa);
         i_ARPA_ETH_Feed = AggregatorV3Interface(arpaEthFeed);
+
+        __Ownable_init();
     }
+
+    function _authorizeUpgrade(address) internal override onlyOwner {}
 
     // =============
     // IAdapterOwner
@@ -330,6 +341,7 @@ contract Adapter is IAdapter, IAdapterOwner, RequestIdBase, RandomnessHandler, O
 
         uint256 randomness = uint256(keccak256(abi.encode(signature)));
 
+        s_randomnessCount += 1;
         s_lastRandomness = randomness;
         s_controller.setLastOutput(randomness);
         // call user fulfill_randomness callback
@@ -358,7 +370,9 @@ contract Adapter is IAdapter, IAdapterOwner, RequestIdBase, RandomnessHandler, O
         rewardRandomness(participantMembers, payment);
 
         // Include payment in the event for tracking costs.
-        emit RandomnessRequestResult(requestId, groupIndex, randomness, payment, success);
+        emit RandomnessRequestResult(
+            requestId, groupIndex, msg.sender, participantMembers, randomness, payment, success
+        );
     }
 
     function getLastSubscription(address consumer) public view override(IAdapter) returns (uint64) {
@@ -389,6 +403,10 @@ contract Adapter is IAdapter, IAdapterOwner, RequestIdBase, RandomnessHandler, O
 
     function getLastRandomness() external view override(IAdapter) returns (uint256) {
         return s_lastRandomness;
+    }
+
+    function getRandomnessCount() external view override(IAdapter) returns (uint256) {
+        return s_randomnessCount;
     }
 
     function getFeeTier(uint64 reqCount) public view override(IAdapter) returns (uint32) {

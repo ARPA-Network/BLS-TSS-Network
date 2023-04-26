@@ -59,6 +59,8 @@ interface IAdapter is IRequestTypeBase {
 
     function getLastRandomness() external view returns (uint256);
 
+    function getRandomnessCount() external view returns (uint256);
+
     /*
      * @notice Compute fee based on the request count
      * @param reqCount number of requests
