@@ -39,11 +39,11 @@ contract GetRandomNumberLocalTestScript is Script {
         vm.broadcast(userPrivateKey);
         uint64 subId = adapter.createSubscription();
 
+        // have to set nonce manually or else the tx will fail
+        vm.setNonce(userAddress, 8);
+
         vm.broadcast(userPrivateKey);
         adapter.fundSubscription(subId, plentyOfArpaBalance);
-
-        // have to set nonce manually or else the tx will fail
-        vm.setNonce(userAddress, 6);
 
         vm.broadcast(userPrivateKey);
         adapter.addConsumer(subId, address(getRandomNumberExample));

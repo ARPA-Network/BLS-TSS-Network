@@ -52,7 +52,10 @@ contract ConsumerRequestBalanceTest is RandcastTestHelper {
         controller = new ControllerForTest(address(arpa), last_output);
 
         vm.prank(admin);
-        adapter = new Adapter(address(controller), address(arpa), address(oracle));
+        adapter = new Adapter();
+
+        vm.prank(admin);
+        adapter.initialize(address(controller), address(arpa), address(oracle));
 
         vm.prank(user);
         getRandomNumberExample = new GetRandomNumberExample(

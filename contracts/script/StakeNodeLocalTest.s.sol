@@ -7,10 +7,12 @@ import "./ArpaLocalTest.sol";
 
 contract StakeNodeLocalTestScript is Script {
     uint256 deployerPrivateKey = vm.envUint("ADMIN_PRIVATE_KEY");
+    uint256 userPrivateKey = vm.envUint("USER_PRIVATE_KEY");
 
     address stakingAddress = vm.envAddress("STAKING_ADDRESS");
     address arpaAddress = vm.envAddress("ARPA_ADDRESS");
     address deployerAddress = vm.envAddress("ADMIN_ADDRESS");
+    address userAddress = vm.envAddress("USER_ADDRESS");
 
     uint256 rewardAmount = vm.envUint("REWARD_AMOUNT");
     uint256 operatorStakeAmount = vm.envUint("OPERATOR_STAKE_AMOUNT");
@@ -53,9 +55,8 @@ contract StakeNodeLocalTestScript is Script {
         staking.start(rewardAmount, 30 days);
 
         // let a user stake to accumulate some rewards
-        // have to set nonce manually or else the tx will fail
-        vm.setNonce(deployerAddress, 15 + stakingNodesIndexLength);
-        stake(deployerAddress);
+        vm.rememberKey(userPrivateKey);
+        stake(userAddress);
 
         for (uint256 i = 0; i < operators.length; i++) {
             stake(operators[i]);
