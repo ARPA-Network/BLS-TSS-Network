@@ -5,5 +5,5 @@ libs = ['lib']
 optimizer = false
 
 gas_price = 1000000000
-
-# See more config options https://github.com/foundry-rs/foundry/tree/master/config
+# Use this to verify contracts on etherscan
+# libraries = ["src/libraries/BLS.sol:BLS:0xE16E139A14109a29d4e41e6Eda4d9d808c82D652", "src/libraries/GroupLib.sol:GroupLib:0x1c4e17B250419010519A2c21268e4aA28f1b78d9"]
