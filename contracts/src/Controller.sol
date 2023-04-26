@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.15;
 
-import "openzeppelin-contracts/contracts/access/Ownable.sol";
 import "openzeppelin-contracts/contracts/token/ERC20/IERC20.sol";
 import "openzeppelin-contracts/contracts/token/ERC20/utils/SafeERC20.sol";
-
+import "openzeppelin-contracts-upgradeable/contracts/access/OwnableUpgradeable.sol";
+import "openzeppelin-contracts-upgradeable/contracts/proxy/utils/Initializable.sol";
 import "./interfaces/IController.sol";
 import "./interfaces/IControllerOwner.sol";
 import "./interfaces/ICoordinator.sol";
@@ -13,13 +13,13 @@ import {BLS} from "./libraries/BLS.sol";
 import "./libraries/GroupLib.sol";
 import {Coordinator} from "./Coordinator.sol";
 
-contract Controller is IController, IControllerOwner, Ownable {
+contract Controller is Initializable, IController, IControllerOwner, OwnableUpgradeable {
     using SafeERC20 for IERC20;
     using GroupLib for GroupLib.GroupData;
 
     // *Controller Config*
     ControllerConfig private s_config;
-    IERC20 private immutable i_ARPA;
+    IERC20 private i_ARPA;
 
     // *Node State Variables*
     mapping(address => Node) private s_nodes; // maps node address to Node Struct
@@ -49,6 +49,7 @@ contract Controller is IController, IControllerOwner, Ownable {
     event NodeRegistered(address indexed nodeAddress, bytes dkgPublicKey, uint256 groupIndex);
     event NodeActivated(address indexed nodeAddress, uint256 groupIndex);
     event NodeQuit(address indexed nodeAddress);
+    event DkgPublicKeyChanged(address indexed nodeAddress, bytes dkgPublicKey);
     event NodeSlashed(address indexed nodeIdAddress, uint256 stakingRewardPenalty, uint256 pendingBlock);
     event NodeRewarded(address indexed nodeAddress, uint256 amount);
     event ControllerConfigSet(
@@ -89,9 +90,11 @@ contract Controller is IController, IControllerOwner, Ownable {
     error SenderNotAdapter();
     error InsufficientBalance();
 
-    constructor(address arpa, uint256 lastOutput) {
+    function initialize(address arpa, uint256 lastOutput) public initializer {
         i_ARPA = IERC20(arpa);
         s_lastOutput = lastOutput;
+
+        __Ownable_init();
     }
 
     // =============
@@ -214,6 +217,26 @@ contract Controller is IController, IControllerOwner, Ownable {
         INodeStaking(s_config.stakingContractAddress).unlock(msg.sender, s_config.nodeStakingAmount);
 
         emit NodeQuit(msg.sender);
+    }
+
+    function changeDkgPublicKey(bytes calldata dkgPublicKey) external override(IController) {
+        Node storage node = s_nodes[msg.sender];
+        if (node.idAddress != msg.sender) {
+            revert NodeNotRegistered();
+        }
+
+        if (node.state) {
+            revert NodeAlreadyActive();
+        }
+
+        uint256[4] memory publicKey = BLS.fromBytesPublicKey(dkgPublicKey);
+        if (!BLS.isValidPublicKey(publicKey)) {
+            revert BLS.InvalidPublicKey();
+        }
+
+        node.dkgPublicKey = dkgPublicKey;
+
+        emit DkgPublicKeyChanged(msg.sender, dkgPublicKey);
     }
 
     function commitDkg(CommitDkgParams memory params) external override(IController) {
@@ -382,6 +405,10 @@ contract Controller is IController, IControllerOwner, Ownable {
         returns (Member memory)
     {
         return s_groupData.s_groups[groupIndex].members[memberIndex];
+    }
+
+    function getBelongingGroup(address nodeAddress) external view override(IController) returns (int256, int256) {
+        return s_groupData.getBelongingGroupByMemberAddress(nodeAddress);
     }
 
     function getCoordinator(uint256 groupIndex) public view override(IController) returns (address) {
