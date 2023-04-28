@@ -584,7 +584,7 @@ impl<T: ResultCache> InMemorySignatureResultCache<T> {
 
 impl Task for RandomnessResultCache {
     fn request_id(&self) -> &[u8] {
-        &self.randomness_task_request_id
+        &self.randomness_task.request_id
     }
 }
 
@@ -596,14 +596,13 @@ impl ResultCache for RandomnessResultCache {
 #[derive(Debug)]
 pub struct BLSResultCache<T: ResultCache> {
     pub result_cache: T,
-    pub task: T::Task,
     pub state: bool,
 }
 
 #[derive(Clone, Debug)]
 pub struct RandomnessResultCache {
     pub group_index: usize,
-    pub randomness_task_request_id: Vec<u8>,
+    pub randomness_task: RandomnessTask,
     pub message: Vec<u8>,
     pub threshold: usize,
     pub partial_signatures: HashMap<Address, Vec<u8>>,
@@ -631,17 +630,16 @@ impl SignatureResultCacheUpdater<RandomnessResultCache>
     ) -> DataAccessResult<bool> {
         let signature_result_cache = RandomnessResultCache {
             group_index,
-            randomness_task_request_id: task.request_id.clone(),
+            randomness_task: task,
             message,
             threshold,
             partial_signatures: HashMap::new(),
         };
 
         self.signature_result_caches.insert(
-            task.request_id.clone(),
+            signature_result_cache.randomness_task.request_id.clone(),
             BLSResultCache {
                 result_cache: signature_result_cache,
-                task,
                 state: false,
             },
         );
@@ -676,11 +674,13 @@ impl SignatureResultCacheUpdater<RandomnessResultCache>
             .values_mut()
             .filter(|v| {
                 (current_block_height
-                    >= v.task.assignment_block_height + v.task.request_confirmations)
+                    >= v.result_cache.randomness_task.assignment_block_height
+                        + v.result_cache.randomness_task.request_confirmations as usize)
                     && !v.state
                     && v.result_cache.partial_signatures.len() >= v.result_cache.threshold
             })
             .map(|v| {
+                // TODO add management of signature_result_caches to persistence layer
                 v.state = true;
                 v.result_cache.clone()
             })

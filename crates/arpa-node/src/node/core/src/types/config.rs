@@ -10,7 +10,7 @@ use std::time::Duration;
 
 pub static CONFIG: OnceCell<Config> = OnceCell::new();
 
-pub const PALCEHOLDER_ADDRESS: Address = Address::zero();
+pub const PLACEHOLDER_ADDRESS: Address = Address::zero();
 
 pub const DEFAULT_LISTENER_INTERVAL_MILLIS: u64 = 10000;
 pub const DEFAULT_LISTENER_USE_JITTER: bool = true;
@@ -70,7 +70,7 @@ impl Default for Config {
             provider_endpoint: "localhost:8545".to_string(),
             chain_id: 0,
             controller_address: "0x5fc8d32690cc91d4c39d9d3abcbd16989f875707".to_string(),
-            adapter_address: "0x0165878a594ca255338adfa4d48449f69242eb8f".to_string(),
+            adapter_address: "0x2279b7a0a67db372996a5fab50d91eaa73d2ebe6".to_string(),
             data_path: None,
             account: Default::default(),
             listeners: Default::default(),

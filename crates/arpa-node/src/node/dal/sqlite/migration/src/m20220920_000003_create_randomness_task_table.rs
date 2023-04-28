@@ -23,26 +23,56 @@ impl MigrationTrait for Migration {
                             .not_null(),
                     )
                     .col(
+                        ColumnDef::new(RandomnessTask::SubscriptionId)
+                            .big_unsigned()
+                            .not_null(),
+                    )
+                    .col(
                         ColumnDef::new(RandomnessTask::GroupIndex)
-                            .integer()
+                            .unsigned()
+                            .not_null(),
+                    )
+                    .col(
+                        ColumnDef::new(RandomnessTask::RequestType)
+                            .tiny_unsigned()
+                            .not_null(),
+                    )
+                    .col(
+                        ColumnDef::new(RandomnessTask::Params)
+                            .blob(BlobSize::Medium)
+                            .not_null(),
+                    )
+                    .col(ColumnDef::new(RandomnessTask::Requester).text().not_null())
+                    .col(
+                        ColumnDef::new(RandomnessTask::Seed)
+                            .blob(BlobSize::Medium)
                             .not_null(),
                     )
                     .col(
                         ColumnDef::new(RandomnessTask::RequestConfirmations)
-                            .integer()
+                            .unsigned()
+                            .not_null(),
+                    )
+                    .col(
+                        ColumnDef::new(RandomnessTask::CallbackGasLimit)
+                            .blob(BlobSize::Medium)
+                            .not_null(),
+                    )
+                    .col(
+                        ColumnDef::new(RandomnessTask::CallbackMaxGasPrice)
+                            .blob(BlobSize::Medium)
                             .not_null(),
                     )
                     .col(
                         ColumnDef::new(RandomnessTask::AssignmentBlockHeight)
-                            .integer()
+                            .big_unsigned()
                             .not_null(),
                     )
                     .col(
-                        ColumnDef::new(RandomnessTask::Message)
-                            .blob(BlobSize::Medium)
+                        ColumnDef::new(RandomnessTask::State)
+                            .tiny_unsigned()
                             .not_null(),
                     )
-                    .col(ColumnDef::new(RandomnessTask::State).integer().not_null())
                     .col(
                         ColumnDef::new(RandomnessTask::CreateAt)
                             .date_time()
@@ -70,10 +100,16 @@ pub(crate) enum RandomnessTask {
     Table,
     Id,
     RequestId,
+    SubscriptionId,
     GroupIndex,
+    RequestType,
+    Params,
+    Requester,
+    Seed,
     RequestConfirmations,
+    CallbackGasLimit,
+    CallbackMaxGasPrice,
     AssignmentBlockHeight,
-    Message,
     State,
     CreateAt,
     UpdateAt,

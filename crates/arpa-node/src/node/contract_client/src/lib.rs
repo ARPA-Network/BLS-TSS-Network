@@ -247,7 +247,7 @@ pub mod adapter {
         async fn fulfill_randomness(
             &self,
             group_index: usize,
-            request_id: Vec<u8>,
+            task: RandomnessTask,
             signature: Vec<u8>,
             partial_signatures: HashMap<Address, PartialSignature>,
         ) -> ContractClientResult<H256>;

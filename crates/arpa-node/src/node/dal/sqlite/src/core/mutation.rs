@@ -139,20 +139,33 @@ impl GroupMutation {
 pub struct RandomnessTaskMutation;
 
 impl RandomnessTaskMutation {
+    #[allow(clippy::too_many_arguments)]
     pub async fn add_task(
         db: &DbConn,
         request_id: Vec<u8>,
+        subscription_id: i32,
         group_index: i32,
+        request_type: i32,
+        params: Vec<u8>,
+        requester: String,
+        seed: Vec<u8>,
         request_confirmations: i32,
+        callback_gas_limit: Vec<u8>,
+        callback_max_gas_price: Vec<u8>,
         assignment_block_height: i32,
-        message: Vec<u8>,
     ) -> Result<randomness_task::ActiveModel, DbErr> {
         randomness_task::ActiveModel {
             request_id: Set(request_id),
+            subscription_id: Set(subscription_id),
             group_index: Set(group_index),
+            request_type: Set(request_type),
+            params: Set(params),
+            requester: Set(requester),
+            seed: Set(seed),
             request_confirmations: Set(request_confirmations),
+            callback_gas_limit: Set(callback_gas_limit),
+            callback_max_gas_price: Set(callback_max_gas_price),
             assignment_block_height: Set(assignment_block_height),
-            message: Set(message),
             create_at: Set(format_now_date()),
             update_at: Set(format_now_date()),
             state: Set(0),

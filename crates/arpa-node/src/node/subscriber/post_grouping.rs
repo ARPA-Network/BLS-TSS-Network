@@ -8,7 +8,7 @@ use crate::node::{
 use arpa_node_contract_client::controller::{
     ControllerClientBuilder, ControllerTransactions, ControllerViews,
 };
-use arpa_node_core::{ChainIdentity, DKGStatus, SubscriberType, TaskType, PALCEHOLDER_ADDRESS};
+use arpa_node_core::{ChainIdentity, DKGStatus, SubscriberType, TaskType, PLACEHOLDER_ADDRESS};
 use arpa_node_dal::GroupInfoUpdater;
 use arpa_node_log::*;
 use async_trait::async_trait;
@@ -91,7 +91,7 @@ impl<
                 .await
                 .build_controller_client();
 
-            if PALCEHOLDER_ADDRESS != client.get_coordinator(group_index).await? {
+            if PLACEHOLDER_ADDRESS != client.get_coordinator(group_index).await? {
                 client.post_process_dkg(group_index, group_epoch).await?;
             };
         }

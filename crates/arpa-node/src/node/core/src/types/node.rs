@@ -25,9 +25,15 @@ impl Task for RandomnessTask {
 #[derive(Clone, PartialEq)]
 pub struct RandomnessTask {
     pub request_id: Vec<u8>,
-    pub seed: U256,
+    pub subscription_id: u64,
     pub group_index: usize,
-    pub request_confirmations: usize,
+    pub request_type: RandomnessRequestType,
+    pub params: Vec<u8>,
+    pub requester: Address,
+    pub seed: U256,
+    pub request_confirmations: u16,
+    pub callback_gas_limit: U256,
+    pub callback_max_gas_price: U256,
     pub assignment_block_height: usize,
 }
 
@@ -201,6 +207,33 @@ impl From<usize> for DKGStatus {
             2 => DKGStatus::CommitSuccess,
             3 => DKGStatus::WaitForPostProcess,
             _ => DKGStatus::None,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Hash, Eq, Serialize, Deserialize)]
+pub enum RandomnessRequestType {
+    Randomness,
+    RandomWords,
+    Shuffling,
+}
+
+impl RandomnessRequestType {
+    pub fn to_u8(self) -> u8 {
+        match self {
+            RandomnessRequestType::Randomness => 0,
+            RandomnessRequestType::RandomWords => 1,
+            RandomnessRequestType::Shuffling => 2,
+        }
+    }
+}
+
+impl From<u8> for RandomnessRequestType {
+    fn from(s: u8) -> Self {
+        match s {
+            1 => RandomnessRequestType::RandomWords,
+            2 => RandomnessRequestType::Shuffling,
+            _ => RandomnessRequestType::Randomness,
         }
     }
 }

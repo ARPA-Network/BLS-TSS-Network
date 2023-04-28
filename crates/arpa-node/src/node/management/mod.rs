@@ -648,13 +648,16 @@ impl<
             })
             .collect::<Result<_, NodeError>>()?;
 
+        let randomness_task = self
+            .get_main_chain()
+            .get_randomness_tasks_cache()
+            .read()
+            .await
+            .get(&randomness_task_request_id)
+            .await?;
+
         client
-            .fulfill_randomness(
-                group_index,
-                randomness_task_request_id,
-                sig,
-                partial_signatures,
-            )
+            .fulfill_randomness(group_index, randomness_task, sig, partial_signatures)
             .await?;
 
         Ok(())

@@ -169,8 +169,8 @@ Configuration items in [`conf/config.yml`](conf/config.yml) are listed here:
 ## start the local testnet by anvil:
 
 ```bash
-# produces a new block every 10 second
-anvil --block-time 10
+# produces a new block every 1 second
+anvil --block-time 1
 ```
 
 ## deploy the controller and the adapter contract:
@@ -178,7 +178,7 @@ anvil --block-time 10
 ```bash
 cd contracts
 # controller address 0x5fc8d32690cc91d4c39d9d3abcbd16989f875707
-# adapter_address: 0x0165878a594ca255338adfa4d48449f69242eb8f
+# adapter_address: 0x2279b7a0a67db372996a5fab50d91eaa73d2ebe6
 # user contract address 0x8464135c8f25da09e49bc8782676a84730c318bc
 forge script script/ControllerLocalTest.s.sol:ControllerLocalTestScript --fork-url http://localhost:8545 --optimize --broadcast
 ```
@@ -188,7 +188,7 @@ forge script script/ControllerLocalTest.s.sol:ControllerLocalTestScript --fork-u
 ```bash
 # nodes addresses are generated from index 10 by mnemonic "test test test test test test test test test test test junk"(anvil default)
 # offset and length can be set by STAKING_NODES_INDEX_OFFSET and STAKING_NODES_INDEX_LENGTH in .env
-forge script script/StakeNodeLocalTest.s.sol:StakeNodeLocalTestScript --fork-url http://localhost:8545 --optimize --broadcast
+forge script script/StakeNodeLocalTest.s.sol:StakeNodeLocalTestScript --fork-url http://localhost:8545 --optimize --broadcast -g 150
 ```
 
 ## run 3 nodes to make a group:
@@ -214,7 +214,7 @@ forge script script/GetRandomNumberLocalTest.s.sol:GetRandomNumberLocalTestScrip
 
 ```bash
 # check the randomness result recorded by the adapter and the user contract respectively
-cast call 0x0165878a594ca255338adfa4d48449f69242eb8f \
+cast call 0x2279b7a0a67db372996a5fab50d91eaa73d2ebe6 \
   "getLastRandomness()(uint256)"
 
 cast call 0x8464135c8f25da09e49bc8782676a84730c318bc \

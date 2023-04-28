@@ -8,6 +8,7 @@ use crate::core::RandomnessTaskQuery;
 use arpa_node_core::u256_to_vec;
 use arpa_node_core::Group;
 use arpa_node_core::Member;
+use arpa_node_core::RandomnessRequestType;
 use arpa_node_core::CONFIG;
 use arpa_node_core::{address_to_string, format_now_date, RandomnessTask, Task};
 use arpa_node_dal::cache::InMemoryGroupInfoCache;
@@ -95,7 +96,7 @@ impl<C: PairingCurve> SqliteDB<C> {
 
         db.integrity_check().await?;
 
-        Migrator::up(&db.connection, None).await?;
+        Migrator::up(&*db.connection, None).await?;
 
         Ok(db)
     }
@@ -770,9 +771,15 @@ impl<C: PairingCurve + Sync + Send> BLSTasksFetcher<RandomnessTask>
 
         task.map(|model| RandomnessTask {
             request_id: model.request_id,
-            seed: U256::from_big_endian(&model.message),
+            subscription_id: model.subscription_id as u64,
             group_index: model.group_index as usize,
-            request_confirmations: model.request_confirmations as usize,
+            request_type: RandomnessRequestType::from(model.request_type as u8),
+            params: model.params,
+            requester: model.requester.parse::<Address>().unwrap(),
+            seed: U256::from_big_endian(&model.seed),
+            request_confirmations: model.request_confirmations as u16,
+            callback_gas_limit: U256::from_big_endian(&model.callback_gas_limit),
+            callback_max_gas_price: U256::from_big_endian(&model.callback_max_gas_price),
             assignment_block_height: model.assignment_block_height as usize,
         })
         .ok_or_else(|| {
@@ -803,10 +810,16 @@ impl<C: PairingCurve + Sync + Send> BLSTasksUpdater<RandomnessTask>
         RandomnessTaskMutation::add_task(
             self.get_connection(),
             task.request_id,
+            task.subscription_id as i32,
             task.group_index as i32,
-            task.request_confirmations as i32,
-            task.assignment_block_height as i32,
+            task.request_type as i32,
+            task.params,
+            address_to_string(task.requester),
             seed_bytes,
+            task.request_confirmations as i32,
+            u256_to_vec(&task.callback_gas_limit),
+            u256_to_vec(&task.callback_max_gas_price),
+            task.assignment_block_height as i32,
         )
         .await
         .map_err(|e| {
@@ -845,9 +858,15 @@ impl<C: PairingCurve + Sync + Send> BLSTasksUpdater<RandomnessTask>
                 .into_iter()
                 .map(|model| RandomnessTask {
                     request_id: model.request_id,
-                    seed: U256::from_big_endian(&model.message),
+                    subscription_id: model.subscription_id as u64,
                     group_index: model.group_index as usize,
-                    request_confirmations: model.request_confirmations as usize,
+                    request_type: RandomnessRequestType::from(model.request_type as u8),
+                    params: model.params,
+                    requester: model.requester.parse::<Address>().unwrap(),
+                    seed: U256::from_big_endian(&model.seed),
+                    request_confirmations: model.request_confirmations as u16,
+                    callback_gas_limit: U256::from_big_endian(&model.callback_gas_limit),
+                    callback_max_gas_price: U256::from_big_endian(&model.callback_max_gas_price),
                     assignment_block_height: model.assignment_block_height as usize,
                 })
                 .collect::<Vec<_>>()
@@ -868,8 +887,10 @@ pub mod sqlite_tests {
     use arpa_node_core::Config;
     use arpa_node_core::DKGStatus;
     use arpa_node_core::DKGTask;
+    use arpa_node_core::RandomnessRequestType;
     use arpa_node_core::RandomnessTask;
     use arpa_node_core::DEFAULT_RANDOMNESS_TASK_EXCLUSIVE_WINDOW;
+    use arpa_node_core::PLACEHOLDER_ADDRESS;
     use arpa_node_dal::error::GroupError;
     use arpa_node_dal::BLSTasksFetcher;
     use arpa_node_dal::BLSTasksUpdater;
@@ -1226,9 +1247,15 @@ pub mod sqlite_tests {
 
         let task = RandomnessTask {
             request_id: request_id.clone(),
-            seed,
+            subscription_id: 0,
             group_index: 2,
+            request_type: RandomnessRequestType::Randomness,
+            params: vec![],
+            requester: PLACEHOLDER_ADDRESS,
+            seed,
             request_confirmations: 0,
+            callback_gas_limit: 0.into(),
+            callback_max_gas_price: 0.into(),
             assignment_block_height: 100,
         };
 
@@ -1274,9 +1301,15 @@ pub mod sqlite_tests {
 
         let task = RandomnessTask {
             request_id: request_id.clone(),
-            seed,
+            subscription_id: 0,
             group_index: 2,
+            request_type: RandomnessRequestType::Randomness,
+            params: vec![],
+            requester: PLACEHOLDER_ADDRESS,
+            seed,
             request_confirmations: 0,
+            callback_gas_limit: 0.into(),
+            callback_max_gas_price: 0.into(),
             assignment_block_height: 100,
         };
 
