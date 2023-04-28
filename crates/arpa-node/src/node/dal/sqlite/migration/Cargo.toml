@@ -19,5 +19,5 @@ libsqlite3-sys = { version = "0.24.2",  default-features = false, features = [
 ]}
   
 [dependencies.sea-orm-migration]
-version = "^0.9.0"
+version = "^0.11.0"
 features = ["sqlx-sqlite", "runtime-tokio-native-tls"]
