@@ -33,3 +33,5 @@ solidity/build
 # Custom
 contracts/test/Test.t.sol
 .DS_Store
+*.sqlite
+passwd
