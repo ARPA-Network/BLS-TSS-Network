@@ -2,7 +2,7 @@ node_committer_rpc_endpoint: "[::1]:50060"
 
 node_management_rpc_endpoint: "[::1]:50099"
 
-node_management_rpc_token: "for_test"
+node_management_rpc_token: "change_me"
 
 provider_endpoint: "localhost:8545"
 

@@ -195,9 +195,9 @@ forge script script/StakeNodeLocalTest.s.sol:StakeNodeLocalTestScript --fork-url
 
 ```bash
 cd crates/arpa-node
-cargo run --bin node-client -- -m new-run -c conf/config_test_1.yml
-cargo run --bin node-client -- -m new-run -c conf/config_test_2.yml
-cargo run --bin node-client -- -m new-run -c conf/config_test_3.yml
+cargo run --bin node-client -- -m new-run -c test/conf/config_test_1.yml
+cargo run --bin node-client -- -m new-run -c test/conf/config_test_2.yml
+cargo run --bin node-client -- -m new-run -c test/conf/config_test_3.yml
 ```
 
 ## deploy the user contract([`GetRandomNumberExample`](../../contracts/src/user/examples/GetRandomNumberExample.sol)) and request a randomness:
