@@ -3,9 +3,9 @@ use arpa_node::node::context::types::GeneralContext;
 use arpa_node::node::context::{Context, TaskWaiter};
 use arpa_node_contract_client::controller::{ControllerClientBuilder, ControllerTransactions};
 use arpa_node_core::log::encoder::JsonEncoder;
+use arpa_node_core::GeneralChainIdentity;
 use arpa_node_core::{build_wallet_from_config, RandomnessTask};
 use arpa_node_core::{format_now_date, Config};
-use arpa_node_core::{GeneralChainIdentity, CONFIG};
 use arpa_node_dal::NodeInfoFetcher;
 use arpa_node_sqlite_db::BLSTasksDBClient;
 use arpa_node_sqlite_db::GroupInfoDBClient;
@@ -45,10 +45,8 @@ pub struct Opt {
     config_path: PathBuf,
 }
 
-fn load_config(opt: Opt) -> String {
-    println!("{:#?}", opt);
-
-    let config_str = &read_to_string(opt.config_path).unwrap_or_else(|e| {
+fn load_config(config_path: PathBuf) -> Config {
+    let config_str = &read_to_string(config_path).unwrap_or_else(|e| {
         panic!(
             "Error loading configuration file: {:?}, please check the configuration!",
             e
@@ -58,9 +56,7 @@ fn load_config(opt: Opt) -> String {
     let config: Config =
         serde_yaml::from_str(config_str).expect("Error loading configuration file");
 
-    config.initialize();
-
-    opt.mode
+    config.initialize()
 }
 
 fn init_log(node_id: &str, context_logging: bool) {
@@ -107,21 +103,17 @@ fn init_log(node_id: &str, context_logging: bool) {
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let opt = Opt::from_args();
+    println!("{:#?}", opt);
 
-    let mode = load_config(opt);
+    let config = load_config(opt.config_path);
 
-    init_log(
-        CONFIG.get().unwrap().node_id.as_ref().unwrap(),
-        CONFIG.get().unwrap().context_logging,
-    );
-
-    let config = CONFIG.get().unwrap();
+    init_log(config.node_id.as_ref().unwrap(), config.context_logging);
 
     info!("{:?}", config);
 
     let data_path = PathBuf::from(config.data_path.clone().unwrap());
 
-    match mode.as_str() {
+    match opt.mode.as_str() {
         "new-run" => {
             let wallet = build_wallet_from_config(&config.account)?;
 
@@ -179,6 +171,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     .adapter_address
                     .parse()
                     .expect("bad format of adapter_address"),
+                config
+                    .time_limits
+                    .unwrap()
+                    .contract_transaction_retry_descriptor,
+                config.time_limits.unwrap().contract_view_retry_descriptor,
             );
 
             let main_chain = GeneralMainChain::<
@@ -193,9 +190,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 node_cache,
                 group_cache,
                 randomness_tasks_cache,
+                config.time_limits.unwrap(),
+                config.listeners.clone(),
             );
 
-            let context = GeneralContext::new(main_chain);
+            let context = GeneralContext::new(main_chain, config);
 
             let handle = context.deploy().await?;
 
@@ -252,6 +251,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     .adapter_address
                     .parse()
                     .expect("bad format of adapter_address"),
+                config
+                    .time_limits
+                    .unwrap()
+                    .contract_transaction_retry_descriptor,
+                config.time_limits.unwrap().contract_view_retry_descriptor,
             );
 
             let main_chain = GeneralMainChain::<
@@ -266,9 +270,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 node_cache,
                 group_cache,
                 randomness_tasks_cache,
+                config.time_limits.unwrap(),
+                config.listeners.clone(),
             );
 
-            let context = GeneralContext::new(main_chain);
+            let context = GeneralContext::new(main_chain, config);
 
             let handle = context.deploy().await?;
 

@@ -1,4 +1,5 @@
 use crate::node::context::types::GeneralContext;
+use crate::node::context::ContextFetcher;
 use crate::node::error::NodeError;
 use crate::node::management::ComponentService;
 use crate::rpc_stub::management::management_service_server::{
@@ -21,7 +22,7 @@ use arpa_node_contract_client::{
 };
 use arpa_node_core::{
     address_to_string, ChainIdentity, Group as ModelGroup, ListenerType, Member as ModelMember,
-    RandomnessTask, SchedulerError, CONFIG,
+    RandomnessTask, SchedulerError,
 };
 use arpa_node_dal::error::DataAccessError;
 use arpa_node_dal::{
@@ -507,7 +508,7 @@ pub async fn start_management_server<
         // Apply middleware from tower
         .timeout(Duration::from_secs(30))
         // Apply our own middleware
-        .layer(LogLayer)
+        .layer(LogLayer::new(context.clone()))
         // Interceptors can be also be applied as middleware
         .into_inner();
 
@@ -522,22 +523,118 @@ pub async fn start_management_server<
 }
 
 #[derive(Debug, Clone)]
-struct LogLayer;
+struct LogLayer<
+    N: NodeInfoFetcher<C> + NodeInfoUpdater<C> + ContextInfoUpdater + Clone,
+    G: GroupInfoFetcher<C> + GroupInfoUpdater<C> + ContextInfoUpdater + Clone,
+    T: BLSTasksFetcher<RandomnessTask> + BLSTasksUpdater<RandomnessTask> + Clone,
+    I: ChainIdentity
+        + ControllerClientBuilder<C>
+        + CoordinatorClientBuilder
+        + AdapterClientBuilder
+        + ChainProviderBuilder
+        + Clone,
+    C: PairingCurve,
+> {
+    context: NodeContext<N, G, T, I, C>,
+}
 
-impl<S> Layer<S> for LogLayer {
-    type Service = LogService<S>;
+impl<
+        N: NodeInfoFetcher<C> + NodeInfoUpdater<C> + ContextInfoUpdater + Clone,
+        G: GroupInfoFetcher<C> + GroupInfoUpdater<C> + ContextInfoUpdater + Clone,
+        T: BLSTasksFetcher<RandomnessTask> + BLSTasksUpdater<RandomnessTask> + Clone,
+        I: ChainIdentity
+            + ControllerClientBuilder<C>
+            + CoordinatorClientBuilder
+            + AdapterClientBuilder
+            + ChainProviderBuilder
+            + Clone,
+        C: PairingCurve,
+    > LogLayer<N, G, T, I, C>
+{
+    pub fn new(context: NodeContext<N, G, T, I, C>) -> Self {
+        LogLayer { context }
+    }
+}
+
+impl<
+        S,
+        N: NodeInfoFetcher<C> + NodeInfoUpdater<C> + ContextInfoUpdater + Clone,
+        G: GroupInfoFetcher<C> + GroupInfoUpdater<C> + ContextInfoUpdater + Clone,
+        T: BLSTasksFetcher<RandomnessTask> + BLSTasksUpdater<RandomnessTask> + Clone,
+        I: ChainIdentity
+            + ControllerClientBuilder<C>
+            + CoordinatorClientBuilder
+            + AdapterClientBuilder
+            + ChainProviderBuilder
+            + Clone,
+        C: PairingCurve,
+    > Layer<S> for LogLayer<N, G, T, I, C>
+{
+    type Service = LogService<S, N, G, T, I, C>;
 
     fn layer(&self, service: S) -> Self::Service {
-        LogService { inner: service }
+        LogService {
+            inner: service,
+            context: self.context.clone(),
+        }
     }
 }
 
 #[derive(Debug, Clone)]
-struct LogService<S> {
+struct LogService<
+    S,
+    N: NodeInfoFetcher<C> + NodeInfoUpdater<C> + ContextInfoUpdater + Clone,
+    G: GroupInfoFetcher<C> + GroupInfoUpdater<C> + ContextInfoUpdater + Clone,
+    T: BLSTasksFetcher<RandomnessTask> + BLSTasksUpdater<RandomnessTask> + Clone,
+    I: ChainIdentity
+        + ControllerClientBuilder<C>
+        + CoordinatorClientBuilder
+        + AdapterClientBuilder
+        + ChainProviderBuilder
+        + Clone,
+    C: PairingCurve,
+> {
     inner: S,
+    context: NodeContext<N, G, T, I, C>,
 }
 
-impl<S> Service<hyper::Request<Body>> for LogService<S>
+impl<
+        S,
+        N: NodeInfoFetcher<C>
+            + NodeInfoUpdater<C>
+            + ContextInfoUpdater
+            + std::fmt::Debug
+            + Clone
+            + Sync
+            + Send
+            + 'static,
+        G: GroupInfoFetcher<C>
+            + GroupInfoUpdater<C>
+            + ContextInfoUpdater
+            + std::fmt::Debug
+            + Clone
+            + Sync
+            + Send
+            + 'static,
+        T: BLSTasksFetcher<RandomnessTask>
+            + BLSTasksUpdater<RandomnessTask>
+            + std::fmt::Debug
+            + Clone
+            + Sync
+            + Send
+            + 'static,
+        I: ChainIdentity
+            + ControllerClientBuilder<C>
+            + CoordinatorClientBuilder
+            + AdapterClientBuilder
+            + ChainProviderBuilder
+            + std::fmt::Debug
+            + Clone
+            + Sync
+            + Send
+            + 'static,
+        C: PairingCurve + std::fmt::Debug + Clone + Sync + Send + 'static,
+    > Service<hyper::Request<Body>> for LogService<S, N, G, T, I, C>
 where
     S: Service<hyper::Request<Body>, Response = hyper::Response<BoxBody>> + Clone + Send + 'static,
     S::Future: Send + 'static,
@@ -557,12 +654,19 @@ where
         let clone = self.inner.clone();
         let mut inner = std::mem::replace(&mut self.inner, clone);
 
+        let context = self.context.clone();
+
         Box::pin(async move {
             log_mdc::insert("management_request_id", Uuid::new_v4().to_string());
 
             debug!("Intercepting management request: {:?}", req);
 
-            let token_str = match CONFIG.get().unwrap().get_node_management_rpc_token() {
+            let token_str = match context
+                .read()
+                .await
+                .get_config()
+                .get_node_management_rpc_token()
+            {
                 Ok(t) => t,
                 Err(_) => {
                     return Ok(

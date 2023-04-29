@@ -23,7 +23,7 @@ use arpa_node_contract_client::{
 };
 use arpa_node_core::{
     ChainIdentity, GeneralChainIdentity, ListenerDescriptor, ListenerType, RandomnessTask,
-    SchedulerResult, TaskType, CONFIG,
+    SchedulerResult, TaskType, TimeLimitDescriptor,
 };
 use arpa_node_dal::{
     cache::{InMemoryBlockInfoCache, InMemorySignatureResultCache, RandomnessResultCache},
@@ -57,6 +57,8 @@ pub struct GeneralMainChain<
     committer_randomness_result_cache:
         Arc<RwLock<InMemorySignatureResultCache<RandomnessResultCache>>>,
     c: PhantomData<PC>,
+    time_limits: TimeLimitDescriptor,
+    listener_descriptors: Option<Vec<ListenerDescriptor>>,
 }
 
 impl<PC: PairingCurve + Send + Sync + 'static>
@@ -74,6 +76,8 @@ impl<PC: PairingCurve + Send + Sync + 'static>
         node_cache: NodeInfoDBClient<PC>,
         group_cache: GroupInfoDBClient<PC>,
         randomness_tasks_cache: BLSTasksDBClient<RandomnessTask, PC>,
+        time_limits: TimeLimitDescriptor,
+        listener_descriptors: Option<Vec<ListenerDescriptor>>,
     ) -> Self {
         GeneralMainChain {
             id: chain_identity.get_chain_id(),
@@ -87,6 +91,8 @@ impl<PC: PairingCurve + Send + Sync + 'static>
             node_cache: Arc::new(RwLock::new(node_cache)),
             group_cache: Arc::new(RwLock::new(group_cache)),
             c: PhantomData,
+            time_limits,
+            listener_descriptors,
         }
     }
 }
@@ -196,8 +202,12 @@ impl<
                 )
             }
             ListenerType::PostGrouping => {
-                let p_post_grouping =
-                    PostGroupingListener::new(self.get_block_cache(), self.get_group_cache(), eq);
+                let p_post_grouping = PostGroupingListener::new(
+                    self.get_block_cache(),
+                    self.get_group_cache(),
+                    eq,
+                    self.time_limits.dkg_timeout_duration,
+                );
 
                 fs.write().await.add_task(
                     TaskType::Listener(ListenerType::PostGrouping),
@@ -245,6 +255,7 @@ impl<
                     self.get_group_cache(),
                     self.get_randomness_tasks_cache(),
                     eq,
+                    self.time_limits.randomness_task_exclusive_window,
                 );
 
                 fs.write().await.add_task(
@@ -291,7 +302,7 @@ impl<
         &self,
         context: &GeneralContext<N, G, T, I, PC>,
     ) -> SchedulerResult<()> {
-        match &CONFIG.get().unwrap().listeners {
+        match &self.listener_descriptors {
             Some(listeners) => {
                 for listener in listeners {
                     self.init_listener(
@@ -369,7 +380,10 @@ impl<
         self.init_listener(
             context.get_event_queue(),
             context.get_fixed_task_handler(),
-            ListenerDescriptor::build(ListenerType::Block),
+            ListenerDescriptor::build(
+                ListenerType::Block,
+                self.time_limits.listener_interval_millis,
+            ),
         )
         .await?;
 
@@ -380,19 +394,28 @@ impl<
         self.init_listener(
             context.get_event_queue(),
             context.get_fixed_task_handler(),
-            ListenerDescriptor::build(ListenerType::PreGrouping),
+            ListenerDescriptor::build(
+                ListenerType::PreGrouping,
+                self.time_limits.listener_interval_millis,
+            ),
         )
         .await?;
         self.init_listener(
             context.get_event_queue(),
             context.get_fixed_task_handler(),
-            ListenerDescriptor::build(ListenerType::PostCommitGrouping),
+            ListenerDescriptor::build(
+                ListenerType::PostCommitGrouping,
+                self.time_limits.listener_interval_millis,
+            ),
         )
         .await?;
         self.init_listener(
             context.get_event_queue(),
             context.get_fixed_task_handler(),
-            ListenerDescriptor::build(ListenerType::PostGrouping),
+            ListenerDescriptor::build(
+                ListenerType::PostGrouping,
+                self.time_limits.listener_interval_millis,
+            ),
         )
         .await?;
 
@@ -403,19 +426,28 @@ impl<
         self.init_listener(
             context.get_event_queue(),
             context.get_fixed_task_handler(),
-            ListenerDescriptor::build(ListenerType::NewRandomnessTask),
+            ListenerDescriptor::build(
+                ListenerType::NewRandomnessTask,
+                self.time_limits.listener_interval_millis,
+            ),
         )
         .await?;
         self.init_listener(
             context.get_event_queue(),
             context.get_fixed_task_handler(),
-            ListenerDescriptor::build(ListenerType::ReadyToHandleRandomnessTask),
+            ListenerDescriptor::build(
+                ListenerType::ReadyToHandleRandomnessTask,
+                self.time_limits.listener_interval_millis,
+            ),
         )
         .await?;
         self.init_listener(
             context.get_event_queue(),
             context.get_fixed_task_handler(),
-            ListenerDescriptor::build(ListenerType::RandomnessSignatureAggregation),
+            ListenerDescriptor::build(
+                ListenerType::RandomnessSignatureAggregation,
+                self.time_limits.listener_interval_millis,
+            ),
         )
         .await?;
 
@@ -441,6 +473,7 @@ impl<
             self.get_group_cache(),
             context.get_event_queue(),
             context.get_dynamic_task_handler(),
+            self.time_limits.dkg_wait_for_phase_interval_millis,
         );
 
         s_in_grouping.subscribe().await;
@@ -476,6 +509,7 @@ impl<
             self.get_randomness_result_cache(),
             context.get_event_queue(),
             context.get_dynamic_task_handler(),
+            self.time_limits.commit_partial_signature_retry_descriptor,
         );
 
         s_ready_to_handle_randomness_task.subscribe().await;

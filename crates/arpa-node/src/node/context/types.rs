@@ -15,7 +15,7 @@ use arpa_node_contract_client::{
     coordinator::CoordinatorClientBuilder, provider::ChainProviderBuilder,
 };
 use arpa_node_core::{
-    ChainIdentity, RandomnessTask, RpcServerType, SchedulerResult, TaskType, CONFIG,
+    ChainIdentity, Config, RandomnessTask, RpcServerType, SchedulerResult, TaskType,
     DEFAULT_DYNAMIC_TASK_CLEANER_INTERVAL_MILLIS,
 };
 use arpa_node_dal::{
@@ -40,6 +40,7 @@ pub struct GeneralContext<
     eq: Arc<RwLock<EventQueue>>,
     ts: Arc<RwLock<SimpleDynamicTaskScheduler>>,
     f_ts: Arc<RwLock<SimpleFixedTaskScheduler>>,
+    config: Config,
 }
 
 impl<
@@ -57,12 +58,13 @@ impl<
         C: PairingCurve,
     > GeneralContext<N, G, T, I, C>
 {
-    pub fn new(main_chain: GeneralMainChain<N, G, T, I, C>) -> Self {
+    pub fn new(main_chain: GeneralMainChain<N, G, T, I, C>, config: Config) -> Self {
         GeneralContext {
             main_chain,
             eq: Arc::new(RwLock::new(EventQueue::new())),
             ts: Arc::new(RwLock::new(SimpleDynamicTaskScheduler::new())),
             f_ts: Arc::new(RwLock::new(SimpleFixedTaskScheduler::new())),
+            config,
         }
     }
 }
@@ -120,8 +122,7 @@ impl<
             .unwrap()
             .to_string();
 
-        let management_server_rpc_endpoint =
-            CONFIG.get().unwrap().node_management_rpc_endpoint.clone();
+        let node_management_rpc_endpoint = self.config.node_management_rpc_endpoint.clone();
 
         let context = Arc::new(RwLock::new(self));
 
@@ -131,7 +132,7 @@ impl<
 
         f_ts.write()
             .await
-            .start_management_server(management_server_rpc_endpoint, context.clone())?;
+            .start_management_server(node_management_rpc_endpoint, context.clone())?;
 
         let ts = context.read().await.get_dynamic_task_handler();
 
@@ -190,6 +191,10 @@ impl<
 
     fn get_event_queue(&self) -> Arc<RwLock<EventQueue>> {
         self.eq.clone()
+    }
+
+    fn get_config(&self) -> &Config {
+        &self.config
     }
 }
 

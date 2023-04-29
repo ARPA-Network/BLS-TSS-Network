@@ -2,7 +2,7 @@ use crate::error::ContractClientError;
 use ::ethers::abi::Detokenize;
 use ::ethers::types::U64;
 use ::ethers::{prelude::builders::ContractCall, types::H256};
-use arpa_node_core::{jitter, WalletSigner, CONFIG};
+use arpa_node_core::{jitter, ExponentialBackoffRetryDescriptor, WalletSigner};
 use async_trait::async_trait;
 use error::ContractClientResult;
 use log::{error, info};
@@ -23,13 +23,8 @@ pub trait TransactionCaller {
     async fn call_contract_transaction(
         info: &str,
         call: ContractCall<WalletSigner, ()>,
+        contract_transaction_retry_descriptor: ExponentialBackoffRetryDescriptor,
     ) -> ContractClientResult<H256> {
-        let contract_transaction_retry_descriptor = CONFIG
-            .get()
-            .unwrap()
-            .time_limits
-            .unwrap()
-            .contract_transaction_retry_descriptor;
         let retry_strategy =
             ExponentialBackoff::from_millis(contract_transaction_retry_descriptor.base)
                 .factor(contract_transaction_retry_descriptor.factor)
@@ -86,13 +81,8 @@ pub trait ViewCaller {
     async fn call_contract_view<D: Detokenize + std::fmt::Debug + Send + Sync + 'static>(
         info: &str,
         call: ContractCall<WalletSigner, D>,
+        contract_view_retry_descriptor: ExponentialBackoffRetryDescriptor,
     ) -> ContractClientResult<D> {
-        let contract_view_retry_descriptor = CONFIG
-            .get()
-            .unwrap()
-            .time_limits
-            .unwrap()
-            .contract_view_retry_descriptor;
         let retry_strategy = ExponentialBackoff::from_millis(contract_view_retry_descriptor.base)
             .factor(contract_view_retry_descriptor.factor)
             .map(|e| {

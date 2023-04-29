@@ -9,8 +9,8 @@ use crate::{
     ServiceClient, TransactionCaller, ViewCaller,
 };
 use arpa_node_core::{
-    ChainIdentity, GeneralChainIdentity, PartialSignature, RandomnessRequestType, RandomnessTask,
-    WalletSigner,
+    ChainIdentity, ExponentialBackoffRetryDescriptor, GeneralChainIdentity, PartialSignature,
+    RandomnessRequestType, RandomnessTask, WalletSigner,
 };
 use async_trait::async_trait;
 use ethers::{prelude::*, utils::hex};
@@ -22,6 +22,8 @@ pub struct AdapterClient {
     main_id_address: Address,
     adapter_address: Address,
     signer: Arc<WalletSigner>,
+    contract_transaction_retry_descriptor: ExponentialBackoffRetryDescriptor,
+    contract_view_retry_descriptor: ExponentialBackoffRetryDescriptor,
 }
 
 impl AdapterClient {
@@ -29,11 +31,15 @@ impl AdapterClient {
         main_id_address: Address,
         adapter_address: Address,
         identity: &GeneralChainIdentity,
+        contract_transaction_retry_descriptor: ExponentialBackoffRetryDescriptor,
+        contract_view_retry_descriptor: ExponentialBackoffRetryDescriptor,
     ) -> Self {
         AdapterClient {
             main_id_address,
             adapter_address,
             signer: identity.get_signer(),
+            contract_transaction_retry_descriptor,
+            contract_view_retry_descriptor,
         }
     }
 }
@@ -42,7 +48,13 @@ impl AdapterClientBuilder for GeneralChainIdentity {
     type Service = AdapterClient;
 
     fn build_adapter_client(&self, main_id_address: Address) -> AdapterClient {
-        AdapterClient::new(main_id_address, self.get_adapter_address(), self)
+        AdapterClient::new(
+            main_id_address,
+            self.get_adapter_address(),
+            self,
+            self.get_contract_transaction_retry_descriptor(),
+            self.get_contract_view_retry_descriptor(),
+        )
     }
 }
 
@@ -105,7 +117,12 @@ impl AdapterTransactions for AdapterClient {
 
         let call = adapter_contract.fulfill_randomness(group_index.into(), r_id, sig, rd, ps);
 
-        AdapterClient::call_contract_transaction("fulfill_randomness", call).await
+        AdapterClient::call_contract_transaction(
+            "fulfill_randomness",
+            call,
+            self.contract_transaction_retry_descriptor,
+        )
+        .await
     }
 }
 
@@ -118,6 +135,7 @@ impl AdapterViews for AdapterClient {
         AdapterClient::call_contract_view(
             "get_last_randomness",
             adapter_contract.get_last_randomness(),
+            self.contract_view_retry_descriptor,
         )
         .await
     }
@@ -131,6 +149,7 @@ impl AdapterViews for AdapterClient {
         AdapterClient::call_contract_view(
             "get_pending_request",
             adapter_contract.get_pending_request_commitment(r_id),
+            self.contract_view_retry_descriptor,
         )
         .await
         .map(|r| !r.is_empty())

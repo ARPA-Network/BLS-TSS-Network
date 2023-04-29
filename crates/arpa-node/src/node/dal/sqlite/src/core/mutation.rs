@@ -56,8 +56,8 @@ impl NodeMutation {
 
 pub struct GroupMutation;
 
-#[allow(clippy::too_many_arguments)]
 impl GroupMutation {
+    #[allow(clippy::too_many_arguments)]
     pub async fn save_task_info(
         db: &DbConn,
         index: i32,

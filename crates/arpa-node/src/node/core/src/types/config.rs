@@ -2,13 +2,10 @@ use crate::{ConfigError, SchedulerError};
 use ethers_core::rand::{thread_rng, Rng};
 use ethers_core::{k256::ecdsa::SigningKey, types::Address};
 use ethers_signers::{coins_bip39::English, LocalWallet, MnemonicBuilder, Wallet};
-use once_cell::sync::OnceCell;
 use serde::{Deserialize, Serialize};
 use std::convert::TryFrom;
 use std::env;
 use std::time::Duration;
-
-pub static CONFIG: OnceCell<Config> = OnceCell::new();
 
 pub const PLACEHOLDER_ADDRESS: Address = Address::zero();
 
@@ -43,7 +40,7 @@ pub fn jitter(duration: Duration) -> Duration {
     duration.mul_f64(thread_rng().gen_range(0.5..=1.0))
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Config {
     pub node_committer_rpc_endpoint: String,
     pub node_management_rpc_endpoint: String,
@@ -89,15 +86,10 @@ pub struct ListenerDescriptor {
 }
 
 impl ListenerDescriptor {
-    pub fn build(l_type: ListenerType) -> Self {
+    pub fn build(l_type: ListenerType, interval_millis: u64) -> Self {
         Self {
             l_type,
-            interval_millis: CONFIG
-                .get()
-                .unwrap()
-                .time_limits
-                .unwrap()
-                .listener_interval_millis,
+            interval_millis,
             use_jitter: DEFAULT_LISTENER_USE_JITTER,
         }
     }
@@ -140,7 +132,7 @@ impl Config {
         Ok(self.node_management_rpc_token.clone())
     }
 
-    pub fn initialize(mut self) {
+    pub fn initialize(mut self) -> Self {
         if self.data_path.is_none() {
             self.data_path = Some(String::from("data.sqlite"));
         }
@@ -210,8 +202,7 @@ impl Config {
                 });
             }
         };
-
-        CONFIG.get_or_init(|| self);
+        self
     }
 }
 
@@ -328,7 +319,7 @@ pub struct Adapter {
     pub account: Account,
 }
 
-#[derive(Default, Debug, Serialize, Deserialize)]
+#[derive(Default, Clone, Debug, Serialize, Deserialize)]
 pub struct Account {
     pub hdwallet: Option<HDWallet>,
     pub keystore: Option<Keystore>,
@@ -388,7 +379,7 @@ pub fn build_wallet_from_config(account: &Account) -> Result<Wallet<SigningKey>,
 mod tests {
     use std::{fs::read_to_string, time::Duration};
 
-    use crate::{jitter, Config, ListenerType, CONFIG};
+    use crate::{jitter, Config, ListenerType};
 
     #[test]
     fn test_enum_serialization() {
@@ -411,7 +402,7 @@ mod tests {
 
         config.initialize();
 
-        println!("config = {:?}", CONFIG.get().unwrap());
+        // println!("config = {:?}", CONFIG.get().unwrap());
     }
 
     #[test]

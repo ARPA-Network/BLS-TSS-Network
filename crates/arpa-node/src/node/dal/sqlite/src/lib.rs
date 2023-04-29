@@ -9,7 +9,6 @@ use arpa_node_core::u256_to_vec;
 use arpa_node_core::Group;
 use arpa_node_core::Member;
 use arpa_node_core::RandomnessRequestType;
-use arpa_node_core::CONFIG;
 use arpa_node_core::{address_to_string, format_now_date, RandomnessTask, Task};
 use arpa_node_dal::cache::InMemoryGroupInfoCache;
 use arpa_node_dal::cache::InMemoryNodeInfoCache;
@@ -834,13 +833,8 @@ impl<C: PairingCurve + Sync + Send> BLSTasksUpdater<RandomnessTask>
         &mut self,
         current_block_height: usize,
         current_group_index: usize,
+        randomness_task_exclusive_window: usize,
     ) -> DataAccessResult<Vec<RandomnessTask>> {
-        let randomness_task_exclusive_window = CONFIG
-            .get()
-            .unwrap()
-            .time_limits
-            .unwrap()
-            .randomness_task_exclusive_window;
         let before_assignment_block_height =
             if current_block_height > randomness_task_exclusive_window {
                 current_block_height - randomness_task_exclusive_window
@@ -884,7 +878,6 @@ pub mod sqlite_tests {
     use crate::test_helper;
     use crate::DBError;
     use crate::SqliteDB;
-    use arpa_node_core::Config;
     use arpa_node_core::DKGStatus;
     use arpa_node_core::DKGTask;
     use arpa_node_core::RandomnessRequestType;
@@ -912,8 +905,6 @@ pub mod sqlite_tests {
     const CIPHER_KEY: &str = "passphrase";
 
     fn setup() {
-        Config::default().initialize();
-
         if PathBuf::from(DB_PATH).exists() {
             fs::remove_file(DB_PATH).expect("could not remove file");
         }
@@ -1237,6 +1228,8 @@ pub mod sqlite_tests {
     async fn test_add_and_get_randomness_task_with_assigned_group() {
         setup();
 
+        let randomness_task_exclusive_window = 10;
+
         let db = build_sqlite_db::<PairingCurve>().await.unwrap();
 
         let mut db = db.get_bls_tasks_client::<RandomnessTask>();
@@ -1267,10 +1260,16 @@ pub mod sqlite_tests {
         assert_eq!(task, db.get(&request_id).await.unwrap());
         assert_eq!(false, db.is_handled(&request_id).await.unwrap());
 
-        let available_tasks = db.check_and_get_available_tasks(100, 1).await.unwrap();
+        let available_tasks = db
+            .check_and_get_available_tasks(100, 1, randomness_task_exclusive_window)
+            .await
+            .unwrap();
         assert_eq!(0, available_tasks.len());
 
-        let available_tasks = db.check_and_get_available_tasks(100, 2).await.unwrap();
+        let available_tasks = db
+            .check_and_get_available_tasks(100, 2, randomness_task_exclusive_window)
+            .await
+            .unwrap();
         assert_eq!(1, available_tasks.len());
         assert_eq!(request_id, available_tasks[0].request_id);
         assert_eq!(seed, available_tasks[0].seed);
@@ -1281,7 +1280,10 @@ pub mod sqlite_tests {
         assert_eq!(task, db.get(&request_id).await.unwrap());
         assert_eq!(true, db.is_handled(&request_id).await.unwrap());
 
-        let available_tasks = db.check_and_get_available_tasks(100, 2).await.unwrap();
+        let available_tasks = db
+            .check_and_get_available_tasks(100, 2, randomness_task_exclusive_window)
+            .await
+            .unwrap();
         assert_eq!(0, available_tasks.len());
 
         teardown();
@@ -1291,6 +1293,8 @@ pub mod sqlite_tests {
     async fn test_add_and_get_randomness_task_over_exclusive_window() {
         setup();
 
+        let randomness_task_exclusive_window = 10;
+
         let db = build_sqlite_db::<PairingCurve>().await.unwrap();
 
         let mut db = db.get_bls_tasks_client::<RandomnessTask>();
@@ -1322,13 +1326,21 @@ pub mod sqlite_tests {
         assert_eq!(false, db.is_handled(&request_id).await.unwrap());
 
         let available_tasks = db
-            .check_and_get_available_tasks(100 + DEFAULT_RANDOMNESS_TASK_EXCLUSIVE_WINDOW, 1)
+            .check_and_get_available_tasks(
+                100 + DEFAULT_RANDOMNESS_TASK_EXCLUSIVE_WINDOW,
+                1,
+                randomness_task_exclusive_window,
+            )
             .await
             .unwrap();
         assert_eq!(0, available_tasks.len());
 
         let available_tasks = db
-            .check_and_get_available_tasks(100 + DEFAULT_RANDOMNESS_TASK_EXCLUSIVE_WINDOW + 1, 1)
+            .check_and_get_available_tasks(
+                100 + DEFAULT_RANDOMNESS_TASK_EXCLUSIVE_WINDOW + 1,
+                1,
+                randomness_task_exclusive_window,
+            )
             .await
             .unwrap();
         assert_eq!(1, available_tasks.len());
@@ -1342,7 +1354,11 @@ pub mod sqlite_tests {
         assert_eq!(true, db.is_handled(&request_id).await.unwrap());
 
         let available_tasks = db
-            .check_and_get_available_tasks(100 + DEFAULT_RANDOMNESS_TASK_EXCLUSIVE_WINDOW + 1, 1)
+            .check_and_get_available_tasks(
+                100 + DEFAULT_RANDOMNESS_TASK_EXCLUSIVE_WINDOW + 1,
+                1,
+                randomness_task_exclusive_window,
+            )
             .await
             .unwrap();
         assert_eq!(0, available_tasks.len());

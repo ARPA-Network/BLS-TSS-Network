@@ -19,8 +19,11 @@ use arpa_node_contract_client::{
     provider::ChainProviderBuilder,
 };
 use arpa_node_core::{
-    BLSTaskType, ChainIdentity, DKGStatus, Group, ListenerDescriptor, ListenerType,
-    PartialSignature, RandomnessTask, SchedulerResult, TaskType,
+    BLSTaskType, ChainIdentity, DKGStatus, ExponentialBackoffRetryDescriptor, Group,
+    ListenerDescriptor, ListenerType, PartialSignature, RandomnessTask, SchedulerResult, TaskType,
+    DEFAULT_COMMIT_PARTIAL_SIGNATURE_RETRY_BASE, DEFAULT_COMMIT_PARTIAL_SIGNATURE_RETRY_FACTOR,
+    DEFAULT_COMMIT_PARTIAL_SIGNATURE_RETRY_MAX_ATTEMPTS,
+    DEFAULT_COMMIT_PARTIAL_SIGNATURE_RETRY_USE_JITTER, DEFAULT_LISTENER_INTERVAL_MILLIS,
 };
 use arpa_node_dal::{
     error::DataAccessResult, BLSTasksFetcher, BLSTasksUpdater, ContextInfoUpdater,
@@ -238,7 +241,7 @@ impl<
             .init_listener(
                 self.get_event_queue(),
                 self.get_fixed_task_handler(),
-                ListenerDescriptor::build(task_type),
+                ListenerDescriptor::build(task_type, DEFAULT_LISTENER_INTERVAL_MILLIS),
             )
             .await
     }
@@ -593,7 +596,18 @@ impl<
             .unwrap()
             .to_string();
 
-        let committer_client = GeneralCommitterClient::build(id_address, endpoint);
+        let commit_partial_signature_retry_descriptor = ExponentialBackoffRetryDescriptor {
+            base: DEFAULT_COMMIT_PARTIAL_SIGNATURE_RETRY_BASE,
+            factor: DEFAULT_COMMIT_PARTIAL_SIGNATURE_RETRY_FACTOR,
+            max_attempts: DEFAULT_COMMIT_PARTIAL_SIGNATURE_RETRY_MAX_ATTEMPTS,
+            use_jitter: DEFAULT_COMMIT_PARTIAL_SIGNATURE_RETRY_USE_JITTER,
+        };
+
+        let committer_client = GeneralCommitterClient::build(
+            id_address,
+            endpoint,
+            commit_partial_signature_retry_descriptor,
+        );
 
         let chain_id = self
             .get_main_chain()

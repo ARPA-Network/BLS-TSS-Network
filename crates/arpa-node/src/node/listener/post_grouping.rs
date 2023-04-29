@@ -4,7 +4,7 @@ use crate::node::{
     event::dkg_post_process::DKGPostProcess,
     queue::{event_queue::EventQueue, EventPublisher},
 };
-use arpa_node_core::{DKGStatus, CONFIG};
+use arpa_node_core::DKGStatus;
 use arpa_node_dal::{BlockInfoFetcher, GroupInfoFetcher};
 use async_trait::async_trait;
 use log::info;
@@ -17,6 +17,7 @@ pub struct PostGroupingListener<B: BlockInfoFetcher, G: GroupInfoFetcher<PC>, PC
     group_cache: Arc<RwLock<G>>,
     eq: Arc<RwLock<EventQueue>>,
     pc: PhantomData<PC>,
+    dkg_timeout_duration: usize,
 }
 
 impl<B: BlockInfoFetcher, G: GroupInfoFetcher<PC>, PC: PairingCurve>
@@ -26,12 +27,14 @@ impl<B: BlockInfoFetcher, G: GroupInfoFetcher<PC>, PC: PairingCurve>
         block_cache: Arc<RwLock<B>>,
         group_cache: Arc<RwLock<G>>,
         eq: Arc<RwLock<EventQueue>>,
+        dkg_timeout_duration: usize,
     ) -> Self {
         PostGroupingListener {
             block_cache,
             group_cache,
             eq,
             pc: PhantomData,
+            dkg_timeout_duration,
         }
     }
 }
@@ -67,13 +70,8 @@ impl<
 
                     let block_height = self.block_cache.read().await.get_block_height();
 
-                    let dkg_timeout_block_height = dkg_start_block_height
-                        + CONFIG
-                            .get()
-                            .unwrap()
-                            .time_limits
-                            .unwrap()
-                            .dkg_timeout_duration;
+                    let dkg_timeout_block_height =
+                        dkg_start_block_height + self.dkg_timeout_duration;
 
                     info!("checking post process... dkg_start_block_height: {}, current_block_height: {}, timeuout_dkg_block_height: {}",
                     dkg_start_block_height,block_height,dkg_timeout_block_height);

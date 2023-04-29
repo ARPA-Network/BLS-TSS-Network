@@ -6,7 +6,9 @@ use crate::{
     error::ContractClientResult,
     ServiceClient, TransactionCaller, ViewCaller,
 };
-use arpa_node_core::{ChainIdentity, GeneralChainIdentity, WalletSigner};
+use arpa_node_core::{
+    ChainIdentity, ExponentialBackoffRetryDescriptor, GeneralChainIdentity, WalletSigner,
+};
 use async_trait::async_trait;
 use dkg_core::{
     primitives::{BundledJustification, BundledResponses, BundledShares},
@@ -20,13 +22,22 @@ use threshold_bls::group::Curve;
 pub struct CoordinatorClient {
     coordinator_address: Address,
     signer: Arc<WalletSigner>,
+    contract_transaction_retry_descriptor: ExponentialBackoffRetryDescriptor,
+    contract_view_retry_descriptor: ExponentialBackoffRetryDescriptor,
 }
 
 impl CoordinatorClient {
-    pub fn new(coordinator_address: Address, identity: &GeneralChainIdentity) -> Self {
+    pub fn new(
+        coordinator_address: Address,
+        identity: &GeneralChainIdentity,
+        contract_transaction_retry_descriptor: ExponentialBackoffRetryDescriptor,
+        contract_view_retry_descriptor: ExponentialBackoffRetryDescriptor,
+    ) -> Self {
         CoordinatorClient {
             coordinator_address,
             signer: identity.get_signer(),
+            contract_transaction_retry_descriptor,
+            contract_view_retry_descriptor,
         }
     }
 }
@@ -35,7 +46,12 @@ impl<C: Curve + 'static> CoordinatorClientBuilder<C> for GeneralChainIdentity {
     type Service = CoordinatorClient;
 
     fn build_coordinator_client(&self, contract_address: Address) -> CoordinatorClient {
-        CoordinatorClient::new(contract_address, self)
+        CoordinatorClient::new(
+            contract_address,
+            self,
+            self.get_contract_transaction_retry_descriptor(),
+            self.get_contract_view_retry_descriptor(),
+        )
     }
 }
 
@@ -64,7 +80,12 @@ impl CoordinatorTransactions for CoordinatorClient {
 
         let call = coordinator_contract.publish(value.into());
 
-        CoordinatorClient::call_contract_transaction("publish", call).await
+        CoordinatorClient::call_contract_transaction(
+            "publish",
+            call,
+            self.contract_transaction_retry_descriptor,
+        )
+        .await
     }
 }
 
@@ -74,18 +95,26 @@ impl CoordinatorViews for CoordinatorClient {
         let coordinator_contract =
             ServiceClient::<CoordinatorContract>::prepare_service_client(self).await?;
 
-        CoordinatorClient::call_contract_view("get_shares", coordinator_contract.get_shares())
-            .await
-            .map(|r| r.iter().map(|b| b.to_vec()).collect::<Vec<Vec<u8>>>())
+        CoordinatorClient::call_contract_view(
+            "get_shares",
+            coordinator_contract.get_shares(),
+            self.contract_view_retry_descriptor,
+        )
+        .await
+        .map(|r| r.iter().map(|b| b.to_vec()).collect::<Vec<Vec<u8>>>())
     }
 
     async fn get_responses(&self) -> ContractClientResult<Vec<Vec<u8>>> {
         let coordinator_contract =
             ServiceClient::<CoordinatorContract>::prepare_service_client(self).await?;
 
-        CoordinatorClient::call_contract_view("get_responses", coordinator_contract.get_responses())
-            .await
-            .map(|r| r.iter().map(|b| b.to_vec()).collect::<Vec<Vec<u8>>>())
+        CoordinatorClient::call_contract_view(
+            "get_responses",
+            coordinator_contract.get_responses(),
+            self.contract_view_retry_descriptor,
+        )
+        .await
+        .map(|r| r.iter().map(|b| b.to_vec()).collect::<Vec<Vec<u8>>>())
     }
 
     async fn get_justifications(&self) -> ContractClientResult<Vec<Vec<u8>>> {
@@ -95,6 +124,7 @@ impl CoordinatorViews for CoordinatorClient {
         CoordinatorClient::call_contract_view(
             "get_justifications",
             coordinator_contract.get_justifications(),
+            self.contract_view_retry_descriptor,
         )
         .await
         .map(|r| r.iter().map(|b| b.to_vec()).collect::<Vec<Vec<u8>>>())
@@ -107,6 +137,7 @@ impl CoordinatorViews for CoordinatorClient {
         CoordinatorClient::call_contract_view(
             "get_participants",
             coordinator_contract.get_participants(),
+            self.contract_view_retry_descriptor,
         )
         .await
     }
@@ -115,21 +146,30 @@ impl CoordinatorViews for CoordinatorClient {
         let coordinator_contract =
             ServiceClient::<CoordinatorContract>::prepare_service_client(self).await?;
 
-        CoordinatorClient::call_contract_view("get_dkg_keys", coordinator_contract.get_dkg_keys())
-            .await
-            .map(|(t, keys)| {
-                (
-                    t.as_usize(),
-                    keys.iter().map(|b| b.to_vec()).collect::<Vec<Vec<u8>>>(),
-                )
-            })
+        CoordinatorClient::call_contract_view(
+            "get_dkg_keys",
+            coordinator_contract.get_dkg_keys(),
+            self.contract_view_retry_descriptor,
+        )
+        .await
+        .map(|(t, keys)| {
+            (
+                t.as_usize(),
+                keys.iter().map(|b| b.to_vec()).collect::<Vec<Vec<u8>>>(),
+            )
+        })
     }
 
     async fn in_phase(&self) -> ContractClientResult<i8> {
         let coordinator_contract =
             ServiceClient::<CoordinatorContract>::prepare_service_client(self).await?;
 
-        CoordinatorClient::call_contract_view("in_phase", coordinator_contract.in_phase()).await
+        CoordinatorClient::call_contract_view(
+            "in_phase",
+            coordinator_contract.in_phase(),
+            self.contract_view_retry_descriptor,
+        )
+        .await
     }
 }
 
@@ -231,7 +271,7 @@ pub mod coordinator_tests {
 
     #[tokio::test]
     async fn test_publish_to_coordinator() {
-        Config::default().initialize();
+        let config = Config::default().initialize();
 
         let anvil = start_chain();
         let coordinator_contract = deploy_contract(&anvil).await;
@@ -262,9 +302,22 @@ pub mod coordinator_tests {
             3000,
             Address::random(),
             Address::random(),
+            config
+                .time_limits
+                .unwrap()
+                .contract_transaction_retry_descriptor,
+            config.time_limits.unwrap().contract_view_retry_descriptor,
         );
 
-        let client = CoordinatorClient::new(coordinator_contract.address(), &main_chain_identity);
+        let client = CoordinatorClient::new(
+            coordinator_contract.address(),
+            &main_chain_identity,
+            config
+                .time_limits
+                .unwrap()
+                .contract_transaction_retry_descriptor,
+            config.time_limits.unwrap().contract_view_retry_descriptor,
+        );
 
         let mock_value = vec![1, 2, 3, 4];
         let res = client.publish(mock_value.clone()).await;

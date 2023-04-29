@@ -1,6 +1,5 @@
 use crate::node::error::{NodeError, NodeResult};
 use arpa_node_contract_client::coordinator::{CoordinatorTransactions, CoordinatorViews};
-use arpa_node_core::CONFIG;
 use async_trait::async_trait;
 use core::fmt::Debug;
 use dkg_core::{
@@ -33,15 +32,17 @@ pub(crate) struct AllPhasesDKGCore<
 > {
     coordinator_client: P,
     c: PhantomData<C>,
+    dkg_wait_for_phase_interval_millis: u64,
 }
 
 impl<P: CoordinatorTransactions + CoordinatorViews + BoardPublisher<C>, C: Curve>
     AllPhasesDKGCore<P, C>
 {
-    pub fn new(coordinator_client: P) -> Self {
+    pub fn new(coordinator_client: P, dkg_wait_for_phase_interval_millis: u64) -> Self {
         AllPhasesDKGCore {
             coordinator_client,
             c: PhantomData,
+            dkg_wait_for_phase_interval_millis,
         }
     }
 }
@@ -66,7 +67,12 @@ where
         // TODO error handling and retry
 
         // Wait for Phase 0
-        wait_for_phase(&self.coordinator_client, 0).await?;
+        wait_for_phase(
+            &self.coordinator_client,
+            0,
+            self.dkg_wait_for_phase_interval_millis,
+        )
+        .await?;
 
         // Get the group info
         let group = self.coordinator_client.get_dkg_keys().await?;
@@ -106,7 +112,12 @@ where
         let phase1 = phase0.run(&mut self.coordinator_client, rng).await?;
 
         // Wait for Phase 1
-        wait_for_phase(&self.coordinator_client, 1).await?;
+        wait_for_phase(
+            &self.coordinator_client,
+            1,
+            self.dkg_wait_for_phase_interval_millis,
+        )
+        .await?;
 
         // Get the shares
         let shares = self.coordinator_client.get_shares().await?;
@@ -118,7 +129,12 @@ where
         let phase2 = phase1.run(&mut self.coordinator_client, &shares).await?;
 
         // Wait for Phase 2
-        wait_for_phase(&self.coordinator_client, 2).await?;
+        wait_for_phase(
+            &self.coordinator_client,
+            2,
+            self.dkg_wait_for_phase_interval_millis,
+        )
+        .await?;
 
         // Get the responses
         let responses = self.coordinator_client.get_responses().await?;
@@ -133,7 +149,12 @@ where
             Phase2Result::GoToPhase3(phase3) => {
                 info!("There were complaints. Running Phase 3.");
                 // Wait for Phase 3
-                wait_for_phase(&self.coordinator_client, 3).await?;
+                wait_for_phase(
+                    &self.coordinator_client,
+                    3,
+                    self.dkg_wait_for_phase_interval_millis,
+                )
+                .await?;
 
                 let justifications = self.coordinator_client.get_justifications().await?;
                 let justifications = parse_bundle(&justifications)?;
@@ -162,7 +183,11 @@ where
     }
 }
 
-async fn wait_for_phase(dkg: &impl CoordinatorViews, num: usize) -> NodeResult<()> {
+async fn wait_for_phase(
+    dkg: &impl CoordinatorViews,
+    num: usize,
+    dkg_wait_for_phase_interval_millis: u64,
+) -> NodeResult<()> {
     info!("Waiting for Phase {} to start", num);
 
     loop {
@@ -180,12 +205,7 @@ async fn wait_for_phase(dkg: &impl CoordinatorViews, num: usize) -> NodeResult<(
         }
 
         tokio::time::sleep(std::time::Duration::from_millis(
-            CONFIG
-                .get()
-                .unwrap()
-                .time_limits
-                .unwrap()
-                .dkg_wait_for_phase_interval_millis,
+            dkg_wait_for_phase_interval_millis,
         ))
         .await;
     }
