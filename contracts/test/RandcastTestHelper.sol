@@ -2,7 +2,7 @@
 pragma solidity >=0.8.10;
 
 import "forge-std/Test.sol";
-import "../src/Adapter.sol";
+import "./AdapterForTest.sol";
 import {Staking, ArpaTokenInterface} from "Staking-v0.1/Staking.sol";
 import "./ControllerForTest.sol";
 import "./mock/MockArpaEthOracle.sol";
@@ -12,7 +12,7 @@ import "openzeppelin-contracts/contracts/utils/Strings.sol";
 
 abstract contract RandcastTestHelper is Test {
     ControllerForTest controller;
-    Adapter adapter;
+    AdapterForTest adapter;
     MockArpaEthOracle oracle;
     IERC20 arpa;
     Staking staking;
@@ -339,19 +339,22 @@ abstract contract RandcastTestHelper is Test {
         hex"06a8e68091b66c6e6213fdab7adcaa1c7ef2145aecbad0518de6398ea84175180f55f1c03517e174a95b4317ffee31c4f99bb64b6d0ea179ca7f8e86a54574780678fb7b25f7aa9ef3b7e4108834a5f5517f0d6ce295efb363323e45c434a6162a730a0a82bf1d78eb6ac49c2841f77ed71fc14e5df27625dbeb97de7b78628a";
 
     function fulfillRequest(bytes32 requestId, uint256 sigIndex) internal {
-        IAdapter.Callback memory callback = adapter.getPendingRequest(requestId);
+        Adapter.RequestDetail memory rd = adapter.getPendingRequest(requestId);
+
         // mock confirmation times and SIGNATURE_TASK_EXCLUSIVE_WINDOW = 10;
-        vm.roll(block.number + callback.requestConfirmations + 10);
+        vm.roll(block.number + rd.requestConfirmations + 10);
 
         // mock fulfillRandomness directly
         IAdapter.PartialSignature[] memory partialSignatures = new IAdapter.PartialSignature[](3);
         partialSignatures[0] = IAdapter.PartialSignature(0, sig[sigIndex][1]);
         partialSignatures[1] = IAdapter.PartialSignature(1, sig[sigIndex][2]);
         partialSignatures[2] = IAdapter.PartialSignature(2, sig[sigIndex][3]);
+
         adapter.fulfillRandomness(
             0, // fixed group 0
             requestId,
             sig[sigIndex][0],
+            rd,
             partialSignatures
         );
     }

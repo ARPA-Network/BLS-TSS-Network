@@ -29,26 +29,29 @@ contract Adapter is UUPSUpgradeable, IAdapter, IAdapterOwner, RequestIdBase, Ran
     uint16 public constant MAX_REQUEST_CONFIRMATIONS = 200;
 
     // *State Variables*
-    IERC20 private i_ARPA;
-    AggregatorV3Interface private i_ARPA_ETH_Feed;
-    IController private s_controller;
+    IERC20 internal i_ARPA;
+    AggregatorV3Interface internal i_ARPA_ETH_Feed;
+    IController internal s_controller;
 
     // Randomness Task State
-    uint256 private s_lastAssignedGroupIndex;
-    uint256 private s_lastRandomness;
-    uint256 private s_randomnessCount;
+    uint256 internal s_lastAssignedGroupIndex;
+    uint256 internal s_lastRandomness;
+    uint256 internal s_randomnessCount;
 
-    AdapterConfig private s_config;
-    FeeConfig private s_feeConfig;
-    mapping(bytes32 => Callback) private s_callbacks;
-    mapping(address => Consumer) /* consumerAddress */ /* consumer */ private s_consumers;
-    mapping(uint64 => Subscription) /* subId */ /* subscription */ private s_subscriptions;
-    uint64 private s_currentSubId;
+    AdapterConfig internal s_config;
+    FeeConfig internal s_feeConfig;
+    mapping(bytes32 => bytes32) internal s_requestCommitments;
+    /* consumerAddress - consumer */
+    mapping(address => Consumer) internal s_consumers;
+    /* subId - subscription */
+    mapping(uint64 => Subscription) internal s_subscriptions;
+    uint64 internal s_currentSubId;
 
     // *Structs*
     // Note a nonce of 0 indicates an the consumer is not assigned to that subscription.
     struct Consumer {
-        mapping(uint64 => uint64) nonces; /* subId */ /* nonce */
+        /* subId - nonce */
+        mapping(uint64 => uint64) nonces;
         uint64 lastSubscription;
     }
 
@@ -82,11 +85,14 @@ contract Adapter is UUPSUpgradeable, IAdapter, IAdapterOwner, RequestIdBase, Ran
         bytes32 indexed requestId,
         uint64 indexed subId,
         uint256 indexed groupIndex,
+        RequestType requestType,
+        bytes params,
         address sender,
         uint256 seed,
         uint16 requestConfirmations,
         uint256 callbackGasLimit,
-        uint256 callbackMaxGasPrice
+        uint256 callbackMaxGasPrice,
+        uint96 estimatedPayment
     );
     event RandomnessRequestResult(
         bytes32 indexed requestId,
@@ -111,6 +117,7 @@ contract Adapter is UUPSUpgradeable, IAdapter, IAdapterOwner, RequestIdBase, Ran
     error InvalidArpaWeiPrice(int256 arpaWei);
     error NoAvailableGroups();
     error NoCorrespondingRequest();
+    error IncorrectCommitment();
     error InvalidRequestByEOA();
     error TaskStillExclusive();
     error TaskStillWithinRequestConfirmations();
@@ -239,7 +246,13 @@ contract Adapter is UUPSUpgradeable, IAdapter, IAdapterOwner, RequestIdBase, Ran
         emit SubscriptionFunded(subId, oldBalance, oldBalance + amount);
     }
 
-    function requestRandomness(RandomnessRequestParams memory p) external override(IAdapter) returns (bytes32) {
+    function requestRandomness(RandomnessRequestParams memory p)
+        public
+        virtual
+        override(IAdapter)
+        nonReentrant
+        returns (bytes32)
+    {
         if (msg.sender == tx.origin) {
             revert InvalidRequestByEOA();
         }
@@ -251,8 +264,7 @@ contract Adapter is UUPSUpgradeable, IAdapter, IAdapterOwner, RequestIdBase, Ran
         // Its important to ensure that the consumer is in fact who they say they
         // are, otherwise they could use someone else's subscription balance.
         // A nonce of 0 indicates consumer is not allocated to the sub.
-        uint64 currentNonce = s_consumers[msg.sender].nonces[p.subId];
-        if (currentNonce == 0) {
+        if (s_consumers[msg.sender].nonces[p.subId] == 0) {
             revert InvalidConsumer(p.subId, msg.sender);
         }
 
@@ -263,15 +275,16 @@ contract Adapter is UUPSUpgradeable, IAdapter, IAdapterOwner, RequestIdBase, Ran
         s_lastAssignedGroupIndex = currentAssignedGroupIndex;
 
         // Calculate requestId for the task
-        uint64 nonce = s_consumers[msg.sender].nonces[p.subId];
-        uint256 rawSeed = makeRandcastInputSeed(p.seed, msg.sender, nonce);
+        uint256 rawSeed = makeRandcastInputSeed(p.seed, msg.sender, s_consumers[msg.sender].nonces[p.subId]);
         s_consumers[msg.sender].nonces[p.subId] += 1;
         bytes32 requestId = makeRequestId(rawSeed);
 
         // Estimate upper cost of this fulfillment.
-        uint64 reqCount = s_subscriptions[p.subId].reqCount;
         uint96 payment = estimatePaymentAmount(
-            p.callbackGasLimit, s_config.gasExceptCallback, getFeeTier(reqCount + 1), p.callbackMaxGasPrice
+            p.callbackGasLimit,
+            s_config.gasExceptCallback,
+            getFeeTier(s_subscriptions[p.subId].reqCount + 1),
+            p.callbackMaxGasPrice
         );
 
         if (s_subscriptions[p.subId].balance - s_subscriptions[p.subId].inflightCost < payment) {
@@ -280,29 +293,34 @@ contract Adapter is UUPSUpgradeable, IAdapter, IAdapterOwner, RequestIdBase, Ran
         s_subscriptions[p.subId].inflightCost += payment;
         s_subscriptions[p.subId].inflightPayments[requestId] = payment;
 
-        // Record callback struct
-        assert(s_callbacks[requestId].callbackContract == address(0));
-        Callback storage callback = s_callbacks[requestId];
-        callback.callbackContract = msg.sender;
-        callback.requestType = p.requestType;
-        callback.params = p.params;
-        callback.subId = p.subId;
-        callback.seed = rawSeed;
-        callback.groupIndex = currentAssignedGroupIndex;
-        callback.blockNum = block.number;
-        callback.requestConfirmations = p.requestConfirmations;
-        callback.callbackGasLimit = p.callbackGasLimit;
-        callback.callbackMaxGasPrice = p.callbackMaxGasPrice;
+        s_requestCommitments[requestId] = keccak256(
+            abi.encode(
+                requestId,
+                p.subId,
+                currentAssignedGroupIndex,
+                p.requestType,
+                p.params,
+                msg.sender,
+                rawSeed,
+                p.requestConfirmations,
+                p.callbackGasLimit,
+                p.callbackMaxGasPrice,
+                block.number
+            )
+        );
 
         emit RandomnessRequest(
             requestId,
-            callback.subId,
+            p.subId,
             currentAssignedGroupIndex,
+            p.requestType,
+            p.params,
             msg.sender,
-            callback.seed,
-            callback.requestConfirmations,
-            callback.callbackGasLimit,
-            callback.callbackMaxGasPrice
+            rawSeed,
+            p.requestConfirmations,
+            p.callbackGasLimit,
+            p.callbackMaxGasPrice,
+            payment
         );
 
         return requestId;
@@ -312,23 +330,43 @@ contract Adapter is UUPSUpgradeable, IAdapter, IAdapterOwner, RequestIdBase, Ran
         uint256 groupIndex,
         bytes32 requestId,
         uint256 signature,
-        PartialSignature[] memory partialSignatures
-    ) public override(IAdapter) {
+        RequestDetail calldata requestDetail,
+        PartialSignature[] calldata partialSignatures
+    ) public virtual override(IAdapter) nonReentrant {
         uint256 startGas = gasleft();
 
-        Callback memory callback = s_callbacks[requestId];
-
-        if (callback.seed == 0) {
+        bytes32 commitment = s_requestCommitments[requestId];
+        if (commitment == 0) {
             revert NoCorrespondingRequest();
         }
+        if (
+            commitment
+                != keccak256(
+                    abi.encode(
+                        requestId,
+                        requestDetail.subId,
+                        requestDetail.groupIndex,
+                        requestDetail.requestType,
+                        requestDetail.params,
+                        requestDetail.callbackContract,
+                        requestDetail.seed,
+                        requestDetail.requestConfirmations,
+                        requestDetail.callbackGasLimit,
+                        requestDetail.callbackMaxGasPrice,
+                        requestDetail.blockNum
+                    )
+                )
+        ) {
+            revert IncorrectCommitment();
+        }
 
-        if (block.number < callback.blockNum + callback.requestConfirmations) {
+        if (block.number < requestDetail.blockNum + requestDetail.requestConfirmations) {
             revert TaskStillWithinRequestConfirmations();
         }
 
         if (
-            groupIndex != callback.groupIndex
-                && block.number <= callback.blockNum + s_config.signatureTaskExclusiveWindow
+            groupIndex != requestDetail.groupIndex
+                && block.number <= requestDetail.blockNum + s_config.signatureTaskExclusiveWindow
         ) {
             revert TaskStillExclusive();
         }
@@ -337,7 +375,9 @@ contract Adapter is UUPSUpgradeable, IAdapter, IAdapterOwner, RequestIdBase, Ran
         }
 
         address[] memory participantMembers =
-            verifySignature(groupIndex, callback.seed, callback.blockNum, signature, partialSignatures);
+            verifySignature(groupIndex, requestDetail.seed, requestDetail.blockNum, signature, partialSignatures);
+
+        delete s_requestCommitments[requestId];
 
         uint256 randomness = uint256(keccak256(abi.encode(signature)));
 
@@ -345,10 +385,10 @@ contract Adapter is UUPSUpgradeable, IAdapter, IAdapterOwner, RequestIdBase, Ran
         s_lastRandomness = randomness;
         s_controller.setLastOutput(randomness);
         // call user fulfill_randomness callback
-        bool success = fulfillCallback(requestId, randomness, callback);
+        bool success = fulfillCallback(requestId, randomness, requestDetail);
         // Increment the req count for fee tier selection.
-        uint64 reqCount = s_subscriptions[callback.subId].reqCount;
-        s_subscriptions[callback.subId].reqCount += 1;
+        uint64 reqCount = s_subscriptions[requestDetail.subId].reqCount;
+        s_subscriptions[requestDetail.subId].reqCount += 1;
 
         // We want to charge users exactly for how much gas they use in their callback.
         // The gasAfterPaymentCalculation is meant to cover these additional operations where we
@@ -359,12 +399,13 @@ contract Adapter is UUPSUpgradeable, IAdapter, IAdapterOwner, RequestIdBase, Ran
         uint96 payment =
             calculatePaymentAmount(startGas, s_config.gasAfterPaymentCalculation, getFeeTier(reqCount), tx.gasprice);
 
-        if (s_subscriptions[callback.subId].balance < payment) {
+        if (s_subscriptions[requestDetail.subId].balance < payment) {
             revert InsufficientBalanceWhenFulfill();
         }
-        s_subscriptions[callback.subId].inflightCost -= s_subscriptions[callback.subId].inflightPayments[requestId];
-        delete s_subscriptions[callback.subId].inflightPayments[requestId];
-        s_subscriptions[callback.subId].balance -= payment;
+        s_subscriptions[requestDetail.subId].inflightCost -=
+            s_subscriptions[requestDetail.subId].inflightPayments[requestId];
+        delete s_subscriptions[requestDetail.subId].inflightPayments[requestId];
+        s_subscriptions[requestDetail.subId].balance -= payment;
 
         // rewardRandomness for participants
         rewardRandomness(participantMembers, payment);
@@ -397,8 +438,8 @@ contract Adapter is UUPSUpgradeable, IAdapter, IAdapterOwner, RequestIdBase, Ran
         );
     }
 
-    function getPendingRequest(bytes32 requestId) public view override(IAdapter) returns (Callback memory) {
-        return s_callbacks[requestId];
+    function getPendingRequestCommitment(bytes32 requestId) public view override(IAdapter) returns (bytes32) {
+        return s_requestCommitments[requestId];
     }
 
     function getLastRandomness() external view override(IAdapter) returns (uint256) {
@@ -466,12 +507,10 @@ contract Adapter is UUPSUpgradeable, IAdapter, IAdapterOwner, RequestIdBase, Ran
     }
 
     function rewardRandomness(address[] memory participantMembers, uint96 payment) internal {
-        s_controller.addReward(msg.sender, s_config.committerRewardPerSignature);
-        for (uint256 i = 0; i < participantMembers.length; i++) {
-            s_controller.addReward(
-                participantMembers[i], s_config.rewardPerSignature + payment / participantMembers.length
-            );
-        }
+        address[] memory committer = new address[](1);
+        committer[0] = msg.sender;
+        s_controller.addReward(committer, s_config.committerRewardPerSignature);
+        s_controller.addReward(participantMembers, s_config.rewardPerSignature + payment / participantMembers.length);
     }
 
     function verifySignature(
@@ -521,28 +560,26 @@ contract Adapter is UUPSUpgradeable, IAdapter, IAdapterOwner, RequestIdBase, Ran
         }
     }
 
-    function fulfillCallback(bytes32 requestId, uint256 randomness, Callback memory callback)
+    function fulfillCallback(bytes32 requestId, uint256 randomness, RequestDetail memory requestDetail)
         internal
         returns (bool success)
     {
         IBasicRandcastConsumerBase b;
         bytes memory resp;
-        if (callback.requestType == RequestType.Randomness) {
+        if (requestDetail.requestType == RequestType.Randomness) {
             resp = abi.encodeWithSelector(b.rawFulfillRandomness.selector, requestId, randomness);
-        } else if (callback.requestType == RequestType.RandomWords) {
-            uint32 numWords = abi.decode(callback.params, (uint32));
+        } else if (requestDetail.requestType == RequestType.RandomWords) {
+            uint32 numWords = abi.decode(requestDetail.params, (uint32));
             uint256[] memory randomWords = new uint256[](numWords);
             for (uint256 i = 0; i < numWords; i++) {
                 randomWords[i] = uint256(keccak256(abi.encode(randomness, i)));
             }
             resp = abi.encodeWithSelector(b.rawFulfillRandomWords.selector, requestId, randomWords);
-        } else if (callback.requestType == RequestType.Shuffling) {
-            uint32 upper = abi.decode(callback.params, (uint32));
+        } else if (requestDetail.requestType == RequestType.Shuffling) {
+            uint32 upper = abi.decode(requestDetail.params, (uint32));
             uint256[] memory shuffledArray = shuffle(upper, randomness);
             resp = abi.encodeWithSelector(b.rawFulfillShuffledArray.selector, requestId, shuffledArray);
         }
-
-        delete s_callbacks[requestId];
 
         // Call with explicitly the amount of callback gas requested
         // Important to not let them exhaust the gas budget and avoid oracle payment.
@@ -551,7 +588,7 @@ contract Adapter is UUPSUpgradeable, IAdapter, IAdapterOwner, RequestIdBase, Ran
         // Note that callWithExactGas will revert if we do not have sufficient gas
         // to give the callee their requested amount.
         s_config.reentrancyLock = true;
-        success = callWithExactGas(callback.callbackGasLimit, callback.callbackContract, resp);
+        success = callWithExactGas(requestDetail.callbackGasLimit, requestDetail.callbackContract, resp);
         s_config.reentrancyLock = false;
     }
 

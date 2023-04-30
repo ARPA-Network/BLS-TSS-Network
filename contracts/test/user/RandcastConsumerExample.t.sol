@@ -26,7 +26,7 @@ contract RandcastConsumerExampleTest is RandcastTestHelper {
     uint32 maxGasLimit = 2000000;
     uint32 stalenessSeconds = 30;
     uint32 gasAfterPaymentCalculation = 30000;
-    uint32 gasExceptCallback = 200000;
+    uint32 gasExceptRequestDetail = 200000;
     int256 fallbackWeiPerUnitArpa = 1e12;
     uint256 signatureTaskExclusiveWindow = 10;
     uint256 rewardPerSignature = 50;
@@ -51,10 +51,7 @@ contract RandcastConsumerExampleTest is RandcastTestHelper {
         controller = new ControllerForTest(address(arpa), last_output);
 
         vm.prank(admin);
-        adapter = new Adapter();
-
-        vm.prank(admin);
-        adapter.initialize(address(controller), address(arpa), address(oracle));
+        adapter = new AdapterForTest(address(controller), address(arpa), address(oracle));
 
         vm.prank(user);
         getRandomNumberExample = new GetRandomNumberExample(
@@ -94,7 +91,7 @@ contract RandcastConsumerExampleTest is RandcastTestHelper {
             maxGasLimit,
             stalenessSeconds,
             gasAfterPaymentCalculation,
-            gasExceptCallback,
+            gasExceptRequestDetail,
             fallbackWeiPerUnitArpa,
             signatureTaskExclusiveWindow,
             rewardPerSignature,
@@ -130,8 +127,8 @@ contract RandcastConsumerExampleTest is RandcastTestHelper {
         for (uint256 i = 0; i < times; i++) {
             bytes32 requestId = getRandomNumberExample.getRandomNumber();
 
-            Adapter.Callback memory callback = adapter.getPendingRequest(requestId);
-            bytes memory rawSeed = abi.encodePacked(callback.seed);
+            Adapter.RequestDetail memory rd = adapter.getPendingRequest(requestId);
+            bytes memory rawSeed = abi.encodePacked(rd.seed);
             emit log_named_bytes("rawSeed", rawSeed);
 
             deal(node1, 1 * 1e18);
@@ -155,8 +152,8 @@ contract RandcastConsumerExampleTest is RandcastTestHelper {
         uint32 bunch = 10;
         bytes32 requestId = rollDiceExample.rollDice(bunch);
 
-        Adapter.Callback memory callback = adapter.getPendingRequest(requestId);
-        bytes memory rawSeed = abi.encodePacked(callback.seed);
+        Adapter.RequestDetail memory rd = adapter.getPendingRequest(requestId);
+        bytes memory rawSeed = abi.encodePacked(rd.seed);
         emit log_named_bytes("rawSeed", rawSeed);
 
         deal(node1, 1 * 1e18);
@@ -179,8 +176,8 @@ contract RandcastConsumerExampleTest is RandcastTestHelper {
         uint32 upper = 10;
         bytes32 requestId = getShuffledArrayExample.getShuffledArray(upper);
 
-        Adapter.Callback memory callback = adapter.getPendingRequest(requestId);
-        bytes memory rawSeed = abi.encodePacked(callback.seed);
+        Adapter.RequestDetail memory rd = adapter.getPendingRequest(requestId);
+        bytes memory rawSeed = abi.encodePacked(rd.seed);
         emit log_named_bytes("rawSeed", rawSeed);
 
         deal(node1, 1 * 1e18);
@@ -210,15 +207,15 @@ contract RandcastConsumerExampleTest is RandcastTestHelper {
         uint32 upper = 10;
         uint256 seed = 42;
         uint16 requestConfirmations = 0;
-        uint256 callbackGasLimit = 350000;
-        uint256 callbackMaxGasPrice = 1 * 1e9;
+        uint256 rdGasLimit = 350000;
+        uint256 rdMaxGasPrice = 1 * 1e9;
 
         bytes32 requestId = advancedGetShuffledArrayExample.getRandomNumberThenGenerateShuffledArray(
-            upper, subId, seed, requestConfirmations, callbackGasLimit, callbackMaxGasPrice
+            upper, subId, seed, requestConfirmations, rdGasLimit, rdMaxGasPrice
         );
 
-        Adapter.Callback memory callback = adapter.getPendingRequest(requestId);
-        bytes memory rawSeed = abi.encodePacked(callback.seed);
+        Adapter.RequestDetail memory rd = adapter.getPendingRequest(requestId);
+        bytes memory rawSeed = abi.encodePacked(rd.seed);
         emit log_named_bytes("rawSeed", rawSeed);
 
         deal(node1, 1 * 1e18);

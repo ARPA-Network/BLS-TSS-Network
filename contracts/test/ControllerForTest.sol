@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity ^0.8.15;
 
-import "src/Controller.sol";
+import "../src/Controller.sol";
 
 contract ControllerForTest is Controller {
     using GroupLib for GroupLib.GroupData;

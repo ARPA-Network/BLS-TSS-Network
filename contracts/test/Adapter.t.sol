@@ -3,7 +3,6 @@ pragma solidity >=0.8.10;
 
 import "../src/user/examples/GetRandomNumberExample.sol";
 import "./RandcastTestHelper.sol";
-import "../src/libraries/BLS.sol";
 
 contract AdapterTest is RandcastTestHelper {
     GetRandomNumberExample getRandomNumberExample;
@@ -60,10 +59,7 @@ contract AdapterTest is RandcastTestHelper {
         controller = new ControllerForTest(address(arpa), last_output);
 
         vm.prank(admin);
-        adapter = new Adapter();
-
-        vm.prank(admin);
-        adapter.initialize(address(controller), address(arpa), address(oracle));
+        adapter = new AdapterForTest(address(controller), address(arpa), address(oracle));
 
         vm.prank(user);
         getRandomNumberExample = new GetRandomNumberExample(
@@ -162,8 +158,8 @@ contract AdapterTest is RandcastTestHelper {
 
             assertEq(inflightCost, payment * (i + 1));
 
-            Adapter.Callback memory callback = adapter.getPendingRequest(requestId);
-            bytes memory actualSeed = abi.encodePacked(callback.seed, callback.blockNum);
+            Adapter.RequestDetail memory rd = adapter.getPendingRequest(requestId);
+            bytes memory actualSeed = abi.encodePacked(rd.seed, rd.blockNum);
 
             emit log_named_bytes("actualSeed", actualSeed);
 
@@ -181,8 +177,8 @@ contract AdapterTest is RandcastTestHelper {
         bytes32 requestId = getRandomNumberExample.getRandomNumber();
         emit log_bytes32(requestId);
 
-        Adapter.Callback memory callback = adapter.getPendingRequest(requestId);
-        bytes memory rawSeed = abi.encodePacked(callback.seed);
+        Adapter.RequestDetail memory rd = adapter.getPendingRequest(requestId);
+        bytes memory rawSeed = abi.encodePacked(rd.seed);
         emit log_named_bytes("rawSeed", rawSeed);
 
         vm.startBroadcast(node1);

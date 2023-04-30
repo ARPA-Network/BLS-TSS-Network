@@ -12,10 +12,10 @@ NOTE: foundry.toml must contain "gas_price = 1000000000" for tests to pass
 cd contracts
 
 forge install # Install submodule dependencies
-forge build # Compile contracts
+forge build --optimize # Compile contracts
 
-forge test # Run tests
-forge test --match-test CommitDkg -vvvvv # Run a specific test
+forge test --optimize # Run tests
+forge test --match-test CommitDkg --optimize -vvvvv # Run a specific test
 ```
 
 ## Coverage

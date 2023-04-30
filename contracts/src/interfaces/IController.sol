@@ -61,7 +61,7 @@ interface IController {
     function claimReward(address recipient, uint256 amount) external;
 
     // adapter transaction
-    function addReward(address nodeAddress, uint256 amount) external;
+    function addReward(address[] memory nodes, uint256 amount) external;
 
     function setLastOutput(uint256 lastOutput) external;
 

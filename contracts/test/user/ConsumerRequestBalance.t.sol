@@ -26,8 +26,7 @@ contract ConsumerRequestBalanceTest is RandcastTestHelper {
     uint32 maxGasLimit = 2000000;
     uint32 stalenessSeconds = 30;
     uint32 gasAfterPaymentCalculation = 80000;
-    // TODO this is not confirmed
-    uint32 gasExceptCallback = 575000;
+    uint32 gasExceptCallback = 492000;
     int256 fallbackWeiPerUnitArpa = 1e12;
     uint256 signatureTaskExclusiveWindow = 10;
     uint256 rewardPerSignature = 50;
@@ -52,10 +51,7 @@ contract ConsumerRequestBalanceTest is RandcastTestHelper {
         controller = new ControllerForTest(address(arpa), last_output);
 
         vm.prank(admin);
-        adapter = new Adapter();
-
-        vm.prank(admin);
-        adapter.initialize(address(controller), address(arpa), address(oracle));
+        adapter = new AdapterForTest(address(controller), address(arpa), address(oracle));
 
         vm.prank(user);
         getRandomNumberExample = new GetRandomNumberExample(
@@ -145,14 +141,14 @@ contract ConsumerRequestBalanceTest is RandcastTestHelper {
         //     weiPerUnitGas *
         //     (gasExceptCallback + callbackGasUsed) /
         //     uint256(weiPerUnitArpa);
-        // callbackGasUsed = 501728 gas
+        // callbackGasUsed = 496820 gas
         // WeiPerUnitArpa = 1e12 wei/arpa
         // weiPerUnitGas = 1e9 wei/gas
-        // TODO gasExceptCallback  = 575000 gas
+        // gasExceptCallback  = 492000 gas
         // flat fee = 250000 1e12 arpa wei
         // Actual: 904212000000000000000
         // Expected: 891728000000000000000
-        uint256 expectedPayment = (1e18 * 1e9 * (575000 + 501728)) / 1e12 + 250000 * 1e12;
+        uint256 expectedPayment = (1e18 * 1e9 * (492000 + 496820)) / 1e12 + 250000 * 1e12;
 
         uint96 plentyOfArpaBalance = 1e6 * 1e18;
         deal(address(arpa), address(user), plentyOfArpaBalance);

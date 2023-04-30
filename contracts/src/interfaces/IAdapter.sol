@@ -19,18 +19,17 @@ interface IAdapter is IRequestTypeBase {
         uint256 callbackMaxGasPrice;
     }
 
-    // TODO only record the hash of the callback params to save storage gas
-    struct Callback {
-        address callbackContract;
+    struct RequestDetail {
+        uint64 subId;
+        uint256 groupIndex;
         RequestType requestType;
         bytes params;
-        uint64 subId;
+        address callbackContract;
         uint256 seed;
-        uint256 groupIndex;
-        uint256 blockNum;
         uint16 requestConfirmations;
         uint256 callbackGasLimit;
         uint256 callbackMaxGasPrice;
+        uint256 blockNum;
     }
 
     function requestRandomness(RandomnessRequestParams memory p) external returns (bytes32);
@@ -39,6 +38,7 @@ interface IAdapter is IRequestTypeBase {
         uint256 groupIndex,
         bytes32 requestId,
         uint256 signature,
+        RequestDetail calldata requestDetail,
         PartialSignature[] calldata partialSignatures
     ) external;
 
@@ -55,7 +55,7 @@ interface IAdapter is IRequestTypeBase {
         view
         returns (uint96 balance, uint96 inflightCost, uint64 reqCount, address owner, address[] memory consumers);
 
-    function getPendingRequest(bytes32 requestId) external view returns (Callback memory);
+    function getPendingRequestCommitment(bytes32 requestId) external view returns (bytes32);
 
     function getLastRandomness() external view returns (uint256);
 

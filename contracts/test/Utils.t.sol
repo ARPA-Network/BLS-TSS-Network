@@ -2,7 +2,7 @@
 pragma solidity >=0.8.10;
 
 import "forge-std/Test.sol";
-import "src/utils/Utils.sol";
+import "../src/utils/Utils.sol";
 import "openzeppelin-contracts/contracts/utils/Strings.sol";
 
 contract UtilsTest is Test {
