@@ -11,14 +11,12 @@ contract StakeNodeLocalTestScript is Script {
 
     address stakingAddress = vm.envAddress("STAKING_ADDRESS");
     address arpaAddress = vm.envAddress("ARPA_ADDRESS");
-    address deployerAddress = vm.envAddress("ADMIN_ADDRESS");
-    address userAddress = vm.envAddress("USER_ADDRESS");
 
     uint256 rewardAmount = vm.envUint("REWARD_AMOUNT");
     uint256 operatorStakeAmount = vm.envUint("OPERATOR_STAKE_AMOUNT");
 
     address[] operators;
-    string mnemonic = "test test test test test test test test test test test junk";
+    string mnemonic = vm.envString("STAKING_NODES_MNEMONIC");
     uint32 stakingNodesIndexOffset = uint32(vm.envUint("STAKING_NODES_INDEX_OFFSET"));
     uint32 stakingNodesIndexLength = uint32(vm.envUint("STAKING_NODES_INDEX_LENGTH"));
 
@@ -46,7 +44,7 @@ contract StakeNodeLocalTestScript is Script {
 
         // start the staking pool
         vm.broadcast(deployerPrivateKey);
-        arpa.mint(deployerAddress, rewardAmount);
+        arpa.mint(vm.addr(deployerPrivateKey), rewardAmount);
 
         vm.broadcast(deployerPrivateKey);
         arpa.approve(address(staking), rewardAmount);
@@ -56,7 +54,7 @@ contract StakeNodeLocalTestScript is Script {
 
         // let a user stake to accumulate some rewards
         vm.rememberKey(userPrivateKey);
-        stake(userAddress);
+        stake(vm.addr(userPrivateKey));
 
         for (uint256 i = 0; i < operators.length; i++) {
             stake(operators[i]);

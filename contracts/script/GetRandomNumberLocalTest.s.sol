@@ -20,7 +20,6 @@ contract GetRandomNumberLocalTestScript is Script {
         address adapterAddress = vm.envAddress("ADAPTER_ADDRESS");
         address arpaAddress = vm.envAddress("ARPA_ADDRESS");
         uint256 userPrivateKey = vm.envUint("USER_PRIVATE_KEY");
-        address userAddress = vm.envAddress("USER_ADDRESS");
 
         adapter = IAdapter(adapterAddress);
         arpa = Arpa(arpaAddress);
@@ -30,7 +29,7 @@ contract GetRandomNumberLocalTestScript is Script {
             adapterAddress
         );
 
-        arpa.mint(userAddress, plentyOfArpaBalance);
+        arpa.mint(vm.addr(userPrivateKey), plentyOfArpaBalance);
 
         arpa.approve(address(adapter), plentyOfArpaBalance);
 

@@ -44,6 +44,8 @@ forge coverage --report lcov
 
 ## Local Test
 
+Create a `.env` following the `.env.example`, then add `ADMIN_PRIVATE_KEY`, `USER_PRIVATE_KEY` and `STAKING_NODES_MNEMONIC` to it or set them in the environment.
+
 ### start the local testnet by anvil:
 
 ```bash
