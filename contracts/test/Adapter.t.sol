@@ -112,8 +112,9 @@ contract AdapterTest is RandcastTestHelper {
         vm.prank(user);
         arpa.approve(address(controller), 3 * plentyOfArpaBalance);
 
-        changePrank(user);
+        vm.startPrank(user);
         subId = prepareSubscription(address(getRandomNumberExample), plentyOfArpaBalance);
+        vm.stopPrank();
     }
 
     function testAdapterAddress() public {
@@ -127,7 +128,6 @@ contract AdapterTest is RandcastTestHelper {
     }
 
     function testCannotRequestByEOA() public {
-        vm.stopPrank();
         deal(user, 1 * 1e18);
         vm.expectRevert(abi.encodeWithSelector(Adapter.InvalidRequestByEOA.selector));
 

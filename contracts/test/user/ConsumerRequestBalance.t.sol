@@ -112,7 +112,7 @@ contract ConsumerRequestBalanceTest is RandcastTestHelper {
 
     function testCannotRequestWithoutSubscription() public {
         deal(user, 1 * 1e18);
-        changePrank(user);
+        vm.startPrank(user);
 
         uint32 bunch = 10;
         vm.expectRevert(Adapter.InvalidSubscription.selector);
@@ -121,20 +121,22 @@ contract ConsumerRequestBalanceTest is RandcastTestHelper {
 
     function testCannotRequestWithoutEnoughBalance() public {
         deal(user, 1 * 1e18);
-        changePrank(user);
 
         uint96 fewArpaBalance = 1 * 1e18;
         deal(address(arpa), address(user), fewArpaBalance);
+
+        vm.startPrank(user);
         prepareSubscription(address(rollDiceExample), fewArpaBalance);
 
         uint32 bunch = 10;
         vm.expectRevert(Adapter.InsufficientBalanceWhenRequest.selector);
         rollDiceExample.rollDice(bunch);
+        vm.stopPrank();
     }
 
     function testRequestGeneralExampleWithEnoughBalanceThenSuccessfullyFulfill() public {
         deal(user, 1 * 1e18);
-        changePrank(user);
+        vm.startPrank(user);
 
         // (1e18 arpa wei/arpa) (wei/gas * gas) / (wei/arpa) = arpa wei
         // paymentNoFee = (1e18 *
@@ -161,7 +163,6 @@ contract ConsumerRequestBalanceTest is RandcastTestHelper {
         changePrank(node1);
         fulfillRequest(requestId, 10);
 
-        changePrank(user);
         (uint96 afterBalance, uint96 inflightCost) = getBalance(subId);
 
         // the upper limit of delta is 5%
@@ -178,7 +179,7 @@ contract ConsumerRequestBalanceTest is RandcastTestHelper {
 
     function testCannotRequestWithTooMuchInflightCost() public {
         deal(user, 1 * 1e18);
-        changePrank(user);
+        vm.startPrank(user);
 
         // give the balance just enough for one request
         // give more than 3 times actual payment(1076242000000000000000) since we estimate 3 times max gas fee(3320434000000000000000)
@@ -195,7 +196,7 @@ contract ConsumerRequestBalanceTest is RandcastTestHelper {
 
     function testRequestAdvancedExampleWithEnoughBalanceThenSuccessfullyFulfill() public {
         deal(user, 1 * 1e18);
-        changePrank(user);
+        vm.startPrank(user);
 
         uint96 plentyOfArpaBalance = 1e6 * 1e18;
         deal(address(arpa), address(user), plentyOfArpaBalance);
@@ -216,8 +217,6 @@ contract ConsumerRequestBalanceTest is RandcastTestHelper {
         changePrank(node1);
         fulfillRequest(requestId, 12);
 
-        changePrank(user);
-
         assertEq(advancedGetShuffledArrayExample.lengthOfShuffleResults(), 1);
 
         for (uint256 k = 0; k < advancedGetShuffledArrayExample.lengthOfShuffleResults(); k++) {
@@ -232,7 +231,7 @@ contract ConsumerRequestBalanceTest is RandcastTestHelper {
 
     function testCannotRequestAdvancedExampleWithTooHighCallbackGasLimitAndCallbackMaxGasFee() public {
         deal(user, 1 * 1e18);
-        changePrank(user);
+        vm.startPrank(user);
 
         uint96 plentyOfArpaBalance = 1e6 * 1e18;
         deal(address(arpa), address(user), plentyOfArpaBalance);

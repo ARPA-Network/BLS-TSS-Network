@@ -105,10 +105,11 @@ contract RandcastConsumerExampleTest is RandcastTestHelper {
         uint96 plentyOfArpaBalance = 1e6 * 1e18;
         deal(address(arpa), address(admin), 3 * plentyOfArpaBalance);
 
-        changePrank(admin);
+        vm.startPrank(admin);
         prepareSubscription(address(getRandomNumberExample), plentyOfArpaBalance);
         prepareSubscription(address(rollDiceExample), plentyOfArpaBalance);
         prepareSubscription(address(getShuffledArrayExample), plentyOfArpaBalance);
+        vm.stopPrank();
         prepareAnAvailableGroup();
     }
 
@@ -121,7 +122,7 @@ contract RandcastConsumerExampleTest is RandcastTestHelper {
 
     function testGetRandomNumber() public {
         deal(user, 1 * 1e18);
-        changePrank(user);
+        vm.startPrank(user);
 
         uint32 times = 10;
         for (uint256 i = 0; i < times; i++) {
@@ -147,7 +148,7 @@ contract RandcastConsumerExampleTest is RandcastTestHelper {
 
     function testRollDice() public {
         deal(user, 1 * 1e18);
-        changePrank(user);
+        vm.startPrank(user);
 
         uint32 bunch = 10;
         bytes32 requestId = rollDiceExample.rollDice(bunch);
@@ -160,8 +161,6 @@ contract RandcastConsumerExampleTest is RandcastTestHelper {
         changePrank(node1);
         fulfillRequest(requestId, 10);
 
-        changePrank(user);
-
         for (uint256 i = 0; i < rollDiceExample.lengthOfDiceResults(); i++) {
             emit log_uint(rollDiceExample.diceResults(i));
             assertTrue(rollDiceExample.diceResults(i) > 0 && rollDiceExample.diceResults(i) <= 6);
@@ -171,7 +170,7 @@ contract RandcastConsumerExampleTest is RandcastTestHelper {
 
     function testGetShuffledArray() public {
         deal(user, 1 * 1e18);
-        changePrank(user);
+        vm.startPrank(user);
 
         uint32 upper = 10;
         bytes32 requestId = getShuffledArrayExample.getShuffledArray(upper);
@@ -184,8 +183,6 @@ contract RandcastConsumerExampleTest is RandcastTestHelper {
         changePrank(node1);
         fulfillRequest(requestId, 11);
 
-        changePrank(user);
-
         for (uint256 i = 0; i < upper; i++) {
             emit log_uint(getShuffledArrayExample.shuffleResults(i));
             assertTrue(
@@ -196,7 +193,7 @@ contract RandcastConsumerExampleTest is RandcastTestHelper {
     }
 
     function testAdvancedGetShuffledArray() public {
-        changePrank(admin);
+        vm.startPrank(admin);
         uint96 plentyOfArpaBalance = 1e6 * 1e18;
         deal(address(arpa), address(admin), plentyOfArpaBalance);
         uint64 subId = prepareSubscription(address(advancedGetShuffledArrayExample), plentyOfArpaBalance);
@@ -221,8 +218,6 @@ contract RandcastConsumerExampleTest is RandcastTestHelper {
         deal(node1, 1 * 1e18);
         changePrank(node1);
         fulfillRequest(requestId, 12);
-
-        changePrank(user);
 
         assertEq(advancedGetShuffledArrayExample.lengthOfShuffleResults(), 1);
 

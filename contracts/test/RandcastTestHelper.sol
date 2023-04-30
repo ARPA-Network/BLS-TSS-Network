@@ -373,8 +373,6 @@ abstract contract RandcastTestHelper is Test {
     }
 
     function prepareStakingContract(address sender, address arpaAddress, address[] memory operators) internal {
-        vm.stopPrank();
-
         Staking.PoolConstructorParams memory params = Staking.PoolConstructorParams(
             ArpaTokenInterface(arpaAddress),
             initialMaxPoolSize,
@@ -420,8 +418,6 @@ abstract contract RandcastTestHelper is Test {
     }
 
     function prepareAnAvailableGroup() public {
-        vm.stopPrank();
-
         // deal nodes
         vm.deal(node1, 1 * 10 ** 18);
         vm.deal(node2, 1 * 10 ** 18);
