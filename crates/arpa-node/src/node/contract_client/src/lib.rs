@@ -24,6 +24,7 @@ pub trait TransactionCaller {
         info: &str,
         call: ContractCall<WalletSigner, ()>,
         contract_transaction_retry_descriptor: ExponentialBackoffRetryDescriptor,
+        retry_on_transaction_fail: bool,
     ) -> ContractClientResult<H256> {
         let retry_strategy =
             ExponentialBackoff::from_millis(contract_transaction_retry_descriptor.base)
@@ -68,7 +69,9 @@ pub trait TransactionCaller {
 
                 Ok(receipt.transaction_hash)
             },
-            |e: &ContractClientError| !matches!(e, ContractClientError::TransactionFailed),
+            |e: &ContractClientError| {
+                retry_on_transaction_fail || !matches!(e, ContractClientError::TransactionFailed)
+            },
         )
         .await?;
 

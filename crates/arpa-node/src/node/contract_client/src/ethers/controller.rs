@@ -86,6 +86,7 @@ impl ControllerTransactions for ControllerClient {
             "node_register",
             call,
             self.contract_transaction_retry_descriptor,
+            true,
         )
         .await
     }
@@ -113,6 +114,7 @@ impl ControllerTransactions for ControllerClient {
             "commit_dkg",
             call,
             self.contract_transaction_retry_descriptor,
+            true,
         )
         .await
     }
@@ -131,6 +133,7 @@ impl ControllerTransactions for ControllerClient {
             "post_process_dkg",
             call,
             self.contract_transaction_retry_descriptor,
+            false,
         )
         .await
     }

@@ -36,6 +36,8 @@ pub const DEFAULT_PROVIDER_POLLING_INTERVAL_MILLIS: u64 = 10000;
 
 pub const DEFAULT_DYNAMIC_TASK_CLEANER_INTERVAL_MILLIS: u64 = 1000;
 
+pub const FULFILL_RANDOMNESS_GAS_EXCEPT_CALLBACK: u64 = 700000;
+
 pub fn jitter(duration: Duration) -> Duration {
     duration.mul_f64(thread_rng().gen_range(0.5..=1.0))
 }

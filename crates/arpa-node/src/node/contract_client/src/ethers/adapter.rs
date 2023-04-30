@@ -10,7 +10,7 @@ use crate::{
 };
 use arpa_node_core::{
     ChainIdentity, ExponentialBackoffRetryDescriptor, GeneralChainIdentity, PartialSignature,
-    RandomnessRequestType, RandomnessTask, WalletSigner,
+    RandomnessRequestType, RandomnessTask, WalletSigner, FULFILL_RANDOMNESS_GAS_EXCEPT_CALLBACK,
 };
 use async_trait::async_trait;
 use ethers::{prelude::*, utils::hex};
@@ -119,8 +119,10 @@ impl AdapterTransactions for AdapterClient {
 
         AdapterClient::call_contract_transaction(
             "fulfill_randomness",
-            call,
+            call.gas(task.callback_gas_limit + FULFILL_RANDOMNESS_GAS_EXCEPT_CALLBACK)
+                .gas_price(task.callback_max_gas_price),
             self.contract_transaction_retry_descriptor,
+            false,
         )
         .await
     }

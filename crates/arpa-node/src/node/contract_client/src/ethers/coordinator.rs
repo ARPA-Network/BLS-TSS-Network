@@ -84,6 +84,7 @@ impl CoordinatorTransactions for CoordinatorClient {
             "publish",
             call,
             self.contract_transaction_retry_descriptor,
+            false,
         )
         .await
     }
