@@ -12,6 +12,7 @@ use tonic::Request;
 #[derive(Clone, Debug)]
 pub(crate) struct GeneralCommitterClient {
     id_address: Address,
+    committer_id_address: Address,
     committer_endpoint: String,
     commit_partial_signature_retry_descriptor: ExponentialBackoffRetryDescriptor,
 }
@@ -19,11 +20,13 @@ pub(crate) struct GeneralCommitterClient {
 impl GeneralCommitterClient {
     pub fn new(
         id_address: Address,
+        committer_id_address: Address,
         committer_endpoint: String,
         commit_partial_signature_retry_descriptor: ExponentialBackoffRetryDescriptor,
     ) -> Self {
         GeneralCommitterClient {
             id_address,
+            committer_id_address,
             committer_endpoint,
             commit_partial_signature_retry_descriptor,
         }
@@ -35,17 +38,23 @@ impl CommitterClient for GeneralCommitterClient {
         self.id_address
     }
 
+    fn get_committer_id_address(&self) -> Address {
+        self.committer_id_address
+    }
+
     fn get_committer_endpoint(&self) -> &str {
         &self.committer_endpoint
     }
 
     fn build(
         id_address: Address,
+        committer_id_address: Address,
         committer_endpoint: String,
         commit_partial_signature_retry_descriptor: ExponentialBackoffRetryDescriptor,
     ) -> Self {
         Self::new(
             id_address,
+            committer_id_address,
             committer_endpoint,
             commit_partial_signature_retry_descriptor,
         )
@@ -115,7 +124,7 @@ impl CommitterService for GeneralCommitterClient {
             |e: &NodeError| {
                 error!(
                     "send partial signature to committer {0} failed. Retry... Error: {1:?}",
-                    address_to_string(self.get_id_address()),
+                    address_to_string(self.get_committer_id_address()),
                     e
                 );
                 true

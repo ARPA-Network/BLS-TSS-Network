@@ -30,10 +30,13 @@ pub(crate) trait CommitterService {
 pub(crate) trait CommitterClient {
     fn get_id_address(&self) -> Address;
 
+    fn get_committer_id_address(&self) -> Address;
+
     fn get_committer_endpoint(&self) -> &str;
 
     fn build(
         id_address: Address,
+        committer_id_address: Address,
         committer_endpoint: String,
         commit_partial_signature_retry_descriptor: ExponentialBackoffRetryDescriptor,
     ) -> Self;
@@ -74,6 +77,7 @@ pub(crate) trait CommitterClientHandler<
 
             let committer_client = C::build(
                 id_address,
+                committer,
                 endpoint.clone(),
                 self.get_commit_partial_signature_retry_descriptor(),
             );

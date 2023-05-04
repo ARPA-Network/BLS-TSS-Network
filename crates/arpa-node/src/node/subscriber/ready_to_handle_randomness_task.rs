@@ -202,7 +202,7 @@ impl<
                 self.ts.write().await.add_task(
                     TaskType::Subscriber(SubscriberType::SendingPartialSignature),
                     async move {
-                        let committer_id = committer.get_id_address();
+                        let committer_id = committer.get_committer_id_address();
 
                         match committer
                             .commit_partial_signature(

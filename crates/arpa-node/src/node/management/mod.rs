@@ -585,6 +585,14 @@ impl<
             .await
             .get_id_address()?;
 
+        let committer_id_address = self
+            .get_main_chain()
+            .get_group_cache()
+            .read()
+            .await
+            .get_member(member_id_address)?
+            .id_address;
+
         let endpoint = self
             .get_main_chain()
             .get_group_cache()
@@ -605,6 +613,7 @@ impl<
 
         let committer_client = GeneralCommitterClient::build(
             id_address,
+            committer_id_address,
             endpoint,
             commit_partial_signature_retry_descriptor,
         );
