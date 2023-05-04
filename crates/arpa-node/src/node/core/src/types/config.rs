@@ -45,6 +45,7 @@ pub fn jitter(duration: Duration) -> Duration {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Config {
     pub node_committer_rpc_endpoint: String,
+    pub node_advertised_committer_rpc_endpoint: Option<String>,
     pub node_management_rpc_endpoint: String,
     pub node_management_rpc_token: String,
     pub provider_endpoint: String,
@@ -64,6 +65,7 @@ impl Default for Config {
     fn default() -> Self {
         Self {
             node_committer_rpc_endpoint: "[::1]:50060".to_string(),
+            node_advertised_committer_rpc_endpoint: Some("[::1]:50060".to_string()),
             node_management_rpc_endpoint: "[::1]:50099".to_string(),
             node_management_rpc_token: "for_test".to_string(),
             provider_endpoint: "localhost:8545".to_string(),
@@ -135,6 +137,11 @@ impl Config {
     }
 
     pub fn initialize(mut self) -> Self {
+        if self.node_advertised_committer_rpc_endpoint.is_none() {
+            self.node_advertised_committer_rpc_endpoint =
+                Some(self.node_committer_rpc_endpoint.clone());
+        }
+
         if self.data_path.is_none() {
             self.data_path = Some(String::from("data.sqlite"));
         }

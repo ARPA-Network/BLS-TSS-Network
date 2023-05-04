@@ -6,7 +6,7 @@ use arpa_node_core::log::encoder::JsonEncoder;
 use arpa_node_core::GeneralChainIdentity;
 use arpa_node_core::{build_wallet_from_config, RandomnessTask};
 use arpa_node_core::{format_now_date, Config};
-use arpa_node_dal::NodeInfoFetcher;
+use arpa_node_dal::{NodeInfoFetcher, NodeInfoUpdater};
 use arpa_node_sqlite_db::BLSTasksDBClient;
 use arpa_node_sqlite_db::GroupInfoDBClient;
 use arpa_node_sqlite_db::NodeInfoDBClient;
@@ -148,7 +148,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             node_cache
                 .save_node_info(
                     id_address,
-                    config.node_committer_rpc_endpoint.clone(),
+                    config
+                        .node_advertised_committer_rpc_endpoint
+                        .clone()
+                        .unwrap(),
                     dkg_private_key,
                     dkg_public_key,
                 )
@@ -229,6 +232,16 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
             node_cache.get_node_rpc_endpoint()?;
             node_cache.get_dkg_public_key()?;
+
+            // update committer rpc endpoint according to config
+            node_cache
+                .set_node_rpc_endpoint(
+                    config
+                        .node_advertised_committer_rpc_endpoint
+                        .clone()
+                        .unwrap(),
+                )
+                .await?;
 
             let mut group_cache = db.get_group_info_client();
 

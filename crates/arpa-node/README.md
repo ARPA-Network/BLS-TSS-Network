@@ -52,9 +52,11 @@ sudo apt install libssh-dev
 
 Configuration items in [`conf/config.yml`](conf/config.yml) are listed here:
 
-- node_committer_rpc_endpoint: Config endpoint to expose committer grpc services. Look this will only take effect when the node is firstly started. (example: "[::1]:50060")
+- node_committer_rpc_endpoint: Endpoint that this node will use to create server socket to expose committer grpc services. Once this get changed, the node MUST re-activate itself to the controller so that the controller can update the endpoint by re-grouping. (example: "0.0.0.0:50060")
 
-- node_management_rpc_endpoint: Config endpoint to expose management grpc services. (example: "[::1]:50099")
+- node_advertised_committer_rpc_endpoint: Endpoint that other members in the group will use to connect to this node. If this setting is not set, then value of node_committer_rpc_endpoint will be used here and published to other nodes. (example: "10.0.0.1:50060")
+
+- node_management_rpc_endpoint: Config endpoint to expose management grpc services. (example: "0.0.0.0:50099")
 
 - node_management_rpc_token: Config token phrase for authenticaing management grpc requests by `authorization` header. (example: "arpa_network")
 

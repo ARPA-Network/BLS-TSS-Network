@@ -1,5 +1,5 @@
 use super::{
-    chain::{types::GeneralMainChain, Chain, MainChainFetcher},
+    chain::{types::GeneralMainChain, Chain},
     CommitterServerStarter, Context, ContextFetcher, ManagementServerStarter, TaskWaiter,
 };
 use crate::node::{
@@ -113,14 +113,7 @@ impl<
 
         let f_ts = self.get_fixed_task_handler();
 
-        let rpc_endpoint = self
-            .get_main_chain()
-            .get_node_cache()
-            .read()
-            .await
-            .get_node_rpc_endpoint()
-            .unwrap()
-            .to_string();
+        let rpc_endpoint = self.config.node_committer_rpc_endpoint.clone();
 
         let node_management_rpc_endpoint = self.config.node_management_rpc_endpoint.clone();
 
