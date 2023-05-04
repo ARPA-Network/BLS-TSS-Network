@@ -38,11 +38,21 @@ Install [protoc](https://github.com/hyperium/tonic#dependencies) and [foundry](h
 cargo build
 ```
 
+# Troubleshooting
+
+"error: linker `cc` not found"... when running `cargo build`
+
+```bash
+sudo apt install build-essential
+sudo apt install pkg-config
+sudo apt install libssh-dev
+```
+
 # Node Config
 
 Configuration items in [`conf/config.yml`](conf/config.yml) are listed here:
 
-- node_committer_rpc_endpoint: Config endpoint to expose committer grpc services. (example: "[::1]:50060")
+- node_committer_rpc_endpoint: Config endpoint to expose committer grpc services. Look this will only take effect when the node is firstly started. (example: "[::1]:50060")
 
 - node_management_rpc_endpoint: Config endpoint to expose management grpc services. (example: "[::1]:50099")
 
