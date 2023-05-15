@@ -3,11 +3,9 @@ pragma solidity ^0.8.15;
 
 pragma experimental ABIEncoderV2;
 
-import {Coordinator} from "src/Coordinator.sol";
-import "src/interfaces/ICoordinator.sol";
 import "./RandcastTestHelper.sol";
 
-// Suggested usage: forge test --match-contract ControllerTest -vv
+// Suggested usage: forge test --match-contract ControllerTest --optimize -vv
 
 contract ControllerTest is RandcastTestHelper {
     uint256 disqualifiedNodePenaltyAmount = 1000;

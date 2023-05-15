@@ -2,12 +2,9 @@
 pragma solidity ^0.8.15;
 
 import "forge-std/Test.sol";
-import {Coordinator} from "src/Coordinator.sol";
+import {Coordinator} from "../src/Coordinator.sol";
 
 import "openzeppelin-contracts/contracts/utils/Strings.sol";
-
-// Future Controller Implementation
-// import {Cotroller} from "src/Controller.sol";
 
 contract CoordinatorTest is Test {
     Coordinator coordinator;

@@ -3,10 +3,6 @@ pragma solidity ^0.8.15;
 
 pragma experimental ABIEncoderV2;
 
-import {Coordinator} from "src/Coordinator.sol";
-import {Controller} from "src/Controller.sol";
-import "openzeppelin-contracts/contracts/utils/Strings.sol";
-import "src/interfaces/ICoordinator.sol";
 import "./RandcastTestHelper.sol";
 
 contract DKGScenarioTest is RandcastTestHelper {

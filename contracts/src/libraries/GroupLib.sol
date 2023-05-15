@@ -67,19 +67,18 @@ library GroupLib {
     {
         groupIndicesToEmitEvent = new uint256[](0);
 
-        for (uint256 i = 0; i < groupData.s_groupCount; i++) {
-            // find group with member address = nodeIdAddress
-            int256 memberIndex = getMemberIndexByAddress(groupData, i, idAddress);
-            if (memberIndex != -1) {
-                (bool needRebalance, bool needEmitGroupEvent) = removeFromGroup(groupData, uint256(memberIndex), i);
-                if (needEmitGroupEvent) {
-                    groupIndicesToEmitEvent = new uint256[](1);
-                    groupIndicesToEmitEvent[0] = i;
-                    return groupIndicesToEmitEvent;
-                }
-                if (needRebalance) {
-                    return arrangeMembersInGroup(groupData, i, lastOutput);
-                }
+        (int256 groupIndex, int256 memberIndex) = getBelongingGroupByMemberAddress(groupData, idAddress);
+
+        if (groupIndex != -1) {
+            (bool needRebalance, bool needEmitGroupEvent) =
+                removeFromGroup(groupData, uint256(memberIndex), uint256(groupIndex));
+            if (needEmitGroupEvent) {
+                groupIndicesToEmitEvent = new uint256[](1);
+                groupIndicesToEmitEvent[0] = uint256(groupIndex);
+                return groupIndicesToEmitEvent;
+            }
+            if (needRebalance) {
+                return arrangeMembersInGroup(groupData, uint256(groupIndex), lastOutput);
             }
         }
     }
@@ -224,11 +223,25 @@ library GroupLib {
     // =============
     // View
     // =============
+    // Find group with member address equals to nodeIdAddress, return -1 if not found.
+    function getBelongingGroupByMemberAddress(GroupData storage groupData, address nodeIdAddress)
+        public
+        view
+        returns (int256, int256)
+    {
+        for (uint256 i = 0; i < groupData.s_groupCount; i++) {
+            int256 memberIndex = getMemberIndexByAddress(groupData, i, nodeIdAddress);
+            if (memberIndex != -1) {
+                return (int256(i), memberIndex);
+            }
+        }
+        return (-1, -1);
+    }
 
     function getMemberIndexByAddress(GroupData storage groupData, uint256 groupIndex, address nodeIdAddress)
         public
         view
-        returns (int256 memberIndex)
+        returns (int256)
     {
         IController.Group memory g = groupData.s_groups[groupIndex];
         for (uint256 i = 0; i < g.members.length; i++) {
@@ -373,7 +386,6 @@ library GroupLib {
         // get the group index of the group with the minimum size, as well as the min size
         uint256 indexOfMinSize;
         uint256 minSize = groupData.s_groupMaxCapacity;
-        // uint256 minSize;
         for (uint256 i = 0; i < groupData.s_groupCount; i++) {
             IController.Group memory g = groupData.s_groups[i];
             if (g.size < minSize) {
