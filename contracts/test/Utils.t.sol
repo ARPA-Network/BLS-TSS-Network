@@ -2,7 +2,8 @@
 pragma solidity >=0.8.10;
 
 import "forge-std/Test.sol";
-import "src/utils/Utils.sol";
+import "../src/utils/Utils.sol";
+import "openzeppelin-contracts/contracts/utils/Strings.sol";
 
 contract UtilsTest is Test {
     string mnemonic = "test test test test test test test test test test test junk";
@@ -22,11 +23,11 @@ contract UtilsTest is Test {
     }
 
     function testPrivateKeyByDefaultMnemonic() public {
-        for (uint32 i = 10; i < 10 + 5; i++) {
+        for (uint32 i = 0; i < 20; i++) {
             uint256 sk = vm.deriveKey(mnemonic, i);
-            emit log_bytes(abi.encodePacked(sk));
+            emit log_named_bytes(Strings.toString(i), abi.encodePacked(sk));
             address addr = vm.rememberKey(sk);
-            emit log_address(addr);
+            emit log_named_address(Strings.toString(i), addr);
         }
     }
 }

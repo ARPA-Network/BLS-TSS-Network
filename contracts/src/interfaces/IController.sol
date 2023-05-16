@@ -52,6 +52,8 @@ interface IController {
 
     function nodeQuit() external;
 
+    function changeDkgPublicKey(bytes calldata dkgPublicKey) external;
+
     function commitDkg(CommitDkgParams memory params) external;
 
     function postProcessDkg(uint256 groupIndex, uint256 groupEpoch) external;
@@ -59,7 +61,7 @@ interface IController {
     function claimReward(address recipient, uint256 amount) external;
 
     // adapter transaction
-    function addReward(address nodeAddress, uint256 amount) external;
+    function addReward(address[] memory nodes, uint256 amount) external;
 
     function setLastOutput(uint256 lastOutput) external;
 
@@ -75,6 +77,9 @@ interface IController {
     function getNode(address nodeAddress) external view returns (Node memory);
 
     function getMember(uint256 groupIndex, uint256 memberIndex) external view returns (Member memory);
+
+    /// @notice Get the group index and member index of a given node.
+    function getBelongingGroup(address nodeAddress) external view returns (int256, int256);
 
     function getCoordinator(uint256 groupIndex) external view returns (address);
 

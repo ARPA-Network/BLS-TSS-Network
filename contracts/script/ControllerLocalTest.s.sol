@@ -3,11 +3,14 @@ pragma solidity ^0.8.13;
 
 import "forge-std/Script.sol";
 import "../src/Controller.sol";
+import "../src/interfaces/IControllerOwner.sol";
 import "../src/Adapter.sol";
+import "../src/interfaces/IAdapterOwner.sol";
 import "./MockArpaEthOracle.sol";
 import "./ArpaLocalTest.sol";
 import "openzeppelin-contracts/contracts/token/ERC20/IERC20.sol";
 import "openzeppelin-contracts/contracts/token/ERC20/ERC20.sol";
+import "openzeppelin-contracts/contracts/proxy/ERC1967/ERC1967Proxy.sol";
 import {Staking, ArpaTokenInterface} from "Staking-v0.1/Staking.sol";
 
 contract ControllerLocalTestScript is Script {
@@ -55,7 +58,8 @@ contract ControllerLocalTestScript is Script {
 
     function run() external {
         Controller controller;
-        Adapter adapter;
+        ERC1967Proxy adapter;
+        Adapter adapter_impl;
         Staking staking;
         MockArpaEthOracle oracle;
         IERC20 arpa;
@@ -81,13 +85,20 @@ contract ControllerLocalTestScript is Script {
         staking = new Staking(params);
 
         vm.broadcast(deployerPrivateKey);
-        controller = new Controller(address(arpa), last_output);
+        controller = new Controller();
 
         vm.broadcast(deployerPrivateKey);
-        adapter = new Adapter(address(controller), address(arpa), address(oracle));
+        controller.initialize(address(staking), last_output);
 
         vm.broadcast(deployerPrivateKey);
-        controller.setControllerConfig(
+        adapter_impl = new Adapter();
+
+        vm.broadcast(deployerPrivateKey);
+        adapter =
+        new ERC1967Proxy(address(adapter_impl),abi.encodeWithSignature("initialize(address,address,address)",address(controller), address(arpa), address(oracle)));
+
+        vm.broadcast(deployerPrivateKey);
+        IControllerOwner(address(controller)).setControllerConfig(
             address(staking),
             address(adapter),
             operatorStakeAmount,
@@ -101,7 +112,7 @@ contract ControllerLocalTestScript is Script {
         );
 
         vm.broadcast(deployerPrivateKey);
-        adapter.setAdapterConfig(
+        IAdapterOwner(address(adapter)).setAdapterConfig(
             minimumRequestConfirmations,
             maxGasLimit,
             stalenessSeconds,

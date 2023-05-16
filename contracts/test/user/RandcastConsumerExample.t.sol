@@ -26,7 +26,7 @@ contract RandcastConsumerExampleTest is RandcastTestHelper {
     uint32 maxGasLimit = 2000000;
     uint32 stalenessSeconds = 30;
     uint32 gasAfterPaymentCalculation = 30000;
-    uint32 gasExceptCallback = 200000;
+    uint32 gasExceptRequestDetail = 200000;
     int256 fallbackWeiPerUnitArpa = 1e12;
     uint256 signatureTaskExclusiveWindow = 10;
     uint256 rewardPerSignature = 50;
@@ -51,7 +51,7 @@ contract RandcastConsumerExampleTest is RandcastTestHelper {
         controller = new ControllerForTest(address(arpa), last_output);
 
         vm.prank(admin);
-        adapter = new Adapter(address(controller), address(arpa), address(oracle));
+        adapter = new AdapterForTest(address(controller), address(arpa), address(oracle));
 
         vm.prank(user);
         getRandomNumberExample = new GetRandomNumberExample(
@@ -91,7 +91,7 @@ contract RandcastConsumerExampleTest is RandcastTestHelper {
             maxGasLimit,
             stalenessSeconds,
             gasAfterPaymentCalculation,
-            gasExceptCallback,
+            gasExceptRequestDetail,
             fallbackWeiPerUnitArpa,
             signatureTaskExclusiveWindow,
             rewardPerSignature,
@@ -105,10 +105,11 @@ contract RandcastConsumerExampleTest is RandcastTestHelper {
         uint96 plentyOfArpaBalance = 1e6 * 1e18;
         deal(address(arpa), address(admin), 3 * plentyOfArpaBalance);
 
-        changePrank(admin);
+        vm.startPrank(admin);
         prepareSubscription(address(getRandomNumberExample), plentyOfArpaBalance);
         prepareSubscription(address(rollDiceExample), plentyOfArpaBalance);
         prepareSubscription(address(getShuffledArrayExample), plentyOfArpaBalance);
+        vm.stopPrank();
         prepareAnAvailableGroup();
     }
 
@@ -121,14 +122,14 @@ contract RandcastConsumerExampleTest is RandcastTestHelper {
 
     function testGetRandomNumber() public {
         deal(user, 1 * 1e18);
-        changePrank(user);
+        vm.startPrank(user);
 
         uint32 times = 10;
         for (uint256 i = 0; i < times; i++) {
             bytes32 requestId = getRandomNumberExample.getRandomNumber();
 
-            Adapter.Callback memory callback = adapter.getPendingRequest(requestId);
-            bytes memory rawSeed = abi.encodePacked(callback.seed);
+            Adapter.RequestDetail memory rd = adapter.getPendingRequest(requestId);
+            bytes memory rawSeed = abi.encodePacked(rd.seed);
             emit log_named_bytes("rawSeed", rawSeed);
 
             deal(node1, 1 * 1e18);
@@ -147,20 +148,18 @@ contract RandcastConsumerExampleTest is RandcastTestHelper {
 
     function testRollDice() public {
         deal(user, 1 * 1e18);
-        changePrank(user);
+        vm.startPrank(user);
 
         uint32 bunch = 10;
         bytes32 requestId = rollDiceExample.rollDice(bunch);
 
-        Adapter.Callback memory callback = adapter.getPendingRequest(requestId);
-        bytes memory rawSeed = abi.encodePacked(callback.seed);
+        Adapter.RequestDetail memory rd = adapter.getPendingRequest(requestId);
+        bytes memory rawSeed = abi.encodePacked(rd.seed);
         emit log_named_bytes("rawSeed", rawSeed);
 
         deal(node1, 1 * 1e18);
         changePrank(node1);
         fulfillRequest(requestId, 10);
-
-        changePrank(user);
 
         for (uint256 i = 0; i < rollDiceExample.lengthOfDiceResults(); i++) {
             emit log_uint(rollDiceExample.diceResults(i));
@@ -171,20 +170,18 @@ contract RandcastConsumerExampleTest is RandcastTestHelper {
 
     function testGetShuffledArray() public {
         deal(user, 1 * 1e18);
-        changePrank(user);
+        vm.startPrank(user);
 
         uint32 upper = 10;
         bytes32 requestId = getShuffledArrayExample.getShuffledArray(upper);
 
-        Adapter.Callback memory callback = adapter.getPendingRequest(requestId);
-        bytes memory rawSeed = abi.encodePacked(callback.seed);
+        Adapter.RequestDetail memory rd = adapter.getPendingRequest(requestId);
+        bytes memory rawSeed = abi.encodePacked(rd.seed);
         emit log_named_bytes("rawSeed", rawSeed);
 
         deal(node1, 1 * 1e18);
         changePrank(node1);
         fulfillRequest(requestId, 11);
-
-        changePrank(user);
 
         for (uint256 i = 0; i < upper; i++) {
             emit log_uint(getShuffledArrayExample.shuffleResults(i));
@@ -196,7 +193,7 @@ contract RandcastConsumerExampleTest is RandcastTestHelper {
     }
 
     function testAdvancedGetShuffledArray() public {
-        changePrank(admin);
+        vm.startPrank(admin);
         uint96 plentyOfArpaBalance = 1e6 * 1e18;
         deal(address(arpa), address(admin), plentyOfArpaBalance);
         uint64 subId = prepareSubscription(address(advancedGetShuffledArrayExample), plentyOfArpaBalance);
@@ -207,22 +204,20 @@ contract RandcastConsumerExampleTest is RandcastTestHelper {
         uint32 upper = 10;
         uint256 seed = 42;
         uint16 requestConfirmations = 0;
-        uint256 callbackGasLimit = 350000;
-        uint256 callbackMaxGasPrice = 1 * 1e9;
+        uint256 rdGasLimit = 350000;
+        uint256 rdMaxGasPrice = 1 * 1e9;
 
         bytes32 requestId = advancedGetShuffledArrayExample.getRandomNumberThenGenerateShuffledArray(
-            upper, subId, seed, requestConfirmations, callbackGasLimit, callbackMaxGasPrice
+            upper, subId, seed, requestConfirmations, rdGasLimit, rdMaxGasPrice
         );
 
-        Adapter.Callback memory callback = adapter.getPendingRequest(requestId);
-        bytes memory rawSeed = abi.encodePacked(callback.seed);
+        Adapter.RequestDetail memory rd = adapter.getPendingRequest(requestId);
+        bytes memory rawSeed = abi.encodePacked(rd.seed);
         emit log_named_bytes("rawSeed", rawSeed);
 
         deal(node1, 1 * 1e18);
         changePrank(node1);
         fulfillRequest(requestId, 12);
-
-        changePrank(user);
 
         assertEq(advancedGetShuffledArrayExample.lengthOfShuffleResults(), 1);
 

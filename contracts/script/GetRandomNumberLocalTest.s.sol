@@ -20,38 +20,27 @@ contract GetRandomNumberLocalTestScript is Script {
         address adapterAddress = vm.envAddress("ADAPTER_ADDRESS");
         address arpaAddress = vm.envAddress("ARPA_ADDRESS");
         uint256 userPrivateKey = vm.envUint("USER_PRIVATE_KEY");
-        address userAddress = vm.envAddress("USER_ADDRESS");
 
         adapter = IAdapter(adapterAddress);
         arpa = Arpa(arpaAddress);
 
-        vm.broadcast(userPrivateKey);
+        vm.startBroadcast(userPrivateKey);
         getRandomNumberExample = new GetRandomNumberExample(
             adapterAddress
         );
 
-        vm.broadcast(userPrivateKey);
-        arpa.mint(userAddress, plentyOfArpaBalance);
+        arpa.mint(vm.addr(userPrivateKey), plentyOfArpaBalance);
 
-        vm.broadcast(userPrivateKey);
         arpa.approve(address(adapter), plentyOfArpaBalance);
 
-        vm.broadcast(userPrivateKey);
         uint64 subId = adapter.createSubscription();
 
-        vm.broadcast(userPrivateKey);
         adapter.fundSubscription(subId, plentyOfArpaBalance);
 
-        // have to set nonce manually or else the tx will fail
-        vm.setNonce(userAddress, 6);
-
-        vm.broadcast(userPrivateKey);
         adapter.addConsumer(subId, address(getRandomNumberExample));
 
-        vm.broadcast(userPrivateKey);
         getRandomNumberExample.getRandomNumber();
 
-        vm.broadcast(userPrivateKey);
         getRandomNumberExample.getRandomNumber();
     }
 }

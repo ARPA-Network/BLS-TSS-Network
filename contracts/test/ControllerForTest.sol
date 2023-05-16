@@ -1,12 +1,14 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity ^0.8.15;
 
-import "src/Controller.sol";
+import "../src/Controller.sol";
 
 contract ControllerForTest is Controller {
     using GroupLib for GroupLib.GroupData;
 
-    constructor(address arpa, uint256 lastOutput) Controller(arpa, lastOutput) {}
+    constructor(address arpa, uint256 lastOutput) {
+        initialize(arpa, lastOutput);
+    }
 
     // Give node staking reward penalty and freezeNode
     function slashNodeForTest(address nodeIdAddress, uint256 stakingPenalty, uint256 pendingBlock) public {

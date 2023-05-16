@@ -3,11 +3,9 @@ pragma solidity ^0.8.15;
 
 pragma experimental ABIEncoderV2;
 
-import {Coordinator} from "src/Coordinator.sol";
-import "src/interfaces/ICoordinator.sol";
 import "./RandcastTestHelper.sol";
 
-// Suggested usage: forge test --match-contract ControllerTest -vv
+// Suggested usage: forge test --match-contract ControllerTest --optimize -vv
 
 contract ControllerTest is RandcastTestHelper {
     uint256 disqualifiedNodePenaltyAmount = 1000;
@@ -78,17 +76,23 @@ contract ControllerTest is RandcastTestHelper {
     }
 
     function testNodeRegister() public {
-        // printNodeInfo(node1);
+        // Fail on bad dkg public key
+        vm.expectRevert(abi.encodeWithSelector(BLS.InvalidPublicKey.selector));
+        vm.prank(node1);
+        controller.nodeRegister(badKey);
+
+        // Register node1
         vm.prank(node1);
         controller.nodeRegister(DKGPubkey1);
-        // printNodeInfo(node1);
 
+        // Assert node1 state is correct
         Controller.Node memory n = controller.getNode(node1);
         assertEq(n.idAddress, node1);
         assertEq(n.dkgPublicKey, DKGPubkey1);
         assertEq(n.state, true);
         assertEq(n.pendingUntilBlock, 0);
 
+        // fail on already registered node
         vm.expectRevert(abi.encodeWithSelector(Controller.NodeAlreadyRegistered.selector));
         vm.prank(node1);
         controller.nodeRegister(DKGPubkey1);
