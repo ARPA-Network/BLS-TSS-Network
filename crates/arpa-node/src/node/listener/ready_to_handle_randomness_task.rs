@@ -28,6 +28,7 @@ pub struct ReadyToHandleRandomnessTaskListener<
     randomness_tasks_cache: Arc<RwLock<T>>,
     eq: Arc<RwLock<EventQueue>>,
     pc: PhantomData<PC>,
+    randomness_task_exclusive_window: usize,
 }
 
 impl<
@@ -38,6 +39,7 @@ impl<
         PC: PairingCurve,
     > ReadyToHandleRandomnessTaskListener<B, G, T, I, PC>
 {
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         chain_id: usize,
         id_address: Address,
@@ -46,6 +48,7 @@ impl<
         group_cache: Arc<RwLock<G>>,
         randomness_tasks_cache: Arc<RwLock<T>>,
         eq: Arc<RwLock<EventQueue>>,
+        randomness_task_exclusive_window: usize,
     ) -> Self {
         ReadyToHandleRandomnessTaskListener {
             chain_id,
@@ -56,6 +59,7 @@ impl<
             randomness_tasks_cache,
             eq,
             pc: PhantomData,
+            randomness_task_exclusive_window,
         }
     }
 }
@@ -96,7 +100,11 @@ impl<
                 .randomness_tasks_cache
                 .write()
                 .await
-                .check_and_get_available_tasks(current_block_height, current_group_index)
+                .check_and_get_available_tasks(
+                    current_block_height,
+                    current_group_index,
+                    self.randomness_task_exclusive_window,
+                )
                 .await?;
 
             if available_tasks.is_empty() {

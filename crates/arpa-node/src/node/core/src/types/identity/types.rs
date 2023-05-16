@@ -1,3 +1,5 @@
+use crate::ExponentialBackoffRetryDescriptor;
+
 use super::ChainIdentity;
 use ethers_core::types::Address;
 use ethers_middleware::{NonceManagerMiddleware, SignerMiddleware};
@@ -14,6 +16,8 @@ pub struct GeneralChainIdentity {
     signer: Arc<WalletSigner>,
     controller_address: Address,
     adapter_address: Address,
+    contract_transaction_retry_descriptor: ExponentialBackoffRetryDescriptor,
+    contract_view_retry_descriptor: ExponentialBackoffRetryDescriptor,
 }
 
 impl GeneralChainIdentity {
@@ -24,6 +28,8 @@ impl GeneralChainIdentity {
         provider_polling_interval_millis: u64,
         controller_address: Address,
         adapter_address: Address,
+        contract_transaction_retry_descriptor: ExponentialBackoffRetryDescriptor,
+        contract_view_retry_descriptor: ExponentialBackoffRetryDescriptor,
     ) -> Self {
         let provider = Arc::new(
             Provider::<Http>::try_from(provider_rpc_endpoint)
@@ -44,6 +50,8 @@ impl GeneralChainIdentity {
             signer,
             controller_address,
             adapter_address,
+            contract_transaction_retry_descriptor,
+            contract_view_retry_descriptor,
         }
     }
 }
@@ -71,5 +79,13 @@ impl ChainIdentity for GeneralChainIdentity {
 
     fn get_provider(&self) -> Arc<Provider<Http>> {
         self.provider.clone()
+    }
+
+    fn get_contract_transaction_retry_descriptor(&self) -> ExponentialBackoffRetryDescriptor {
+        self.contract_transaction_retry_descriptor
+    }
+
+    fn get_contract_view_retry_descriptor(&self) -> ExponentialBackoffRetryDescriptor {
+        self.contract_view_retry_descriptor
     }
 }

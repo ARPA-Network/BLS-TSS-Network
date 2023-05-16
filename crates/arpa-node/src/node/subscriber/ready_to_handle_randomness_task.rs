@@ -8,7 +8,10 @@ use crate::node::{
     queue::{event_queue::EventQueue, EventSubscriber},
     scheduler::{dynamic::SimpleDynamicTaskScheduler, TaskScheduler},
 };
-use arpa_node_core::{u256_to_vec, BLSTaskType, RandomnessTask, SubscriberType, TaskType};
+use arpa_node_core::{
+    u256_to_vec, BLSTaskType, ExponentialBackoffRetryDescriptor, RandomnessTask, SubscriberType,
+    TaskType,
+};
 use arpa_node_dal::{
     cache::RandomnessResultCache, BLSTasksFetcher, GroupInfoFetcher, SignatureResultCacheFetcher,
     SignatureResultCacheUpdater,
@@ -38,6 +41,7 @@ pub struct ReadyToHandleRandomnessTaskSubscriber<
     eq: Arc<RwLock<EventQueue>>,
     ts: Arc<RwLock<SimpleDynamicTaskScheduler>>,
     c: PhantomData<PC>,
+    commit_partial_signature_retry_descriptor: ExponentialBackoffRetryDescriptor,
 }
 
 impl<
@@ -48,6 +52,7 @@ impl<
         PC: PairingCurve,
     > ReadyToHandleRandomnessTaskSubscriber<G, T, C, PC>
 {
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         chain_id: usize,
         id_address: Address,
@@ -56,6 +61,7 @@ impl<
         randomness_signature_cache: Arc<RwLock<C>>,
         eq: Arc<RwLock<EventQueue>>,
         ts: Arc<RwLock<SimpleDynamicTaskScheduler>>,
+        commit_partial_signature_retry_descriptor: ExponentialBackoffRetryDescriptor,
     ) -> Self {
         ReadyToHandleRandomnessTaskSubscriber {
             chain_id,
@@ -66,6 +72,7 @@ impl<
             eq,
             ts,
             c: PhantomData,
+            commit_partial_signature_retry_descriptor,
         }
     }
 }
@@ -90,6 +97,7 @@ pub struct GeneralRandomnessHandler<
     randomness_signature_cache: Arc<RwLock<C>>,
     ts: Arc<RwLock<SimpleDynamicTaskScheduler>>,
     c: PhantomData<PC>,
+    commit_partial_signature_retry_descriptor: ExponentialBackoffRetryDescriptor,
 }
 
 #[async_trait]
@@ -110,6 +118,10 @@ impl<
 
     fn get_group_cache(&self) -> Arc<RwLock<G>> {
         self.group_cache.clone()
+    }
+
+    fn get_commit_partial_signature_retry_descriptor(&self) -> ExponentialBackoffRetryDescriptor {
+        self.commit_partial_signature_retry_descriptor
     }
 }
 
@@ -190,7 +202,7 @@ impl<
                 self.ts.write().await.add_task(
                     TaskType::Subscriber(SubscriberType::SendingPartialSignature),
                     async move {
-                        let committer_id = committer.get_id_address();
+                        let committer_id = committer.get_committer_id_address();
 
                         match committer
                             .commit_partial_signature(
@@ -264,6 +276,9 @@ impl<
 
         let task_scheduler_for_handler = self.ts.clone();
 
+        let commit_partial_signature_retry_descriptor =
+            self.commit_partial_signature_retry_descriptor;
+
         self.ts.write().await.add_task(
             TaskType::Subscriber(SubscriberType::ReadyToHandleRandomnessTask),
             async move {
@@ -276,6 +291,7 @@ impl<
                     randomness_signature_cache: randomness_signature_cache_for_handler,
                     ts: task_scheduler_for_handler,
                     c: PhantomData::<PC>,
+                    commit_partial_signature_retry_descriptor,
                 };
 
                 if let Err(e) = handler.handle().await {

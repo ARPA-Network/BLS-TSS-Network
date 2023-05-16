@@ -2,7 +2,7 @@ pub mod client;
 pub mod server;
 
 use crate::node::error::NodeResult;
-use arpa_node_core::BLSTaskType;
+use arpa_node_core::{BLSTaskType, ExponentialBackoffRetryDescriptor};
 use arpa_node_dal::GroupInfoFetcher;
 use async_trait::async_trait;
 use ethers::types::Address;
@@ -30,9 +30,16 @@ pub(crate) trait CommitterService {
 pub(crate) trait CommitterClient {
     fn get_id_address(&self) -> Address;
 
+    fn get_committer_id_address(&self) -> Address;
+
     fn get_committer_endpoint(&self) -> &str;
 
-    fn build(id_address: Address, committer_endpoint: String) -> Self;
+    fn build(
+        id_address: Address,
+        committer_id_address: Address,
+        committer_endpoint: String,
+        commit_partial_signature_retry_descriptor: ExponentialBackoffRetryDescriptor,
+    ) -> Self;
 }
 
 #[async_trait]
@@ -45,6 +52,8 @@ pub(crate) trait CommitterClientHandler<
     async fn get_id_address(&self) -> Address;
 
     fn get_group_cache(&self) -> Arc<RwLock<G>>;
+
+    fn get_commit_partial_signature_retry_descriptor(&self) -> ExponentialBackoffRetryDescriptor;
 
     async fn prepare_committer_clients(&self) -> NodeResult<Vec<C>> {
         let mut committers = self.get_group_cache().read().await.get_committers()?;
@@ -66,7 +75,12 @@ pub(crate) trait CommitterClientHandler<
                 .unwrap()
                 .to_string();
 
-            let committer_client = C::build(id_address, endpoint.clone());
+            let committer_client = C::build(
+                id_address,
+                committer,
+                endpoint.clone(),
+                self.get_commit_partial_signature_retry_descriptor(),
+            );
 
             committer_clients.push(committer_client);
         }

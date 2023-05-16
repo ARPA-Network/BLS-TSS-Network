@@ -122,6 +122,7 @@ pub trait BLSTasksUpdater<T: Task> {
         &mut self,
         current_block_height: usize,
         current_group_index: usize,
+        randomness_task_exclusive_window: usize,
     ) -> DataAccessResult<Vec<T>>;
 }
 

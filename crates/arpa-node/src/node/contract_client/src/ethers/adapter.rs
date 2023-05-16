@@ -2,13 +2,15 @@ use crate::{
     adapter::{AdapterClientBuilder, AdapterLogs, AdapterTransactions, AdapterViews},
     contract_stub::{
         adapter::{Adapter, RandomnessRequestFilter},
+        i_controller::RequestDetail,
         shared_types::PartialSignature as ContractPartialSignature,
     },
     error::{ContractClientError, ContractClientResult},
     ServiceClient, TransactionCaller, ViewCaller,
 };
 use arpa_node_core::{
-    ChainIdentity, GeneralChainIdentity, PartialSignature, RandomnessTask, WalletSigner,
+    ChainIdentity, ExponentialBackoffRetryDescriptor, GeneralChainIdentity, PartialSignature,
+    RandomnessRequestType, RandomnessTask, WalletSigner, FULFILL_RANDOMNESS_GAS_EXCEPT_CALLBACK,
 };
 use async_trait::async_trait;
 use ethers::{prelude::*, utils::hex};
@@ -20,6 +22,8 @@ pub struct AdapterClient {
     main_id_address: Address,
     adapter_address: Address,
     signer: Arc<WalletSigner>,
+    contract_transaction_retry_descriptor: ExponentialBackoffRetryDescriptor,
+    contract_view_retry_descriptor: ExponentialBackoffRetryDescriptor,
 }
 
 impl AdapterClient {
@@ -27,11 +31,15 @@ impl AdapterClient {
         main_id_address: Address,
         adapter_address: Address,
         identity: &GeneralChainIdentity,
+        contract_transaction_retry_descriptor: ExponentialBackoffRetryDescriptor,
+        contract_view_retry_descriptor: ExponentialBackoffRetryDescriptor,
     ) -> Self {
         AdapterClient {
             main_id_address,
             adapter_address,
             signer: identity.get_signer(),
+            contract_transaction_retry_descriptor,
+            contract_view_retry_descriptor,
         }
     }
 }
@@ -40,7 +48,13 @@ impl AdapterClientBuilder for GeneralChainIdentity {
     type Service = AdapterClient;
 
     fn build_adapter_client(&self, main_id_address: Address) -> AdapterClient {
-        AdapterClient::new(main_id_address, self.get_adapter_address(), self)
+        AdapterClient::new(
+            main_id_address,
+            self.get_adapter_address(),
+            self,
+            self.get_contract_transaction_retry_descriptor(),
+            self.get_contract_view_retry_descriptor(),
+        )
     }
 }
 
@@ -66,14 +80,14 @@ impl AdapterTransactions for AdapterClient {
     async fn fulfill_randomness(
         &self,
         group_index: usize,
-        request_id: Vec<u8>,
+        task: RandomnessTask,
         signature: Vec<u8>,
         partial_signatures: HashMap<Address, PartialSignature>,
     ) -> ContractClientResult<H256> {
         let adapter_contract =
             ServiceClient::<AdapterContract>::prepare_service_client(self).await?;
 
-        let r_id = pad_to_bytes32(&request_id).unwrap();
+        let r_id = pad_to_bytes32(&task.request_id).unwrap();
 
         let sig = U256::from(signature.as_slice());
 
@@ -88,9 +102,29 @@ impl AdapterTransactions for AdapterClient {
             })
             .collect();
 
-        let call = adapter_contract.fulfill_randomness(group_index.into(), r_id, sig, ps);
+        let rd = RequestDetail {
+            sub_id: task.subscription_id,
+            group_index: group_index.into(),
+            request_type: task.request_type.to_u8(),
+            params: task.params.into(),
+            callback_contract: task.requester,
+            seed: task.seed,
+            request_confirmations: task.request_confirmations,
+            callback_gas_limit: task.callback_gas_limit,
+            callback_max_gas_price: task.callback_max_gas_price,
+            block_num: task.assignment_block_height.into(),
+        };
 
-        AdapterClient::call_contract_transaction("fulfill_randomness", call).await
+        let call = adapter_contract.fulfill_randomness(group_index.into(), r_id, sig, rd, ps);
+
+        AdapterClient::call_contract_transaction(
+            "fulfill_randomness",
+            call.gas(task.callback_gas_limit + FULFILL_RANDOMNESS_GAS_EXCEPT_CALLBACK)
+                .gas_price(task.callback_max_gas_price),
+            self.contract_transaction_retry_descriptor,
+            false,
+        )
+        .await
     }
 }
 
@@ -103,6 +137,7 @@ impl AdapterViews for AdapterClient {
         AdapterClient::call_contract_view(
             "get_last_randomness",
             adapter_contract.get_last_randomness(),
+            self.contract_view_retry_descriptor,
         )
         .await
     }
@@ -115,10 +150,11 @@ impl AdapterViews for AdapterClient {
 
         AdapterClient::call_contract_view(
             "get_pending_request",
-            adapter_contract.get_pending_request(r_id),
+            adapter_contract.get_pending_request_commitment(r_id),
+            self.contract_view_retry_descriptor,
         )
         .await
-        .map(|r| r.sub_id != 0)
+        .map(|r| !r.is_empty())
     }
 }
 
@@ -143,14 +179,17 @@ impl AdapterLogs for AdapterClient {
         while let Some(Ok(evt)) = stream.next().await {
             let (
                 RandomnessRequestFilter {
-                    group_index,
                     request_id,
-                    sender,
                     sub_id,
+                    group_index,
+                    request_type,
+                    params,
+                    sender,
                     seed,
                     request_confirmations,
                     callback_gas_limit,
                     callback_max_gas_price,
+                    estimated_payment: _,
                 },
                 meta,
             ) = evt;
@@ -160,9 +199,15 @@ impl AdapterLogs for AdapterClient {
 
             let task = RandomnessTask {
                 request_id: request_id.to_vec(),
-                seed,
+                subscription_id: sub_id,
                 group_index: group_index.as_usize(),
-                request_confirmations: request_confirmations as usize,
+                request_type: RandomnessRequestType::from(request_type),
+                params: params.to_vec(),
+                requester: sender,
+                seed,
+                request_confirmations,
+                callback_gas_limit,
+                callback_max_gas_price,
                 assignment_block_height: meta.block_number.as_usize(),
             };
             cb(task).await?;

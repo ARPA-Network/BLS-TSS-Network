@@ -2,7 +2,7 @@ use super::{CommitterClient, CommitterService, ServiceClient};
 use crate::node::error::{NodeError, NodeResult};
 use crate::rpc_stub::committer::committer_service_client::CommitterServiceClient;
 use crate::rpc_stub::committer::CommitPartialSignatureRequest;
-use arpa_node_core::{address_to_string, jitter, BLSTaskType, CONFIG};
+use arpa_node_core::{address_to_string, jitter, BLSTaskType, ExponentialBackoffRetryDescriptor};
 use async_trait::async_trait;
 use ethers::types::Address;
 use log::error;
@@ -12,14 +12,23 @@ use tonic::Request;
 #[derive(Clone, Debug)]
 pub(crate) struct GeneralCommitterClient {
     id_address: Address,
+    committer_id_address: Address,
     committer_endpoint: String,
+    commit_partial_signature_retry_descriptor: ExponentialBackoffRetryDescriptor,
 }
 
 impl GeneralCommitterClient {
-    pub fn new(id_address: Address, committer_endpoint: String) -> Self {
+    pub fn new(
+        id_address: Address,
+        committer_id_address: Address,
+        committer_endpoint: String,
+        commit_partial_signature_retry_descriptor: ExponentialBackoffRetryDescriptor,
+    ) -> Self {
         GeneralCommitterClient {
             id_address,
+            committer_id_address,
             committer_endpoint,
+            commit_partial_signature_retry_descriptor,
         }
     }
 }
@@ -29,12 +38,26 @@ impl CommitterClient for GeneralCommitterClient {
         self.id_address
     }
 
+    fn get_committer_id_address(&self) -> Address {
+        self.committer_id_address
+    }
+
     fn get_committer_endpoint(&self) -> &str {
         &self.committer_endpoint
     }
 
-    fn build(id_address: Address, committer_endpoint: String) -> Self {
-        Self::new(id_address, committer_endpoint)
+    fn build(
+        id_address: Address,
+        committer_id_address: Address,
+        committer_endpoint: String,
+        commit_partial_signature_retry_descriptor: ExponentialBackoffRetryDescriptor,
+    ) -> Self {
+        Self::new(
+            id_address,
+            committer_id_address,
+            committer_endpoint,
+            commit_partial_signature_retry_descriptor,
+        )
     }
 }
 
@@ -59,12 +82,8 @@ impl CommitterService for GeneralCommitterClient {
         message: Vec<u8>,
         partial_signature: Vec<u8>,
     ) -> NodeResult<bool> {
-        let commit_partial_signature_retry_descriptor = CONFIG
-            .get()
-            .unwrap()
-            .time_limits
-            .unwrap()
-            .commit_partial_signature_retry_descriptor;
+        let commit_partial_signature_retry_descriptor =
+            self.commit_partial_signature_retry_descriptor;
         let retry_strategy =
             ExponentialBackoff::from_millis(commit_partial_signature_retry_descriptor.base)
                 .factor(commit_partial_signature_retry_descriptor.factor)
@@ -105,7 +124,7 @@ impl CommitterService for GeneralCommitterClient {
             |e: &NodeError| {
                 error!(
                     "send partial signature to committer {0} failed. Retry... Error: {1:?}",
-                    address_to_string(self.get_id_address()),
+                    address_to_string(self.get_committer_id_address()),
                     e
                 );
                 true

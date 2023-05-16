@@ -61,7 +61,7 @@ pub mod tests {
 
     #[tokio::test]
     async fn test() {
-        Config::default().initialize();
+        let config = Config::default().initialize();
 
         let eq = Arc::new(RwLock::new(EventQueue::new()));
 
@@ -79,6 +79,14 @@ pub mod tests {
             .parse()
             .unwrap();
 
+        let contract_transaction_retry_descriptor = config
+            .time_limits
+            .unwrap()
+            .contract_transaction_retry_descriptor;
+
+        let contract_view_retry_descriptor =
+            config.time_limits.unwrap().contract_view_retry_descriptor;
+
         let chain_identity = GeneralChainIdentity::new(
             0,
             fake_wallet,
@@ -86,6 +94,8 @@ pub mod tests {
             3000,
             Address::random(),
             Address::random(),
+            contract_transaction_retry_descriptor,
+            contract_view_retry_descriptor,
         );
 
         let chain_identity = Arc::new(RwLock::new(chain_identity));

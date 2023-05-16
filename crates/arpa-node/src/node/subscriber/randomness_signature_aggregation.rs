@@ -7,7 +7,7 @@ use crate::node::{
     scheduler::{dynamic::SimpleDynamicTaskScheduler, TaskScheduler},
 };
 use arpa_node_contract_client::adapter::{AdapterClientBuilder, AdapterTransactions, AdapterViews};
-use arpa_node_core::{ChainIdentity, PartialSignature, SubscriberType, TaskType};
+use arpa_node_core::{ChainIdentity, PartialSignature, RandomnessTask, SubscriberType, TaskType};
 use arpa_node_dal::cache::RandomnessResultCache;
 use async_trait::async_trait;
 use ethers::types::Address;
@@ -55,7 +55,7 @@ pub trait FulfillRandomnessHandler {
     async fn handle(
         &self,
         group_index: usize,
-        randomness_task_request_id: Vec<u8>,
+        randomness_task: RandomnessTask,
         signature: Vec<u8>,
         partial_signatures: HashMap<Address, PartialSignature>,
     ) -> NodeResult<()>;
@@ -73,7 +73,7 @@ impl<I: ChainIdentity + AdapterClientBuilder + Sync + Send> FulfillRandomnessHan
     async fn handle(
         &self,
         group_index: usize,
-        randomness_task_request_id: Vec<u8>,
+        randomness_task: RandomnessTask,
         signature: Vec<u8>,
         partial_signatures: HashMap<Address, PartialSignature>,
     ) -> NodeResult<()> {
@@ -83,11 +83,13 @@ impl<I: ChainIdentity + AdapterClientBuilder + Sync + Send> FulfillRandomnessHan
             .await
             .build_adapter_client(self.id_address);
 
+        let randomness_task_request_id = randomness_task.request_id.clone();
+
         if client.is_task_pending(&randomness_task_request_id).await? {
             match client
                 .fulfill_randomness(
                     group_index,
-                    randomness_task_request_id.clone(),
+                    randomness_task,
                     signature.clone(),
                     partial_signatures,
                 )
@@ -127,7 +129,7 @@ impl<
         for signature in ready_signatures {
             let RandomnessResultCache {
                 group_index,
-                randomness_task_request_id,
+                randomness_task,
                 message: _,
                 threshold,
                 partial_signatures,
@@ -167,7 +169,7 @@ impl<
                     if let Err(e) = handler
                         .handle(
                             group_index,
-                            randomness_task_request_id,
+                            randomness_task,
                             signature.clone(),
                             partial_signatures,
                         )
