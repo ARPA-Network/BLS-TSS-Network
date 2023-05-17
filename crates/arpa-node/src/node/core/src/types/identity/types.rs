@@ -21,6 +21,7 @@ pub struct GeneralChainIdentity {
 }
 
 impl GeneralChainIdentity {
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         chain_id: usize,
         wallet: LocalWallet,
