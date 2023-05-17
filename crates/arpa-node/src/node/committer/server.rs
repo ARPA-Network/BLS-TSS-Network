@@ -12,7 +12,7 @@ use arpa_node_contract_client::{
     adapter::AdapterClientBuilder, controller::ControllerClientBuilder,
     coordinator::CoordinatorClientBuilder, provider::ChainProviderBuilder,
 };
-use arpa_node_core::{BLSTaskError, ChainIdentity, RandomnessTask, TaskType};
+use arpa_node_core::{BLSTaskError, BLSTaskType, ChainIdentity, RandomnessTask};
 use arpa_node_dal::{
     BLSTasksFetcher, BLSTasksUpdater, ContextInfoUpdater, GroupInfoFetcher, GroupInfoUpdater,
     NodeInfoFetcher, NodeInfoUpdater, SignatureResultCacheFetcher, SignatureResultCacheUpdater,
@@ -136,23 +136,14 @@ impl<
             )
             .map_err(|e| Status::internal(e.to_string()))?;
 
-            let chain_id = req.chain_id as usize;
-
-            match TaskType::from(req.task_type) {
-                TaskType::Randomness => {
-                    let randomness_result_cache = match chain_id {
-                        0 => self
-                            .context
-                            .read()
-                            .await
-                            .get_main_chain()
-                            .get_randomness_result_cache(),
-                        _ => {
-                            return Err(Status::invalid_argument(
-                                NodeError::InvalidChainId(chain_id).to_string(),
-                            ));
-                        }
-                    };
+            match BLSTaskType::from(req.task_type) {
+                BLSTaskType::Randomness => {
+                    let randomness_result_cache = self
+                        .context
+                        .read()
+                        .await
+                        .get_main_chain()
+                        .get_randomness_result_cache();
 
                     if !randomness_result_cache
                         .read()

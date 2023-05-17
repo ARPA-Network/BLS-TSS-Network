@@ -1,12 +1,12 @@
 use arpa_node::node::context::chain::types::GeneralMainChain;
-use arpa_node::node::context::types::{build_wallet_from_config, Config, GeneralContext};
+use arpa_node::node::context::types::GeneralContext;
 use arpa_node::node::context::{Context, TaskWaiter};
 use arpa_node_contract_client::controller::{ControllerClientBuilder, ControllerTransactions};
-use arpa_node_core::format_now_date;
 use arpa_node_core::log::encoder::JsonEncoder;
 use arpa_node_core::GeneralChainIdentity;
-use arpa_node_core::RandomnessTask;
-use arpa_node_dal::NodeInfoFetcher;
+use arpa_node_core::{build_wallet_from_config, RandomnessTask};
+use arpa_node_core::{format_now_date, Config};
+use arpa_node_dal::{NodeInfoFetcher, NodeInfoUpdater};
 use arpa_node_sqlite_db::BLSTasksDBClient;
 use arpa_node_sqlite_db::GroupInfoDBClient;
 use arpa_node_sqlite_db::NodeInfoDBClient;
@@ -43,6 +43,20 @@ pub struct Opt {
         default_value = "conf/config.yml"
     )]
     config_path: PathBuf,
+}
+
+fn load_config(config_path: PathBuf) -> Config {
+    let config_str = &read_to_string(config_path).unwrap_or_else(|e| {
+        panic!(
+            "Error loading configuration file: {:?}, please check the configuration!",
+            e
+        )
+    });
+
+    let config: Config =
+        serde_yaml::from_str(config_str).expect("Error loading configuration file");
+
+    config.initialize()
 }
 
 fn init_log(node_id: &str, context_logging: bool) {
@@ -91,28 +105,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let opt = Opt::from_args();
     println!("{:#?}", opt);
 
-    let config_path_str = opt
-        .config_path
-        .clone()
-        .into_os_string()
-        .into_string()
-        .unwrap();
+    let config = load_config(opt.config_path);
 
-    let config_str = &read_to_string(opt.config_path).unwrap_or_else(|_| {
-        panic!(
-            "Error loading configuration file {}, please check the configuration!",
-            config_path_str
-        )
-    });
-
-    let mut config: Config =
-        serde_yaml::from_str(config_str).expect("Error loading configuration file");
-    if config.data_path.is_none() {
-        config.data_path = Some(String::from("data.sqlite"));
-    }
-
-    let node_id = &config.node_id.clone().unwrap_or("running".to_string());
-    init_log(node_id, config.context_logging);
+    init_log(config.node_id.as_ref().unwrap(), config.context_logging);
 
     info!("{:?}", config);
 
@@ -153,7 +148,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             node_cache
                 .save_node_info(
                     id_address,
-                    config.node_committer_rpc_endpoint.clone(),
+                    config
+                        .node_advertised_committer_rpc_endpoint
+                        .clone()
+                        .unwrap(),
                     dkg_private_key,
                     dkg_public_key,
                 )
@@ -164,10 +162,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             let randomness_tasks_cache = db.get_bls_tasks_client::<RandomnessTask>();
 
             let main_chain_identity = GeneralChainIdentity::new(
-                0,
                 config.chain_id,
                 wallet,
                 config.provider_endpoint.clone(),
+                config.time_limits.unwrap().provider_polling_interval_millis,
                 config
                     .controller_address
                     .parse()
@@ -176,6 +174,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     .adapter_address
                     .parse()
                     .expect("bad format of adapter_address"),
+                config
+                    .time_limits
+                    .unwrap()
+                    .contract_transaction_retry_descriptor,
+                config.time_limits.unwrap().contract_view_retry_descriptor,
             );
 
             let main_chain = GeneralMainChain::<
@@ -185,15 +188,16 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 GeneralChainIdentity,
                 BN254,
             >::new(
-                0,
                 "main chain".to_string(),
                 main_chain_identity.clone(),
                 node_cache,
                 group_cache,
                 randomness_tasks_cache,
+                config.time_limits.unwrap(),
+                config.listeners.clone(),
             );
 
-            let context = GeneralContext::new(config, main_chain);
+            let context = GeneralContext::new(main_chain, config);
 
             let handle = context.deploy().await?;
 
@@ -229,6 +233,16 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             node_cache.get_node_rpc_endpoint()?;
             node_cache.get_dkg_public_key()?;
 
+            // update committer rpc endpoint according to config
+            node_cache
+                .set_node_rpc_endpoint(
+                    config
+                        .node_advertised_committer_rpc_endpoint
+                        .clone()
+                        .unwrap(),
+                )
+                .await?;
+
             let mut group_cache = db.get_group_info_client();
 
             group_cache.refresh_current_group_info().await.expect(
@@ -238,10 +252,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             let randomness_tasks_cache = db.get_bls_tasks_client::<RandomnessTask>();
 
             let main_chain_identity = GeneralChainIdentity::new(
-                0,
                 config.chain_id,
                 wallet,
                 config.provider_endpoint.clone(),
+                config.time_limits.unwrap().provider_polling_interval_millis,
                 config
                     .controller_address
                     .parse()
@@ -250,6 +264,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     .adapter_address
                     .parse()
                     .expect("bad format of adapter_address"),
+                config
+                    .time_limits
+                    .unwrap()
+                    .contract_transaction_retry_descriptor,
+                config.time_limits.unwrap().contract_view_retry_descriptor,
             );
 
             let main_chain = GeneralMainChain::<
@@ -259,15 +278,16 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 GeneralChainIdentity,
                 BN254,
             >::new(
-                0,
                 "main chain".to_string(),
                 main_chain_identity,
                 node_cache,
                 group_cache,
                 randomness_tasks_cache,
+                config.time_limits.unwrap(),
+                config.listeners.clone(),
             );
 
-            let context = GeneralContext::new(config, main_chain);
+            let context = GeneralContext::new(main_chain, config);
 
             let handle = context.deploy().await?;
 

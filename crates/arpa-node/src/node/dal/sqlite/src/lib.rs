@@ -8,7 +8,7 @@ use crate::core::RandomnessTaskQuery;
 use arpa_node_core::u256_to_vec;
 use arpa_node_core::Group;
 use arpa_node_core::Member;
-use arpa_node_core::RANDOMNESS_TASK_EXCLUSIVE_WINDOW;
+use arpa_node_core::RandomnessRequestType;
 use arpa_node_core::{address_to_string, format_now_date, RandomnessTask, Task};
 use arpa_node_dal::cache::InMemoryGroupInfoCache;
 use arpa_node_dal::cache::InMemoryNodeInfoCache;
@@ -95,7 +95,7 @@ impl<C: PairingCurve> SqliteDB<C> {
 
         db.integrity_check().await?;
 
-        Migrator::up(&db.connection, None).await?;
+        Migrator::up(&*db.connection, None).await?;
 
         Ok(db)
     }
@@ -770,9 +770,15 @@ impl<C: PairingCurve + Sync + Send> BLSTasksFetcher<RandomnessTask>
 
         task.map(|model| RandomnessTask {
             request_id: model.request_id,
-            seed: U256::from_big_endian(&model.message),
+            subscription_id: model.subscription_id as u64,
             group_index: model.group_index as usize,
-            request_confirmations: model.request_confirmations as usize,
+            request_type: RandomnessRequestType::from(model.request_type as u8),
+            params: model.params,
+            requester: model.requester.parse::<Address>().unwrap(),
+            seed: U256::from_big_endian(&model.seed),
+            request_confirmations: model.request_confirmations as u16,
+            callback_gas_limit: U256::from_big_endian(&model.callback_gas_limit),
+            callback_max_gas_price: U256::from_big_endian(&model.callback_max_gas_price),
             assignment_block_height: model.assignment_block_height as usize,
         })
         .ok_or_else(|| {
@@ -803,10 +809,16 @@ impl<C: PairingCurve + Sync + Send> BLSTasksUpdater<RandomnessTask>
         RandomnessTaskMutation::add_task(
             self.get_connection(),
             task.request_id,
+            task.subscription_id as i32,
             task.group_index as i32,
-            task.request_confirmations as i32,
-            task.assignment_block_height as i32,
+            task.request_type as i32,
+            task.params,
+            address_to_string(task.requester),
             seed_bytes,
+            task.request_confirmations as i32,
+            u256_to_vec(&task.callback_gas_limit),
+            u256_to_vec(&task.callback_max_gas_price),
+            task.assignment_block_height as i32,
         )
         .await
         .map_err(|e| {
@@ -821,10 +833,11 @@ impl<C: PairingCurve + Sync + Send> BLSTasksUpdater<RandomnessTask>
         &mut self,
         current_block_height: usize,
         current_group_index: usize,
+        randomness_task_exclusive_window: usize,
     ) -> DataAccessResult<Vec<RandomnessTask>> {
         let before_assignment_block_height =
-            if current_block_height > RANDOMNESS_TASK_EXCLUSIVE_WINDOW {
-                current_block_height - RANDOMNESS_TASK_EXCLUSIVE_WINDOW
+            if current_block_height > randomness_task_exclusive_window {
+                current_block_height - randomness_task_exclusive_window
             } else {
                 0
             };
@@ -839,9 +852,15 @@ impl<C: PairingCurve + Sync + Send> BLSTasksUpdater<RandomnessTask>
                 .into_iter()
                 .map(|model| RandomnessTask {
                     request_id: model.request_id,
-                    seed: U256::from_big_endian(&model.message),
+                    subscription_id: model.subscription_id as u64,
                     group_index: model.group_index as usize,
-                    request_confirmations: model.request_confirmations as usize,
+                    request_type: RandomnessRequestType::from(model.request_type as u8),
+                    params: model.params,
+                    requester: model.requester.parse::<Address>().unwrap(),
+                    seed: U256::from_big_endian(&model.seed),
+                    request_confirmations: model.request_confirmations as u16,
+                    callback_gas_limit: U256::from_big_endian(&model.callback_gas_limit),
+                    callback_max_gas_price: U256::from_big_endian(&model.callback_max_gas_price),
                     assignment_block_height: model.assignment_block_height as usize,
                 })
                 .collect::<Vec<_>>()
@@ -861,8 +880,10 @@ pub mod sqlite_tests {
     use crate::SqliteDB;
     use arpa_node_core::DKGStatus;
     use arpa_node_core::DKGTask;
+    use arpa_node_core::RandomnessRequestType;
     use arpa_node_core::RandomnessTask;
-    use arpa_node_core::RANDOMNESS_TASK_EXCLUSIVE_WINDOW;
+    use arpa_node_core::DEFAULT_RANDOMNESS_TASK_EXCLUSIVE_WINDOW;
+    use arpa_node_core::PLACEHOLDER_ADDRESS;
     use arpa_node_dal::error::GroupError;
     use arpa_node_dal::BLSTasksFetcher;
     use arpa_node_dal::BLSTasksUpdater;
@@ -1207,6 +1228,8 @@ pub mod sqlite_tests {
     async fn test_add_and_get_randomness_task_with_assigned_group() {
         setup();
 
+        let randomness_task_exclusive_window = 10;
+
         let db = build_sqlite_db::<PairingCurve>().await.unwrap();
 
         let mut db = db.get_bls_tasks_client::<RandomnessTask>();
@@ -1217,9 +1240,15 @@ pub mod sqlite_tests {
 
         let task = RandomnessTask {
             request_id: request_id.clone(),
-            seed,
+            subscription_id: 0,
             group_index: 2,
+            request_type: RandomnessRequestType::Randomness,
+            params: vec![],
+            requester: PLACEHOLDER_ADDRESS,
+            seed,
             request_confirmations: 0,
+            callback_gas_limit: 0.into(),
+            callback_max_gas_price: 0.into(),
             assignment_block_height: 100,
         };
 
@@ -1231,10 +1260,16 @@ pub mod sqlite_tests {
         assert_eq!(task, db.get(&request_id).await.unwrap());
         assert_eq!(false, db.is_handled(&request_id).await.unwrap());
 
-        let available_tasks = db.check_and_get_available_tasks(100, 1).await.unwrap();
+        let available_tasks = db
+            .check_and_get_available_tasks(100, 1, randomness_task_exclusive_window)
+            .await
+            .unwrap();
         assert_eq!(0, available_tasks.len());
 
-        let available_tasks = db.check_and_get_available_tasks(100, 2).await.unwrap();
+        let available_tasks = db
+            .check_and_get_available_tasks(100, 2, randomness_task_exclusive_window)
+            .await
+            .unwrap();
         assert_eq!(1, available_tasks.len());
         assert_eq!(request_id, available_tasks[0].request_id);
         assert_eq!(seed, available_tasks[0].seed);
@@ -1245,7 +1280,10 @@ pub mod sqlite_tests {
         assert_eq!(task, db.get(&request_id).await.unwrap());
         assert_eq!(true, db.is_handled(&request_id).await.unwrap());
 
-        let available_tasks = db.check_and_get_available_tasks(100, 2).await.unwrap();
+        let available_tasks = db
+            .check_and_get_available_tasks(100, 2, randomness_task_exclusive_window)
+            .await
+            .unwrap();
         assert_eq!(0, available_tasks.len());
 
         teardown();
@@ -1255,6 +1293,8 @@ pub mod sqlite_tests {
     async fn test_add_and_get_randomness_task_over_exclusive_window() {
         setup();
 
+        let randomness_task_exclusive_window = 10;
+
         let db = build_sqlite_db::<PairingCurve>().await.unwrap();
 
         let mut db = db.get_bls_tasks_client::<RandomnessTask>();
@@ -1265,9 +1305,15 @@ pub mod sqlite_tests {
 
         let task = RandomnessTask {
             request_id: request_id.clone(),
-            seed,
+            subscription_id: 0,
             group_index: 2,
+            request_type: RandomnessRequestType::Randomness,
+            params: vec![],
+            requester: PLACEHOLDER_ADDRESS,
+            seed,
             request_confirmations: 0,
+            callback_gas_limit: 0.into(),
+            callback_max_gas_price: 0.into(),
             assignment_block_height: 100,
         };
 
@@ -1280,13 +1326,21 @@ pub mod sqlite_tests {
         assert_eq!(false, db.is_handled(&request_id).await.unwrap());
 
         let available_tasks = db
-            .check_and_get_available_tasks(100 + RANDOMNESS_TASK_EXCLUSIVE_WINDOW, 1)
+            .check_and_get_available_tasks(
+                100 + DEFAULT_RANDOMNESS_TASK_EXCLUSIVE_WINDOW,
+                1,
+                randomness_task_exclusive_window,
+            )
             .await
             .unwrap();
         assert_eq!(0, available_tasks.len());
 
         let available_tasks = db
-            .check_and_get_available_tasks(100 + RANDOMNESS_TASK_EXCLUSIVE_WINDOW + 1, 1)
+            .check_and_get_available_tasks(
+                100 + DEFAULT_RANDOMNESS_TASK_EXCLUSIVE_WINDOW + 1,
+                1,
+                randomness_task_exclusive_window,
+            )
             .await
             .unwrap();
         assert_eq!(1, available_tasks.len());
@@ -1300,7 +1354,11 @@ pub mod sqlite_tests {
         assert_eq!(true, db.is_handled(&request_id).await.unwrap());
 
         let available_tasks = db
-            .check_and_get_available_tasks(100 + RANDOMNESS_TASK_EXCLUSIVE_WINDOW + 1, 1)
+            .check_and_get_available_tasks(
+                100 + DEFAULT_RANDOMNESS_TASK_EXCLUSIVE_WINDOW + 1,
+                1,
+                randomness_task_exclusive_window,
+            )
             .await
             .unwrap();
         assert_eq!(0, available_tasks.len());

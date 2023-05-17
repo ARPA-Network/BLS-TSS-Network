@@ -35,6 +35,7 @@ pub struct InGroupingSubscriber<
     eq: Arc<RwLock<EventQueue>>,
     ts: Arc<RwLock<SimpleDynamicTaskScheduler>>,
     c: PhantomData<C>,
+    dkg_wait_for_phase_interval_millis: u64,
 }
 
 impl<
@@ -50,6 +51,7 @@ impl<
         group_cache: Arc<RwLock<G>>,
         eq: Arc<RwLock<EventQueue>>,
         ts: Arc<RwLock<SimpleDynamicTaskScheduler>>,
+        dkg_wait_for_phase_interval_millis: u64,
     ) -> Self {
         InGroupingSubscriber {
             main_chain_identity,
@@ -58,6 +60,7 @@ impl<
             eq,
             ts,
             c: PhantomData,
+            dkg_wait_for_phase_interval_millis,
         }
     }
 }
@@ -75,6 +78,7 @@ pub struct AllInOneDKGHandler<
     node_cache: Arc<RwLock<N>>,
     group_cache: Arc<RwLock<G>>,
     c: PhantomData<C>,
+    dkg_wait_for_phase_interval_millis: u64,
 }
 
 impl<
@@ -91,6 +95,7 @@ impl<
         main_chain_identity: Arc<RwLock<I>>,
         node_cache: Arc<RwLock<N>>,
         group_cache: Arc<RwLock<G>>,
+        dkg_wait_for_phase_interval_millis: u64,
     ) -> Self {
         AllInOneDKGHandler {
             rng,
@@ -98,6 +103,7 @@ impl<
             node_cache,
             group_cache,
             c: PhantomData,
+            dkg_wait_for_phase_interval_millis,
         }
     }
 }
@@ -152,7 +158,8 @@ impl<
             .await
             .build_coordinator_client(task.coordinator_address);
 
-        let mut dkg_core = AllPhasesDKGCore::new(coordinator_client);
+        let mut dkg_core =
+            AllPhasesDKGCore::new(coordinator_client, self.dkg_wait_for_phase_interval_millis);
 
         let output = dkg_core
             .run_dkg(dkg_private_key, node_rpc_endpoint, self.rng)
@@ -228,6 +235,7 @@ impl<
             chain_identity,
             self.node_cache.clone(),
             self.group_cache.clone(),
+            self.dkg_wait_for_phase_interval_millis,
         );
 
         self.ts.write().await.add_task_with_shutdown_signal(

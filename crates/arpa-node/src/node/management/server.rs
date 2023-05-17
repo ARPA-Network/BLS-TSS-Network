@@ -2,7 +2,6 @@ use crate::node::context::types::GeneralContext;
 use crate::node::context::ContextFetcher;
 use crate::node::error::NodeError;
 use crate::node::management::ComponentService;
-use crate::node::scheduler::ListenerType;
 use crate::rpc_stub::management::management_service_server::{
     ManagementService, ManagementServiceServer,
 };
@@ -22,8 +21,8 @@ use arpa_node_contract_client::{
     coordinator::CoordinatorClientBuilder, provider::ChainProviderBuilder,
 };
 use arpa_node_core::{
-    address_to_string, ChainIdentity, Group as ModelGroup, Member as ModelMember, RandomnessTask,
-    SchedulerError,
+    address_to_string, ChainIdentity, Group as ModelGroup, ListenerType, Member as ModelMember,
+    RandomnessTask, SchedulerError,
 };
 use arpa_node_dal::error::DataAccessError;
 use arpa_node_dal::{

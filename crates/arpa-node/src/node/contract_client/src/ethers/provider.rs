@@ -6,26 +6,17 @@ use arpa_node_core::{ChainIdentity, GeneralChainIdentity};
 use async_trait::async_trait;
 use ethers::prelude::*;
 use ethers::providers::Http as HttpProvider;
-use lazy_static::lazy_static;
-use std::{convert::TryFrom, future::Future, sync::Arc, time::Duration};
-use tokio::sync::Mutex;
-
-lazy_static! {
-    // currently it only supports one chain
-    pub static ref NONCE: Arc<Mutex<i64>> = Arc::new(Mutex::new(-1));
-}
+use std::{future::Future, sync::Arc};
 
 pub struct ChainProvider {
-    provider: Provider<HttpProvider>,
+    provider: Arc<Provider<HttpProvider>>,
 }
 
 impl ChainProvider {
     pub fn new(identity: &GeneralChainIdentity) -> Self {
-        let provider = Provider::<Http>::try_from(identity.get_provider_rpc_endpoint())
-            .unwrap()
-            .interval(Duration::from_millis(3000));
-
-        ChainProvider { provider }
+        ChainProvider {
+            provider: identity.get_provider(),
+        }
     }
 }
 

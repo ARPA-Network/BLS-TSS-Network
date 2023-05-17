@@ -9,7 +9,7 @@ use super::{
         ContextFetcher,
     },
     error::{NodeError, NodeResult},
-    scheduler::{FixedTaskScheduler, ListenerType, TaskType},
+    scheduler::FixedTaskScheduler,
 };
 use anyhow::Result;
 use arpa_node_contract_client::{
@@ -19,8 +19,11 @@ use arpa_node_contract_client::{
     provider::ChainProviderBuilder,
 };
 use arpa_node_core::{
-    ChainIdentity, DKGStatus, Group, PartialSignature, RandomnessTask, SchedulerResult,
-    TaskType as BLSTaskType,
+    BLSTaskType, ChainIdentity, DKGStatus, ExponentialBackoffRetryDescriptor, Group,
+    ListenerDescriptor, ListenerType, PartialSignature, RandomnessTask, SchedulerResult, TaskType,
+    DEFAULT_COMMIT_PARTIAL_SIGNATURE_RETRY_BASE, DEFAULT_COMMIT_PARTIAL_SIGNATURE_RETRY_FACTOR,
+    DEFAULT_COMMIT_PARTIAL_SIGNATURE_RETRY_MAX_ATTEMPTS,
+    DEFAULT_COMMIT_PARTIAL_SIGNATURE_RETRY_USE_JITTER, DEFAULT_LISTENER_INTERVAL_MILLIS,
 };
 use arpa_node_dal::{
     error::DataAccessResult, BLSTasksFetcher, BLSTasksUpdater, ContextInfoUpdater,
@@ -238,7 +241,7 @@ impl<
             .init_listener(
                 self.get_event_queue(),
                 self.get_fixed_task_handler(),
-                TaskType::Listener(task_type),
+                ListenerDescriptor::build(task_type, DEFAULT_LISTENER_INTERVAL_MILLIS),
             )
             .await
     }
@@ -582,6 +585,14 @@ impl<
             .await
             .get_id_address()?;
 
+        let committer_id_address = self
+            .get_main_chain()
+            .get_group_cache()
+            .read()
+            .await
+            .get_member(member_id_address)?
+            .id_address;
+
         let endpoint = self
             .get_main_chain()
             .get_group_cache()
@@ -593,7 +604,19 @@ impl<
             .unwrap()
             .to_string();
 
-        let committer_client = GeneralCommitterClient::build(id_address, endpoint);
+        let commit_partial_signature_retry_descriptor = ExponentialBackoffRetryDescriptor {
+            base: DEFAULT_COMMIT_PARTIAL_SIGNATURE_RETRY_BASE,
+            factor: DEFAULT_COMMIT_PARTIAL_SIGNATURE_RETRY_FACTOR,
+            max_attempts: DEFAULT_COMMIT_PARTIAL_SIGNATURE_RETRY_MAX_ATTEMPTS,
+            use_jitter: DEFAULT_COMMIT_PARTIAL_SIGNATURE_RETRY_USE_JITTER,
+        };
+
+        let committer_client = GeneralCommitterClient::build(
+            id_address,
+            committer_id_address,
+            endpoint,
+            commit_partial_signature_retry_descriptor,
+        );
 
         let chain_id = self
             .get_main_chain()
@@ -606,8 +629,8 @@ impl<
             .commit_partial_signature(
                 chain_id,
                 BLSTaskType::Randomness,
-                msg,
                 randomness_task_request_id,
+                msg,
                 partial,
             )
             .await?;
@@ -648,13 +671,16 @@ impl<
             })
             .collect::<Result<_, NodeError>>()?;
 
+        let randomness_task = self
+            .get_main_chain()
+            .get_randomness_tasks_cache()
+            .read()
+            .await
+            .get(&randomness_task_request_id)
+            .await?;
+
         client
-            .fulfill_randomness(
-                group_index,
-                randomness_task_request_id,
-                sig,
-                partial_signatures,
-            )
+            .fulfill_randomness(group_index, randomness_task, sig, partial_signatures)
             .await?;
 
         Ok(())

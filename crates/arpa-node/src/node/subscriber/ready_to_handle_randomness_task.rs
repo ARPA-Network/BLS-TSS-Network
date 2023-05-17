@@ -3,23 +3,25 @@ use crate::node::{
     committer::{
         client::GeneralCommitterClient, CommitterClient, CommitterClientHandler, CommitterService,
     },
-    error::{NodeError, NodeResult},
+    error::NodeResult,
     event::{ready_to_handle_randomness_task::ReadyToHandleRandomnessTask, types::Topic},
     queue::{event_queue::EventQueue, EventSubscriber},
-    scheduler::{dynamic::SimpleDynamicTaskScheduler, SubscriberType, TaskScheduler, TaskType},
+    scheduler::{dynamic::SimpleDynamicTaskScheduler, TaskScheduler},
 };
-use arpa_node_core::{address_to_string, u256_to_vec, RandomnessTask, TaskType as BLSTaskType};
+use arpa_node_core::{
+    u256_to_vec, BLSTaskType, ExponentialBackoffRetryDescriptor, RandomnessTask, SubscriberType,
+    TaskType,
+};
 use arpa_node_dal::{
     cache::RandomnessResultCache, BLSTasksFetcher, GroupInfoFetcher, SignatureResultCacheFetcher,
     SignatureResultCacheUpdater,
 };
 use async_trait::async_trait;
 use ethers::types::{Address, U256};
-use log::{debug, error};
+use log::{debug, error, info};
 use std::{marker::PhantomData, sync::Arc};
 use threshold_bls::group::PairingCurve;
 use tokio::sync::RwLock;
-use tokio_retry::{strategy::FixedInterval, RetryIf};
 
 use super::{DebuggableEvent, DebuggableSubscriber, Subscriber};
 
@@ -39,6 +41,7 @@ pub struct ReadyToHandleRandomnessTaskSubscriber<
     eq: Arc<RwLock<EventQueue>>,
     ts: Arc<RwLock<SimpleDynamicTaskScheduler>>,
     c: PhantomData<PC>,
+    commit_partial_signature_retry_descriptor: ExponentialBackoffRetryDescriptor,
 }
 
 impl<
@@ -49,6 +52,7 @@ impl<
         PC: PairingCurve,
     > ReadyToHandleRandomnessTaskSubscriber<G, T, C, PC>
 {
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         chain_id: usize,
         id_address: Address,
@@ -57,6 +61,7 @@ impl<
         randomness_signature_cache: Arc<RwLock<C>>,
         eq: Arc<RwLock<EventQueue>>,
         ts: Arc<RwLock<SimpleDynamicTaskScheduler>>,
+        commit_partial_signature_retry_descriptor: ExponentialBackoffRetryDescriptor,
     ) -> Self {
         ReadyToHandleRandomnessTaskSubscriber {
             chain_id,
@@ -67,6 +72,7 @@ impl<
             eq,
             ts,
             c: PhantomData,
+            commit_partial_signature_retry_descriptor,
         }
     }
 }
@@ -89,7 +95,9 @@ pub struct GeneralRandomnessHandler<
     group_cache: Arc<RwLock<G>>,
     randomness_tasks_cache: Arc<RwLock<T>>,
     randomness_signature_cache: Arc<RwLock<C>>,
+    ts: Arc<RwLock<SimpleDynamicTaskScheduler>>,
     c: PhantomData<PC>,
+    commit_partial_signature_retry_descriptor: ExponentialBackoffRetryDescriptor,
 }
 
 #[async_trait]
@@ -111,23 +119,26 @@ impl<
     fn get_group_cache(&self) -> Arc<RwLock<G>> {
         self.group_cache.clone()
     }
+
+    fn get_commit_partial_signature_retry_descriptor(&self) -> ExponentialBackoffRetryDescriptor {
+        self.commit_partial_signature_retry_descriptor
+    }
 }
 
 #[async_trait]
 impl<
-        G: GroupInfoFetcher<PC> + Sync + Send,
-        T: BLSTasksFetcher<RandomnessTask> + Sync + Send,
+        G: GroupInfoFetcher<PC> + Sync + Send + 'static,
+        T: BLSTasksFetcher<RandomnessTask> + Sync + Send + 'static,
         C: SignatureResultCacheUpdater<RandomnessResultCache>
             + SignatureResultCacheFetcher<RandomnessResultCache>
             + Sync
-            + Send,
+            + Send
+            + 'static,
         PC: PairingCurve + Sync + Send + 'static,
     > RandomnessHandler for GeneralRandomnessHandler<G, T, C, PC>
 {
     async fn handle(self) -> NodeResult<()> {
-        let committers = self.prepare_committer_clients().await?;
-
-        for task in self.tasks {
+        for task in self.tasks.iter() {
             let actual_seed = [
                 &u256_to_vec(&task.seed)[..],
                 &u256_to_vec(&U256::from(task.assignment_block_height))[..],
@@ -180,35 +191,50 @@ impl<
                     )?;
             }
 
-            for committer in committers.iter() {
-                let retry_strategy = FixedInterval::from_millis(2000).take(3);
+            let committers = self.prepare_committer_clients().await?;
 
+            for committer in committers.into_iter() {
                 let chain_id = self.chain_id;
+                let request_id = task.request_id.clone();
+                let actual_seed = actual_seed.clone();
+                let partial_signature = partial_signature.clone();
 
-                if let Err(err) = RetryIf::spawn(
-                    retry_strategy,
-                    || {
-                        committer.clone().commit_partial_signature(
-                            chain_id,
-                            BLSTaskType::Randomness,
-                            actual_seed.to_vec(),
-                            task.request_id.clone(),
-                            partial_signature.clone(),
-                        )
+                self.ts.write().await.add_task(
+                    TaskType::Subscriber(SubscriberType::SendingPartialSignature),
+                    async move {
+                        let committer_id = committer.get_committer_id_address();
+
+                        match committer
+                            .commit_partial_signature(
+                                chain_id,
+                                BLSTaskType::Randomness,
+                                request_id,
+                                actual_seed,
+                                partial_signature,
+                            )
+                            .await
+                        {
+                            Ok(true) => {
+                                info!(
+                                    "Partial signature sent and accepted by committer: {:?}",
+                                    committer_id
+                                );
+                            }
+                            Ok(false) => {
+                                info!(
+                                    "Partial signature is not accepted by committer: {:?}",
+                                    committer_id
+                                );
+                            }
+                            Err(e) => {
+                                error!(
+                                    "Error while sending partial signature to committer: {:?}, caused by: {:?}",
+                                    committer_id, e
+                                );
+                            }
+                        }
                     },
-                    |e: &NodeError| {
-                        error!(
-                            "send partial signature to committer {0} failed. Retry... Error: {1:?}",
-                            address_to_string(committer.get_id_address()),
-                            e
-                        );
-                        true
-                    },
-                )
-                .await
-                {
-                    error!("{:?}", err);
-                }
+                )?;
             }
         }
 
@@ -248,6 +274,11 @@ impl<
 
         let randomness_signature_cache_for_handler = self.randomness_signature_cache.clone();
 
+        let task_scheduler_for_handler = self.ts.clone();
+
+        let commit_partial_signature_retry_descriptor =
+            self.commit_partial_signature_retry_descriptor;
+
         self.ts.write().await.add_task(
             TaskType::Subscriber(SubscriberType::ReadyToHandleRandomnessTask),
             async move {
@@ -258,7 +289,9 @@ impl<
                     group_cache: group_cache_for_handler,
                     randomness_tasks_cache: randomness_tasks_cache_for_handler,
                     randomness_signature_cache: randomness_signature_cache_for_handler,
+                    ts: task_scheduler_for_handler,
                     c: PhantomData::<PC>,
+                    commit_partial_signature_retry_descriptor,
                 };
 
                 if let Err(e) = handler.handle().await {
