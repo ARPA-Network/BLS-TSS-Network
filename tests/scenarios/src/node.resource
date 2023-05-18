@@ -137,26 +137,31 @@ Get Address By Index
     [Arguments]    ${node_index}
     RETURN    ${NODE_ACCOUNT_LIST[${node_index} - 1].address}
 
+Get Private Key By Index
+    [Arguments]    ${node_index}
+    RETURN    ${NODE_ACCOUNT_LIST[${node_index} - 1].key}
+
 Add ARPA
     [Documentation]    Test Add ARPA
     [Arguments]    ${address}    ${amount}
-    ${from} =    Get Value From Env    ADMIN_ADDRESS
-    ${result} =    Run    cast send ${ARPA_CONTRACT_ADDRESS} "mint(address to, uint256 amount)" ${address} ${amount} --from=${from}
+    ${key} =    Get Value From Env    ADMIN_PRIVATE_KEY
+    ${result} =    Run    cast send ${ARPA_CONTRACT_ADDRESS} "mint(address to, uint256 amount)" ${address} ${amount} --private-key=${key} --gas-limit=100000
     RETURN    ${result}
 
 Approve ARPA
     [Documentation]    Test Approve
-    [Arguments]    ${address}    ${amount}
+    [Arguments]    ${node_index}    ${amount}
     ${stake_contract_address} =    Get Value From Env    STAKING_ADDRESS
-    ${result} =    Run    cast send ${ARPA_CONTRACT_ADDRESS} "approve(address spender, uint256 amount)" ${stake_contract_address} ${amount} --from=${address}
+    ${key} =    Get Private Key By Index    ${node_index}
+    ${result} =    Run    cast send ${ARPA_CONTRACT_ADDRESS} "approve(address spender, uint256 amount)" ${stake_contract_address} ${amount} --private-key=${key}
     RETURN    ${result}
 
 Stake ARPA
     [Documentation]    Test Stake
     [Arguments]    ${node_index}    ${amount}
-    ${address} =    Get Address By Index    ${node_index}
+    ${key} =    Get Private Key By Index    ${node_index}
     ${stake_contract_address} =    Get Value From Env    STAKING_ADDRESS
-    ${result} =    Run    cast send ${stake_contract_address} "stake(uint256 amount)" ${amount} --from=${address}
+    ${result} =    Run    cast send ${stake_contract_address} "stake(uint256 amount)" ${amount} --private-key=${key}
     RETURN    ${result}
 
 Stake And Run Node
@@ -165,7 +170,7 @@ Stake And Run Node
 
     ${amount} =    Get Value From Env    OPERATOR_STAKE_AMOUNT
     ${result} =    Add ARPA    ${address}    ${amount}
-    ${result} =    Approve ARPA    ${address}    ${amount}
+    ${result} =    Approve ARPA    ${node_index}    ${amount}
     ${result} =    Stake ARPA    ${node_index}    ${amount}
     
     ${proc} =    Start Node    ${node_index}

@@ -3,12 +3,16 @@ pragma solidity ^0.8.13;
 
 import "forge-std/Script.sol";
 import "../src/Controller.sol";
+import "../src/interfaces/IControllerOwner.sol";
 import "../src/Adapter.sol";
-import "../src/Proxy.sol";
+import "../src/interfaces/IAdapterOwner.sol";
+import "../src/ControllerProxy.sol";
 import "./MockArpaEthOracle.sol";
 import "./ArpaLocalTest.sol";
+import "../src/interfaces/IController.sol";
 import "openzeppelin-contracts/contracts/token/ERC20/IERC20.sol";
 import "openzeppelin-contracts/contracts/token/ERC20/ERC20.sol";
+import "openzeppelin-contracts/contracts/proxy/ERC1967/ERC1967Proxy.sol";
 import {Staking, ArpaTokenInterface} from "Staking-v0.1/Staking.sol";
 
 contract ControllerLocalTestProxyScript is Script {
@@ -56,8 +60,9 @@ contract ControllerLocalTestProxyScript is Script {
 
     function run() external {
         Controller controller;
-        Proxy proxy;
-        Adapter adapter;
+        ControllerProxy proxy;
+        ERC1967Proxy adapter;
+        Adapter adapter_impl;
         Staking staking;
         MockArpaEthOracle oracle;
         IERC20 arpa;
@@ -83,16 +88,23 @@ contract ControllerLocalTestProxyScript is Script {
         staking = new Staking(params);
 
         vm.broadcast(deployerPrivateKey);
-        controller = new Controller(address(arpa), last_output);
+        controller = new Controller();
         
         vm.broadcast(deployerPrivateKey);
-        proxy = new Proxy(address(controller));
+        proxy = new ControllerProxy(address(controller));
 
         vm.broadcast(deployerPrivateKey);
-        adapter = new Adapter(address(proxy), address(arpa), address(oracle));
+        IControllerOwner(address(proxy)).initialize(address(staking), last_output);
 
         vm.broadcast(deployerPrivateKey);
-        proxy.setControllerConfig(
+        adapter_impl = new Adapter();
+
+        vm.broadcast(deployerPrivateKey);
+        adapter =
+        new ERC1967Proxy(address(adapter_impl),abi.encodeWithSignature("initialize(address,address,address)",address(proxy), address(arpa), address(oracle)));
+
+        vm.broadcast(deployerPrivateKey);
+        IControllerOwner(address(proxy)).setControllerConfig(
             address(staking),
             address(adapter),
             operatorStakeAmount,
@@ -106,7 +118,7 @@ contract ControllerLocalTestProxyScript is Script {
         );
 
         vm.broadcast(deployerPrivateKey);
-        adapter.setAdapterConfig(
+        IAdapterOwner(address(adapter)).setAdapterConfig(
             minimumRequestConfirmations,
             maxGasLimit,
             stalenessSeconds,

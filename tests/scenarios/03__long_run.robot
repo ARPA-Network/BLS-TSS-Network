@@ -42,4 +42,4 @@ DKG Happy Path1
     Kill Node    ${node2}
     Kill Node    ${node3}
     Set Global Variable    ${NODE_PROCESS_LIST}    ${EMPTY_LIST}
-    #Teardown Scenario Testing Environment
+    Teardown Scenario Testing Environment

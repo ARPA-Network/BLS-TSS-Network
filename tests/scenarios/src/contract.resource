@@ -14,7 +14,6 @@ Resource            common.resource
 
 *** Variables ***
 # Proxy contract:
-${PROXY_CONTRACT_PATH}                   src/Proxy.sol:Proxy
 ${PROXY_CONTRACT_DEPLOYER_KEY}           0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80
 ${PROXY_CONTRACT_ADDRESS}
 ${PROXY_OUTPUT}                          contracts/out/
@@ -29,7 +28,7 @@ ${USER_CONTRACT}
 # Test value:
 ${TEST_NODE_ADDRESS}                     0x70997970c51812dc3a010c7d01b50e0d17dc79c8
 ${TEST_PRIVATE_KEY}                      0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80
-${MODIFIRD_PUB_KEY}                      0x01
+${MODIFIRD_PUB_KEY}                      0x137bde2a3eca9e26d5023c8a31c7db75db47b4d1776efc144bc9cfa36403125510292172c806e0d9dd29958c8b359ea9c693179c505558cc95ca8ce6a690eb800652ce1fadb1895c06e5f28e871d8e3797f749941108195d2106a782464a09ed23ece01e5c6512317cd413fbecc36032ab7ba45f62704e9808ec2b6a2dd03d8c
 ${MODIFIRD_PARTIAL_PUB_KEY}              0x02
 @{MODIFIRD_DISQUALIFIED_NODES}           0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC
 
@@ -54,7 +53,7 @@ Bound Contract ABI
     ${proxy_address} =    Get Value From Env    PROXY_ADDRESS
     ${proxy_address} =    To Checksum Address    ${proxy_address}
     Set Global Variable    $PROXY_CONTRACT_ADDRESS    ${proxy_address}
-    ${proxy_contract} =    Get Contract    ${PROXY_OUTPUT}Proxy.sol/Proxy.json    ${PROXY_CONTRACT_ADDRESS}
+    ${proxy_contract} =    Get Contract    ${PROXY_OUTPUT}ControllerProxy.sol/ControllerProxy.json    ${PROXY_CONTRACT_ADDRESS}
     Set Global Variable    $PROXY_CONTRACT   ${proxy_contract}
     ${controller_contract} =    Get Contract    ${PROXY_OUTPUT}Controller.sol/Controller.json    ${PROXY_CONTRACT_ADDRESS}
     Set Global Variable    $CONTROLLER_CONTRACT   ${controller_contract}
@@ -118,6 +117,8 @@ Set Modified Public Key
     ${node} =    To Checksum Address    ${node}
     ${result} =    Contract Function Transact    ${PROXY_CONTRACT}    setModifiedPublicKey
     ...    ${node}    ${pub_key}
+    Sleep    1s
+    ${result} =    Contract Function Call    ${PROXY_CONTRACT}    getModifiedDkgData    ${node}
     Log    Set node ${node} public key: ${pub_key}
 
 Set Modified Partial Public Key

@@ -7,16 +7,16 @@ import "./ArpaLocalTest.sol";
 
 contract StakeOperatorLocalTestScript is Script {
     uint256 deployerPrivateKey = vm.envUint("ADMIN_PRIVATE_KEY");
+    uint256 userPrivateKey = vm.envUint("USER_PRIVATE_KEY");
 
     address stakingAddress = vm.envAddress("STAKING_ADDRESS");
     address arpaAddress = vm.envAddress("ARPA_ADDRESS");
-    address deployerAddress = vm.envAddress("ADMIN_ADDRESS");
 
     uint256 rewardAmount = vm.envUint("REWARD_AMOUNT");
     uint256 operatorStakeAmount = vm.envUint("OPERATOR_STAKE_AMOUNT");
 
     address[] operators;
-    string mnemonic = "test test test test test test test test test test test junk";
+    string mnemonic = vm.envString("STAKING_NODES_MNEMONIC");
     uint32 stakingNodesIndexOffset = uint32(vm.envUint("STAKING_NODES_INDEX_OFFSET"));
     uint32 stakingNodesIndexLength = 10;
 
@@ -44,7 +44,7 @@ contract StakeOperatorLocalTestScript is Script {
 
         // start the staking pool
         vm.broadcast(deployerPrivateKey);
-        arpa.mint(deployerAddress, rewardAmount);
+        arpa.mint(vm.addr(deployerPrivateKey), rewardAmount);
 
         vm.broadcast(deployerPrivateKey);
         arpa.approve(address(staking), rewardAmount);
@@ -53,9 +53,8 @@ contract StakeOperatorLocalTestScript is Script {
         staking.start(rewardAmount, 30 days);
 
         // let a user stake to accumulate some rewards
-        // have to set nonce manually or else the tx will fail
-        vm.setNonce(deployerAddress, 16 + stakingNodesIndexLength);
-        stake(deployerAddress);
+        vm.rememberKey(userPrivateKey);
+        stake(vm.addr(userPrivateKey));
     }
 
     function stake(address sender) internal {

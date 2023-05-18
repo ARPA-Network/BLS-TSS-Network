@@ -9,55 +9,55 @@ Resource            src/node.resource
 
 *** Test Cases ***
 
-DKG Happy Path1
-    [Documentation]
-    ...    1. Given a group of nodes do DKG
-    ...    2. When 1, 2, 3, 4 submit their results
-    ...    3. 4 is disqualified from 123, results submitted from 123 will indicate as such
-    ...    4. DKG phase time out(Anvil mines blocks)
-    ...    5. Any node calls post_process_dkg
-    ...    6. DKG is successful, 4 is slashed
-    Set Enviorment And Deploy Contract
-    Sleep    3s
-    ${address1} =    Get Address By Index    1
-    ${address2} =    Get Address By Index    2
-    ${address3} =    Get Address By Index    3
-    ${address4} =    Get Address By Index    4
+# DKG Happy Path1
+#     [Documentation]
+#     ...    1. Given a group of nodes do DKG
+#     ...    2. When 1, 2, 3, 4 submit their results
+#     ...    3. 4 is disqualified from 123, results submitted from 123 will indicate as such
+#     ...    4. DKG phase time out(Anvil mines blocks)
+#     ...    5. Any node calls post_process_dkg
+#     ...    6. DKG is successful, 4 is slashed
+#     Set Enviorment And Deploy Contract
+#     Sleep    3s
+#     ${address1} =    Get Address By Index    1
+#     ${address2} =    Get Address By Index    2
+#     ${address3} =    Get Address By Index    3
+#     ${address4} =    Get Address By Index    4
 
-    ${address4} =    To Checksum Address    ${address4}
-    ${disqulified_list} =    Make List    ${address4}
-    Set Modified Disqualified Nodes    ${address1}    ${disqulified_list}
-    Set Modified Disqualified Nodes    ${address2}    ${disqulified_list}
-    Set Modified Disqualified Nodes    ${address3}    ${disqulified_list}
-    Set Modified Public Key    ${address4}    ${MODIFIRD_PUB_KEY}
+#     ${address4} =    To Checksum Address    ${address4}
+#     ${disqulified_list} =    Make List    ${address4}
+#     Set Modified Disqualified Nodes    ${address1}    ${disqulified_list}
+#     Set Modified Disqualified Nodes    ${address2}    ${disqulified_list}
+#     Set Modified Disqualified Nodes    ${address3}    ${disqulified_list}
+#     Set Modified Public Key    ${address4}    ${MODIFIRD_PUB_KEY}
 
-    ${node1} =    Stake And Run Node    1
-    ${node2} =    Stake And Run Node    2
-    ${node3} =    Stake And Run Node    3
-    ${node4} =    Stake And Run Node    4
+#     ${node1} =    Stake And Run Node    1
+#     ${node2} =    Stake And Run Node    2
+#     ${node3} =    Stake And Run Node    3
+#     ${node4} =    Stake And Run Node    4
 
-    ${log_phase_1} =    All Nodes Have Keyword    Waiting for Phase 1 to start    ${NODE_PROCESS_LIST}
-    Mine Blocks    8
-    ${log_phase_2} =   Get Keyword From Log    2    Waiting for Phase 2 to start
-    Mine Blocks    9
-    ${log_group_available} =   Get Keyword From Log    2    Group index:
-    Group Node Number Should Be    0    3
+#     ${log_phase_1} =    All Nodes Have Keyword    Waiting for Phase 1 to start    ${NODE_PROCESS_LIST}
+#     Mine Blocks    8
+#     ${log_phase_2} =   Get Keyword From Log    2    Waiting for Phase 2 to start
+#     Mine Blocks    9
+#     ${log_group_available} =   Get Keyword From Log    2    Group index:
+#     Group Node Number Should Be    0    3
     
-    ${slash_event} =    Get Event    ${CONTROLLER_CONTRACT}    NodeSlashed
-    Should Be Equal As Strings    ${slash_event['args']['nodeIdAddress']}    ${address4}
+#     ${slash_event} =    Get Event    ${CONTROLLER_CONTRACT}    NodeSlashed
+#     Should Be Equal As Strings    ${slash_event['args']['nodeIdAddress']}    ${address4}
     
-    Deploy User Contract And Request Randomness
-    ${log_received_randomness_task} =    Get Keyword From Log   1    received new randomness task
-    Sleep    5s
-    Mine Blocks    6
-    Sleep    10s
-    Check Randomness
-    Kill Node    ${node1}
-    Kill Node    ${node2}
-    Kill Node    ${node3}
-    Kill Node    ${node4}
-    Set Global Variable    ${NODE_PROCESS_LIST}    ${EMPTY_LIST}
-    Teardown Scenario Testing Environment
+#     Deploy User Contract And Request Randomness
+#     ${log_received_randomness_task} =    Get Keyword From Log   1    received new randomness task
+#     Sleep    5s
+#     Mine Blocks    6
+#     Sleep    10s
+#     Check Randomness
+#     Kill Node    ${node1}
+#     Kill Node    ${node2}
+#     Kill Node    ${node3}
+#     Kill Node    ${node4}
+#     Set Global Variable    ${NODE_PROCESS_LIST}    ${EMPTY_LIST}
+#     Teardown Scenario Testing Environment
 
 # DKG Happy Path6
 #     [Documentation]
@@ -81,19 +81,16 @@ DKG Happy Path1
 #     Mine Blocks    8
 #     ${log_phase_2} =   Get Keyword From Log    2    Waiting for Phase 2 to start
 #     Mine Blocks    9
-#     ${log_group_available} =       ${node2}    Group index:
+#     ${log_group_available} =       All Nodes Have Keyword    Group index:    ${NODE_PROCESS_LIST}
 #     Group Node Number Should Be    0    4
 #     ${group} =   Get Group    0
 #     ${ckeck_result} =    Check Group Status    ${group}
     
 #     Mine Blocks    20
 #     Sleep    2s
-#     ${node_rewards_1} =    Get Reward    ${address1}
-#     ${node_rewards_2} =    Get Reward    ${address2}
-#     ${node_rewards_3} =    Get Reward    ${address3}
-#     ${node_rewards_4} =    Get Reward    ${address4}
-#     ${reward_value} =    Get Value From Env    DKG_POST_PROCESS_REWARD
-#     ${result} =    Has Equal Value    ${reward_value}    ${node_rewards_1}    ${node_rewards_2}    ${node_rewards_3}    ${node_rewards_4}
+#     ${node_rewards} =    Get Event    ${CONTROLLER_CONTRACT}    NodeRewarded
+
+#     ${result} =    Has Equal Value    ${node_rewards['args']['nodeAddress']}    ${address1}    ${address2}    ${address3}    ${address4}
 #     Should Be True    ${result}
 
 #     Deploy User Contract And Request Randomness
@@ -116,7 +113,9 @@ DKG Happy Path1
 #     ...    3. 2 nodes submit r, 2 nodes submit r'.
 #     ...    4. threshold is 3. r and r' submitter are not pass (2<3)
 #     ...    5. post_process_dkg triggered, punish node 1 2 3 4
-
+    
+#     Sleep    3s
+#     Set Global Variable    $BLOCK_TIME    1
 #     Set Enviorment And Deploy Contract
 #     Sleep    3s
 #     ${address1} =    Get Address By Index    1
@@ -124,8 +123,6 @@ DKG Happy Path1
 #     ${address3} =    Get Address By Index    3
 #     ${address4} =    Get Address By Index    4
 
-#     ${address4} =    To Checksum Address    ${address4}
-#     ${disqulified_list} =    Make List    ${address4}
 #     Set Modified Public Key    ${address3}    ${MODIFIRD_PUB_KEY}
 #     Set Modified Public Key    ${address4}    ${MODIFIRD_PUB_KEY}
 
@@ -134,64 +131,48 @@ DKG Happy Path1
 #     ${node3} =    Stake And Run Node    3
 #     ${node4} =    Stake And Run Node    4
 
-#     ${staking1} =    Get Node Staking    ${address1}
-#     ${staking2} =    Get Node Staking    ${address2}
-#     ${staking3} =    Get Node Staking    ${address3}
-#     ${staking4} =    Get Node Staking    ${address4}
-#     ${group} =   Get Group    0
+#     ${result} =    All Nodes Have Keyword    Transaction successful(node_register)    ${NODE_PROCESS_LIST}
 
-#     ${log_phase_1} =    All Nodes Have Keyword    Waiting for Phase 1 to start    ${NODE_PROCESS_LIST}
-#     Mine Blocks    8
-#     ${log_phase_publish} =    All Nodes Have Keyword    Calling contract function publish    ${NODE_PROCESS_LIST}
-#     Mine Blocks    9
-#     Sleep    2s
-#     Mine Blocks    20
-#     ${log_post_process} =    Have Node Got Keyword    DKGEnded    ${NODE_PROCESS_LIST}
-#     Sleep    3s
-
-#     ${staking1_after_slash} =    Get Node Staking    ${address1}
-#     ${staking2_after_slash} =    Get Node Staking    ${address2}
-#     ${staking3_after_slash} =    Get Node Staking    ${address3}
-#     ${staking4_after_slash} =    Get Node Staking    ${address4}
-#     ${penalty_amout} =    Get Value From Env    DISQUALIFIED_NODE_PENALTY_AMOUNT
-#     Should Be Equal As Integers    ${staking1}    ${staking1_after_slash + ${penalty_amout}}
-#     Should Be Equal As Integers    ${staking2}    ${staking2_after_slash + ${penalty_amout}} 
-#     Should Be Equal As Integers    ${staking3}    ${staking3_after_slash + ${penalty_amout}}
-#     Should Be Equal As Integers    ${staking4}    ${staking4_after_slash + ${penalty_amout}}
+#     ${log_phase_1} =    All Nodes Have Keyword    Transaction successful(commit_dkg)    ${NODE_PROCESS_LIST}
     
+#     Sleep    25s
+#     ${slash_events} =    Get Events    ${CONTROLLER_CONTRACT}    NodeSlashed
+    
+#     ${result} =    Events Should Contain All Value    ${slash_events}    nodeIdAddress    ${address1}    ${address2}    ${address3}    ${address4}
+#     Should Be True    ${result}
 #     ${group} =   Get Group    0
 #     Should Be Equal As Strings    ${group[7]}    False
 #     Teardown Scenario Testing Environment
 
-# Test Rebalance
-#     [Documentation]
-#     ...    1. Given a group of nodes do DKG
-#     ...    2. When 1, 2, 3, 4, 5 formed a group 0
-#     ...    3. 6 register as a new node
-#     ...    4. The rebalance triggered
-#     ...    5. There will be 2 groups, group 0 and group 1, each group has 3 nodes
-#     Sleep    3s
-#     Set Global Variable    $BLOCK_TIME    1
-#     Set Enviorment And Deploy Contract
-#     Sleep    3s
+Test Rebalance
+    [Documentation]
+    ...    1. Given a group of nodes do DKG
+    ...    2. When 1, 2, 3, 4, 5 formed a group 0
+    ...    3. 6 register as a new node
+    ...    4. The rebalance triggered
+    ...    5. There will be 2 groups, group 0 and group 1, each group has 3 nodes
+    Sleep    3s
+    Set Global Variable    $BLOCK_TIME    1
+    Set Enviorment And Deploy Contract
+    Sleep    3s
     
-#     ${node1} =    Stake And Run Node    1
-#     ${node2} =    Stake And Run Node    2
-#     ${node3} =    Stake And Run Node    3
-#     ${node4} =    Stake And Run Node    4
-#     ${node5} =    Stake And Run Node    5
+    ${node1} =    Stake And Run Node    1
+    ${node2} =    Stake And Run Node    2
+    ${node3} =    Stake And Run Node    3
+    ${node4} =    Stake And Run Node    4
+    ${node5} =    Stake And Run Node    5
 
-#     ${result} =    All Nodes Have Keyword    Transaction successful(node_register)    ${NODE_PROCESS_LIST}
-#     Should Be True    ${result}
-#     ${get_share} =    All Nodes Have Keyword    Calling contract view get_shares    ${NODE_PROCESS_LIST}
-#     ${group_result} =    Have Node Got Keyword    Group index:0 epoch:3 is available    ${NODE_PROCESS_LIST}    
-#     Group Node Number Should Be    0    5
+    ${result} =    All Nodes Have Keyword    Transaction successful(node_register)    ${NODE_PROCESS_LIST}
+    Should Be True    ${result}
+    ${get_share} =    All Nodes Have Keyword    Calling contract view get_shares    ${NODE_PROCESS_LIST}
+    ${group_result} =    Have Node Got Keyword    Group index:0 epoch:3 is available    ${NODE_PROCESS_LIST}    
+    Group Node Number Should Be    0    5
 
-#     ${node6} =    Stake And Run Node    6
-#     ${result} =        Get Keyword From Log    6    Transaction successful(node_register)
-#     ${get_share} =    All Nodes Have Keyword    Calling contract view get_shares    ${NODE_PROCESS_LIST}
-#     ${group_result} =    Get Keyword From Log    6    is available
+    ${node6} =    Stake And Run Node    6
+    ${result} =        Get Keyword From Log    6    Transaction successful(node_register)
+    ${get_share} =    All Nodes Have Keyword    Calling contract view get_shares    ${NODE_PROCESS_LIST}
+    ${group_result} =    Get Keyword From Log    6    is available
 
-#     Group Node Number Should Be    0    3
-#     Group Node Number Should Be    1    3
-    #Teardown Scenario Testing Environment
+    Group Node Number Should Be    0    3
+    Group Node Number Should Be    1    3
+    Teardown Scenario Testing Environment

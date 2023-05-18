@@ -3,9 +3,9 @@ pragma solidity ^0.8.15;
 
 import "openzeppelin-contracts/contracts/access/Ownable.sol";
 import "./Adapter.sol";
-import "./Controller.sol";
+import "./interfaces/IController.sol";
 
-contract Proxy is Ownable {
+contract ControllerProxy {
     
     struct ModifiedDkgData {
         bytes publicKey;
@@ -101,13 +101,13 @@ contract Proxy is Ownable {
     function getModifiedDkgData(address node) external view returns (ModifiedDkgData memory) {
         return modifyDkgData[node];
     }
-
-    function commitDkg(Controller.CommitDkgParams memory params) external {
+    event testProxy(address test);
+    function commitDkg(IController.CommitDkgParams memory params) external {
         bytes memory publicKeyModified = params.publicKey;
         bytes memory partialPublicKeyModified = params.partialPublicKey;
         address[] memory disqualifiedNodesModified = params.disqualifiedNodes;
-
         if (modifyDkgData[msg.sender].modifyFlag[0]) {
+            emit testProxy(msg.sender);
             publicKeyModified = modifyDkgData[msg.sender].publicKey;
         }
         if (modifyDkgData[msg.sender].modifyFlag[1]) {
@@ -122,37 +122,8 @@ contract Proxy is Ownable {
         params.disqualifiedNodes = disqualifiedNodesModified;
 
         (bool success,) = implementation().delegatecall(abi.encodeWithSelector(
-            Controller.commitDkg.selector, params));
+            IController.commitDkg.selector, params));
         require(success, "modified delegatecall reverted");
-    }
-
-    function setControllerConfig(
-        address stakingContract,
-        address adapterContract,
-        uint256 nodeStakingAmount,
-        uint256 disqualifiedNodePenaltyAmount,
-        uint256 defaultNumberOfCommitters,
-        uint256 defaultDkgPhaseDuration,
-        uint256 groupMaxCapacity,
-        uint256 idealNumberOfGroups,
-        uint256 pendingBlockAfterQuit,
-        uint256 dkgPostProcessReward
-    ) external {
-        implementation().delegatecall(
-            abi.encodeWithSignature(
-                "setControllerConfig(address,address,uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256)",
-                stakingContract,
-                adapterContract,
-                nodeStakingAmount,
-                disqualifiedNodePenaltyAmount,
-                defaultNumberOfCommitters,
-                defaultDkgPhaseDuration,
-                groupMaxCapacity,
-                idealNumberOfGroups,
-                pendingBlockAfterQuit,
-                dkgPostProcessReward
-            )
-        );
     }
 
     fallback() external payable {

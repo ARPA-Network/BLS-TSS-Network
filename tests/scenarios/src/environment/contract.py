@@ -65,7 +65,7 @@ def exec_script(script_name):
     """
     os.chdir("contracts")
     cmd = ("forge script script/" + script_name
-        + " --fork-url http://localhost:8545 --optimize --broadcast --slow")
+        + " --fork-url http://localhost:8545 --optimize --broadcast")
     os.system(cmd)
     os.chdir("..")
 
@@ -89,8 +89,28 @@ def get_event(contract, event_name):
     Get event from contract.
     """
     event = getattr(contract.events, event_name)
-    filter = event.create_filter(fromBlock=0)
-    log = filter.get_new_entries()
+    event_filter = event.create_filter(fromBlock=0)
+    log = event_filter.get_new_entries()
     return log[0]
 
+def get_events(contract, event_name):
+    """
+    Get events from contract.
+    """
+    event = getattr(contract.events, event_name)
+    event_filter = event.create_filter(fromBlock=0)
+    logs = event_filter.get_all_entries()
+    print(len(logs))
+    return logs
 
+def events_should_contain_all_value(events, key, *value):
+    """
+    Check if all events contain the value of the key.
+    """
+    #cast value to upper case
+    value = [str(v).upper() for v in value]
+    for event in events:
+        if str(event['args'][key]).upper() not in value:
+            return False
+        print(str(event['args'][key])+ " is in evnets")
+    return True

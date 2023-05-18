@@ -30,7 +30,7 @@ def has_equal_value(value, *args):
     :param args: The rest of the values to check.
     :return: True if any of the values after the first have the same value as the value, False otherwise.
     """
-    return any(str(arg) == str(value) for arg in args)
+    return any(str(arg).upper() == str(value).upper() for arg in args)
 
 def get_value_from_env(name):
     """

@@ -36,3 +36,4 @@ contracts/test/Test.t.sol
 /.venv
 *.sqlite
 passwd
+*.pyc

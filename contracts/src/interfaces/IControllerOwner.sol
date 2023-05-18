@@ -27,4 +27,6 @@ interface IControllerOwner {
         uint256 pendingBlockAfterQuit,
         uint256 dkgPostProcessReward
     ) external;
+
+    function initialize(address arpa, uint256 lastOutput) external;
 }
