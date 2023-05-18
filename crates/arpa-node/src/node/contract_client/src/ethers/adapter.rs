@@ -154,7 +154,10 @@ impl AdapterViews for AdapterClient {
             self.contract_view_retry_descriptor,
         )
         .await
-        .map(|r| !r.is_empty())
+        .map(|r| {
+            let r = U256::from(r);
+            !r.is_zero()
+        })
     }
 }
 
