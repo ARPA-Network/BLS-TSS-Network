@@ -61,9 +61,10 @@ contract Adapter is UUPSUpgradeable, IAdapter, IAdapterOwner, RequestIdBase, Ran
         address requestedOwner; // For safely transferring sub ownership.
         address[] consumers;
         uint256 balance; // Token balance used for all consumer requests.
-        uint256 inflightCost; // Upper cost for pending requests.
+        uint256 inflightCost; // Upper cost for pending requests(except drastic exchange rate changes).
         mapping(bytes32 => uint256) inflightPayments;
         uint64 reqCount; // For fee tiers
+        TokenType tokenType; // Every sub is either ARPA or ETH.
     }
 
     // *Events*
@@ -79,7 +80,7 @@ contract Adapter is UUPSUpgradeable, IAdapter, IAdapterOwner, RequestIdBase, Ran
         uint256 committerRewardPerSignature,
         FeeConfig feeConfig
     );
-    event SubscriptionCreated(uint64 indexed subId, address indexed owner);
+    event SubscriptionCreated(uint64 indexed subId, address indexed owner, TokenType tokenType);
     event SubscriptionFunded(uint64 indexed subId, uint256 oldBalance, uint256 newBalance);
     event SubscriptionConsumerAdded(uint64 indexed subId, address consumer);
     event RandomnessRequest(
@@ -209,12 +210,13 @@ contract Adapter is UUPSUpgradeable, IAdapter, IAdapterOwner, RequestIdBase, Ran
     // =============
     // IAdapter
     // =============
-    function createSubscription() external override(IAdapter) nonReentrant returns (uint64) {
+    function createSubscription(TokenType tokenType) external override(IAdapter) nonReentrant returns (uint64) {
         _currentSubId++;
 
         _subscriptions[_currentSubId].owner = msg.sender;
+        _subscriptions[_currentSubId].tokenType = tokenType;
 
-        emit SubscriptionCreated(_currentSubId, msg.sender);
+        emit SubscriptionCreated(_currentSubId, msg.sender, tokenType);
         return _currentSubId;
     }
 
@@ -236,12 +238,18 @@ contract Adapter is UUPSUpgradeable, IAdapter, IAdapterOwner, RequestIdBase, Ran
         emit SubscriptionConsumerAdded(subId, consumer);
     }
 
-    function fundSubscription(uint64 subId, uint256 amount) external override(IAdapter) nonReentrant {
+    function fundSubscription(uint64 subId, uint256 amount) external payable override(IAdapter) nonReentrant {
         if (_subscriptions[subId].owner == address(0)) {
             revert InvalidSubscription();
         }
 
-        _arpa.safeTransferFrom(msg.sender, address(_controller), amount);
+        if (_subscriptions[subId].tokenType == TokenType.ETH) {
+            amount = msg.value;
+            (bool sent,) = payable(address(_controller)).call{value: address(this).balance}("");
+            require(sent, "Failed to send Ether");
+        } else {
+            _arpa.safeTransferFrom(msg.sender, address(_controller), amount);
+        }
 
         // We do not check that the msg.sender is the subscription owner,
         // anyone can fund a subscription.
@@ -274,10 +282,7 @@ contract Adapter is UUPSUpgradeable, IAdapter, IAdapterOwner, RequestIdBase, Ran
         }
 
         // Choose current available group to handle randomness request(by round robin)
-        uint256 currentAssignedGroupIndex = _findGroupToAssignTask();
-
-        // Update global state
-        _lastAssignedGroupIndex = currentAssignedGroupIndex;
+        _lastAssignedGroupIndex = _findGroupToAssignTask();
 
         // Calculate requestId for the task
         uint256 rawSeed = _makeRandcastInputSeed(p.seed, msg.sender, _consumers[msg.sender].nonces[p.subId]);
@@ -285,12 +290,16 @@ contract Adapter is UUPSUpgradeable, IAdapter, IAdapterOwner, RequestIdBase, Ran
         bytes32 requestId = _makeRequestId(rawSeed);
 
         // Estimate upper cost of this fulfillment.
-        uint256 payment = estimatePaymentAmount(
+        (uint256 payment, uint256 weiPerUnitArpa) = estimatePaymentAmountInArpa(
             p.callbackGasLimit,
             _config.gasExceptCallback,
             getFeeTier(_subscriptions[p.subId].reqCount + 1),
             p.callbackMaxGasPrice
         );
+
+        if (_subscriptions[p.subId].tokenType == TokenType.ETH) {
+            payment = payment * weiPerUnitArpa / 1e18;
+        }
 
         if (_subscriptions[p.subId].balance - _subscriptions[p.subId].inflightCost < payment) {
             revert InsufficientBalanceWhenRequest();
@@ -302,7 +311,7 @@ contract Adapter is UUPSUpgradeable, IAdapter, IAdapterOwner, RequestIdBase, Ran
             abi.encode(
                 requestId,
                 p.subId,
-                currentAssignedGroupIndex,
+                _lastAssignedGroupIndex,
                 p.requestType,
                 p.params,
                 msg.sender,
@@ -317,7 +326,7 @@ contract Adapter is UUPSUpgradeable, IAdapter, IAdapterOwner, RequestIdBase, Ran
         emit RandomnessRequest(
             requestId,
             p.subId,
-            currentAssignedGroupIndex,
+            _lastAssignedGroupIndex,
             p.requestType,
             p.params,
             msg.sender,
@@ -399,10 +408,18 @@ contract Adapter is UUPSUpgradeable, IAdapter, IAdapterOwner, RequestIdBase, Ran
         // The gasAfterPaymentCalculation is meant to cover these additional operations where we
         // decrement the subscription balance and increment the groups withdrawable balance.
         // We also add the flat arpa fee to the payment amount.
-        // Its specified in millionths of arpa, if _config.fulfillmentFlatFeearpaPPM = 1
+        // Its specified in millionths of arpa, if _config.fulfillmentFlatFeeArpaPPM = 1
         // 1 arpa / 1e6 = 1e18 arpa wei / 1e6 = 1e12 arpa wei.
-        uint256 payment =
-            _calculatePaymentAmount(startGas, _config.gasAfterPaymentCalculation, getFeeTier(reqCount), tx.gasprice);
+        (uint256 payment, uint256 weiPerUnitArpa) = _calculatePaymentAmountInArpa(
+            startGas, _config.gasAfterPaymentCalculation, getFeeTier(reqCount), tx.gasprice
+        );
+
+        // rewardRandomness for participants
+        _rewardRandomness(participantMembers, payment);
+
+        if (_subscriptions[requestDetail.subId].tokenType == TokenType.ETH) {
+            payment = payment * weiPerUnitArpa / 1e18;
+        }
 
         if (_subscriptions[requestDetail.subId].balance < payment) {
             revert InsufficientBalanceWhenFulfill();
@@ -411,9 +428,6 @@ contract Adapter is UUPSUpgradeable, IAdapter, IAdapterOwner, RequestIdBase, Ran
             _subscriptions[requestDetail.subId].inflightPayments[requestId];
         delete _subscriptions[requestDetail.subId].inflightPayments[requestId];
         _subscriptions[requestDetail.subId].balance -= payment;
-
-        // rewardRandomness for participants
-        _rewardRandomness(participantMembers, payment);
 
         // Include payment in the event for tracking costs.
         emit RandomnessRequestResult(
@@ -472,21 +486,22 @@ contract Adapter is UUPSUpgradeable, IAdapter, IAdapterOwner, RequestIdBase, Ran
         return fc.fulfillmentFlatFeeArpaPPMTier5;
     }
 
-    function estimatePaymentAmount(
+    function estimatePaymentAmountInArpa(
         uint256 callbackGasLimit,
         uint256 gasExceptCallback,
-        uint32 fulfillmentFlatFeearpaPPM,
+        uint32 fulfillmentFlatFeeArpaPPM,
         uint256 weiPerUnitGas
-    ) public view override(IAdapter) returns (uint256) {
+    ) public view override(IAdapter) returns (uint256, uint256) {
         int256 weiPerUnitArpa;
-        weiPerUnitArpa = _getFeedData();
+        weiPerUnitArpa = _getArpaEthFeedData();
         if (weiPerUnitArpa <= 0) {
             revert InvalidarpaWeiPrice(weiPerUnitArpa);
         }
-        // (1e18 arpa wei/arpa) (wei/gas * gas) / (wei/arpa) = arpa wei
-        uint256 paymentNoFee = (1e18 * weiPerUnitGas * (gasExceptCallback + callbackGasLimit)) / uint256(weiPerUnitArpa);
-        uint256 fee = 1e12 * uint256(fulfillmentFlatFeearpaPPM);
-        return paymentNoFee + fee;
+        // (1e18) (wei/gas * gas) / (wei/arpa) = arpa wei
+        uint256 paymentNoFee = 1e18 * weiPerUnitGas * (gasExceptCallback + callbackGasLimit) / uint256(weiPerUnitArpa);
+        uint256 fee = 1e12 * uint256(fulfillmentFlatFeeArpaPPM);
+
+        return (paymentNoFee + fee, uint256(weiPerUnitArpa));
     }
 
     // =============
@@ -598,28 +613,29 @@ contract Adapter is UUPSUpgradeable, IAdapter, IAdapterOwner, RequestIdBase, Ran
     }
 
     // Get the amount of gas used for fulfillment
-    function _calculatePaymentAmount(
+    function _calculatePaymentAmountInArpa(
         uint256 startGas,
         uint256 gasAfterPaymentCalculation,
-        uint32 fulfillmentFlatFeearpaPPM,
+        uint32 fulfillmentFlatFeeArpaPPM,
         uint256 weiPerUnitGas
-    ) internal view returns (uint256) {
+    ) internal view returns (uint256, uint256) {
         int256 weiPerUnitArpa;
-        weiPerUnitArpa = _getFeedData();
+        weiPerUnitArpa = _getArpaEthFeedData();
         if (weiPerUnitArpa <= 0) {
             revert InvalidarpaWeiPrice(weiPerUnitArpa);
         }
-        // (1e18 arpa wei/arpa) (wei/gas * gas) / (wei/arpa) = arpa wei
+
+        // (1e18) (wei/gas * gas) / (wei/arpa) = arpa wei
         uint256 paymentNoFee =
-            (1e18 * weiPerUnitGas * (gasAfterPaymentCalculation + startGas - gasleft())) / uint256(weiPerUnitArpa);
-        uint256 fee = 1e12 * uint256(fulfillmentFlatFeearpaPPM);
+            1e18 * (weiPerUnitGas * (gasAfterPaymentCalculation + startGas - gasleft())) / uint256(weiPerUnitArpa);
+        uint256 fee = 1e12 * uint256(fulfillmentFlatFeeArpaPPM);
         if (paymentNoFee > (15e26 - fee)) {
             revert PaymentTooLarge(); // Payment + fee cannot be more than all of the arpa in existence.
         }
-        return paymentNoFee + fee;
+        return (paymentNoFee + fee, uint256(weiPerUnitArpa));
     }
 
-    function _getFeedData() private view returns (int256) {
+    function _getArpaEthFeedData() private view returns (int256) {
         uint32 stalenessSeconds = _config.stalenessSeconds;
         bool staleFallback = stalenessSeconds > 0;
         uint256 timestamp;

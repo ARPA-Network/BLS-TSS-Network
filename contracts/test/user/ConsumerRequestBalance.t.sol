@@ -5,7 +5,15 @@ import "../../src/user/examples/GetRandomNumberExample.sol";
 import "../../src/user/examples/GetShuffledArrayExample.sol";
 import "../../src/user/examples/RollDiceExample.sol";
 import "../../src/user/examples/AdvancedGetShuffledArrayExample.sol";
-import "../RandcastTestHelper.sol";
+import {
+    IAdapter,
+    Adapter,
+    RandcastTestHelper,
+    ERC20,
+    MockArpaEthOracle,
+    ControllerForTest,
+    AdapterForTest
+} from "../RandcastTestHelper.sol";
 import {IAdapterOwner} from "../../src/interfaces/IAdapterOwner.sol";
 
 contract ConsumerRequestBalanceTest is RandcastTestHelper {
@@ -46,7 +54,7 @@ contract ConsumerRequestBalanceTest is RandcastTestHelper {
         operators[2] = node3;
         operators[3] = node4;
         operators[4] = node5;
-        prepareStakingContract(stakingDeployer, address(arpa), operators);
+        _prepareStakingContract(stakingDeployer, address(arpa), operators);
 
         vm.prank(admin);
         controller = new ControllerForTest(address(arpa), last_output);
@@ -127,7 +135,7 @@ contract ConsumerRequestBalanceTest is RandcastTestHelper {
         deal(address(arpa), address(user), fewArpaBalance);
 
         vm.startPrank(user);
-        prepareSubscription(address(rollDiceExample), fewArpaBalance);
+        _prepareSubscription(address(rollDiceExample), IAdapter.TokenType.ARPA, fewArpaBalance);
 
         uint32 bunch = 10;
         vm.expectRevert(Adapter.InsufficientBalanceWhenRequest.selector);
@@ -155,7 +163,7 @@ contract ConsumerRequestBalanceTest is RandcastTestHelper {
 
         uint256 plentyOfArpaBalance = 1e6 * 1e18;
         deal(address(arpa), address(user), plentyOfArpaBalance);
-        uint64 subId = prepareSubscription(address(rollDiceExample), plentyOfArpaBalance);
+        uint64 subId = _prepareSubscription(address(rollDiceExample), IAdapter.TokenType.ARPA, plentyOfArpaBalance);
 
         uint32 bunch = 10;
         bytes32 requestId = rollDiceExample.rollDice(bunch);
@@ -164,7 +172,7 @@ contract ConsumerRequestBalanceTest is RandcastTestHelper {
         changePrank(node1);
         fulfillRequest(requestId, 10);
 
-        (uint256 afterBalance, uint256 inflightCost) = getBalance(subId);
+        (uint256 afterBalance, uint256 inflightCost) = _getBalance(subId);
 
         // the upper limit of delta is 5%
         // maxPercentDelta is an 18 decimal fixed point number, where 1e18 == 100%
@@ -186,7 +194,7 @@ contract ConsumerRequestBalanceTest is RandcastTestHelper {
         // give more than 3 times actual payment(1076242000000000000000) since we estimate 3 times max gas fee(3320434000000000000000)
         uint256 someArpaBalance = 1150 * 3 * 1e18;
         deal(address(arpa), address(user), someArpaBalance);
-        prepareSubscription(address(rollDiceExample), someArpaBalance);
+        _prepareSubscription(address(rollDiceExample), IAdapter.TokenType.ARPA, someArpaBalance);
         uint32 bunch = 10;
         rollDiceExample.rollDice(bunch);
         // now we have an inflight request, then try to request again in the next block
@@ -201,7 +209,8 @@ contract ConsumerRequestBalanceTest is RandcastTestHelper {
 
         uint256 plentyOfArpaBalance = 1e6 * 1e18;
         deal(address(arpa), address(user), plentyOfArpaBalance);
-        uint64 subId = prepareSubscription(address(advancedGetShuffledArrayExample), plentyOfArpaBalance);
+        uint64 subId =
+            _prepareSubscription(address(advancedGetShuffledArrayExample), IAdapter.TokenType.ARPA, plentyOfArpaBalance);
 
         uint32 upper = 10;
         uint256 seed = 42;
@@ -236,7 +245,8 @@ contract ConsumerRequestBalanceTest is RandcastTestHelper {
 
         uint256 plentyOfArpaBalance = 1e6 * 1e18;
         deal(address(arpa), address(user), plentyOfArpaBalance);
-        uint64 subId = prepareSubscription(address(advancedGetShuffledArrayExample), plentyOfArpaBalance);
+        uint64 subId =
+            _prepareSubscription(address(advancedGetShuffledArrayExample), IAdapter.TokenType.ARPA, plentyOfArpaBalance);
 
         uint32 upper = 10;
         uint256 seed = 42;

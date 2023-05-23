@@ -4,6 +4,11 @@ pragma solidity >=0.8.10;
 import {IRequestTypeBase} from "./IRequestTypeBase.sol";
 
 interface IAdapter is IRequestTypeBase {
+    enum TokenType {
+        ARPA,
+        ETH
+    }
+
     struct PartialSignature {
         uint256 index;
         uint256 partialSignature;
@@ -42,11 +47,11 @@ interface IAdapter is IRequestTypeBase {
         PartialSignature[] calldata partialSignatures
     ) external;
 
-    function createSubscription() external returns (uint64);
+    function createSubscription(TokenType tokenType) external returns (uint64);
 
     function addConsumer(uint64 subId, address consumer) external;
 
-    function fundSubscription(uint64 subId, uint256 amount) external;
+    function fundSubscription(uint64 subId, uint256 amount) external payable;
 
     function getLastSubscription(address consumer) external view returns (uint64);
 
@@ -69,10 +74,10 @@ interface IAdapter is IRequestTypeBase {
     function getFeeTier(uint64 reqCount) external view returns (uint32);
 
     // Estimate the amount of gas used for fulfillment
-    function estimatePaymentAmount(
+    function estimatePaymentAmountInArpa(
         uint256 callbackGasLimit,
         uint256 gasExceptCallback,
         uint32 fulfillmentFlatFeeArpaPPM,
         uint256 weiPerUnitGas
-    ) external view returns (uint256);
+    ) external view returns (uint256, uint256);
 }

@@ -1,15 +1,13 @@
 // SPDX-License-Identifier: MIT
 pragma solidity >=0.8.10;
 
-import "forge-std/Test.sol";
-import "openzeppelin-contracts/contracts/utils/Strings.sol";
+import {Test} from "forge-std/Test.sol";
+import {Strings} from "openzeppelin-contracts/contracts/utils/Strings.sol";
 // solhint-disable-next-line no-global-import
 import "../src/utils/Utils.sol" as Utils;
 
 contract UtilsTest is Test {
     string private _mnemonic = "test test test test test test test test test test test junk";
-
-    function setUp() public {}
 
     function testPickRandomIndex() public {
         uint256 seed = 2459565876494606882;

@@ -54,7 +54,7 @@ contract ControllerTest is RandcastTestHelper {
         operators[8] = node9;
         operators[9] = node10;
         operators[10] = node11;
-        prepareStakingContract(stakingDeployer, address(arpa), operators);
+        _prepareStakingContract(stakingDeployer, address(arpa), operators);
 
         vm.prank(owner);
         controller = new ControllerForTest(address(arpa), lastOutput);

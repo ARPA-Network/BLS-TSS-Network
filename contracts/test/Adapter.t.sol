@@ -62,7 +62,7 @@ contract AdapterTest is RandcastTestHelper {
         operators[2] = node3;
         operators[3] = node4;
         operators[4] = node5;
-        prepareStakingContract(stakingDeployer, address(arpa), operators);
+        _prepareStakingContract(stakingDeployer, address(arpa), operators);
 
         vm.prank(admin);
         controller = new ControllerForTest(address(arpa), last_output);
@@ -122,7 +122,7 @@ contract AdapterTest is RandcastTestHelper {
         arpa.approve(address(controller), 3 * plentyOfArpaBalance);
 
         vm.startPrank(user);
-        subId = prepareSubscription(address(getRandomNumberExample), plentyOfArpaBalance);
+        subId = _prepareSubscription(address(getRandomNumberExample), IAdapter.TokenType.ARPA, plentyOfArpaBalance);
         vm.stopPrank();
     }
 
@@ -158,7 +158,7 @@ contract AdapterTest is RandcastTestHelper {
             (, uint256 inflightCost,,,) = adapter.getSubscription(subId);
             emit log_uint(inflightCost);
 
-            uint256 payment = adapter.estimatePaymentAmount(
+            (uint256 payment,) = adapter.estimatePaymentAmountInArpa(
                 getRandomNumberExample.callbackGasLimit(),
                 gasExceptCallback,
                 fulfillmentFlatFeeArpaPPMTier1,

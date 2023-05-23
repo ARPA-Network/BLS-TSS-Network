@@ -5,7 +5,15 @@ import "../../src/user/examples/GetRandomNumberExample.sol";
 import "../../src/user/examples/GetShuffledArrayExample.sol";
 import "../../src/user/examples/RollDiceExample.sol";
 import "../../src/user/examples/AdvancedGetShuffledArrayExample.sol";
-import "../RandcastTestHelper.sol";
+import {
+    IAdapter,
+    Adapter,
+    RandcastTestHelper,
+    ERC20,
+    MockArpaEthOracle,
+    ControllerForTest,
+    AdapterForTest
+} from "../RandcastTestHelper.sol";
 import {IAdapterOwner} from "../../src/interfaces/IAdapterOwner.sol";
 
 contract RandcastConsumerExampleTest is RandcastTestHelper {
@@ -46,7 +54,7 @@ contract RandcastConsumerExampleTest is RandcastTestHelper {
         operators[2] = node3;
         operators[3] = node4;
         operators[4] = node5;
-        prepareStakingContract(stakingDeployer, address(arpa), operators);
+        _prepareStakingContract(stakingDeployer, address(arpa), operators);
 
         vm.prank(admin);
         controller = new ControllerForTest(address(arpa), last_output);
@@ -107,9 +115,9 @@ contract RandcastConsumerExampleTest is RandcastTestHelper {
         deal(address(arpa), address(admin), 3 * plentyOfArpaBalance);
 
         vm.startPrank(admin);
-        prepareSubscription(address(getRandomNumberExample), plentyOfArpaBalance);
-        prepareSubscription(address(rollDiceExample), plentyOfArpaBalance);
-        prepareSubscription(address(getShuffledArrayExample), plentyOfArpaBalance);
+        _prepareSubscription(address(getRandomNumberExample), IAdapter.TokenType.ARPA, plentyOfArpaBalance);
+        _prepareSubscription(address(rollDiceExample), IAdapter.TokenType.ARPA, plentyOfArpaBalance);
+        _prepareSubscription(address(getShuffledArrayExample), IAdapter.TokenType.ARPA, plentyOfArpaBalance);
         vm.stopPrank();
         prepareAnAvailableGroup();
     }
@@ -197,7 +205,8 @@ contract RandcastConsumerExampleTest is RandcastTestHelper {
         vm.startPrank(admin);
         uint256 plentyOfArpaBalance = 1e6 * 1e18;
         deal(address(arpa), address(admin), plentyOfArpaBalance);
-        uint64 subId = prepareSubscription(address(advancedGetShuffledArrayExample), plentyOfArpaBalance);
+        uint64 subId =
+            _prepareSubscription(address(advancedGetShuffledArrayExample), IAdapter.TokenType.ARPA, plentyOfArpaBalance);
 
         deal(user, 1 * 1e18);
         changePrank(user);

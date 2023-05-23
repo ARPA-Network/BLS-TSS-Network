@@ -361,20 +361,28 @@ abstract contract RandcastTestHelper is Test {
         );
     }
 
-    function prepareSubscription(address consumer, uint256 balance) internal returns (uint64) {
-        uint64 subId = adapter.createSubscription();
+    function _prepareSubscription(address consumer, IAdapter.TokenType tokenType, uint256 balance)
+        internal
+        returns (uint64)
+    {
+        uint64 subId = adapter.createSubscription(tokenType);
         arpa.approve(address(adapter), balance);
-        adapter.fundSubscription(subId, balance);
+        if (tokenType == IAdapter.TokenType.ETH) {
+            vm.deal(address(this), balance);
+            adapter.fundSubscription{value: balance}(subId, 0);
+        } else {
+            adapter.fundSubscription(subId, balance);
+        }
         adapter.addConsumer(subId, consumer);
         return subId;
     }
 
-    function getBalance(uint64 subId) internal view returns (uint256, uint256) {
+    function _getBalance(uint64 subId) internal view returns (uint256, uint256) {
         (uint256 balance, uint256 inflightCost,,,) = adapter.getSubscription(subId);
         return (balance, inflightCost);
     }
 
-    function prepareStakingContract(address sender, address arpaAddress, address[] memory operators) internal {
+    function _prepareStakingContract(address sender, address arpaAddress, address[] memory operators) internal {
         Staking.PoolConstructorParams memory params = Staking.PoolConstructorParams(
             ArpaTokenInterface(arpaAddress),
             initialMaxPoolSize,
@@ -401,17 +409,17 @@ abstract contract RandcastTestHelper is Test {
         staking.start(rewardAmount, 30 days);
 
         // let a user stake to accumulate some rewards
-        stake(sender);
+        _stake(sender);
 
         for (uint256 i = 0; i < operators.length; i++) {
-            stake(operators[i]);
+            _stake(operators[i]);
         }
 
         // warp to 10 days to earn some delegation rewards for nodes
         vm.warp(10 days);
     }
 
-    function stake(address sender) internal {
+    function _stake(address sender) internal {
         deal(address(arpa), sender, operatorStakeAmount);
         vm.prank(sender);
         arpa.approve(address(staking), operatorStakeAmount);

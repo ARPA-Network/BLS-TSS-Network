@@ -39,7 +39,7 @@ contract DKGScenarioTest is RandcastTestHelper {
         operators[2] = node3;
         operators[3] = node4;
         operators[4] = node5;
-        prepareStakingContract(stakingDeployer, address(arpa), operators);
+        _prepareStakingContract(stakingDeployer, address(arpa), operators);
 
         controller = new ControllerForTest(address(arpa), lastOutput);
 

@@ -70,7 +70,7 @@ contract ExtendedDKGScenarioTest is RandcastTestHelper {
         }
 
         // deploy staking contract and add operators
-        prepareStakingContract(stakingDeployer, address(arpa), operators);
+        _prepareStakingContract(stakingDeployer, address(arpa), operators);
 
         // deploy controller
         vm.prank(owner);
