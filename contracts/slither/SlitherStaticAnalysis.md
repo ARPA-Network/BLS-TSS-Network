@@ -71,10 +71,11 @@ CLIther is a CLI tool for analyzing slither output.
                                                                
 Loaded Slither Output: slither_output.json
 Available Commands:
-  - ls                        list finding summary
-  - impact [impact]           list findings by impact [high|medium|low|informational|optimization]
+  - count                     list finding summary
+  - sum [impact]              summarize findings by detector
+  - list [impact]             list findings by impact [high|medium|low|informational|optimization]
   - detail [impact] [number]  display full findings details
 
 Vulnerability / Remediation Info: https://github.com/crytic/slither/wiki/Detector-Documentation
-> 
+∴ 
 ```

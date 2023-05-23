@@ -7,14 +7,15 @@ from cmd import Cmd
 class FindingsCLI(Cmd):
     def __init__(self, findings_by_impact):
         super(FindingsCLI, self).__init__()
-        self.prompt = "> "
+        self.prompt = "∴ "
         self.findings_by_impact = findings_by_impact
 
-    def do_ls(self, _):
+    def do_count(self, _):
         """List number of findings by impact."""
         self.count_findings(self.findings_by_impact)
+        print()
 
-    def do_impact(self, impact):
+    def do_list(self, impact):
         """List findings with a specific impact level.
         Usage: impact [high|medium|low|informational|optimization]
         """
@@ -22,6 +23,7 @@ class FindingsCLI(Cmd):
             print("Please provide a valid impact level.")
             return
         self.print_findings(impact.lower(), self.findings_by_impact)
+        print()
 
     def do_detail(self, args):
         """Display the full details of a specific finding by its number in the impact list.
@@ -40,6 +42,7 @@ class FindingsCLI(Cmd):
                 display_finding(finding)
             except (IndexError, ValueError):
                 print("Please provide a valid finding number.")
+        print()
 
     def do_exit(self, _):
         """Exit the Findings CLI."""
@@ -73,6 +76,25 @@ class FindingsCLI(Cmd):
             print(
                 f" {impact.capitalize():{longest_impact_length}}  {len(findings_by_impact[impact])}"
             )
+
+    def do_sum(self, impact):
+        """Summarize the number of findings with the specified impact grouped by check type.
+        Usage: summarize [high|medium|low|informational|optimization]
+        """
+        if impact not in self.findings_by_impact.keys():
+            print("Please provide a valid impact level.")
+            return
+        self.summarize_findings_by_check(impact, self.findings_by_impact)
+        print()
+
+    def summarize_findings_by_check(self, impact, findings_by_impact):
+        # print(f"Summary of Findings for Impact Level: {impact}")
+        summary = defaultdict(int)
+        for finding in findings_by_impact[impact]:
+            summary[finding["check"]] += 1
+
+        for check, count in summary.items():
+            print(f"{check:<25} {count}")
 
 
 def parse_report(filename, impact_filter=None):
@@ -115,11 +137,12 @@ def print_instructions(args):
 (_______/(_______/\\_______/   )_(   |/     \\|(_______/|/   \\__/
                                                                """
     )
-    print(f"Loaded Slither Output: {args.filename}")
+    print(f"Loaded Slither Output: {args.filename}\n")
     print("Available Commands:")
-    print(f"  - {'ls':<25} list finding summary")
+    print(f"  - {'count':<25} list finding summary")
+    print(f"  - {'sum [impact]':<25} summarize findings by detector")
     print(
-        f"  - {'impact [impact]':<25} list findings by impact [high|medium|low|informational|optimization]"
+        f"  - {'list [impact]':<25} list findings by impact [high|medium|low|informational|optimization]"
     )
     print(f"  - {'detail [impact] [number]':<25} display full findings details")
     print(
