@@ -2,13 +2,15 @@
 pragma solidity >=0.8.10;
 
 import "forge-std/Test.sol";
-import "./AdapterForTest.sol";
+import {IController} from "../src/interfaces/IController.sol";
+import {IAdapter} from "../src/interfaces/IAdapter.sol";
+import {AdapterForTest, Adapter} from "./AdapterForTest.sol";
 import {Staking, ArpaTokenInterface} from "Staking-v0.1/Staking.sol";
-import "./ControllerForTest.sol";
-import "./mock/MockArpaEthOracle.sol";
-import "openzeppelin-contracts/contracts/token/ERC20/IERC20.sol";
-import "openzeppelin-contracts/contracts/token/ERC20/ERC20.sol";
-import "openzeppelin-contracts/contracts/utils/Strings.sol";
+import {ControllerForTest, Controller} from "./ControllerForTest.sol";
+import {MockArpaEthOracle} from "./mock/MockArpaEthOracle.sol";
+import {IERC20} from "openzeppelin-contracts/contracts/token/ERC20/IERC20.sol";
+import {ERC20} from "openzeppelin-contracts/contracts/token/ERC20/ERC20.sol";
+import {Strings} from "openzeppelin-contracts/contracts/utils/Strings.sol";
 
 abstract contract RandcastTestHelper is Test {
     ControllerForTest controller;
@@ -339,7 +341,7 @@ abstract contract RandcastTestHelper is Test {
         hex"06a8e68091b66c6e6213fdab7adcaa1c7ef2145aecbad0518de6398ea84175180f55f1c03517e174a95b4317ffee31c4f99bb64b6d0ea179ca7f8e86a54574780678fb7b25f7aa9ef3b7e4108834a5f5517f0d6ce295efb363323e45c434a6162a730a0a82bf1d78eb6ac49c2841f77ed71fc14e5df27625dbeb97de7b78628a";
 
     function fulfillRequest(bytes32 requestId, uint256 sigIndex) internal {
-        Adapter.RequestDetail memory rd = adapter.getPendingRequest(requestId);
+        IAdapter.RequestDetail memory rd = adapter.getPendingRequest(requestId);
 
         // mock confirmation times and SIGNATURE_TASK_EXCLUSIVE_WINDOW = 10;
         vm.roll(block.number + rd.requestConfirmations + 10);
@@ -359,7 +361,7 @@ abstract contract RandcastTestHelper is Test {
         );
     }
 
-    function prepareSubscription(address consumer, uint96 balance) internal returns (uint64) {
+    function prepareSubscription(address consumer, uint256 balance) internal returns (uint64) {
         uint64 subId = adapter.createSubscription();
         arpa.approve(address(adapter), balance);
         adapter.fundSubscription(subId, balance);
@@ -367,8 +369,8 @@ abstract contract RandcastTestHelper is Test {
         return subId;
     }
 
-    function getBalance(uint64 subId) internal view returns (uint96, uint96) {
-        (uint96 balance, uint96 inflightCost,,,) = adapter.getSubscription(subId);
+    function getBalance(uint64 subId) internal view returns (uint256, uint256) {
+        (uint256 balance, uint256 inflightCost,,,) = adapter.getSubscription(subId);
         return (balance, inflightCost);
     }
 
@@ -559,7 +561,7 @@ abstract contract RandcastTestHelper is Test {
         emit log_named_address("printing info for node", nodeAddress);
         emit log("----------------------------------------");
 
-        Controller.Node memory node = controller.getNode(nodeAddress);
+        IController.Node memory node = controller.getNode(nodeAddress);
 
         emit log_named_address("n.idAddress", node.idAddress);
         emit log_named_bytes("n.dkgPublicKey", node.dkgPublicKey);
@@ -574,7 +576,7 @@ abstract contract RandcastTestHelper is Test {
             )
         );
 
-        Controller.Member memory m = controller.getMember(groupIndex, memberIndex);
+        IController.Member memory m = controller.getMember(groupIndex, memberIndex);
 
         // emit log_named_uint("m.index", m.index);
         emit log_named_address("m.nodeIdAddress", m.nodeIdAddress);
@@ -605,7 +607,7 @@ abstract contract RandcastTestHelper is Test {
     }
 
     function checkIsStrictlyMajorityConsensusReached(uint256 groupIndex) public view returns (bool) {
-        Controller.Group memory g = controller.getGroup(groupIndex);
+        IController.Group memory g = controller.getGroup(groupIndex);
         return g.isStrictlyMajorityConsensusReached;
     }
 

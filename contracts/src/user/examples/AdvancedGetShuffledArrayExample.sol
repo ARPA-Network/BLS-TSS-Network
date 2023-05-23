@@ -1,15 +1,16 @@
 // SPDX-License-Identifier: MIT
 pragma solidity >=0.8.10;
 
-import "../BasicRandcastConsumerBase.sol";
-import "../../utils/RandomnessHandler.sol";
-import "../../utils/RequestIdBase.sol";
+import {BasicRandcastConsumerBase} from "../BasicRandcastConsumerBase.sol";
+import {RandomnessHandler} from "../../utils/RandomnessHandler.sol";
+import {RequestIdBase} from "../../utils/RequestIdBase.sol";
 
 contract AdvancedGetShuffledArrayExample is RequestIdBase, BasicRandcastConsumerBase, RandomnessHandler {
     mapping(bytes32 => uint256) public shuffledArrayUppers;
     uint256[][] public shuffleResults;
 
-    constructor(address controller) BasicRandcastConsumerBase(controller) {}
+    // solhint-disable-next-line no-empty-blocks
+    constructor(address adapter) BasicRandcastConsumerBase(adapter) {}
 
     /**
      * Requests randomness
@@ -24,12 +25,12 @@ contract AdvancedGetShuffledArrayExample is RequestIdBase, BasicRandcastConsumer
     ) external returns (bytes32) {
         bytes memory params;
 
-        uint256 rawSeed = makeRandcastInputSeed(seed, address(this), nonce);
+        uint256 rawSeed = _makeRandcastInputSeed(seed, address(this), nonce);
         // This should be identical to controller generated requestId.
-        bytes32 requestId = makeRequestId(rawSeed);
+        bytes32 requestId = _makeRequestId(rawSeed);
         shuffledArrayUppers[requestId] = shuffledArrayUpper;
 
-        return rawRequestRandomness(
+        return _rawRequestRandomness(
             RequestType.Randomness, params, subId, seed, requestConfirmations, callbackGasLimit, callbackMaxGasPrice
         );
 
@@ -48,10 +49,10 @@ contract AdvancedGetShuffledArrayExample is RequestIdBase, BasicRandcastConsumer
     }
 
     /**
-     * Callback function used by Randcast Controller
+     * Callback function used by Randcast Adapter
      */
-    function fulfillRandomness(bytes32 requestId, uint256 randomness) internal override {
-        shuffleResults.push(shuffle(shuffledArrayUppers[requestId], randomness));
+    function _fulfillRandomness(bytes32 requestId, uint256 randomness) internal override {
+        shuffleResults.push(_shuffle(shuffledArrayUppers[requestId], randomness));
     }
 
     function lengthOfShuffleResults() public view returns (uint256) {

@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity >=0.8.10;
 
-import "./IRequestTypeBase.sol";
+import {IRequestTypeBase} from "./IRequestTypeBase.sol";
 
 interface IAdapter is IRequestTypeBase {
     struct PartialSignature {
@@ -53,7 +53,7 @@ interface IAdapter is IRequestTypeBase {
     function getSubscription(uint64 subId)
         external
         view
-        returns (uint96 balance, uint96 inflightCost, uint64 reqCount, address owner, address[] memory consumers);
+        returns (uint256 balance, uint256 inflightCost, uint64 reqCount, address owner, address[] memory consumers);
 
     function getPendingRequestCommitment(bytes32 requestId) external view returns (bytes32);
 
@@ -74,5 +74,5 @@ interface IAdapter is IRequestTypeBase {
         uint256 gasExceptCallback,
         uint32 fulfillmentFlatFeeArpaPPM,
         uint256 weiPerUnitGas
-    ) external view returns (uint96);
+    ) external view returns (uint256);
 }

@@ -1,8 +1,17 @@
 // SPDX-License-Identifier: MIT
 pragma solidity >=0.8.10;
 
-import "../src/user/examples/GetRandomNumberExample.sol";
-import "./RandcastTestHelper.sol";
+import {GetRandomNumberExample} from "../src/user/examples/GetRandomNumberExample.sol";
+import {IAdapterOwner} from "../src/interfaces/IAdapterOwner.sol";
+import {
+    RandcastTestHelper,
+    IAdapter,
+    Adapter,
+    MockArpaEthOracle,
+    ControllerForTest,
+    AdapterForTest
+} from "./RandcastTestHelper.sol";
+import {ERC20} from "openzeppelin-contracts/contracts/token/ERC20/ERC20.sol";
 
 contract AdapterTest is RandcastTestHelper {
     GetRandomNumberExample getRandomNumberExample;
@@ -37,7 +46,7 @@ contract AdapterTest is RandcastTestHelper {
     uint24 reqsForTier4 = 0;
     uint24 reqsForTier5 = 0;
 
-    uint96 plentyOfArpaBalance = 1e6 * 1e18;
+    uint256 plentyOfArpaBalance = 1e6 * 1e18;
 
     function setUp() public {
         skip(1000);
@@ -146,10 +155,10 @@ contract AdapterTest is RandcastTestHelper {
             bytes32 requestId = getRandomNumberExample.getRandomNumber();
             emit log_bytes32(requestId);
             vm.stopBroadcast();
-            (, uint96 inflightCost,,,) = adapter.getSubscription(subId);
+            (, uint256 inflightCost,,,) = adapter.getSubscription(subId);
             emit log_uint(inflightCost);
 
-            uint96 payment = adapter.estimatePaymentAmount(
+            uint256 payment = adapter.estimatePaymentAmount(
                 getRandomNumberExample.callbackGasLimit(),
                 gasExceptCallback,
                 fulfillmentFlatFeeArpaPPMTier1,

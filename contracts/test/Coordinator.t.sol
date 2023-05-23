@@ -96,19 +96,19 @@ contract CoordinatorTest is Test {
         // Phase 1: Shares
         vm.startPrank(node1);
         coordinator.publish(data); // succesful share
-        vm.expectRevert("you have already published your shares");
+        vm.expectRevert("share existed");
         coordinator.publish(data);
 
         // Phase 2: Responses
         vm.roll(startBlock + 1 + PHASE_DURATION);
         coordinator.publish(data); // succesful response
-        vm.expectRevert("you have already published your responses");
+        vm.expectRevert("response existed");
         coordinator.publish(data);
 
         // Phase 3: Justifications
         vm.roll(startBlock + 1 + 2 * PHASE_DURATION);
         coordinator.publish(data); // succesful justification
-        vm.expectRevert("you have already published your justifications");
+        vm.expectRevert("justification existed");
         coordinator.publish(data);
 
         // DKG End

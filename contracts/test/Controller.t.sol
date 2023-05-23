@@ -3,7 +3,9 @@ pragma solidity ^0.8.15;
 
 pragma experimental ABIEncoderV2;
 
-import "./RandcastTestHelper.sol";
+import {ICoordinator} from "../src/interfaces/ICoordinator.sol";
+import {RandcastTestHelper, IController, Controller, ControllerForTest, ERC20} from "./RandcastTestHelper.sol";
+import {BLS} from "../src/libraries/BLS.sol";
 
 // Suggested usage: forge test --match-contract ControllerTest --optimize -vv
 
@@ -86,7 +88,7 @@ contract ControllerTest is RandcastTestHelper {
         controller.nodeRegister(DKGPubkey1);
 
         // Assert node1 state is correct
-        Controller.Node memory n = controller.getNode(node1);
+        IController.Node memory n = controller.getNode(node1);
         assertEq(n.idAddress, node1);
         assertEq(n.dkgPublicKey, DKGPubkey1);
         assertEq(n.state, true);
@@ -190,7 +192,7 @@ contract ControllerTest is RandcastTestHelper {
         // printGroupInfo(groupIndex);
 
         // check group struct is correct
-        Controller.Group memory g = controller.getGroup(groupIndex);
+        IController.Group memory g = controller.getGroup(groupIndex);
         assertEq(g.index, 0);
         assertEq(g.epoch, 1);
         assertEq(g.size, 3);
@@ -198,7 +200,7 @@ contract ControllerTest is RandcastTestHelper {
         assertEq(g.members.length, 3);
 
         // Verify node2 info is recorded in group.members[1]
-        Controller.Member memory m = g.members[1];
+        IController.Member memory m = g.members[1];
         // printMemberInfo(groupIndex, 1);
         assertEq(m.nodeIdAddress, node2);
         // assertEq(m.partialPublicKey, TODO);

@@ -4,6 +4,8 @@ pragma solidity ^0.8.15;
 pragma experimental ABIEncoderV2;
 
 import "./RandcastTestHelper.sol";
+import {ICoordinator} from "../src/interfaces/ICoordinator.sol";
+import {BLS} from "../src/libraries/BLS.sol";
 
 contract DKGScenarioTest is RandcastTestHelper {
     uint256 disqualifiedNodePenaltyAmount = 1000;

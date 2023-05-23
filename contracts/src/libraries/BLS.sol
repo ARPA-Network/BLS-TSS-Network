@@ -12,15 +12,15 @@ import {BN256G2} from "./BN256G2.sol";
  */
 library BLS {
     // Field order
-    uint256 constant N = 21888242871839275222246405745257275088696311157297823662689037894645226208583;
+    uint256 public constant N = 21888242871839275222246405745257275088696311157297823662689037894645226208583;
 
     // Negated genarator of G2
-    uint256 constant nG2x1 = 11559732032986387107991004021392285783925812861821192530917403151452391805634;
-    uint256 constant nG2x0 = 10857046999023057135944570762232829481370756359578518086990519993285655852781;
-    uint256 constant nG2y1 = 17805874995975841540914202342111839520379459829704422454583296818431106115052;
-    uint256 constant nG2y0 = 13392588948715843804641432497768002650278120570034223513918757245338268106653;
+    uint256 public constant N_G2_X1 = 11559732032986387107991004021392285783925812861821192530917403151452391805634;
+    uint256 public constant N_G2_X0 = 10857046999023057135944570762232829481370756359578518086990519993285655852781;
+    uint256 public constant N_G2_Y1 = 17805874995975841540914202342111839520379459829704422454583296818431106115052;
+    uint256 public constant N_G2_Y0 = 13392588948715843804641432497768002650278120570034223513918757245338268106653;
 
-    uint256 constant FIELD_MASK = 0x3fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff;
+    uint256 public constant FIELD_MASK = 0x3fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff;
 
     error MustNotBeInfinity();
     error InvalidPublicKeyEncoding();
@@ -40,10 +40,10 @@ library BLS {
         uint256[12] memory input = [
             signature[0],
             signature[1],
-            nG2x1,
-            nG2x0,
-            nG2y1,
-            nG2y0,
+            N_G2_X1,
+            N_G2_X0,
+            N_G2_Y1,
+            N_G2_Y0,
             message[0],
             message[1],
             pubkey[1],
@@ -53,7 +53,7 @@ library BLS {
         ];
         uint256[1] memory out;
         bool success;
-        // solium-disable-next-line security/no-inline-assembly
+        // solhint-disable-next-line no-inline-assembly
         assembly {
             success := staticcall(sub(gas(), 2000), 8, input, 384, out, 0x20)
             switch success
@@ -72,16 +72,16 @@ library BLS {
         uint256[4] memory aggregatedPublicKey;
         for (uint256 i = 0; i < partials.length; i++) {
             aggregatedSignature = addPoints(aggregatedSignature, partials[i]);
-            aggregatedPublicKey = BN256G2.ECTwistAdd(aggregatedPublicKey, pubkeys[i]);
+            aggregatedPublicKey = BN256G2.ecTwistAdd(aggregatedPublicKey, pubkeys[i]);
         }
 
         uint256[12] memory input = [
             aggregatedSignature[0],
             aggregatedSignature[1],
-            nG2x1,
-            nG2x0,
-            nG2y1,
-            nG2y0,
+            N_G2_X1,
+            N_G2_X0,
+            N_G2_Y1,
+            N_G2_Y0,
             message[0],
             message[1],
             aggregatedPublicKey[1],
@@ -91,7 +91,7 @@ library BLS {
         ];
         uint256[1] memory out;
         bool success;
-        // solium-disable-next-line security/no-inline-assembly
+        // solhint-disable-next-line no-inline-assembly
         assembly {
             success := staticcall(sub(gas(), 2000), 8, input, 384, out, 0x20)
             switch success
@@ -149,6 +149,7 @@ library BLS {
         uint256 x1;
         uint256 y0;
         uint256 y1;
+        // solhint-disable-next-line no-inline-assembly
         assembly {
             // look the first 32 bytes of a bytes struct is its length
             x0 := mload(add(point, 32))
@@ -193,7 +194,7 @@ library BLS {
     }
 
     function isOnCurveG1(uint256[2] memory point) internal pure returns (bool _isOnCurve) {
-        // solium-disable-next-line security/no-inline-assembly
+        // solhint-disable-next-line no-inline-assembly
         assembly {
             let t0 := mload(point)
             let t1 := mload(add(point, 32))
@@ -207,7 +208,7 @@ library BLS {
 
     function isOnCurveG1(uint256 x) internal view returns (bool _isOnCurve) {
         bool callSuccess;
-        // solium-disable-next-line security/no-inline-assembly
+        // solhint-disable-next-line no-inline-assembly
         assembly {
             let t0 := x
             let t1 := mulmod(t0, t0, N)
@@ -230,7 +231,7 @@ library BLS {
     }
 
     function isOnCurveG2(uint256[4] memory point) internal pure returns (bool _isOnCurve) {
-        // solium-disable-next-line security/no-inline-assembly
+        // solhint-disable-next-line no-inline-assembly
         assembly {
             // x0, x1
             let t0 := mload(point)
@@ -266,7 +267,7 @@ library BLS {
 
     function sqrt(uint256 xx) internal view returns (uint256 x, bool hasRoot) {
         bool callSuccess;
-        // solium-disable-next-line security/no-inline-assembly
+        // solhint-disable-next-line no-inline-assembly
         assembly {
             let freemem := mload(0x40)
             mstore(freemem, 0x20)
@@ -293,9 +294,11 @@ library BLS {
         input[2] = p2[0];
         input[3] = p2[1];
         bool success;
+        // solhint-disable-next-line no-inline-assembly
         assembly {
             success := staticcall(sub(gas(), 2000), 6, input, 0xc0, ret, 0x60)
         }
+        // solhint-disable-next-line reason-string
         require(success);
     }
 }

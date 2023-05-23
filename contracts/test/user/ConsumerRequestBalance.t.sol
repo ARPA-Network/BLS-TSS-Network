@@ -6,6 +6,7 @@ import "../../src/user/examples/GetShuffledArrayExample.sol";
 import "../../src/user/examples/RollDiceExample.sol";
 import "../../src/user/examples/AdvancedGetShuffledArrayExample.sol";
 import "../RandcastTestHelper.sol";
+import {IAdapterOwner} from "../../src/interfaces/IAdapterOwner.sol";
 
 contract ConsumerRequestBalanceTest is RandcastTestHelper {
     GetRandomNumberExample getRandomNumberExample;
@@ -122,7 +123,7 @@ contract ConsumerRequestBalanceTest is RandcastTestHelper {
     function testCannotRequestWithoutEnoughBalance() public {
         deal(user, 1 * 1e18);
 
-        uint96 fewArpaBalance = 1 * 1e18;
+        uint256 fewArpaBalance = 1 * 1e18;
         deal(address(arpa), address(user), fewArpaBalance);
 
         vm.startPrank(user);
@@ -152,7 +153,7 @@ contract ConsumerRequestBalanceTest is RandcastTestHelper {
         // Expected: 891728000000000000000
         uint256 expectedPayment = (1e18 * 1e9 * (492000 + 496820)) / 1e12 + 250000 * 1e12;
 
-        uint96 plentyOfArpaBalance = 1e6 * 1e18;
+        uint256 plentyOfArpaBalance = 1e6 * 1e18;
         deal(address(arpa), address(user), plentyOfArpaBalance);
         uint64 subId = prepareSubscription(address(rollDiceExample), plentyOfArpaBalance);
 
@@ -163,7 +164,7 @@ contract ConsumerRequestBalanceTest is RandcastTestHelper {
         changePrank(node1);
         fulfillRequest(requestId, 10);
 
-        (uint96 afterBalance, uint96 inflightCost) = getBalance(subId);
+        (uint256 afterBalance, uint256 inflightCost) = getBalance(subId);
 
         // the upper limit of delta is 5%
         // maxPercentDelta is an 18 decimal fixed point number, where 1e18 == 100%
@@ -183,7 +184,7 @@ contract ConsumerRequestBalanceTest is RandcastTestHelper {
 
         // give the balance just enough for one request
         // give more than 3 times actual payment(1076242000000000000000) since we estimate 3 times max gas fee(3320434000000000000000)
-        uint96 someArpaBalance = 1150 * 3 * 1e18;
+        uint256 someArpaBalance = 1150 * 3 * 1e18;
         deal(address(arpa), address(user), someArpaBalance);
         prepareSubscription(address(rollDiceExample), someArpaBalance);
         uint32 bunch = 10;
@@ -198,7 +199,7 @@ contract ConsumerRequestBalanceTest is RandcastTestHelper {
         deal(user, 1 * 1e18);
         vm.startPrank(user);
 
-        uint96 plentyOfArpaBalance = 1e6 * 1e18;
+        uint256 plentyOfArpaBalance = 1e6 * 1e18;
         deal(address(arpa), address(user), plentyOfArpaBalance);
         uint64 subId = prepareSubscription(address(advancedGetShuffledArrayExample), plentyOfArpaBalance);
 
@@ -233,7 +234,7 @@ contract ConsumerRequestBalanceTest is RandcastTestHelper {
         deal(user, 1 * 1e18);
         vm.startPrank(user);
 
-        uint96 plentyOfArpaBalance = 1e6 * 1e18;
+        uint256 plentyOfArpaBalance = 1e6 * 1e18;
         deal(address(arpa), address(user), plentyOfArpaBalance);
         uint64 subId = prepareSubscription(address(advancedGetShuffledArrayExample), plentyOfArpaBalance);
 

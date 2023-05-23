@@ -2,15 +2,15 @@
 pragma solidity >=0.8.10;
 
 contract MockArpaEthOracle {
-    int256 weiPerUnitArpa;
-    uint256 updatedAt;
+    int256 private _weiPerUnitArpa;
+    uint256 private _updatedAt;
 
-    function setWeiPerUnitArpa(int256 _weiPerUnitArpa) public {
-        weiPerUnitArpa = _weiPerUnitArpa;
+    function setWeiPerUnitArpa(int256 weiPerUnitArpa) public {
+        _weiPerUnitArpa = weiPerUnitArpa;
     }
 
-    function setUpdatedAt(uint256 _updatedAt) public {
-        updatedAt = _updatedAt;
+    function setUpdatedAt(uint256 updatedAt) public {
+        _updatedAt = updatedAt;
     }
 
     function latestRoundData()
@@ -18,6 +18,6 @@ contract MockArpaEthOracle {
         view
         returns (uint80 roundId, int256, uint256 startedAt, uint256, uint80 answeredInRound)
     {
-        return (0, weiPerUnitArpa, 0, updatedAt, 0);
+        return (0, _weiPerUnitArpa, 0, _updatedAt, 0);
     }
 }

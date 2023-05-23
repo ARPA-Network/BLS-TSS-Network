@@ -2,7 +2,7 @@
 pragma solidity >=0.8.10;
 
 contract RandomnessHandler {
-    function shuffle(uint256 upper, uint256 randomness) internal pure returns (uint256[] memory) {
+    function _shuffle(uint256 upper, uint256 randomness) internal pure returns (uint256[] memory) {
         uint256[] memory arr = new uint256[](upper);
         for (uint256 k = 0; k < upper; k++) {
             arr[k] = k;

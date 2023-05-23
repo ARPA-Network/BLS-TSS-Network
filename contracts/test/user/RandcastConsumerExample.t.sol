@@ -6,6 +6,7 @@ import "../../src/user/examples/GetShuffledArrayExample.sol";
 import "../../src/user/examples/RollDiceExample.sol";
 import "../../src/user/examples/AdvancedGetShuffledArrayExample.sol";
 import "../RandcastTestHelper.sol";
+import {IAdapterOwner} from "../../src/interfaces/IAdapterOwner.sol";
 
 contract RandcastConsumerExampleTest is RandcastTestHelper {
     GetRandomNumberExample getRandomNumberExample;
@@ -102,7 +103,7 @@ contract RandcastConsumerExampleTest is RandcastTestHelper {
         vm.prank(stakingDeployer);
         staking.setController(address(controller));
 
-        uint96 plentyOfArpaBalance = 1e6 * 1e18;
+        uint256 plentyOfArpaBalance = 1e6 * 1e18;
         deal(address(arpa), address(admin), 3 * plentyOfArpaBalance);
 
         vm.startPrank(admin);
@@ -194,7 +195,7 @@ contract RandcastConsumerExampleTest is RandcastTestHelper {
 
     function testAdvancedGetShuffledArray() public {
         vm.startPrank(admin);
-        uint96 plentyOfArpaBalance = 1e6 * 1e18;
+        uint256 plentyOfArpaBalance = 1e6 * 1e18;
         deal(address(arpa), address(admin), plentyOfArpaBalance);
         uint64 subId = prepareSubscription(address(advancedGetShuffledArrayExample), plentyOfArpaBalance);
 
