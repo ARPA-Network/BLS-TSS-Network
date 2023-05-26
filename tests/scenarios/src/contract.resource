@@ -65,17 +65,15 @@ Bound Contract ABI
 Deploy User Contract And Request Randomness
     [Documentation]    Deploy the user contract
     ${request_id} =    Set Variable    
-    ${user_contract_address} =    Set Variable    ${USER_CONTRACT_ADDRESS}
-    Set Global Variable    $USER_CONTRACT   ${user_contract}
-    IF  ${user_contract_address == ''}
+    IF  ${USER_CONTRACT_ADDRESS == ''}
         ${contract_output} =    Exec Script    GetRandomNumberLocalTest.s.sol:GetRandomNumberLocalTestScript
         ${contract_address} =    Get Contract Address From File    contracts/broadcast/GetRandomNumberLocalTest.s.sol/31337/run-latest.json
         Set Global Variable    $USER_CONTRACT_ADDRESS    ${contract_address[0]}  
+        ${user_contract} =    Get Contract    ${PROXY_OUTPUT}GetRandomNumberExample.sol/GetRandomNumberExample.json    ${user_contract_address}
+        Set Global Variable    $USER_CONTRACT   ${user_contract}
     ELSE
         ${request_id} =    Contract Function Transact    ${USER_CONTRACT}    getRandomNumber
     END
-    ${user_contract} =    Get Contract    ${PROXY_OUTPUT}GetRandomNumberExample.sol/GetRandomNumberExample.json    ${user_contract_address}
-    ${request_id} =    Contract Function Transact    ${USER_CONTRACT}    getRandomNumber
     RETURN    ${request_id}
 
 Check Randomness

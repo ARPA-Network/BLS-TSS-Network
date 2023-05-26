@@ -41,6 +41,7 @@ Teardown Scenario Testing Environment
     Kill Previous Node    ${list_len}
     Set Global Variable    $NODE_PROCESS_LIST    ${EMPTY_LIST}
     Set Global Variable    $BLOCK_TIME    0
+    Set Global Variable    $USER_CONTRACT_ADDRESS
     
 
 Process Completes Successfully
