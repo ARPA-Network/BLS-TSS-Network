@@ -20,14 +20,10 @@ ${PROXY_OUTPUT}                          contracts/out/
 ${PROXY_CONTRACT}
 ${CONTROLLER_CONTRACT}
 ${STAKE_CONTRACT}
-${DEPLOY_CONTROLLER_SCRIPT}              DeployControllerLocalTest.s.sol:DeployControllerTestScript
-${PROXY_CONFIG_SCRIPT}                   ProxyConfigLocalTest.s.sol:ProxyConfigLocalTestScript
-${REQUEST_RANDOMNESS_SCRIPT}             GetRandomNumberProxy.s.sol:GetRandomNumberProxyScript
+${ADAPTER_CONTRACT}
 ${USER_CONTRACT_ADDRESS}
 ${USER_CONTRACT}
 # Test value:
-${TEST_NODE_ADDRESS}                     0x70997970c51812dc3a010c7d01b50e0d17dc79c8
-${TEST_PRIVATE_KEY}                      0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80
 ${MODIFIRD_PUB_KEY}                      0x137bde2a3eca9e26d5023c8a31c7db75db47b4d1776efc144bc9cfa36403125510292172c806e0d9dd29958c8b359ea9c693179c505558cc95ca8ce6a690eb800652ce1fadb1895c06e5f28e871d8e3797f749941108195d2106a782464a09ed23ece01e5c6512317cd413fbecc36032ab7ba45f62704e9808ec2b6a2dd03d8c
 ${MODIFIRD_PARTIAL_PUB_KEY}              0x02
 @{MODIFIRD_DISQUALIFIED_NODES}           0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC
@@ -61,20 +57,26 @@ Bound Contract ABI
     ${stake_address} =    To Checksum Address    ${stake_address}
     ${stake_contract} =    Get Contract    ${PROXY_OUTPUT}IStaking.sol/IStaking.json    ${stake_address}
     Set Global Variable    $STAKE_CONTRACT   ${stake_contract}
+    ${adapter_address} =    Get Value From Env    ADAPTER_ADDRESS
+    ${adapter_address} =    To Checksum Address    ${adapter_address}
+    ${adapter_contract} =    Get Contract    ${PROXY_OUTPUT}Adapter.sol/Adapter.json    ${adapter_address}
+    Set Global Variable    $ADAPTER_CONTRACT   ${adapter_contract}
 
 Deploy User Contract And Request Randomness
     [Documentation]    Deploy the user contract
+    ${request_id} =    Set Variable    
     ${user_contract_address} =    Set Variable    ${USER_CONTRACT_ADDRESS}
-    ${user_contract} =    Get Contract    ${PROXY_OUTPUT}GetRandomNumberExample.sol/GetRandomNumberExample.json    ${user_contract_address}
     Set Global Variable    $USER_CONTRACT   ${user_contract}
     IF  ${user_contract_address == ''}
         ${contract_output} =    Exec Script    GetRandomNumberLocalTest.s.sol:GetRandomNumberLocalTestScript
         ${contract_address} =    Get Contract Address From File    contracts/broadcast/GetRandomNumberLocalTest.s.sol/31337/run-latest.json
-        Set Global Variable    $USER_CONTRACT_ADDRESS    ${contract_address[0]}
-        ${result} =    All Nodes Have Keyword    received new randomness task    ${NODE_PROCESS_LIST}
+        Set Global Variable    $USER_CONTRACT_ADDRESS    ${contract_address[0]}  
     ELSE
         ${request_id} =    Contract Function Transact    ${USER_CONTRACT}    getRandomNumber
     END
+    ${user_contract} =    Get Contract    ${PROXY_OUTPUT}GetRandomNumberExample.sol/GetRandomNumberExample.json    ${user_contract_address}
+    ${request_id} =    Contract Function Transact    ${USER_CONTRACT}    getRandomNumber
+    RETURN    ${request_id}
 
 Check Randomness
     [Documentation]    Check the randomness
@@ -151,6 +153,14 @@ Get Group
     ${index} =    Convert To Integer    ${index}
     ${result} =    Contract Function Call    ${CONTROLLER_CONTRACT}    getGroup    ${index}
     Log    Group info: ${result}
+    RETURN    ${result}
+
+Is Committer
+    [Documentation]    Check if the node is Committer
+    [Arguments]    ${index}    ${node}
+    ${group} =    Get Group    ${index}
+    ${node} =    To Checksum Address    ${node}
+    ${result} =    List Should Contain    ${group[5]}    ${node}
     RETURN    ${result}
 
 Group Node Number Should Be

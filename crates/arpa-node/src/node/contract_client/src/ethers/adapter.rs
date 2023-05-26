@@ -147,7 +147,7 @@ impl AdapterViews for AdapterClient {
             ServiceClient::<AdapterContract>::prepare_service_client(self).await?;
 
         let r_id = pad_to_bytes32(request_id).unwrap();
-
+        info!("request_id{:?}", r_id);
         AdapterClient::call_contract_view(
             "get_pending_request",
             adapter_contract.get_pending_request_commitment(r_id),

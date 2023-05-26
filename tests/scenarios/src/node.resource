@@ -11,8 +11,7 @@ Resource            common.resource
 *** Variables ***
 ${PROTO_PATH}                       tests/scenarios/src/environment/proto
 ${CONFIG_PATH}                      tests/scenarios/src/environment/node_config/
-#Test variables
-${NODES_PORT}                       localhost:50101
+
 *** Keywords ***
 Compile Proto
     Run    mv ${PROTO_PATH}; mkdir ${PROTO_PATH}
@@ -178,3 +177,7 @@ Stake And Run Node
     Set Global Variable    $NODE_PROCESS_LIST    ${list}
     RETURN    ${proc}
 
+Get Index By Address
+    [Arguments]    ${address}
+    ${index} =    Get Account Index From List    ${address}    ${NODE_ACCOUNT_LIST}
+    RETURN    ${index}

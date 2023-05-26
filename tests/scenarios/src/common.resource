@@ -9,25 +9,16 @@ Library             environment/node.py
 Library             environment/util.py
 
 *** Variables ***
-# Ethereum Mainnet Sanity:
-${TEN_MILLION_BLOCKS}                   10000000
-${WRAPPED_ETHER_CONTRACT_ADDRESS}       0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2
 ${NODE_ACCOUNT_LIST}
 ${NODE_PROCESS_LIST}
 ${EMPTY_LIST}
 ${LOG_PATH}                             crates/arpa-node/log/running/
-
-# ARPA ERC20 information:
-${FORK_RPC_URL}                         https://mainnet.infura.io/v3/e263f48ae1f545198575c7c7d4088f57
 ${ARPA_HOLDER_ADDRESS}                  0xf977814e90da44bfa03b6295a0616a897441acec
 ${ARPA_CONTRACT_ADDRESS}                0xBA50933C268F567BDC86E1aC131BE072C6B0b71a                
-${ACCOUNT_PATH}                         ACCOUNT_PATH
 ${NUM_ACCOUNTS}                         40
 ${BALANCE}                              1000
 
 # Ethereum RPC client, Cast CLI command and arguments:
-${ARGS_IMPERSONATE_ACCOUNT}             rpc anvil_impersonateAccount
-${ARGS_STOP_IMPERSONATE_ACCOUNT}        rpc anvil_stopImpersonatingAccount
 ${LOCAL_ETHEREUM_CHAIN_PROCESS_HANDLE}
 ${BLOCK_TIME}                           0
 
@@ -46,9 +37,10 @@ Teardown Scenario Testing Environment
     [Documentation]    Tears down the scenario testing environment
     Stop Local Ethereum Chain
     Terminate All Processes
+    ${list_len} =   Get Length    ${NODE_PROCESS_LIST}
+    Kill Previous Node    ${list_len}
     Set Global Variable    $NODE_PROCESS_LIST    ${EMPTY_LIST}
     Set Global Variable    $BLOCK_TIME    0
-    Kill Previous Node
     
 
 Process Completes Successfully
@@ -75,9 +67,6 @@ Start Local Ethereum Chain
 
     Process Should Be Running    ${anvil_process_handle}
     Set Global Variable    $LOCAL_ETHEREUM_CHAIN_PROCESS_HANDLE    ${anvil_process_handle}
-    # Temporary solution here
-    # not robust enough since the kickoff time of Anvil can vary depending on the hardware and network
-    # A better solution would be to poll the stdout and inspect the output to ensure Anvil is properly running
     Sleep    2s
     ${result} =    Parse Chain Result To Account List
     Set Global Variable    $NODE_ACCOUNT_LIST    ${result}

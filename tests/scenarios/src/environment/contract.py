@@ -84,14 +84,29 @@ def get_contract_address_from_file(file_name):
             contract_addresses.append(contract_address)
     return contract_addresses
 
-def get_event(contract, event_name):
+def get_event(contract, event_name, from_block=0):
     """
     Get event from contract.
     """
     event = getattr(contract.events, event_name)
-    event_filter = event.create_filter(fromBlock=0)
+    event_filter = event.create_filter(fromBlock=from_block)
     log = event_filter.get_new_entries()
+    if len(log) == 0:
+        return None
+    print(log[0])
     return log[0]
+
+def get_latest_event(contract, event_name, from_block=0):
+    """
+    Get latest event from contract.
+    """
+    event = getattr(contract.events, event_name)
+    event_filter = event.create_filter(fromBlock=from_block)
+    log = event_filter.get_new_entries()
+    if len(log) == 0:
+        return None
+    print(log[-1])
+    return log[-1]
 
 def get_events(contract, event_name):
     """
@@ -99,8 +114,8 @@ def get_events(contract, event_name):
     """
     event = getattr(contract.events, event_name)
     event_filter = event.create_filter(fromBlock=0)
-    logs = event_filter.get_all_entries()
-    print(len(logs))
+    logs = event_filter.get_new_entries()
+    print(logs)
     return logs
 
 def events_should_contain_all_value(events, key, *value):
@@ -113,4 +128,13 @@ def events_should_contain_all_value(events, key, *value):
         if str(event['args'][key]).upper() not in value:
             return False
         print(str(event['args'][key])+ " is in evnets")
+    return True
+
+def events_values_should_be(events, key, value):
+    """
+    Check if all events contain the value of the key.
+    """
+    for event in events:
+        if str(event['args'][key]) != str(value):
+            return False
     return True

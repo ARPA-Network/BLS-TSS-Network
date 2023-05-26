@@ -38,7 +38,7 @@ def get_keyword_from_log(node_idx, keyword, retry_time=30):
             log_info = get_log_info(process, keyword)
             if log_info is not None:
                 return log_info
-        time.sleep(2)
+        time.sleep(1)
     return None
 
 
@@ -83,3 +83,22 @@ def clear_log(path='crates/arpa-node/log/running/'):
         open_path = path + 'node' + str(node_idx) + '.log'
         open(open_path, 'w', encoding='UTF-8').close()
         node_idx = node_idx + 1
+
+def get_err_log_from_chain():
+    """
+    Get the error log from the chain
+    """
+    log_path = ("crates/arpa-node/log/running/anvil-chain.log")
+    with open(log_path, 'r', encoding='UTF-8') as log:
+        for line in log:
+            if line.upper().find('ERROR') != -1:
+                return line
+    return None
+
+# def convert():
+#     integer_list = [119, 57, 29, 190, 58, 172, 214, 5, 86, 169, 123, 18, 108, 95, 93, 200, 242, 170, 43, 115, 0, 90, 142, 126, 227, 123, 19, 135, 215, 37, 144, 169]
+#     byte_object = bytes(integer_list)
+
+#     print(byte_object)
+
+# convert()

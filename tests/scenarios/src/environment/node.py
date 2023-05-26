@@ -2,6 +2,7 @@
 Node management functions for the Arpa test environment.
 """
 import os
+import platform
 import subprocess
 import sys
 import re
@@ -200,6 +201,29 @@ def kill_node(proc):
     proc.kill()
     proc.terminate()
 
+def kill_process_by_port(port):
+    """
+    Kill process by port.
+    port: port number.
+    """
+    if platform.system() == "Windows":
+        command = f'FOR /F "tokens=5 delims= " %P IN (\'netstat -a -n -o ^| findstr :{port}\') DO TaskKill.exe /F /PID %P'
+        os.system(command)
+    else:
+        command = f'lsof -ti :{port} | xargs kill'
+        subprocess.call(command, shell=True)
+
+def kill_node_by_index(index):
+    """
+    Kill a node by its index.
+    index: index of the node.
+    """
+    client_port = 50161 + int(index) - 1
+    committer_port = 50201 + int(index) - 1
+    kill_process_by_port(client_port)
+    kill_process_by_port(committer_port)
+
+
 def get_node_port_from_index(node_idx):
     """
     Get the port of a node from its index.
@@ -219,19 +243,23 @@ def add_process_to_list(proc, node_list):
     node_list.append(proc)
     return node_list
 
-def kill_previous_node():
+def kill_previous_node(node_number=10):
     """
     Kill all previous processes.
+    """
+    for i in range(1, node_number + 1):
+        kill_node_by_index(i)
+
+def print_node_process():
+    """
+    Get the process of a node.
     """
     # Find all processes using ports 50061-50110
     cmd = 'lsof -i :50061-50220'
     p = subprocess.Popen(cmd.split(), stdout=subprocess.PIPE)
     out, err = p.communicate()
-    # Kill each process found
     for line in out.splitlines()[1:]:
         fields = line.strip().split()
         if fields:
             if fields[0] == b'node-clie':
-                pid = int(fields[1])
-                subprocess.call(['kill', '-9', str(pid)])
-
+                print(fields)

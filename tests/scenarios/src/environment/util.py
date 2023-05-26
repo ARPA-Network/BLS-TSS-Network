@@ -49,3 +49,30 @@ def set_value_to_env(name, value):
     value = os.environ.get(name)
     print("Set value to env: ", name, value)
     os.system("source tests/scenarios/.env")
+
+def list_should_contain(address_list, value):
+    """
+    Check if the list contains the value.
+    """
+    print("address_list: ", address_list)
+    return str(value).upper() in [str(item).upper() for item in address_list]
+
+def get_amount_count_from_reward_events(event_list, address):
+    """
+    Get amount from reward events list.
+    """
+    amount = 0
+    for node in event_list:
+        node_address = node["args"]["nodeAddress"]
+        if node_address == address:
+            amount += node["args"]["amount"]
+    return amount
+
+def get_account_index_from_list(address, account_list):
+    """
+    Get account index from list.
+    """
+    for index, account in enumerate(account_list):
+        if str(account.address).upper() == str(address).upper():
+            return index + 1
+    return -1

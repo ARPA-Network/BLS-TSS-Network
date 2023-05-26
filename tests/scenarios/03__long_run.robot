@@ -9,7 +9,7 @@ Resource            src/node.resource
 
 *** Test Cases ***
 
-DKG Happy Path1
+Long Running Request Randomness
     [Documentation]
     ...    1. Given a group is ready for randomeness generation
     ...    2. Request randomness ervery minute
@@ -38,8 +38,9 @@ DKG Happy Path1
         Wait For Process    timeout=1m
     END
 
-    Kill Node    ${node1}
-    Kill Node    ${node2}
-    Kill Node    ${node3}
     Set Global Variable    ${NODE_PROCESS_LIST}    ${EMPTY_LIST}
     Teardown Scenario Testing Environment
+
+*** Keywords ***
+Run Long Running Case
+    #Long Running Request Randomness

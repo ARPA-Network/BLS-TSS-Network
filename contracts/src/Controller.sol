@@ -366,10 +366,12 @@ contract Controller is Initializable, IController, IControllerOwner, OwnableUpgr
         i_ARPA.safeTransfer(recipient, amount);
     }
 
+    event TestEvent(uint256);
     function addReward(address[] memory nodes, uint256 amount) public override(IController) {
         if (msg.sender != s_config.adapterContractAddress) {
             revert SenderNotAdapter();
         }
+        emit TestEvent(nodes.length);
         for (uint256 i = 0; i < nodes.length; i++) {
             s_rewards[nodes[i]] += amount;
             emit NodeRewarded(nodes[i], amount);

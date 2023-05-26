@@ -7,39 +7,9 @@ Resource            src/common.resource
 Resource            src/contract.resource
 Resource            src/node.resource
 
-*** Test Cases ***
-#My Test
-    # Log    RUN
-    # Deploy Proxy Contract
-    # Get Modified CommitdDkg    ${TEST_NODE_ADDRESS}
-    # Set Modified CommitdDkg    ${TEST_NODE_ADDRESS}
-    # Get Node    ${TEST_NODE_ADDRESS}
-    # Get Group    0
-    # Get Member    0    0
-    # Get Coordinator    0
-    # Get Coordinator Instance    0
-    # Deploy Coordinator To Test
-    # Get Shares
-    # Get Justifications
-    # Get Participants
-    # Get DkgKeys
-    # In Phase
+*** Keywords ***
 
-# Node Tets
-#     List Fixed Tasks    1
-#     Shutdown Listener    1    PreGrouping
-#     List fixed Tasks    1
-#     Start Listener    1    PreGrouping
-#     List Fixed Tasks    1
-#     #Node Quit    0    unimplemented
-#     #Node Register    0
-#     #Shutdown Node    0
-#     #Activate Node    0    unimplemented
-#     Get Node Info    1
-#     Get Group Info    1
-#     #Post Process Dkg    0
-
-Normal Node Registration
+Normal Process
     [Documentation]
     ...    This test case is to test the normal node registration process.
     Set Enviorment And Deploy Contract
@@ -62,8 +32,8 @@ Normal Node Registration
     ${result} =    Have Node Got Keyword    fulfill randomness successfully    ${NODE_PROCESS_LIST}
     Sleep    5s
     Check Randomness
-    Kill Node    ${node1}
-    Kill Node    ${node2}
-    Kill Node    ${node3}
-    Set Global Variable    ${NODE_PROCESS_LIST}    ${EMPTY_LIST}
     Teardown Scenario Testing Environment
+
+*** Test Cases ***
+Run Normal Process
+    Repeat Keyword    1    Normal Process
