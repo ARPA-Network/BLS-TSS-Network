@@ -58,10 +58,10 @@ interface IController {
 
     function postProcessDkg(uint256 groupIndex, uint256 groupEpoch) external;
 
-    function claimReward(address recipient, uint256 amount) external;
+    function nodeWithdraw(address recipient) external;
 
     // adapter transaction
-    function addReward(address[] memory nodes, uint256 amount) external;
+    function addReward(address[] memory nodes, uint256 ethAmount, uint256 arpaAmount) external;
 
     function setLastOutput(uint256 lastOutput) external;
 
@@ -83,7 +83,7 @@ interface IController {
 
     function getCoordinator(uint256 groupIndex) external view returns (address);
 
-    function getNodeReward(address nodeAddress) external view returns (uint256);
+    function getNodeWithdrawableTokens(address nodeAddress) external view returns (uint256, uint256);
 
     function getLastOutput() external view returns (uint256);
 

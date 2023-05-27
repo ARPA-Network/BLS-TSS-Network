@@ -6,7 +6,6 @@ import "../src/Controller.sol";
 import "../src/interfaces/IControllerOwner.sol";
 import "../src/Adapter.sol";
 import "../src/interfaces/IAdapterOwner.sol";
-import "./MockArpaEthOracle.sol";
 import "./ArpaLocalTest.sol";
 import "openzeppelin-contracts/contracts/token/ERC20/IERC20.sol";
 import "openzeppelin-contracts/contracts/token/ERC20/ERC20.sol";
@@ -27,23 +26,26 @@ contract ControllerLocalTestScript is Script {
 
     uint16 minimumRequestConfirmations = uint16(vm.envUint("MINIMUM_REQUEST_CONFIRMATIONS"));
     uint32 maxGasLimit = uint32(vm.envUint("MAX_GAS_LIMIT"));
-    uint32 stalenessSeconds = uint32(vm.envUint("STALENESS_SECONDS"));
     uint32 gasAfterPaymentCalculation = uint32(vm.envUint("GAS_AFTER_PAYMENT_CALCULATION"));
     uint32 gasExceptCallback = uint32(vm.envUint("GAS_EXCEPT_CALLBACK"));
-    int256 fallbackWeiPerUnitArpa = vm.envInt("FALLBACK_WEI_PER_UNIT_ARPA");
     uint256 signatureTaskExclusiveWindow = vm.envUint("SIGNATURE_TASK_EXCLUSIVE_WINDOW");
     uint256 rewardPerSignature = vm.envUint("REWARD_PER_SIGNATURE");
     uint256 committerRewardPerSignature = vm.envUint("COMMITTER_REWARD_PER_SIGNATURE");
 
-    uint32 fulfillmentFlatFeeArpaPPMTier1 = uint32(vm.envUint("FULFILLMENT_FLAT_FEE_ARPA_PPM_TIER1"));
-    uint32 fulfillmentFlatFeeArpaPPMTier2 = uint32(vm.envUint("FULFILLMENT_FLAT_FEE_ARPA_PPM_TIER2"));
-    uint32 fulfillmentFlatFeeArpaPPMTier3 = uint32(vm.envUint("FULFILLMENT_FLAT_FEE_ARPA_PPM_TIER3"));
-    uint32 fulfillmentFlatFeeArpaPPMTier4 = uint32(vm.envUint("FULFILLMENT_FLAT_FEE_ARPA_PPM_TIER4"));
-    uint32 fulfillmentFlatFeeArpaPPMTier5 = uint32(vm.envUint("FULFILLMENT_FLAT_FEE_ARPA_PPM_TIER5"));
+    uint32 fulfillmentFlatFeeEthPPMTier1 = uint32(vm.envUint("FULFILLMENT_FLAT_FEE_ARPA_PPM_TIER1"));
+    uint32 fulfillmentFlatFeeEthPPMTier2 = uint32(vm.envUint("FULFILLMENT_FLAT_FEE_ARPA_PPM_TIER2"));
+    uint32 fulfillmentFlatFeeEthPPMTier3 = uint32(vm.envUint("FULFILLMENT_FLAT_FEE_ARPA_PPM_TIER3"));
+    uint32 fulfillmentFlatFeeEthPPMTier4 = uint32(vm.envUint("FULFILLMENT_FLAT_FEE_ARPA_PPM_TIER4"));
+    uint32 fulfillmentFlatFeeEthPPMTier5 = uint32(vm.envUint("FULFILLMENT_FLAT_FEE_ARPA_PPM_TIER5"));
     uint24 reqsForTier2 = uint24(vm.envUint("REQS_FOR_TIER2"));
     uint24 reqsForTier3 = uint24(vm.envUint("REQS_FOR_TIER3"));
     uint24 reqsForTier4 = uint24(vm.envUint("REQS_FOR_TIER4"));
     uint24 reqsForTier5 = uint24(vm.envUint("REQS_FOR_TIER5"));
+
+    uint16 flatFeePromotionGlobalPercentage = uint16(vm.envUint("FLAT_FEE_PROMOTION_GLOBAL_PERCENTAGE"));
+    bool isFlatFeePromotionEnabledPermanently = vm.envBool("IS_FLAT_FEE_PROMOTION_ENABLED_PERMANENTLY");
+    uint256 flatFeePromotionStartTimestamp = vm.envUint("FLAT_FEE_PROMOTION_START_TIMESTAMP");
+    uint256 flatFeePromotionEndTimestamp = vm.envUint("FLAT_FEE_PROMOTION_END_TIMESTAMP");
 
     uint256 initialMaxPoolSize = vm.envUint("INITIAL_MAX_POOL_SIZE");
     uint256 initialMaxCommunityStakeAmount = vm.envUint("INITIAL_MAX_COMMUNITY_STAKE_AMOUNT");
@@ -61,14 +63,10 @@ contract ControllerLocalTestScript is Script {
         ERC1967Proxy adapter;
         Adapter adapter_impl;
         Staking staking;
-        MockArpaEthOracle oracle;
         IERC20 arpa;
 
         vm.broadcast(deployerPrivateKey);
         arpa = new Arpa();
-
-        vm.broadcast(deployerPrivateKey);
-        oracle = new MockArpaEthOracle();
 
         Staking.PoolConstructorParams memory params = Staking.PoolConstructorParams(
             ArpaTokenInterface(address(arpa)),
@@ -95,7 +93,7 @@ contract ControllerLocalTestScript is Script {
 
         vm.broadcast(deployerPrivateKey);
         adapter =
-        new ERC1967Proxy(address(adapter_impl),abi.encodeWithSignature("initialize(address,address,address)",address(controller), address(arpa), address(oracle)));
+            new ERC1967Proxy(address(adapter_impl),abi.encodeWithSignature("initialize(address)",address(controller)));
 
         vm.broadcast(deployerPrivateKey);
         IControllerOwner(address(controller)).setControllerConfig(
@@ -115,24 +113,30 @@ contract ControllerLocalTestScript is Script {
         IAdapterOwner(address(adapter)).setAdapterConfig(
             minimumRequestConfirmations,
             maxGasLimit,
-            stalenessSeconds,
             gasAfterPaymentCalculation,
             gasExceptCallback,
-            fallbackWeiPerUnitArpa,
             signatureTaskExclusiveWindow,
             rewardPerSignature,
-            committerRewardPerSignature,
+            committerRewardPerSignature
+        );
+
+        vm.broadcast(deployerPrivateKey);
+        IAdapterOwner(address(adapter)).setFlatFeeConfig(
             IAdapterOwner.FeeConfig(
-                fulfillmentFlatFeeArpaPPMTier1,
-                fulfillmentFlatFeeArpaPPMTier2,
-                fulfillmentFlatFeeArpaPPMTier3,
-                fulfillmentFlatFeeArpaPPMTier4,
-                fulfillmentFlatFeeArpaPPMTier5,
+                fulfillmentFlatFeeEthPPMTier1,
+                fulfillmentFlatFeeEthPPMTier2,
+                fulfillmentFlatFeeEthPPMTier3,
+                fulfillmentFlatFeeEthPPMTier4,
+                fulfillmentFlatFeeEthPPMTier5,
                 reqsForTier2,
                 reqsForTier3,
                 reqsForTier4,
                 reqsForTier5
-            )
+            ),
+            flatFeePromotionGlobalPercentage,
+            isFlatFeePromotionEnabledPermanently,
+            flatFeePromotionStartTimestamp,
+            flatFeePromotionEndTimestamp
         );
 
         vm.broadcast(deployerPrivateKey);

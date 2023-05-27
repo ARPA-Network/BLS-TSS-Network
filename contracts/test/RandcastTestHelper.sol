@@ -7,7 +7,6 @@ import {IAdapter} from "../src/interfaces/IAdapter.sol";
 import {AdapterForTest, Adapter} from "./AdapterForTest.sol";
 import {Staking, ArpaTokenInterface} from "Staking-v0.1/Staking.sol";
 import {ControllerForTest, Controller} from "./ControllerForTest.sol";
-import {MockArpaEthOracle} from "./mock/MockArpaEthOracle.sol";
 import {IERC20} from "openzeppelin-contracts/contracts/token/ERC20/IERC20.sol";
 import {ERC20} from "openzeppelin-contracts/contracts/token/ERC20/ERC20.sol";
 import {Strings} from "openzeppelin-contracts/contracts/utils/Strings.sol";
@@ -15,7 +14,6 @@ import {Strings} from "openzeppelin-contracts/contracts/utils/Strings.sol";
 abstract contract RandcastTestHelper is Test {
     ControllerForTest controller;
     AdapterForTest adapter;
-    MockArpaEthOracle oracle;
     IERC20 arpa;
     Staking staking;
 
@@ -340,7 +338,7 @@ abstract contract RandcastTestHelper is Test {
     bytes DKGPubkey31 =
         hex"06a8e68091b66c6e6213fdab7adcaa1c7ef2145aecbad0518de6398ea84175180f55f1c03517e174a95b4317ffee31c4f99bb64b6d0ea179ca7f8e86a54574780678fb7b25f7aa9ef3b7e4108834a5f5517f0d6ce295efb363323e45c434a6162a730a0a82bf1d78eb6ac49c2841f77ed71fc14e5df27625dbeb97de7b78628a";
 
-    function fulfillRequest(bytes32 requestId, uint256 sigIndex) internal {
+    function fulfillRequest(address sender, bytes32 requestId, uint256 sigIndex) internal {
         IAdapter.RequestDetail memory rd = adapter.getPendingRequest(requestId);
 
         // mock confirmation times and SIGNATURE_TASK_EXCLUSIVE_WINDOW = 10;
@@ -352,6 +350,7 @@ abstract contract RandcastTestHelper is Test {
         partialSignatures[1] = IAdapter.PartialSignature(1, sig[sigIndex][2]);
         partialSignatures[2] = IAdapter.PartialSignature(2, sig[sigIndex][3]);
 
+        vm.prank(node1);
         adapter.fulfillRandomness(
             0, // fixed group 0
             requestId,
@@ -361,18 +360,13 @@ abstract contract RandcastTestHelper is Test {
         );
     }
 
-    function _prepareSubscription(address consumer, IAdapter.TokenType tokenType, uint256 balance)
-        internal
-        returns (uint64)
-    {
-        uint64 subId = adapter.createSubscription(tokenType);
-        arpa.approve(address(adapter), balance);
-        if (tokenType == IAdapter.TokenType.ETH) {
-            vm.deal(address(this), balance);
-            adapter.fundSubscription{value: balance}(subId, 0);
-        } else {
-            adapter.fundSubscription(subId, balance);
-        }
+    function _prepareSubscription(address sender, address consumer, uint256 balance) internal returns (uint64) {
+        vm.prank(sender);
+        uint64 subId = adapter.createSubscription();
+        vm.deal(sender, balance);
+        vm.prank(sender);
+        adapter.fundSubscription{value: balance}(subId);
+        vm.prank(sender);
         adapter.addConsumer(subId, consumer);
         return subId;
     }

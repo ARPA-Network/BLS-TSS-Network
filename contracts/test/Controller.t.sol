@@ -432,9 +432,9 @@ contract ControllerTest is RandcastTestHelper {
         // Succesful post process dkg: HAPPY PATH
         vm.startPrank(node1);
         controller.postProcessDkg(groupIndex, groupEpoch);
-        uint256 nodeRewards = controller.getNodeReward(node1);
-        emit log_named_uint("node1 rewards", nodeRewards);
-        assertEq(nodeRewards, dkgPostProcessReward);
+        (, uint256 nodeArpaRewards) = controller.getNodeWithdrawableTokens(node1);
+        emit log_named_uint("node1 rewards", nodeArpaRewards);
+        assertEq(nodeArpaRewards, dkgPostProcessReward);
 
         // test self destruct worked properly
         address emptyCoordinatorAddress = controller.getCoordinator(groupIndex);

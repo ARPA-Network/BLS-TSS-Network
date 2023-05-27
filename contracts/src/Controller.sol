@@ -7,6 +7,7 @@ import {OwnableUpgradeable} from "openzeppelin-contracts-upgradeable/contracts/a
 import {Initializable} from "openzeppelin-contracts-upgradeable/contracts/proxy/utils/Initializable.sol";
 import {IController} from "./interfaces/IController.sol";
 import {IControllerOwner} from "./interfaces/IControllerOwner.sol";
+import {IAdapter} from "./interfaces/IAdapter.sol";
 import {ICoordinator} from "./interfaces/ICoordinator.sol";
 import {INodeStaking} from "Staking-v0.1/interfaces/INodeStaking.sol";
 import {BLS} from "./libraries/BLS.sol";
@@ -23,7 +24,8 @@ contract Controller is Initializable, IController, IControllerOwner, OwnableUpgr
 
     // *Node State Variables*
     mapping(address => Node) private _nodes; // maps node address to Node Struct
-    mapping(address => uint256) private _rewards; // maps node address to reward amount
+    mapping(address => uint256) private _withdrawableEths; // maps node address to withdrawable eth amount
+    mapping(address => uint256) private _arpaRewards; // maps node address to arpa rewards
 
     // *DKG Variables*
     mapping(uint256 => address) private _coordinators; // maps group index to coordinator address
@@ -51,7 +53,7 @@ contract Controller is Initializable, IController, IControllerOwner, OwnableUpgr
     event NodeQuit(address indexed nodeAddress);
     event DkgPublicKeyChanged(address indexed nodeAddress, bytes dkgPublicKey);
     event NodeSlashed(address indexed nodeIdAddress, uint256 stakingRewardPenalty, uint256 pendingBlock);
-    event NodeRewarded(address indexed nodeAddress, uint256 amount);
+    event NodeRewarded(address indexed nodeAddress, uint256 ethAmount, uint256 arpaAmount);
     event ControllerConfigSet(
         address stakingContractAddress,
         address adapterContractAddress,
@@ -88,7 +90,6 @@ contract Controller is Initializable, IController, IControllerOwner, OwnableUpgr
     error NodeNotInGroup(uint256 groupIndex, address nodeIdAddress);
     error PartialKeyAlreadyRegistered(uint256 groupIndex, address nodeIdAddress);
     error SenderNotAdapter();
-    error InsufficientBalance();
 
     function initialize(address arpa, uint256 lastOutput) public initializer {
         _arpa = IERC20(arpa);
@@ -353,26 +354,32 @@ contract Controller is Initializable, IController, IControllerOwner, OwnableUpgr
         }
 
         // update rewards for calling node
-        _rewards[msg.sender] += _config.dkgPostProcessReward;
+        _arpaRewards[msg.sender] += _config.dkgPostProcessReward;
 
-        emit NodeRewarded(msg.sender, _config.dkgPostProcessReward);
+        emit NodeRewarded(msg.sender, 0, _config.dkgPostProcessReward);
     }
 
-    function claimReward(address recipient, uint256 amount) external override(IController) {
-        if (_rewards[msg.sender] < amount) {
-            revert InsufficientBalance();
+    function nodeWithdraw(address recipient) external override(IController) {
+        uint256 ethAmount = _withdrawableEths[msg.sender];
+        uint256 arpaAmount = _arpaRewards[msg.sender];
+        if (ethAmount > 0) {
+            _withdrawableEths[msg.sender] = 0;
+            IAdapter(_config.adapterContractAddress).nodeWithdrawETH(recipient, ethAmount);
         }
-        _rewards[recipient] -= amount;
-        _arpa.safeTransfer(recipient, amount);
+        if (arpaAmount > 0) {
+            _arpaRewards[msg.sender] = 0;
+            _arpa.safeTransfer(recipient, arpaAmount);
+        }
     }
 
-    function addReward(address[] memory nodes, uint256 amount) public override(IController) {
+    function addReward(address[] memory nodes, uint256 ethAmount, uint256 arpaAmount) public override(IController) {
         if (msg.sender != _config.adapterContractAddress) {
             revert SenderNotAdapter();
         }
         for (uint256 i = 0; i < nodes.length; i++) {
-            _rewards[nodes[i]] += amount;
-            emit NodeRewarded(nodes[i], amount);
+            _withdrawableEths[nodes[i]] += ethAmount;
+            _arpaRewards[nodes[i]] += arpaAmount;
+            emit NodeRewarded(nodes[i], ethAmount, arpaAmount);
         }
     }
 
@@ -416,8 +423,13 @@ contract Controller is Initializable, IController, IControllerOwner, OwnableUpgr
         return _coordinators[groupIndex];
     }
 
-    function getNodeReward(address nodeAddress) public view override(IController) returns (uint256) {
-        return _rewards[nodeAddress];
+    function getNodeWithdrawableTokens(address nodeAddress)
+        public
+        view
+        override(IController)
+        returns (uint256, uint256)
+    {
+        return (_withdrawableEths[nodeAddress], _arpaRewards[nodeAddress]);
     }
 
     function getLastOutput() external view returns (uint256) {

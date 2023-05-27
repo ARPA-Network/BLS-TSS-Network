@@ -2,7 +2,6 @@
 pragma solidity >=0.8.10;
 
 import "forge-std/Test.sol";
-import "../mock/MockArpaEthOracle.sol";
 import "openzeppelin-contracts/contracts/token/ERC20/IERC20.sol";
 import "openzeppelin-contracts/contracts/token/ERC20/ERC20.sol";
 import "openzeppelin-contracts/contracts/proxy/ERC1967/ERC1967Proxy.sol";
@@ -20,7 +19,6 @@ contract ProxyTest is Test {
     ERC1967Proxy adapter;
     Adapter adapter_impl;
     Staking staking;
-    MockArpaEthOracle oracle;
     IERC20 arpa;
 
     address public admin = address(0xABCD);
@@ -62,33 +60,32 @@ contract ProxyTest is Test {
     // Adapter params
     uint16 minimumRequestConfirmations = 3;
     uint32 maxGasLimit = 2000000;
-    uint32 stalenessSeconds = 30;
     uint32 gasAfterPaymentCalculation = 30000;
     uint32 gasExceptCallback = 200000;
-    int256 fallbackWeiPerUnitArpa = 1e12;
     uint256 signatureTaskExclusiveWindow = 10;
     uint256 rewardPerSignature = 50;
     uint256 committerRewardPerSignature = 100;
 
-    uint32 fulfillmentFlatFeeArpaPPMTier1 = 2500000;
-    uint32 fulfillmentFlatFeeArpaPPMTier2 = 250000;
-    uint32 fulfillmentFlatFeeArpaPPMTier3 = 25000;
-    uint32 fulfillmentFlatFeeArpaPPMTier4 = 2500;
-    uint32 fulfillmentFlatFeeArpaPPMTier5 = 250;
+    uint32 fulfillmentFlatFeeEthPPMTier1 = 2500000;
+    uint32 fulfillmentFlatFeeEthPPMTier2 = 250000;
+    uint32 fulfillmentFlatFeeEthPPMTier3 = 25000;
+    uint32 fulfillmentFlatFeeEthPPMTier4 = 2500;
+    uint32 fulfillmentFlatFeeEthPPMTier5 = 250;
     uint24 reqsForTier2 = 10;
     uint24 reqsForTier3 = 20;
     uint24 reqsForTier4 = 30;
     uint24 reqsForTier5 = 40;
 
-    uint96 plentyOfArpaBalance = 1e6 * 1e18;
+    uint16 flatFeePromotionGlobalPercentage = 100;
+    bool isFlatFeePromotionEnabledPermanently = false;
+    uint256 flatFeePromotionStartTimestamp = 0;
+    uint256 flatFeePromotionEndTimestamp = 0;
 
     function setUp() public {
         skip(1000);
 
         vm.prank(admin);
         arpa = new ERC20("arpa token", "ARPA");
-        vm.prank(admin);
-        oracle = new MockArpaEthOracle();
 
         Staking.PoolConstructorParams memory params = Staking.PoolConstructorParams(
             ArpaTokenInterface(address(arpa)),
@@ -115,7 +112,7 @@ contract ProxyTest is Test {
 
         vm.prank(admin);
         adapter =
-        new ERC1967Proxy(address(adapter_impl), abi.encodeWithSignature("initialize(address,address,address)", address(controller), address(arpa), address(oracle)));
+            new ERC1967Proxy(address(adapter_impl), abi.encodeWithSignature("initialize(address)", address(controller)));
 
         vm.prank(admin);
         IControllerOwner(address(controller)).setControllerConfig(
@@ -135,24 +132,30 @@ contract ProxyTest is Test {
         IAdapterOwner(address(adapter)).setAdapterConfig(
             minimumRequestConfirmations,
             maxGasLimit,
-            stalenessSeconds,
             gasAfterPaymentCalculation,
             gasExceptCallback,
-            fallbackWeiPerUnitArpa,
             signatureTaskExclusiveWindow,
             rewardPerSignature,
-            committerRewardPerSignature,
+            committerRewardPerSignature
+        );
+
+        vm.broadcast(admin);
+        IAdapterOwner(address(adapter)).setFlatFeeConfig(
             IAdapterOwner.FeeConfig(
-                fulfillmentFlatFeeArpaPPMTier1,
-                fulfillmentFlatFeeArpaPPMTier2,
-                fulfillmentFlatFeeArpaPPMTier3,
-                fulfillmentFlatFeeArpaPPMTier4,
-                fulfillmentFlatFeeArpaPPMTier5,
+                fulfillmentFlatFeeEthPPMTier1,
+                fulfillmentFlatFeeEthPPMTier2,
+                fulfillmentFlatFeeEthPPMTier3,
+                fulfillmentFlatFeeEthPPMTier4,
+                fulfillmentFlatFeeEthPPMTier5,
                 reqsForTier2,
                 reqsForTier3,
                 reqsForTier4,
                 reqsForTier5
-            )
+            ),
+            flatFeePromotionGlobalPercentage,
+            isFlatFeePromotionEnabledPermanently,
+            flatFeePromotionStartTimestamp,
+            flatFeePromotionEndTimestamp
         );
 
         vm.prank(admin);
@@ -160,7 +163,7 @@ contract ProxyTest is Test {
     }
 
     function testAdapterProxy() public {
-        assertEq(IAdapter(address(adapter)).getFeeTier(50), fulfillmentFlatFeeArpaPPMTier5);
+        assertEq(IAdapter(address(adapter)).getFeeTier(50), fulfillmentFlatFeeEthPPMTier5);
 
         // adapter cannot be upgraded by anyone except the owner
         vm.prank(stakingDeployer);
@@ -178,44 +181,36 @@ contract ProxyTest is Test {
         vm.expectRevert("Initializable: contract is already initialized");
         vm.prank(admin);
         UUPSUpgradeable(address(adapter)).upgradeToAndCall(
-            address(adapter_impl_2),
-            abi.encodeWithSignature(
-                "initialize(address,address,address)", address(controller), address(arpa), address(oracle)
-            )
+            address(adapter_impl_2), abi.encodeWithSignature("initialize(address)", address(controller))
         );
 
         vm.prank(admin);
         UUPSUpgradeable(address(adapter)).upgradeTo(address(adapter_impl_2));
 
         // the state shoud be the same after upgrade
-        assertEq(IAdapter(address(adapter)).getFeeTier(50), fulfillmentFlatFeeArpaPPMTier5);
+        assertEq(IAdapter(address(adapter)).getFeeTier(50), fulfillmentFlatFeeEthPPMTier5);
 
         // the authorization should be the same after upgrade
-        uint32 newFulfillmentFlatFeeArpaPPMTier5 = 25;
+        uint32 newFulfillmentFlatFeeEthPPMTier5 = 25;
         vm.prank(admin);
-        IAdapterOwner(address(adapter)).setAdapterConfig(
-            minimumRequestConfirmations,
-            maxGasLimit,
-            stalenessSeconds,
-            gasAfterPaymentCalculation,
-            gasExceptCallback,
-            fallbackWeiPerUnitArpa,
-            signatureTaskExclusiveWindow,
-            rewardPerSignature,
-            committerRewardPerSignature,
+        IAdapterOwner(address(adapter)).setFlatFeeConfig(
             IAdapterOwner.FeeConfig(
-                fulfillmentFlatFeeArpaPPMTier1,
-                fulfillmentFlatFeeArpaPPMTier2,
-                fulfillmentFlatFeeArpaPPMTier3,
-                fulfillmentFlatFeeArpaPPMTier4,
-                newFulfillmentFlatFeeArpaPPMTier5,
+                fulfillmentFlatFeeEthPPMTier1,
+                fulfillmentFlatFeeEthPPMTier2,
+                fulfillmentFlatFeeEthPPMTier3,
+                fulfillmentFlatFeeEthPPMTier4,
+                newFulfillmentFlatFeeEthPPMTier5,
                 reqsForTier2,
                 reqsForTier3,
                 reqsForTier4,
                 reqsForTier5
-            )
+            ),
+            flatFeePromotionGlobalPercentage,
+            isFlatFeePromotionEnabledPermanently,
+            flatFeePromotionStartTimestamp,
+            flatFeePromotionEndTimestamp
         );
-        assertEq(IAdapter(address(adapter)).getFeeTier(50), newFulfillmentFlatFeeArpaPPMTier5);
+        assertEq(IAdapter(address(adapter)).getFeeTier(50), newFulfillmentFlatFeeEthPPMTier5);
 
         // the new function should be called successfully
         (bool success, bytes memory result) =

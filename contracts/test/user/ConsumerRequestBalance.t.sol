@@ -6,13 +6,7 @@ import "../../src/user/examples/GetShuffledArrayExample.sol";
 import "../../src/user/examples/RollDiceExample.sol";
 import "../../src/user/examples/AdvancedGetShuffledArrayExample.sol";
 import {
-    IAdapter,
-    Adapter,
-    RandcastTestHelper,
-    ERC20,
-    MockArpaEthOracle,
-    ControllerForTest,
-    AdapterForTest
+    IAdapter, Adapter, RandcastTestHelper, ERC20, ControllerForTest, AdapterForTest
 } from "../RandcastTestHelper.sol";
 import {IAdapterOwner} from "../../src/interfaces/IAdapterOwner.sol";
 
@@ -33,20 +27,21 @@ contract ConsumerRequestBalanceTest is RandcastTestHelper {
 
     uint16 minimumRequestConfirmations = 3;
     uint32 maxGasLimit = 2000000;
-    uint32 stalenessSeconds = 30;
     uint32 gasAfterPaymentCalculation = 80000;
     uint32 gasExceptCallback = 492000;
-    int256 fallbackWeiPerUnitArpa = 1e12;
     uint256 signatureTaskExclusiveWindow = 10;
     uint256 rewardPerSignature = 50;
     uint256 committerRewardPerSignature = 100;
+
+    uint16 flatFeePromotionGlobalPercentage = 100;
+    bool isFlatFeePromotionEnabledPermanently = false;
+    uint256 flatFeePromotionStartTimestamp = 0;
+    uint256 flatFeePromotionEndTimestamp = 0;
 
     function setUp() public {
         skip(1000);
         vm.prank(admin);
         arpa = new ERC20("arpa token", "ARPA");
-        vm.prank(admin);
-        oracle = new MockArpaEthOracle();
 
         address[] memory operators = new address[](5);
         operators[0] = node1;
@@ -60,7 +55,7 @@ contract ConsumerRequestBalanceTest is RandcastTestHelper {
         controller = new ControllerForTest(address(arpa), last_output);
 
         vm.prank(admin);
-        adapter = new AdapterForTest(address(controller), address(arpa), address(oracle));
+        adapter = new AdapterForTest(address(controller));
 
         vm.prank(user);
         getRandomNumberExample = new GetRandomNumberExample(
@@ -98,14 +93,20 @@ contract ConsumerRequestBalanceTest is RandcastTestHelper {
         adapter.setAdapterConfig(
             minimumRequestConfirmations,
             maxGasLimit,
-            stalenessSeconds,
             gasAfterPaymentCalculation,
             gasExceptCallback,
-            fallbackWeiPerUnitArpa,
             signatureTaskExclusiveWindow,
             rewardPerSignature,
-            committerRewardPerSignature,
-            IAdapterOwner.FeeConfig(250000, 250000, 250000, 250000, 250000, 0, 0, 0, 0)
+            committerRewardPerSignature
+        );
+
+        vm.broadcast(admin);
+        IAdapterOwner(address(adapter)).setFlatFeeConfig(
+            IAdapterOwner.FeeConfig(250000, 250000, 250000, 250000, 250000, 0, 0, 0, 0),
+            flatFeePromotionGlobalPercentage,
+            isFlatFeePromotionEnabledPermanently,
+            flatFeePromotionStartTimestamp,
+            flatFeePromotionEndTimestamp
         );
 
         vm.prank(stakingDeployer);
@@ -131,52 +132,48 @@ contract ConsumerRequestBalanceTest is RandcastTestHelper {
     function testCannotRequestWithoutEnoughBalance() public {
         deal(user, 1 * 1e18);
 
-        uint256 fewArpaBalance = 1 * 1e18;
-        deal(address(arpa), address(user), fewArpaBalance);
+        uint256 feweTHBalance = 1 * 1e10;
 
-        vm.startPrank(user);
-        _prepareSubscription(address(rollDiceExample), IAdapter.TokenType.ARPA, fewArpaBalance);
+        _prepareSubscription(user, address(rollDiceExample), feweTHBalance);
 
         uint32 bunch = 10;
         vm.expectRevert(Adapter.InsufficientBalanceWhenRequest.selector);
+        vm.prank(user);
         rollDiceExample.rollDice(bunch);
-        vm.stopPrank();
     }
 
     function testRequestGeneralExampleWithEnoughBalanceThenSuccessfullyFulfill() public {
         deal(user, 1 * 1e18);
-        vm.startPrank(user);
 
         // (1e18 arpa wei/arpa) (wei/gas * gas) / (wei/arpa) = arpa wei
         // paymentNoFee = (1e18 *
         //     weiPerUnitGas *
         //     (gasExceptCallback + callbackGasUsed) /
         //     uint256(weiPerUnitArpa);
-        // callbackGasUsed = 496820 gas
+        // callbackGasUsed = 501728 gas
         // WeiPerUnitArpa = 1e12 wei/arpa
         // weiPerUnitGas = 1e9 wei/gas
-        // gasExceptCallback  = 492000 gas
+        // gasExceptCallback  = 563262 gas
         // flat fee = 250000 1e12 arpa wei
         // Actual: 904212000000000000000
         // Expected: 891728000000000000000
-        uint256 expectedPayment = (1e18 * 1e9 * (492000 + 496820)) / 1e12 + 250000 * 1e12;
+        uint256 expectedPayment = 1e9 * (563262 + 501728);
 
-        uint256 plentyOfArpaBalance = 1e6 * 1e18;
-        deal(address(arpa), address(user), plentyOfArpaBalance);
-        uint64 subId = _prepareSubscription(address(rollDiceExample), IAdapter.TokenType.ARPA, plentyOfArpaBalance);
+        uint256 plentyOfEthBalance = 1e16;
+        uint64 subId = _prepareSubscription(user, address(rollDiceExample), plentyOfEthBalance);
 
         uint32 bunch = 10;
+        vm.prank(user);
         bytes32 requestId = rollDiceExample.rollDice(bunch);
 
         deal(node1, 1 * 1e18);
-        changePrank(node1);
-        fulfillRequest(requestId, 10);
+        fulfillRequest(node1, requestId, 10);
 
         (uint256 afterBalance, uint256 inflightCost) = _getBalance(subId);
 
         // the upper limit of delta is 5%
         // maxPercentDelta is an 18 decimal fixed point number, where 1e18 == 100%
-        assertApproxEqRel(plentyOfArpaBalance - afterBalance, expectedPayment, 1e18 / 20);
+        assertApproxEqRel(plentyOfEthBalance - afterBalance, expectedPayment, 1e18 / 20);
         // inflight cost should be 0 after fulfillment
         assertEq(inflightCost, 0);
 
@@ -188,29 +185,26 @@ contract ConsumerRequestBalanceTest is RandcastTestHelper {
 
     function testCannotRequestWithTooMuchInflightCost() public {
         deal(user, 1 * 1e18);
-        vm.startPrank(user);
 
         // give the balance just enough for one request
-        // give more than 3 times actual payment(1076242000000000000000) since we estimate 3 times max gas fee(3320434000000000000000)
-        uint256 someArpaBalance = 1150 * 3 * 1e18;
-        deal(address(arpa), address(user), someArpaBalance);
-        _prepareSubscription(address(rollDiceExample), IAdapter.TokenType.ARPA, someArpaBalance);
+        // give more than 3 times actual payment since we estimate 3 times max gas fee
+        uint256 someEthBalance = 11 * 3 * 1e14;
+        _prepareSubscription(user, address(rollDiceExample), someEthBalance);
         uint32 bunch = 10;
+        vm.prank(user);
         rollDiceExample.rollDice(bunch);
         // now we have an inflight request, then try to request again in the next block
         vm.roll(block.number + 1);
         vm.expectRevert(Adapter.InsufficientBalanceWhenRequest.selector);
+        vm.prank(user);
         rollDiceExample.rollDice(bunch);
     }
 
     function testRequestAdvancedExampleWithEnoughBalanceThenSuccessfullyFulfill() public {
         deal(user, 1 * 1e18);
-        vm.startPrank(user);
 
-        uint256 plentyOfArpaBalance = 1e6 * 1e18;
-        deal(address(arpa), address(user), plentyOfArpaBalance);
-        uint64 subId =
-            _prepareSubscription(address(advancedGetShuffledArrayExample), IAdapter.TokenType.ARPA, plentyOfArpaBalance);
+        uint256 plentyOfEthBalance = 1e15;
+        uint64 subId = _prepareSubscription(user, address(advancedGetShuffledArrayExample), plentyOfEthBalance);
 
         uint32 upper = 10;
         uint256 seed = 42;
@@ -219,13 +213,13 @@ contract ConsumerRequestBalanceTest is RandcastTestHelper {
         uint256 callbackGasLimit = 350000;
         uint256 callbackMaxGasPrice = 1 * 1e9;
 
+        vm.prank(user);
         bytes32 requestId = advancedGetShuffledArrayExample.getRandomNumberThenGenerateShuffledArray(
             upper, subId, seed, requestConfirmations, callbackGasLimit, callbackMaxGasPrice
         );
 
         deal(node1, 1 * 1e18);
-        changePrank(node1);
-        fulfillRequest(requestId, 12);
+        fulfillRequest(node1, requestId, 12);
 
         assertEq(advancedGetShuffledArrayExample.lengthOfShuffleResults(), 1);
 
@@ -241,20 +235,19 @@ contract ConsumerRequestBalanceTest is RandcastTestHelper {
 
     function testCannotRequestAdvancedExampleWithTooHighCallbackGasLimitAndCallbackMaxGasFee() public {
         deal(user, 1 * 1e18);
-        vm.startPrank(user);
 
-        uint256 plentyOfArpaBalance = 1e6 * 1e18;
-        deal(address(arpa), address(user), plentyOfArpaBalance);
-        uint64 subId =
-            _prepareSubscription(address(advancedGetShuffledArrayExample), IAdapter.TokenType.ARPA, plentyOfArpaBalance);
+        uint256 someEthBalance = 1e18;
+        uint64 subId = _prepareSubscription(user, address(advancedGetShuffledArrayExample), someEthBalance);
 
         uint32 upper = 10;
         uint256 seed = 42;
         uint16 requestConfirmations = 0;
         uint256 callbackGasLimit = 2e6;
         uint256 callbackMaxGasPrice = 1e3 * 1e9;
+        // payment = 2e6 * 1e3 * 1e9 = 2e18
 
         vm.expectRevert(Adapter.InsufficientBalanceWhenRequest.selector);
+        vm.prank(user);
         advancedGetShuffledArrayExample.getRandomNumberThenGenerateShuffledArray(
             upper, subId, seed, requestConfirmations, callbackGasLimit, callbackMaxGasPrice
         );

@@ -6,8 +6,8 @@ import {Adapter} from "../src/Adapter.sol";
 contract AdapterForTest is Adapter {
     mapping(bytes32 => RequestDetail) internal _requestDetails;
 
-    constructor(address controller, address arpa, address arpaEthFeed) {
-        initialize(controller, arpa, arpaEthFeed);
+    constructor(address controller) {
+        initialize(controller);
     }
 
     function requestRandomness(RandomnessRequestParams memory p) public override returns (bytes32) {

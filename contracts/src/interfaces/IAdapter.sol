@@ -4,11 +4,6 @@ pragma solidity >=0.8.10;
 import {IRequestTypeBase} from "./IRequestTypeBase.sol";
 
 interface IAdapter is IRequestTypeBase {
-    enum TokenType {
-        ARPA,
-        ETH
-    }
-
     struct PartialSignature {
         uint256 index;
         uint256 partialSignature;
@@ -37,6 +32,10 @@ interface IAdapter is IRequestTypeBase {
         uint256 blockNum;
     }
 
+    // controller transaction
+    function nodeWithdrawETH(address recipient, uint256 ethAmount) external;
+
+    // consumer contract transaction
     function requestRandomness(RandomnessRequestParams memory p) external returns (bytes32);
 
     function fulfillRandomness(
@@ -47,12 +46,16 @@ interface IAdapter is IRequestTypeBase {
         PartialSignature[] calldata partialSignatures
     ) external;
 
-    function createSubscription(TokenType tokenType) external returns (uint64);
+    // user transaction
+    function createSubscription() external returns (uint64);
 
     function addConsumer(uint64 subId, address consumer) external;
 
-    function fundSubscription(uint64 subId, uint256 amount) external payable;
+    function fundSubscription(uint64 subId) external payable;
 
+    function setReferral(uint64 subId, uint64 referralSubId) external;
+
+    // view
     function getLastSubscription(address consumer) external view returns (uint64);
 
     function getSubscription(uint64 subId)
@@ -74,10 +77,10 @@ interface IAdapter is IRequestTypeBase {
     function getFeeTier(uint64 reqCount) external view returns (uint32);
 
     // Estimate the amount of gas used for fulfillment
-    function estimatePaymentAmountInArpa(
+    function estimatePaymentAmountInETH(
         uint256 callbackGasLimit,
         uint256 gasExceptCallback,
-        uint32 fulfillmentFlatFeeArpaPPM,
+        uint32 fulfillmentFlatFeeEthPPM,
         uint256 weiPerUnitGas
-    ) external view returns (uint256, uint256);
+    ) external view returns (uint256);
 }

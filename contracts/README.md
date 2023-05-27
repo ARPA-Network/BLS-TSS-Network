@@ -71,7 +71,7 @@ forge script script/StakeNodeLocalTest.s.sol:StakeNodeLocalTestScript --fork-url
 
 ### run some nodes to get an available group:
 
-See crate arpa-node [` README.md`](../crates/arpa-node/README.md) for details.
+See crate arpa-node [`README.md`](../crates/arpa-node/README.md) for details.
 
 ### deploy the user contract([`GetRandomNumberExample`](src/user/examples/GetRandomNumberExample.sol)) and request a randomness:
 

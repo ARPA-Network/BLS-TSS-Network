@@ -3,14 +3,7 @@ pragma solidity >=0.8.10;
 
 import {GetRandomNumberExample} from "../src/user/examples/GetRandomNumberExample.sol";
 import {IAdapterOwner} from "../src/interfaces/IAdapterOwner.sol";
-import {
-    RandcastTestHelper,
-    IAdapter,
-    Adapter,
-    MockArpaEthOracle,
-    ControllerForTest,
-    AdapterForTest
-} from "./RandcastTestHelper.sol";
+import {RandcastTestHelper, IAdapter, Adapter, ControllerForTest, AdapterForTest} from "./RandcastTestHelper.sol";
 import {ERC20} from "openzeppelin-contracts/contracts/token/ERC20/ERC20.sol";
 
 contract AdapterTest is RandcastTestHelper {
@@ -28,33 +21,34 @@ contract AdapterTest is RandcastTestHelper {
 
     uint16 minimumRequestConfirmations = 3;
     uint32 maxGasLimit = 2000000;
-    uint32 stalenessSeconds = 30;
     uint32 gasAfterPaymentCalculation = 30000;
-    uint32 gasExceptCallback = 200000;
-    int256 fallbackWeiPerUnitArpa = 1e12;
+    uint32 gasExceptCallback = 563262;
     uint256 signatureTaskExclusiveWindow = 10;
     uint256 rewardPerSignature = 50;
     uint256 committerRewardPerSignature = 100;
 
-    uint32 fulfillmentFlatFeeArpaPPMTier1 = 250000;
-    uint32 fulfillmentFlatFeeArpaPPMTier2 = 250000;
-    uint32 fulfillmentFlatFeeArpaPPMTier3 = 250000;
-    uint32 fulfillmentFlatFeeArpaPPMTier4 = 250000;
-    uint32 fulfillmentFlatFeeArpaPPMTier5 = 250000;
+    uint32 fulfillmentFlatFeeEthPPMTier1 = 250000;
+    uint32 fulfillmentFlatFeeEthPPMTier2 = 250000;
+    uint32 fulfillmentFlatFeeEthPPMTier3 = 250000;
+    uint32 fulfillmentFlatFeeEthPPMTier4 = 250000;
+    uint32 fulfillmentFlatFeeEthPPMTier5 = 250000;
     uint24 reqsForTier2 = 0;
     uint24 reqsForTier3 = 0;
     uint24 reqsForTier4 = 0;
     uint24 reqsForTier5 = 0;
 
-    uint256 plentyOfArpaBalance = 1e6 * 1e18;
+    uint16 flatFeePromotionGlobalPercentage = 100;
+    bool isFlatFeePromotionEnabledPermanently = false;
+    uint256 flatFeePromotionStartTimestamp = 0;
+    uint256 flatFeePromotionEndTimestamp = 0;
+
+    uint256 plentyOfEthBalance = 1e6 * 1e18;
 
     function setUp() public {
         skip(1000);
 
         vm.prank(admin);
         arpa = new ERC20("arpa token", "ARPA");
-        vm.prank(admin);
-        oracle = new MockArpaEthOracle();
 
         address[] memory operators = new address[](5);
         operators[0] = node1;
@@ -68,7 +62,7 @@ contract AdapterTest is RandcastTestHelper {
         controller = new ControllerForTest(address(arpa), last_output);
 
         vm.prank(admin);
-        adapter = new AdapterForTest(address(controller), address(arpa), address(oracle));
+        adapter = new AdapterForTest(address(controller));
 
         vm.prank(user);
         getRandomNumberExample = new GetRandomNumberExample(
@@ -93,37 +87,36 @@ contract AdapterTest is RandcastTestHelper {
         adapter.setAdapterConfig(
             minimumRequestConfirmations,
             maxGasLimit,
-            stalenessSeconds,
             gasAfterPaymentCalculation,
             gasExceptCallback,
-            fallbackWeiPerUnitArpa,
             signatureTaskExclusiveWindow,
             rewardPerSignature,
-            committerRewardPerSignature,
+            committerRewardPerSignature
+        );
+
+        vm.broadcast(admin);
+        IAdapterOwner(address(adapter)).setFlatFeeConfig(
             IAdapterOwner.FeeConfig(
-                fulfillmentFlatFeeArpaPPMTier1,
-                fulfillmentFlatFeeArpaPPMTier2,
-                fulfillmentFlatFeeArpaPPMTier3,
-                fulfillmentFlatFeeArpaPPMTier4,
-                fulfillmentFlatFeeArpaPPMTier5,
+                fulfillmentFlatFeeEthPPMTier1,
+                fulfillmentFlatFeeEthPPMTier2,
+                fulfillmentFlatFeeEthPPMTier3,
+                fulfillmentFlatFeeEthPPMTier4,
+                fulfillmentFlatFeeEthPPMTier5,
                 reqsForTier2,
                 reqsForTier3,
                 reqsForTier4,
                 reqsForTier5
-            )
+            ),
+            flatFeePromotionGlobalPercentage,
+            isFlatFeePromotionEnabledPermanently,
+            flatFeePromotionStartTimestamp,
+            flatFeePromotionEndTimestamp
         );
 
         vm.prank(stakingDeployer);
         staking.setController(address(controller));
 
-        deal(address(arpa), address(user), plentyOfArpaBalance);
-
-        vm.prank(user);
-        arpa.approve(address(controller), 3 * plentyOfArpaBalance);
-
-        vm.startPrank(user);
-        subId = _prepareSubscription(address(getRandomNumberExample), IAdapter.TokenType.ARPA, plentyOfArpaBalance);
-        vm.stopPrank();
+        subId = _prepareSubscription(user, address(getRandomNumberExample), plentyOfEthBalance);
     }
 
     function testAdapterAddress() public {
@@ -150,22 +143,23 @@ contract AdapterTest is RandcastTestHelper {
         deal(user, 1 * 1e18);
 
         uint32 times = 10;
+        uint256 _inflightCost;
+
         for (uint256 i = 0; i < times; i++) {
-            vm.startBroadcast(user);
+            vm.prank(user);
             bytes32 requestId = getRandomNumberExample.getRandomNumber();
             emit log_bytes32(requestId);
-            vm.stopBroadcast();
             (, uint256 inflightCost,,,) = adapter.getSubscription(subId);
             emit log_uint(inflightCost);
 
-            (uint256 payment,) = adapter.estimatePaymentAmountInArpa(
-                getRandomNumberExample.callbackGasLimit(),
-                gasExceptCallback,
-                fulfillmentFlatFeeArpaPPMTier1,
-                tx.gasprice * 3
+            // 0 flat fee until the first request is actually fulfilled
+            uint256 payment = adapter.estimatePaymentAmountInETH(
+                getRandomNumberExample.callbackGasLimit(), gasExceptCallback, 0, tx.gasprice * 3
             );
 
-            assertEq(inflightCost, payment * (i + 1));
+            _inflightCost += payment;
+
+            assertEq(inflightCost, _inflightCost);
 
             Adapter.RequestDetail memory rd = adapter.getPendingRequest(requestId);
             bytes memory actualSeed = abi.encodePacked(rd.seed, rd.blockNum);
@@ -190,9 +184,7 @@ contract AdapterTest is RandcastTestHelper {
         bytes memory rawSeed = abi.encodePacked(rd.seed);
         emit log_named_bytes("rawSeed", rawSeed);
 
-        vm.startBroadcast(node1);
-        fulfillRequest(requestId, 0);
-        vm.stopBroadcast();
+        fulfillRequest(node1, requestId, 0);
 
         vm.roll(block.number + 1);
         assertEq(getRandomNumberExample.randomnessResults(0), adapter.getLastRandomness());

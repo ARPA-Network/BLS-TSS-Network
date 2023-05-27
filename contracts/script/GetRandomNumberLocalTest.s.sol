@@ -16,7 +16,7 @@ contract GetRandomNumberLocalTestScript is Script {
         Arpa arpa;
         IAdapter adapter;
 
-        uint256 plentyOfArpaBalance = vm.envUint("PLENTY_OF_ARPA_BALANCE");
+        uint256 plentyOfEthBalance = vm.envUint("PLENTY_OF_ETH_BALANCE");
         address adapterAddress = vm.envAddress("ADAPTER_ADDRESS");
         address arpaAddress = vm.envAddress("ARPA_ADDRESS");
         uint256 userPrivateKey = vm.envUint("USER_PRIVATE_KEY");
@@ -29,13 +29,13 @@ contract GetRandomNumberLocalTestScript is Script {
             adapterAddress
         );
 
-        arpa.mint(vm.addr(userPrivateKey), plentyOfArpaBalance);
+        arpa.mint(vm.addr(userPrivateKey), plentyOfEthBalance);
 
-        arpa.approve(address(adapter), plentyOfArpaBalance);
+        arpa.approve(address(adapter), plentyOfEthBalance);
 
-        uint64 subId = adapter.createSubscription(IAdapter.TokenType.ARPA);
+        uint64 subId = adapter.createSubscription();
 
-        adapter.fundSubscription(subId, plentyOfArpaBalance);
+        adapter.fundSubscription{value: plentyOfEthBalance}(subId);
 
         adapter.addConsumer(subId, address(getRandomNumberExample));
 
