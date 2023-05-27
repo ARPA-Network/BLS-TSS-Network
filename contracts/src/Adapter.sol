@@ -20,12 +20,7 @@ contract Adapter is UUPSUpgradeable, IAdapter, IAdapterOwner, RequestIdBase, Ran
     using Address for address;
 
     // *Constants*
-    // We need to maintain a list of consuming addresses.
-    // This bound ensures we are able to loop over them as needed.
-    // Should a user require more consumers, they can use multiple subscriptions.
     uint16 public constant MAX_CONSUMERS = 100;
-    // TODO Set this maximum to 200 to give us a 56 block window to fulfill
-    // the request before requiring the block hash feeder.
     uint16 public constant MAX_REQUEST_CONFIRMATIONS = 200;
 
     // *State Variables*
@@ -97,6 +92,8 @@ contract Adapter is UUPSUpgradeable, IAdapter, IAdapterOwner, RequestIdBase, Ran
     event SubscriptionFunded(uint64 indexed subId, uint256 oldBalance, uint256 newBalance);
     event SubscriptionConsumerAdded(uint64 indexed subId, address consumer);
     event SubscriptionReferralSet(uint64 indexed subId, uint64 indexed referralSubId);
+    event SubscriptionCanceled(uint64 indexed subId, address to, uint256 amount);
+    event SubscriptionConsumerRemoved(uint64 indexed subId, address consumer);
     event RandomnessRequest(
         bytes32 indexed requestId,
         uint64 indexed subId,
@@ -142,6 +139,7 @@ contract Adapter is UUPSUpgradeable, IAdapter, IAdapterOwner, RequestIdBase, Ran
     error NotFromCommitter();
     error GroupNotExist(uint256 groupIndex);
     error SenderNotController();
+    error PendingRequestExists();
 
     // *Modifiers*
     modifier onlySubOwner(uint64 subId) {
@@ -258,6 +256,13 @@ contract Adapter is UUPSUpgradeable, IAdapter, IAdapterOwner, RequestIdBase, Ran
         }
     }
 
+    function ownerCancelSubscription(uint64 subId) external override(IAdapterOwner) onlyOwner {
+        if (_subscriptions[subId].owner == address(0)) {
+            revert InvalidSubscription();
+        }
+        _cancelSubscriptionHelper(subId, _subscriptions[subId].owner);
+    }
+
     // =============
     // IAdapter
     // =============
@@ -298,6 +303,27 @@ contract Adapter is UUPSUpgradeable, IAdapter, IAdapterOwner, RequestIdBase, Ran
         emit SubscriptionConsumerAdded(subId, consumer);
     }
 
+    function removeConsumer(uint64 subId, address consumer) external override onlySubOwner(subId) nonReentrant {
+        if (_subscriptions[subId].inflightCost != 0) {
+            revert PendingRequestExists();
+        }
+        address[] memory consumers = _subscriptions[subId].consumers;
+        if (consumers.length == 0) {
+            revert InvalidConsumer(subId, consumer);
+        }
+        // Note bounded by MAX_CONSUMERS
+        for (uint256 i = 0; i < consumers.length; i++) {
+            if (consumers[i] == consumer) {
+                _subscriptions[subId].consumers[i] = consumers[consumers.length - 1];
+                _subscriptions[subId].consumers.pop();
+
+                emit SubscriptionConsumerRemoved(subId, consumer);
+                return;
+            }
+        }
+        revert InvalidConsumer(subId, consumer);
+    }
+
     function fundSubscription(uint64 subId) external payable override(IAdapter) nonReentrant {
         if (_subscriptions[subId].owner == address(0)) {
             revert InvalidSubscription();
@@ -325,6 +351,13 @@ contract Adapter is UUPSUpgradeable, IAdapter, IAdapterOwner, RequestIdBase, Ran
         _subscriptions[subId].referralSubId = referralSubId;
 
         emit SubscriptionReferralSet(subId, referralSubId);
+    }
+
+    function cancelSubscription(uint64 subId, address to) external override onlySubOwner(subId) nonReentrant {
+        if (_subscriptions[subId].inflightCost != 0) {
+            revert PendingRequestExists();
+        }
+        _cancelSubscriptionHelper(subId, to);
     }
 
     function requestRandomness(RandomnessRequestParams memory p)
@@ -533,76 +566,11 @@ contract Adapter is UUPSUpgradeable, IAdapter, IAdapterOwner, RequestIdBase, Ran
     // Internal
     // =============
 
-    function _findGroupToAssignTask() internal view returns (uint256) {
-        uint256[] memory validGroupIndices = _controller.getValidGroupIndices();
-
-        if (validGroupIndices.length == 0) {
-            revert NoAvailableGroups();
-        }
-
-        uint256 groupCount = _controller.getGroupCount();
-
-        uint256 currentAssignedGroupIndex = (_lastAssignedGroupIndex + 1) % groupCount;
-
-        while (!Utils.containElement(validGroupIndices, currentAssignedGroupIndex)) {
-            currentAssignedGroupIndex = (currentAssignedGroupIndex + 1) % groupCount;
-        }
-
-        return currentAssignedGroupIndex;
-    }
-
     function _rewardRandomness(address[] memory participantMembers, uint256 payment) internal {
         address[] memory committer = new address[](1);
         committer[0] = msg.sender;
         _controller.addReward(committer, payment, _config.committerRewardPerSignature);
         _controller.addReward(participantMembers, 0, _config.rewardPerSignature);
-    }
-
-    function _verifySignature(
-        uint256 groupIndex,
-        uint256 seed,
-        uint256 blockNum,
-        uint256 signature,
-        PartialSignature[] memory partialSignatures
-    ) internal view returns (address[] memory participantMembers) {
-        if (!BLS.isValid(signature)) {
-            revert BLS.InvalidSignatureFormat();
-        }
-
-        if (partialSignatures.length == 0) {
-            revert BLS.EmptyPartialSignatures();
-        }
-
-        IController.Group memory g = _controller.getGroup(groupIndex);
-
-        if (!Utils.containElement(g.committers, msg.sender)) {
-            revert NotFromCommitter();
-        }
-
-        bytes memory actualSeed = abi.encodePacked(seed, blockNum);
-
-        uint256[2] memory message = BLS.hashToPoint(actualSeed);
-
-        // verify tss-aggregation signature for randomness
-        if (!BLS.verifySingle(BLS.decompress(signature), g.publicKey, message)) {
-            revert BLS.InvalidSignature();
-        }
-
-        // verify bls-aggregation signature for incentivizing worker list
-        uint256[2][] memory partials = new uint256[2][](partialSignatures.length);
-        uint256[4][] memory pubkeys = new uint256[4][](partialSignatures.length);
-        participantMembers = new address[](partialSignatures.length);
-        for (uint256 i = 0; i < partialSignatures.length; i++) {
-            if (!BLS.isValid(partialSignatures[i].partialSignature)) {
-                revert BLS.InvalidPartialSignatureFormat();
-            }
-            partials[i] = BLS.decompress(partialSignatures[i].partialSignature);
-            pubkeys[i] = g.members[partialSignatures[i].index].partialPublicKey;
-            participantMembers[i] = g.members[partialSignatures[i].index].nodeIdAddress;
-        }
-        if (!BLS.verifyPartials(partials, pubkeys, message)) {
-            revert BLS.InvalidPartialSignatures();
-        }
     }
 
     function _fulfillCallback(bytes32 requestId, uint256 randomness, RequestDetail memory requestDetail)
@@ -736,6 +704,14 @@ contract Adapter is UUPSUpgradeable, IAdapter, IAdapterOwner, RequestIdBase, Ran
         return payment;
     }
 
+    function _cancelSubscriptionHelper(uint64 subId, address to) internal nonReentrant {
+        uint256 balance = _subscriptions[subId].balance;
+        delete _subscriptions[subId];
+        (bool sent,) = payable(to).call{value: balance}("");
+        require(sent, "Failed to send Ether");
+        emit SubscriptionCanceled(subId, to, balance);
+    }
+
     // Get the amount of gas used for fulfillment
     function _calculatePaymentAmountInETH(
         uint256 startGas,
@@ -749,5 +725,70 @@ contract Adapter is UUPSUpgradeable, IAdapter, IAdapterOwner, RequestIdBase, Ran
             revert PaymentTooLarge(); // Payment + fee cannot be more than all of the ETH in existence.
         }
         return paymentNoFee + fee;
+    }
+
+    function _findGroupToAssignTask() internal view returns (uint256) {
+        uint256[] memory validGroupIndices = _controller.getValidGroupIndices();
+
+        if (validGroupIndices.length == 0) {
+            revert NoAvailableGroups();
+        }
+
+        uint256 groupCount = _controller.getGroupCount();
+
+        uint256 currentAssignedGroupIndex = (_lastAssignedGroupIndex + 1) % groupCount;
+
+        while (!Utils.containElement(validGroupIndices, currentAssignedGroupIndex)) {
+            currentAssignedGroupIndex = (currentAssignedGroupIndex + 1) % groupCount;
+        }
+
+        return currentAssignedGroupIndex;
+    }
+
+    function _verifySignature(
+        uint256 groupIndex,
+        uint256 seed,
+        uint256 blockNum,
+        uint256 signature,
+        PartialSignature[] memory partialSignatures
+    ) internal view returns (address[] memory participantMembers) {
+        if (!BLS.isValid(signature)) {
+            revert BLS.InvalidSignatureFormat();
+        }
+
+        if (partialSignatures.length == 0) {
+            revert BLS.EmptyPartialSignatures();
+        }
+
+        IController.Group memory g = _controller.getGroup(groupIndex);
+
+        if (!Utils.containElement(g.committers, msg.sender)) {
+            revert NotFromCommitter();
+        }
+
+        bytes memory actualSeed = abi.encodePacked(seed, blockNum);
+
+        uint256[2] memory message = BLS.hashToPoint(actualSeed);
+
+        // verify tss-aggregation signature for randomness
+        if (!BLS.verifySingle(BLS.decompress(signature), g.publicKey, message)) {
+            revert BLS.InvalidSignature();
+        }
+
+        // verify bls-aggregation signature for incentivizing worker list
+        uint256[2][] memory partials = new uint256[2][](partialSignatures.length);
+        uint256[4][] memory pubkeys = new uint256[4][](partialSignatures.length);
+        participantMembers = new address[](partialSignatures.length);
+        for (uint256 i = 0; i < partialSignatures.length; i++) {
+            if (!BLS.isValid(partialSignatures[i].partialSignature)) {
+                revert BLS.InvalidPartialSignatureFormat();
+            }
+            partials[i] = BLS.decompress(partialSignatures[i].partialSignature);
+            pubkeys[i] = g.members[partialSignatures[i].index].partialPublicKey;
+            participantMembers[i] = g.members[partialSignatures[i].index].nodeIdAddress;
+        }
+        if (!BLS.verifyPartials(partials, pubkeys, message)) {
+            revert BLS.InvalidPartialSignatures();
+        }
     }
 }

@@ -102,4 +102,11 @@ interface IAdapterOwner {
      * @param freeRequestCounts free request count for each subscription
      */
     function setFreeRequestCount(uint64[] memory subIds, uint64[] memory freeRequestCounts) external;
+
+    /**
+     * @notice Owner cancel subscription, sends remaining eth directly to the subscription owner
+     * @param subId subscription id
+     * @dev notably can be called even if there are pending requests
+     */
+    function ownerCancelSubscription(uint64 subId) external;
 }

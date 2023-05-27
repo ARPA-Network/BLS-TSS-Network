@@ -55,6 +55,10 @@ interface IAdapter is IRequestTypeBase {
 
     function setReferral(uint64 subId, uint64 referralSubId) external;
 
+    function cancelSubscription(uint64 subId, address to) external;
+
+    function removeConsumer(uint64 subId, address consumer) external;
+
     // view
     function getLastSubscription(address consumer) external view returns (uint64);
 
