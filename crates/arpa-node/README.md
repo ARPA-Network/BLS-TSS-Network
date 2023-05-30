@@ -189,9 +189,9 @@ anvil --block-time 1
 
 ```bash
 cd contracts
-# controller address 0x5fc8d32690cc91d4c39d9d3abcbd16989f875707
-# adapter_address: 0x2279b7a0a67db372996a5fab50d91eaa73d2ebe6
-# user contract address 0x8464135c8f25da09e49bc8782676a84730c318bc
+# controller address 0xdc64a140aa3e981100a9beca4e685f962f0cf6c9
+# adapter_address: 0xa513e6e4b8f2a923d98304ec87f64353c4d5c853
+# user contract address 0x712516e61C8B383dF4A63CFe83d7701Bce54B03e
 forge script script/ControllerLocalTest.s.sol:ControllerLocalTestScript --fork-url http://localhost:8545 --optimize --broadcast
 ```
 
@@ -226,10 +226,10 @@ forge script script/GetRandomNumberLocalTest.s.sol:GetRandomNumberLocalTestScrip
 
 ```bash
 # check the randomness result recorded by the adapter and the user contract respectively
-cast call 0x2279b7a0a67db372996a5fab50d91eaa73d2ebe6 \
+cast call 0xa513e6e4b8f2a923d98304ec87f64353c4d5c853 \
   "getLastRandomness()(uint256)"
 
-cast call 0x8464135c8f25da09e49bc8782676a84730c318bc \
+cast call 0x712516e61C8B383dF4A63CFe83d7701Bce54B03e \
   "lastRandomnessResult()(uint256)"
 
 # the above two outputs of uint256 type should be identical
