@@ -28,7 +28,7 @@ contract RandcastConsumerExampleTest is RandcastTestHelper {
     uint16 minimumRequestConfirmations = 3;
     uint32 maxGasLimit = 2000000;
     uint32 gasAfterPaymentCalculation = 30000;
-    uint32 gasExceptRequestDetail = 200000;
+    uint32 gasExceptCallback = 530000;
     uint256 signatureTaskExclusiveWindow = 10;
     uint256 rewardPerSignature = 50;
     uint256 committerRewardPerSignature = 100;
@@ -94,7 +94,7 @@ contract RandcastConsumerExampleTest is RandcastTestHelper {
             minimumRequestConfirmations,
             maxGasLimit,
             gasAfterPaymentCalculation,
-            gasExceptRequestDetail,
+            gasExceptCallback,
             signatureTaskExclusiveWindow,
             rewardPerSignature,
             committerRewardPerSignature

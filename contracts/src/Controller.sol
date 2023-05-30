@@ -1,8 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.15;
 
-import {IERC20} from "openzeppelin-contracts/contracts/token/ERC20/IERC20.sol";
-import {SafeERC20} from "openzeppelin-contracts/contracts/token/ERC20/utils/SafeERC20.sol";
+import {IERC20, SafeERC20} from "openzeppelin-contracts/contracts/token/ERC20/utils/SafeERC20.sol";
 import {OwnableUpgradeable} from "openzeppelin-contracts-upgradeable/contracts/access/OwnableUpgradeable.sol";
 import {Initializable} from "openzeppelin-contracts-upgradeable/contracts/proxy/utils/Initializable.sol";
 import {IController} from "./interfaces/IController.sol";
@@ -17,6 +16,9 @@ import {Coordinator} from "./Coordinator.sol";
 contract Controller is Initializable, IController, IControllerOwner, OwnableUpgradeable {
     using SafeERC20 for IERC20;
     using GroupLib for GroupLib.GroupData;
+
+    // *Constants*
+    uint16 public constant BALANCE_BASE = 1;
 
     // *Controller Config*
     ControllerConfig private _config;
@@ -159,6 +161,10 @@ contract Controller is Initializable, IController, IControllerOwner, OwnableUpgr
         n.idAddress = msg.sender;
         n.dkgPublicKey = dkgPublicKey;
         n.state = true;
+
+        // Initialize withdrawable eths and arpa rewards to save gas for adapter call
+        _withdrawableEths[msg.sender] = BALANCE_BASE;
+        _arpaRewards[msg.sender] = BALANCE_BASE;
 
         (uint256 groupIndex, uint256[] memory groupIndicesToEmitEvent) = _groupData.nodeJoin(msg.sender, _lastOutput);
 
@@ -362,13 +368,13 @@ contract Controller is Initializable, IController, IControllerOwner, OwnableUpgr
     function nodeWithdraw(address recipient) external override(IController) {
         uint256 ethAmount = _withdrawableEths[msg.sender];
         uint256 arpaAmount = _arpaRewards[msg.sender];
-        if (ethAmount > 0) {
-            _withdrawableEths[msg.sender] = 0;
-            IAdapter(_config.adapterContractAddress).nodeWithdrawETH(recipient, ethAmount);
+        if (ethAmount > BALANCE_BASE) {
+            _withdrawableEths[msg.sender] = BALANCE_BASE;
+            IAdapter(_config.adapterContractAddress).nodeWithdrawETH(recipient, ethAmount - BALANCE_BASE);
         }
-        if (arpaAmount > 0) {
-            _arpaRewards[msg.sender] = 0;
-            _arpa.safeTransfer(recipient, arpaAmount);
+        if (arpaAmount > BALANCE_BASE) {
+            _arpaRewards[msg.sender] = BALANCE_BASE;
+            _arpa.safeTransfer(recipient, arpaAmount - BALANCE_BASE);
         }
     }
 
@@ -402,6 +408,10 @@ contract Controller is Initializable, IController, IControllerOwner, OwnableUpgr
         return _groupData.groups[groupIndex];
     }
 
+    function getGroupThreshold(uint256 groupIndex) public view override(IController) returns (uint256) {
+        return _groupData.groups[groupIndex].threshold;
+    }
+
     function getNode(address nodeAddress) public view override(IController) returns (Node memory) {
         return _nodes[nodeAddress];
     }
@@ -429,7 +439,10 @@ contract Controller is Initializable, IController, IControllerOwner, OwnableUpgr
         override(IController)
         returns (uint256, uint256)
     {
-        return (_withdrawableEths[nodeAddress], _arpaRewards[nodeAddress]);
+        return (
+            _withdrawableEths[nodeAddress] == 0 ? 0 : (_withdrawableEths[nodeAddress] - BALANCE_BASE),
+            _arpaRewards[nodeAddress] == 0 ? 0 : (_arpaRewards[nodeAddress] - BALANCE_BASE)
+        );
     }
 
     function getLastOutput() external view returns (uint256) {

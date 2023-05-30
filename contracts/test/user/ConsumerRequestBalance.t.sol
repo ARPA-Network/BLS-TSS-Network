@@ -27,8 +27,8 @@ contract ConsumerRequestBalanceTest is RandcastTestHelper {
 
     uint16 minimumRequestConfirmations = 3;
     uint32 maxGasLimit = 2000000;
-    uint32 gasAfterPaymentCalculation = 80000;
-    uint32 gasExceptCallback = 492000;
+    uint32 gasAfterPaymentCalculation = 30000;
+    uint32 gasExceptCallback = 530000;
     uint256 signatureTaskExclusiveWindow = 10;
     uint256 rewardPerSignature = 50;
     uint256 committerRewardPerSignature = 100;
@@ -100,7 +100,7 @@ contract ConsumerRequestBalanceTest is RandcastTestHelper {
             committerRewardPerSignature
         );
 
-        vm.broadcast(admin);
+        vm.prank(admin);
         IAdapterOwner(address(adapter)).setFlatFeeConfig(
             IAdapterOwner.FeeConfig(250000, 250000, 250000, 250000, 250000, 0, 0, 0, 0),
             flatFeePromotionGlobalPercentage,
@@ -143,8 +143,7 @@ contract ConsumerRequestBalanceTest is RandcastTestHelper {
     }
 
     function testRequestGeneralExampleWithEnoughBalanceThenSuccessfullyFulfill() public {
-        deal(user, 1 * 1e18);
-
+        deal(user, 10 * 1e18);
         // (1e18 arpa wei/arpa) (wei/gas * gas) / (wei/arpa) = arpa wei
         // paymentNoFee = (1e18 *
         //     weiPerUnitGas *
@@ -153,11 +152,10 @@ contract ConsumerRequestBalanceTest is RandcastTestHelper {
         // callbackGasUsed = 501728 gas
         // WeiPerUnitArpa = 1e12 wei/arpa
         // weiPerUnitGas = 1e9 wei/gas
-        // gasExceptCallback  = 563262 gas
         // flat fee = 250000 1e12 arpa wei
         // Actual: 904212000000000000000
         // Expected: 891728000000000000000
-        uint256 expectedPayment = 1e9 * (563262 + 501728);
+        uint256 expectedPayment = 1e9 * (uint256(gasExceptCallback) + 501728);
 
         uint256 plentyOfEthBalance = 1e16;
         uint64 subId = _prepareSubscription(user, address(rollDiceExample), plentyOfEthBalance);

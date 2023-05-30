@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity >=0.8.10;
 
-import "forge-std/Test.sol";
+import {Test} from "forge-std/Test.sol";
 import {IController} from "../src/interfaces/IController.sol";
 import {IAdapter} from "../src/interfaces/IAdapter.sol";
 import {AdapterForTest, Adapter} from "./AdapterForTest.sol";
@@ -350,7 +350,7 @@ abstract contract RandcastTestHelper is Test {
         partialSignatures[1] = IAdapter.PartialSignature(1, sig[sigIndex][2]);
         partialSignatures[2] = IAdapter.PartialSignature(2, sig[sigIndex][3]);
 
-        vm.prank(node1);
+        vm.prank(sender);
         adapter.fulfillRandomness(
             0, // fixed group 0
             requestId,
@@ -363,7 +363,7 @@ abstract contract RandcastTestHelper is Test {
     function _prepareSubscription(address sender, address consumer, uint256 balance) internal returns (uint64) {
         vm.prank(sender);
         uint64 subId = adapter.createSubscription();
-        vm.deal(sender, balance);
+        vm.deal(sender, balance + 1e18);
         vm.prank(sender);
         adapter.fundSubscription{value: balance}(subId);
         vm.prank(sender);
@@ -421,7 +421,7 @@ abstract contract RandcastTestHelper is Test {
         staking.stake(operatorStakeAmount);
     }
 
-    function prepareAnAvailableGroup() public {
+    function prepareAnAvailableGroup() public returns (uint256 threshold) {
         // deal nodes
         vm.deal(node1, 1 * 10 ** 18);
         vm.deal(node2, 1 * 10 ** 18);
@@ -451,6 +451,7 @@ abstract contract RandcastTestHelper is Test {
 
         uint256 groupIndex = 0;
         uint256 groupEpoch = 3;
+        threshold = 3;
 
         address[] memory disqualifiedNodes = new address[](0);
         IController.CommitDkgParams memory params;

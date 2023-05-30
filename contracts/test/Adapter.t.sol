@@ -6,43 +6,44 @@ import {IAdapterOwner} from "../src/interfaces/IAdapterOwner.sol";
 import {RandcastTestHelper, IAdapter, Adapter, ControllerForTest, AdapterForTest} from "./RandcastTestHelper.sol";
 import {ERC20} from "openzeppelin-contracts/contracts/token/ERC20/ERC20.sol";
 
+// solhint-disable-next-line max-states-count
 contract AdapterTest is RandcastTestHelper {
-    GetRandomNumberExample getRandomNumberExample;
-    uint64 subId;
+    GetRandomNumberExample internal getRandomNumberExample;
+    uint64 internal subId;
 
-    uint256 disqualifiedNodePenaltyAmount = 1000;
-    uint256 defaultNumberOfCommitters = 3;
-    uint256 defaultDkgPhaseDuration = 10;
-    uint256 groupMaxCapacity = 10;
-    uint256 idealNumberOfGroups = 5;
-    uint256 pendingBlockAfterQuit = 100;
-    uint256 dkgPostProcessReward = 100;
-    uint256 last_output = 2222222222222222;
+    uint256 internal disqualifiedNodePenaltyAmount = 1000;
+    uint256 internal defaultNumberOfCommitters = 3;
+    uint256 internal defaultDkgPhaseDuration = 10;
+    uint256 internal groupMaxCapacity = 10;
+    uint256 internal idealNumberOfGroups = 5;
+    uint256 internal pendingBlockAfterQuit = 100;
+    uint256 internal dkgPostProcessReward = 100;
+    uint256 internal lastOutput = 2222222222222222;
 
-    uint16 minimumRequestConfirmations = 3;
-    uint32 maxGasLimit = 2000000;
-    uint32 gasAfterPaymentCalculation = 30000;
-    uint32 gasExceptCallback = 563262;
-    uint256 signatureTaskExclusiveWindow = 10;
-    uint256 rewardPerSignature = 50;
-    uint256 committerRewardPerSignature = 100;
+    uint16 internal minimumRequestConfirmations = 3;
+    uint32 internal maxGasLimit = 2000000;
+    uint32 internal gasAfterPaymentCalculation = 30000;
+    uint32 internal gasExceptCallback = 530000;
+    uint256 internal signatureTaskExclusiveWindow = 10;
+    uint256 internal rewardPerSignature = 50;
+    uint256 internal committerRewardPerSignature = 100;
 
-    uint32 fulfillmentFlatFeeEthPPMTier1 = 250000;
-    uint32 fulfillmentFlatFeeEthPPMTier2 = 250000;
-    uint32 fulfillmentFlatFeeEthPPMTier3 = 250000;
-    uint32 fulfillmentFlatFeeEthPPMTier4 = 250000;
-    uint32 fulfillmentFlatFeeEthPPMTier5 = 250000;
-    uint24 reqsForTier2 = 0;
-    uint24 reqsForTier3 = 0;
-    uint24 reqsForTier4 = 0;
-    uint24 reqsForTier5 = 0;
+    uint32 internal fulfillmentFlatFeeEthPPMTier1 = 250000;
+    uint32 internal fulfillmentFlatFeeEthPPMTier2 = 250000;
+    uint32 internal fulfillmentFlatFeeEthPPMTier3 = 250000;
+    uint32 internal fulfillmentFlatFeeEthPPMTier4 = 250000;
+    uint32 internal fulfillmentFlatFeeEthPPMTier5 = 250000;
+    uint24 internal reqsForTier2 = 0;
+    uint24 internal reqsForTier3 = 0;
+    uint24 internal reqsForTier4 = 0;
+    uint24 internal reqsForTier5 = 0;
 
-    uint16 flatFeePromotionGlobalPercentage = 100;
-    bool isFlatFeePromotionEnabledPermanently = false;
-    uint256 flatFeePromotionStartTimestamp = 0;
-    uint256 flatFeePromotionEndTimestamp = 0;
+    uint16 internal flatFeePromotionGlobalPercentage = 100;
+    bool internal isFlatFeePromotionEnabledPermanently = false;
+    uint256 internal flatFeePromotionStartTimestamp = 0;
+    uint256 internal flatFeePromotionEndTimestamp = 0;
 
-    uint256 plentyOfEthBalance = 1e6 * 1e18;
+    uint256 internal plentyOfEthBalance = 1e6 * 1e18;
 
     function setUp() public {
         skip(1000);
@@ -59,7 +60,7 @@ contract AdapterTest is RandcastTestHelper {
         _prepareStakingContract(stakingDeployer, address(arpa), operators);
 
         vm.prank(admin);
-        controller = new ControllerForTest(address(arpa), last_output);
+        controller = new ControllerForTest(address(arpa), lastOutput);
 
         vm.prank(admin);
         adapter = new AdapterForTest(address(controller));
@@ -139,7 +140,7 @@ contract AdapterTest is RandcastTestHelper {
     }
 
     function testRequestRandomness() public {
-        prepareAnAvailableGroup();
+        uint256 threshold = prepareAnAvailableGroup();
         deal(user, 1 * 1e18);
 
         uint32 times = 10;
@@ -154,7 +155,10 @@ contract AdapterTest is RandcastTestHelper {
 
             // 0 flat fee until the first request is actually fulfilled
             uint256 payment = adapter.estimatePaymentAmountInETH(
-                getRandomNumberExample.callbackGasLimit(), gasExceptCallback, 0, tx.gasprice * 3
+                getRandomNumberExample.callbackGasLimit() + adapter.RANDOMNESS_REWARD_GAS() * threshold,
+                gasExceptCallback,
+                0,
+                tx.gasprice * 3
             );
 
             _inflightCost += payment;
