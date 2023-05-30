@@ -3,73 +3,73 @@ pragma solidity ^0.8.15;
 
 pragma experimental ABIEncoderV2;
 
-import "./RandcastTestHelper.sol";
+import {RandcastTestHelper, ERC20, ControllerForTest, IController, Controller} from "./RandcastTestHelper.sol";
 import {ICoordinator} from "../src/interfaces/ICoordinator.sol";
 import {BLS} from "../src/libraries/BLS.sol";
 
 contract DKGScenarioTest is RandcastTestHelper {
-    uint256 disqualifiedNodePenaltyAmount = 1000;
-    uint256 defaultNumberOfCommitters = 3;
-    uint256 defaultDkgPhaseDuration = 10;
-    uint256 groupMaxCapacity = 10;
-    uint256 idealNumberOfGroups = 5;
-    uint256 pendingBlockAfterQuit = 100;
-    uint256 dkgPostProcessReward = 100;
-    uint64 lastOutput = 0x2222222222222222;
+    uint256 internal _disqualifiedNodePenaltyAmount = 1000;
+    uint256 internal _defaultNumberOfCommitters = 3;
+    uint256 internal _defaultDkgPhaseDuration = 10;
+    uint256 internal _groupMaxCapacity = 10;
+    uint256 internal _idealNumberOfGroups = 5;
+    uint256 internal _pendingBlockAfterQuit = 100;
+    uint256 internal _dkgPostProcessReward = 100;
+    uint64 internal _lastOutput = 0x2222222222222222;
 
-    address public owner = admin;
+    address internal _owner = _admin;
 
     function setUp() public {
         // deal nodes
-        vm.deal(node1, 1 * 10 ** 18);
-        vm.deal(node2, 1 * 10 ** 18);
-        vm.deal(node3, 1 * 10 ** 18);
-        vm.deal(node4, 1 * 10 ** 18);
-        vm.deal(node5, 1 * 10 ** 18);
+        vm.deal(_node1, 1 * 10 ** 18);
+        vm.deal(_node2, 1 * 10 ** 18);
+        vm.deal(_node3, 1 * 10 ** 18);
+        vm.deal(_node4, 1 * 10 ** 18);
+        vm.deal(_node5, 1 * 10 ** 18);
 
-        // deal owner and create controller
-        vm.deal(owner, 1 * 10 ** 18);
+        // deal _owner and create _controller
+        vm.deal(_owner, 1 * 10 ** 18);
 
-        vm.prank(owner);
-        arpa = new ERC20("arpa token", "ARPA");
+        vm.prank(_owner);
+        _arpa = new ERC20("arpa token", "ARPA");
 
         address[] memory operators = new address[](5);
-        operators[0] = node1;
-        operators[1] = node2;
-        operators[2] = node3;
-        operators[3] = node4;
-        operators[4] = node5;
-        _prepareStakingContract(stakingDeployer, address(arpa), operators);
+        operators[0] = _node1;
+        operators[1] = _node2;
+        operators[2] = _node3;
+        operators[3] = _node4;
+        operators[4] = _node5;
+        _prepareStakingContract(_stakingDeployer, address(_arpa), operators);
 
-        controller = new ControllerForTest(address(arpa), lastOutput);
+        _controller = new ControllerForTest(address(_arpa), _lastOutput);
 
-        controller.setControllerConfig(
-            address(staking),
+        _controller.setControllerConfig(
+            address(_staking),
             address(0),
-            operatorStakeAmount,
-            disqualifiedNodePenaltyAmount,
-            defaultNumberOfCommitters,
-            defaultDkgPhaseDuration,
-            groupMaxCapacity,
-            idealNumberOfGroups,
-            pendingBlockAfterQuit,
-            dkgPostProcessReward
+            _operatorStakeAmount,
+            _disqualifiedNodePenaltyAmount,
+            _defaultNumberOfCommitters,
+            _defaultDkgPhaseDuration,
+            _groupMaxCapacity,
+            _idealNumberOfGroups,
+            _pendingBlockAfterQuit,
+            _dkgPostProcessReward
         );
 
-        vm.prank(stakingDeployer);
-        staking.setController(address(controller));
+        vm.prank(_stakingDeployer);
+        _staking.setController(address(_controller));
 
         // Register Nodes
-        vm.prank(node1);
-        controller.nodeRegister(DKGPubkey1);
-        vm.prank(node2);
-        controller.nodeRegister(DKGPubkey2);
-        vm.prank(node3);
-        controller.nodeRegister(DKGPubkey3);
-        vm.prank(node4);
-        controller.nodeRegister(DKGPubkey4);
-        vm.prank(node5);
-        controller.nodeRegister(DKGPubkey5);
+        vm.prank(_node1);
+        _controller.nodeRegister(_dkgPubkey1);
+        vm.prank(_node2);
+        _controller.nodeRegister(_dkgPubkey2);
+        vm.prank(_node3);
+        _controller.nodeRegister(_dkgPubkey3);
+        vm.prank(_node4);
+        _controller.nodeRegister(_dkgPubkey4);
+        vm.prank(_node5);
+        _controller.nodeRegister(_dkgPubkey5);
     }
 
     struct Params {
@@ -78,7 +78,7 @@ contract DKGScenarioTest is RandcastTestHelper {
         bytes revertMessage;
         uint256 groupIndex;
         uint256 groupEpoch;
-        bytes publicKey;
+        bytes _publicKey;
         bytes partialPublicKey;
         address[] disqualifiedNodes;
     }
@@ -89,11 +89,11 @@ contract DKGScenarioTest is RandcastTestHelper {
             if (params[i].shouldRevert) {
                 vm.expectRevert(params[i].revertMessage);
             }
-            controller.commitDkg(
+            _controller.commitDkg(
                 IController.CommitDkgParams(
                     params[i].groupIndex,
                     params[i].groupEpoch,
-                    params[i].publicKey,
+                    params[i]._publicKey,
                     params[i].partialPublicKey,
                     params[i].disqualifiedNodes
                 )
@@ -102,10 +102,10 @@ contract DKGScenarioTest is RandcastTestHelper {
     }
 
     function setPhase(uint256 groupIndex, uint256 phase) public {
-        address coordinatorAddress = controller.getCoordinator(groupIndex);
+        address coordinatorAddress = _controller.getCoordinator(groupIndex);
         ICoordinator coordinator = ICoordinator(coordinatorAddress);
         uint256 startBlock = coordinator.startBlock();
-        vm.roll(startBlock + 1 + phase * defaultDkgPhaseDuration);
+        vm.roll(startBlock + 1 + phase * _defaultDkgPhaseDuration);
     }
 
     function testDkgReverts() public {
@@ -114,35 +114,35 @@ contract DKGScenarioTest is RandcastTestHelper {
         Params[] memory params = new Params[](1);
 
         err = abi.encodeWithSelector(Controller.GroupNotExist.selector, 999);
-        params[0] = Params(node1, true, err, 999, 3, publicKey, partialPublicKey1, new address[](0));
+        params[0] = Params(_node1, true, err, 999, 3, _publicKey, _partialPublicKey1, new address[](0));
         dkgHelper(params);
 
         err = abi.encodeWithSelector(Controller.EpochMismatch.selector, 0, 999, 3);
-        params[0] = Params(node1, true, err, 0, 999, publicKey, partialPublicKey1, new address[](0));
+        params[0] = Params(_node1, true, err, 0, 999, _publicKey, _partialPublicKey1, new address[](0));
         dkgHelper(params);
 
-        err = abi.encodeWithSelector(Controller.NodeNotInGroup.selector, 0, address(node6));
-        params[0] = Params(node6, true, err, 0, 3, publicKey, partialPublicKey1, new address[](0));
+        err = abi.encodeWithSelector(Controller.NodeNotInGroup.selector, 0, address(_node6));
+        params[0] = Params(_node6, true, err, 0, 3, _publicKey, _partialPublicKey1, new address[](0));
         dkgHelper(params);
 
         err = abi.encodeWithSelector(BLS.InvalidPublicKeyEncoding.selector);
-        params[0] = Params(node1, true, err, 0, 3, publicKey, hex"AAAA", new address[](0));
+        params[0] = Params(_node1, true, err, 0, 3, _publicKey, hex"AAAA", new address[](0));
         dkgHelper(params);
 
         err = abi.encodeWithSelector(BLS.InvalidPartialPublicKey.selector);
-        params[0] = Params(node1, true, err, 0, 3, publicKey, badKey, new address[](0));
+        params[0] = Params(_node1, true, err, 0, 3, _publicKey, _badKey, new address[](0));
         dkgHelper(params);
 
         err = abi.encodeWithSelector(BLS.InvalidPublicKey.selector);
-        params[0] = Params(node1, true, err, 0, 3, badKey, partialPublicKey1, new address[](0));
+        params[0] = Params(_node1, true, err, 0, 3, _badKey, _partialPublicKey1, new address[](0));
         dkgHelper(params);
 
         // Happy Path
         Params[] memory params2 = new Params[](2);
-        params2[0] = Params(node1, false, err, 0, 3, publicKey, partialPublicKey1, new address[](0));
+        params2[0] = Params(_node1, false, err, 0, 3, _publicKey, _partialPublicKey1, new address[](0));
 
-        err = abi.encodeWithSelector(Controller.PartialKeyAlreadyRegistered.selector, 0, address(node1));
-        params2[1] = Params(node1, true, err, 0, 3, publicKey, partialPublicKey1, new address[](0));
+        err = abi.encodeWithSelector(Controller.PartialKeyAlreadyRegistered.selector, 0, address(_node1));
+        params2[1] = Params(_node1, true, err, 0, 3, _publicKey, _partialPublicKey1, new address[](0));
 
         dkgHelper(params2);
     }
@@ -151,17 +151,17 @@ contract DKGScenarioTest is RandcastTestHelper {
     function testDkgHappyPath() public {
         Params[] memory params = new Params[](5);
         bytes memory err;
-        params[0] = Params(node1, false, err, 0, 3, publicKey, partialPublicKey1, new address[](0));
-        params[1] = Params(node2, false, err, 0, 3, publicKey, partialPublicKey2, new address[](0));
-        params[2] = Params(node3, false, err, 0, 3, publicKey, partialPublicKey3, new address[](0));
-        params[3] = Params(node4, false, err, 0, 3, publicKey, partialPublicKey4, new address[](0));
-        params[4] = Params(node5, false, err, 0, 3, publicKey, partialPublicKey5, new address[](0));
+        params[0] = Params(_node1, false, err, 0, 3, _publicKey, _partialPublicKey1, new address[](0));
+        params[1] = Params(_node2, false, err, 0, 3, _publicKey, _partialPublicKey2, new address[](0));
+        params[2] = Params(_node3, false, err, 0, 3, _publicKey, _partialPublicKey3, new address[](0));
+        params[3] = Params(_node4, false, err, 0, 3, _publicKey, _partialPublicKey4, new address[](0));
+        params[4] = Params(_node5, false, err, 0, 3, _publicKey, _partialPublicKey5, new address[](0));
         dkgHelper(params);
         // printGroupInfo(0);
 
         assertEq(checkIsStrictlyMajorityConsensusReached(0), true);
-        assertEq(controller.getGroup(0).members.length, 5);
-        assertEq(controller.getGroup(0).size, 5);
+        assertEq(_controller.getGroup(0).members.length, 5);
+        assertEq(_controller.getGroup(0).size, 5);
     }
 
     // * 1 Disqualified Node
@@ -169,92 +169,92 @@ contract DKGScenarioTest is RandcastTestHelper {
         Params[] memory params = new Params[](5);
         bytes memory err;
         address[] memory disqualifiedNodes = new address[](1);
-        disqualifiedNodes[0] = node1;
+        disqualifiedNodes[0] = _node1;
 
-        uint256 node1DelegationRewardBefore = staking.getDelegationReward(node1);
+        uint256 node1DelegationRewardBefore = _staking.getDelegationReward(_node1);
 
-        params[0] = Params(node1, false, err, 0, 3, publicKey, partialPublicKey1, new address[](0));
-        params[1] = Params(node2, false, err, 0, 3, publicKey, partialPublicKey2, disqualifiedNodes);
-        params[2] = Params(node3, false, err, 0, 3, publicKey, partialPublicKey3, disqualifiedNodes);
-        params[3] = Params(node4, false, err, 0, 3, publicKey, partialPublicKey4, disqualifiedNodes);
-        params[4] = Params(node5, false, err, 0, 3, publicKey, partialPublicKey5, disqualifiedNodes);
+        params[0] = Params(_node1, false, err, 0, 3, _publicKey, _partialPublicKey1, new address[](0));
+        params[1] = Params(_node2, false, err, 0, 3, _publicKey, _partialPublicKey2, disqualifiedNodes);
+        params[2] = Params(_node3, false, err, 0, 3, _publicKey, _partialPublicKey3, disqualifiedNodes);
+        params[3] = Params(_node4, false, err, 0, 3, _publicKey, _partialPublicKey4, disqualifiedNodes);
+        params[4] = Params(_node5, false, err, 0, 3, _publicKey, _partialPublicKey5, disqualifiedNodes);
         dkgHelper(params);
         // printGroupInfo(0);
 
         // assert group state is correct
         assertEq(checkIsStrictlyMajorityConsensusReached(0), true);
-        assertEq(controller.getGroup(0).members.length, 4);
-        assertEq(controller.getGroup(0).size, 4);
+        assertEq(_controller.getGroup(0).members.length, 4);
+        assertEq(_controller.getGroup(0).size, 4);
 
-        // assert node1 was slashed
-        assertEq(nodeInGroup(node1, 0), false);
-        assertEq(node1DelegationRewardBefore - disqualifiedNodePenaltyAmount, staking.getDelegationReward(node1));
+        // assert _node1 was slashed
+        assertEq(nodeInGroup(_node1, 0), false);
+        assertEq(node1DelegationRewardBefore - _disqualifiedNodePenaltyAmount, _staking.getDelegationReward(_node1));
     }
 
     function test1Dq3Reporter() public {
         Params[] memory params = new Params[](5);
         bytes memory err;
         address[] memory disqualifiedNodes = new address[](1);
-        disqualifiedNodes[0] = node1;
+        disqualifiedNodes[0] = _node1;
 
-        uint256 node1DelegationRewardBefore = staking.getDelegationReward(node1);
+        uint256 node1DelegationRewardBefore = _staking.getDelegationReward(_node1);
 
-        params[0] = Params(node1, false, err, 0, 3, publicKey, partialPublicKey1, new address[](0));
-        params[1] = Params(node2, false, err, 0, 3, publicKey, partialPublicKey2, new address[](0));
-        params[2] = Params(node3, false, err, 0, 3, publicKey, partialPublicKey3, disqualifiedNodes);
-        params[3] = Params(node4, false, err, 0, 3, publicKey, partialPublicKey4, disqualifiedNodes);
-        params[4] = Params(node5, false, err, 0, 3, publicKey, partialPublicKey5, disqualifiedNodes);
+        params[0] = Params(_node1, false, err, 0, 3, _publicKey, _partialPublicKey1, new address[](0));
+        params[1] = Params(_node2, false, err, 0, 3, _publicKey, _partialPublicKey2, new address[](0));
+        params[2] = Params(_node3, false, err, 0, 3, _publicKey, _partialPublicKey3, disqualifiedNodes);
+        params[3] = Params(_node4, false, err, 0, 3, _publicKey, _partialPublicKey4, disqualifiedNodes);
+        params[4] = Params(_node5, false, err, 0, 3, _publicKey, _partialPublicKey5, disqualifiedNodes);
         dkgHelper(params);
         // printGroupInfo(0);
 
         // assert group state is correct
         assertEq(checkIsStrictlyMajorityConsensusReached(0), true);
-        assertEq(controller.getGroup(0).members.length, 4);
-        assertEq(controller.getGroup(0).size, 4);
+        assertEq(_controller.getGroup(0).members.length, 4);
+        assertEq(_controller.getGroup(0).size, 4);
 
-        // assert node1 was slashed
-        assertEq(nodeInGroup(node1, 0), false);
-        assertEq(node1DelegationRewardBefore - disqualifiedNodePenaltyAmount, staking.getDelegationReward(node1));
+        // assert _node1 was slashed
+        assertEq(nodeInGroup(_node1, 0), false);
+        assertEq(node1DelegationRewardBefore - _disqualifiedNodePenaltyAmount, _staking.getDelegationReward(_node1));
     }
 
     function test1Dq2Reporter() public {
         Params[] memory params = new Params[](5);
         bytes memory err;
         address[] memory disqualifiedNodes = new address[](1);
-        disqualifiedNodes[0] = node1;
+        disqualifiedNodes[0] = _node1;
 
-        params[0] = Params(node1, false, err, 0, 3, publicKey, partialPublicKey1, new address[](0));
-        params[1] = Params(node2, false, err, 0, 3, publicKey, partialPublicKey2, new address[](0));
-        params[2] = Params(node3, false, err, 0, 3, publicKey, partialPublicKey3, new address[](0));
-        params[3] = Params(node4, false, err, 0, 3, publicKey, partialPublicKey4, disqualifiedNodes);
-        params[4] = Params(node5, false, err, 0, 3, publicKey, partialPublicKey5, disqualifiedNodes);
+        params[0] = Params(_node1, false, err, 0, 3, _publicKey, _partialPublicKey1, new address[](0));
+        params[1] = Params(_node2, false, err, 0, 3, _publicKey, _partialPublicKey2, new address[](0));
+        params[2] = Params(_node3, false, err, 0, 3, _publicKey, _partialPublicKey3, new address[](0));
+        params[3] = Params(_node4, false, err, 0, 3, _publicKey, _partialPublicKey4, disqualifiedNodes);
+        params[4] = Params(_node5, false, err, 0, 3, _publicKey, _partialPublicKey5, disqualifiedNodes);
         dkgHelper(params);
         // printGroupInfo(0);
 
         // assert group state is correct
         assertEq(checkIsStrictlyMajorityConsensusReached(0), true);
-        assertEq(controller.getGroup(0).members.length, 5);
-        assertEq(controller.getGroup(0).size, 5);
+        assertEq(_controller.getGroup(0).members.length, 5);
+        assertEq(_controller.getGroup(0).size, 5);
     }
 
     function test1Dq1Reporter() public {
         Params[] memory params = new Params[](5);
         bytes memory err;
         address[] memory disqualifiedNodes = new address[](1);
-        disqualifiedNodes[0] = node1;
+        disqualifiedNodes[0] = _node1;
 
-        params[0] = Params(node1, false, err, 0, 3, publicKey, partialPublicKey1, new address[](0));
-        params[1] = Params(node2, false, err, 0, 3, publicKey, partialPublicKey2, new address[](0));
-        params[2] = Params(node3, false, err, 0, 3, publicKey, partialPublicKey3, new address[](0));
-        params[3] = Params(node4, false, err, 0, 3, publicKey, partialPublicKey4, new address[](0));
-        params[4] = Params(node5, false, err, 0, 3, publicKey, partialPublicKey5, disqualifiedNodes);
+        params[0] = Params(_node1, false, err, 0, 3, _publicKey, _partialPublicKey1, new address[](0));
+        params[1] = Params(_node2, false, err, 0, 3, _publicKey, _partialPublicKey2, new address[](0));
+        params[2] = Params(_node3, false, err, 0, 3, _publicKey, _partialPublicKey3, new address[](0));
+        params[3] = Params(_node4, false, err, 0, 3, _publicKey, _partialPublicKey4, new address[](0));
+        params[4] = Params(_node5, false, err, 0, 3, _publicKey, _partialPublicKey5, disqualifiedNodes);
         dkgHelper(params);
         // printGroupInfo(0);
 
         // assert group state is correct
         assertEq(checkIsStrictlyMajorityConsensusReached(0), true);
-        assertEq(controller.getGroup(0).members.length, 5);
-        assertEq(controller.getGroup(0).size, 5);
+        assertEq(_controller.getGroup(0).members.length, 5);
+        assertEq(_controller.getGroup(0).size, 5);
     }
 
     // * 2 Disqualified Nodes
@@ -263,82 +263,82 @@ contract DKGScenarioTest is RandcastTestHelper {
         Params[] memory params = new Params[](5);
         bytes memory err;
         address[] memory disqualifiedNodes = new address[](2);
-        disqualifiedNodes[0] = node1;
-        disqualifiedNodes[1] = node2;
+        disqualifiedNodes[0] = _node1;
+        disqualifiedNodes[1] = _node2;
 
-        uint256 node1DelegationRewardBefore = staking.getDelegationReward(node1);
-        uint256 node2DelegationRewardBefore = staking.getDelegationReward(node2);
+        uint256 node1DelegationRewardBefore = _staking.getDelegationReward(_node1);
+        uint256 node2DelegationRewardBefore = _staking.getDelegationReward(_node2);
 
-        params[0] = Params(node1, false, err, 0, 3, publicKey, partialPublicKey1, new address[](0));
-        params[1] = Params(node2, false, err, 0, 3, publicKey, partialPublicKey2, disqualifiedNodes);
-        params[2] = Params(node3, false, err, 0, 3, publicKey, partialPublicKey3, disqualifiedNodes);
-        params[3] = Params(node4, false, err, 0, 3, publicKey, partialPublicKey4, disqualifiedNodes);
-        params[4] = Params(node5, false, err, 0, 3, publicKey, partialPublicKey5, disqualifiedNodes);
+        params[0] = Params(_node1, false, err, 0, 3, _publicKey, _partialPublicKey1, new address[](0));
+        params[1] = Params(_node2, false, err, 0, 3, _publicKey, _partialPublicKey2, disqualifiedNodes);
+        params[2] = Params(_node3, false, err, 0, 3, _publicKey, _partialPublicKey3, disqualifiedNodes);
+        params[3] = Params(_node4, false, err, 0, 3, _publicKey, _partialPublicKey4, disqualifiedNodes);
+        params[4] = Params(_node5, false, err, 0, 3, _publicKey, _partialPublicKey5, disqualifiedNodes);
         dkgHelper(params);
         // printGroupInfo(0);
 
         // assert group state is correct
         assertEq(checkIsStrictlyMajorityConsensusReached(0), true);
-        assertEq(controller.getGroup(0).members.length, 3);
-        assertEq(controller.getGroup(0).size, 3);
+        assertEq(_controller.getGroup(0).members.length, 3);
+        assertEq(_controller.getGroup(0).size, 3);
 
-        // assert node1 was slashed
-        assertEq(nodeInGroup(node1, 0), false);
-        assertEq(node1DelegationRewardBefore - disqualifiedNodePenaltyAmount, staking.getDelegationReward(node1));
-        // assert node2 was slashed
-        assertEq(nodeInGroup(node2, 0), false);
-        assertEq(node2DelegationRewardBefore - disqualifiedNodePenaltyAmount, staking.getDelegationReward(node2));
+        // assert _node1 was slashed
+        assertEq(nodeInGroup(_node1, 0), false);
+        assertEq(node1DelegationRewardBefore - _disqualifiedNodePenaltyAmount, _staking.getDelegationReward(_node1));
+        // assert _node2 was slashed
+        assertEq(nodeInGroup(_node2, 0), false);
+        assertEq(node2DelegationRewardBefore - _disqualifiedNodePenaltyAmount, _staking.getDelegationReward(_node2));
     }
 
     function test2Dq3Reporter() public {
         Params[] memory params = new Params[](5);
         bytes memory err;
         address[] memory disqualifiedNodes = new address[](2);
-        disqualifiedNodes[0] = node1;
-        disqualifiedNodes[1] = node2;
+        disqualifiedNodes[0] = _node1;
+        disqualifiedNodes[1] = _node2;
 
-        uint256 node1DelegationRewardBefore = staking.getDelegationReward(node1);
-        uint256 node2DelegationRewardBefore = staking.getDelegationReward(node2);
+        uint256 node1DelegationRewardBefore = _staking.getDelegationReward(_node1);
+        uint256 node2DelegationRewardBefore = _staking.getDelegationReward(_node2);
 
-        params[0] = Params(node1, false, err, 0, 3, publicKey, partialPublicKey1, new address[](0));
-        params[1] = Params(node2, false, err, 0, 3, publicKey, partialPublicKey2, new address[](0));
-        params[2] = Params(node3, false, err, 0, 3, publicKey, partialPublicKey3, disqualifiedNodes);
-        params[3] = Params(node4, false, err, 0, 3, publicKey, partialPublicKey4, disqualifiedNodes);
-        params[4] = Params(node5, false, err, 0, 3, publicKey, partialPublicKey5, disqualifiedNodes);
+        params[0] = Params(_node1, false, err, 0, 3, _publicKey, _partialPublicKey1, new address[](0));
+        params[1] = Params(_node2, false, err, 0, 3, _publicKey, _partialPublicKey2, new address[](0));
+        params[2] = Params(_node3, false, err, 0, 3, _publicKey, _partialPublicKey3, disqualifiedNodes);
+        params[3] = Params(_node4, false, err, 0, 3, _publicKey, _partialPublicKey4, disqualifiedNodes);
+        params[4] = Params(_node5, false, err, 0, 3, _publicKey, _partialPublicKey5, disqualifiedNodes);
         dkgHelper(params);
         // printGroupInfo(0);
 
         // assert group state is correct
         assertEq(checkIsStrictlyMajorityConsensusReached(0), true);
-        assertEq(controller.getGroup(0).members.length, 3);
-        assertEq(controller.getGroup(0).size, 3);
+        assertEq(_controller.getGroup(0).members.length, 3);
+        assertEq(_controller.getGroup(0).size, 3);
 
-        // assert node1 and node2 were slashed
-        assertEq(nodeInGroup(node1, 0), false);
-        assertEq(node1DelegationRewardBefore - disqualifiedNodePenaltyAmount, staking.getDelegationReward(node1));
-        assertEq(nodeInGroup(node2, 0), false);
-        assertEq(node2DelegationRewardBefore - disqualifiedNodePenaltyAmount, staking.getDelegationReward(node2));
+        // assert _node1 and _node2 were slashed
+        assertEq(nodeInGroup(_node1, 0), false);
+        assertEq(node1DelegationRewardBefore - _disqualifiedNodePenaltyAmount, _staking.getDelegationReward(_node1));
+        assertEq(nodeInGroup(_node2, 0), false);
+        assertEq(node2DelegationRewardBefore - _disqualifiedNodePenaltyAmount, _staking.getDelegationReward(_node2));
     }
 
     function test2Dq2Reporter() public {
         Params[] memory params = new Params[](5);
         bytes memory err;
         address[] memory disqualifiedNodes = new address[](2);
-        disqualifiedNodes[0] = node1;
-        disqualifiedNodes[1] = node2;
+        disqualifiedNodes[0] = _node1;
+        disqualifiedNodes[1] = _node2;
 
-        params[0] = Params(node1, false, err, 0, 3, publicKey, partialPublicKey1, new address[](0));
-        params[1] = Params(node2, false, err, 0, 3, publicKey, partialPublicKey2, new address[](0));
-        params[2] = Params(node3, false, err, 0, 3, publicKey, partialPublicKey3, new address[](0));
-        params[3] = Params(node4, false, err, 0, 3, publicKey, partialPublicKey4, disqualifiedNodes);
-        params[4] = Params(node5, false, err, 0, 3, publicKey, partialPublicKey5, disqualifiedNodes);
+        params[0] = Params(_node1, false, err, 0, 3, _publicKey, _partialPublicKey1, new address[](0));
+        params[1] = Params(_node2, false, err, 0, 3, _publicKey, _partialPublicKey2, new address[](0));
+        params[2] = Params(_node3, false, err, 0, 3, _publicKey, _partialPublicKey3, new address[](0));
+        params[3] = Params(_node4, false, err, 0, 3, _publicKey, _partialPublicKey4, disqualifiedNodes);
+        params[4] = Params(_node5, false, err, 0, 3, _publicKey, _partialPublicKey5, disqualifiedNodes);
         dkgHelper(params);
         // printGroupInfo(0);
 
         // assert group state is correct
         assertEq(checkIsStrictlyMajorityConsensusReached(0), true);
-        assertEq(controller.getGroup(0).members.length, 5);
-        assertEq(controller.getGroup(0).size, 5);
+        assertEq(_controller.getGroup(0).members.length, 5);
+        assertEq(_controller.getGroup(0).size, 5);
     }
 
     // * 3 Disqualified Nodes (???)
@@ -346,15 +346,15 @@ contract DKGScenarioTest is RandcastTestHelper {
         Params[] memory params = new Params[](5);
         bytes memory err;
         address[] memory disqualifiedNodes = new address[](3);
-        disqualifiedNodes[0] = node1;
-        disqualifiedNodes[1] = node2;
-        disqualifiedNodes[2] = node3;
+        disqualifiedNodes[0] = _node1;
+        disqualifiedNodes[1] = _node2;
+        disqualifiedNodes[2] = _node3;
 
-        params[0] = Params(node1, false, err, 0, 3, publicKey, partialPublicKey1, new address[](0));
-        params[1] = Params(node2, false, err, 0, 3, publicKey, partialPublicKey2, new address[](0));
-        params[2] = Params(node3, false, err, 0, 3, publicKey, partialPublicKey3, disqualifiedNodes);
-        params[3] = Params(node4, false, err, 0, 3, publicKey, partialPublicKey4, disqualifiedNodes);
-        params[4] = Params(node5, false, err, 0, 3, publicKey, partialPublicKey5, disqualifiedNodes);
+        params[0] = Params(_node1, false, err, 0, 3, _publicKey, _partialPublicKey1, new address[](0));
+        params[1] = Params(_node2, false, err, 0, 3, _publicKey, _partialPublicKey2, new address[](0));
+        params[2] = Params(_node3, false, err, 0, 3, _publicKey, _partialPublicKey3, disqualifiedNodes);
+        params[3] = Params(_node4, false, err, 0, 3, _publicKey, _partialPublicKey4, disqualifiedNodes);
+        params[4] = Params(_node5, false, err, 0, 3, _publicKey, _partialPublicKey5, disqualifiedNodes);
         dkgHelper(params);
         // printGroupInfo(0);
 
@@ -363,14 +363,14 @@ contract DKGScenarioTest is RandcastTestHelper {
 
         // assert group state is correct
         assertEq(checkIsStrictlyMajorityConsensusReached(0), false);
-        assertEq(controller.getGroup(0).members.length, 5);
-        assertEq(controller.getGroup(0).size, 5);
+        assertEq(_controller.getGroup(0).members.length, 5);
+        assertEq(_controller.getGroup(0).size, 5);
 
-        // assert node1, node2, and node3 were slashed
-        assertEq(nodeInGroup(node1, 0), true);
-        // assertEq(nodeStakingAmount, staking.getDelegationReward(node1));
-        // assertEq(nodeInGroup(node1, 0), false);
-        // // assertEq(nodeStakingAmount - disqualifiedNodePenaltyAmount, staking.getDelegationReward(node1));
+        // assert _node1, _node2, and _node3 were slashed
+        assertEq(nodeInGroup(_node1, 0), true);
+        // assertEq(nodeStakingAmount, _staking.getDelegationReward(_node1));
+        // assertEq(nodeInGroup(_node1, 0), false);
+        // // assertEq(nodeStakingAmount - _disqualifiedNodePenaltyAmount, _staking.getDelegationReward(_node1));
     }
 
     // * PPDKG with 3 Disqualified Nodes
@@ -381,27 +381,27 @@ contract DKGScenarioTest is RandcastTestHelper {
         // Set the coordinator to completed phase
         setPhase(0, 4);
 
-        uint256 node1DelegationRewardBefore = staking.getDelegationReward(node1);
-        uint256 node2DelegationRewardBefore = staking.getDelegationReward(node2);
-        uint256 node3DelegationRewardBefore = staking.getDelegationReward(node3);
+        uint256 node1DelegationRewardBefore = _staking.getDelegationReward(_node1);
+        uint256 node2DelegationRewardBefore = _staking.getDelegationReward(_node2);
+        uint256 node3DelegationRewardBefore = _staking.getDelegationReward(_node3);
 
-        // call postProcessDkg as node1
-        vm.prank(node1);
-        controller.postProcessDkg(0, 3);
+        // call postProcessDkg as _node1
+        vm.prank(_node1);
+        _controller.postProcessDkg(0, 3);
         // printGroupInfo(0);
 
         // assert group state is correct
         assertEq(checkIsStrictlyMajorityConsensusReached(0), false);
-        assertEq(controller.getGroup(0).members.length, 2);
-        assertEq(controller.getGroup(0).size, 2);
+        assertEq(_controller.getGroup(0).members.length, 2);
+        assertEq(_controller.getGroup(0).size, 2);
 
-        // assert node1, node2, and node3 were slashed
-        assertEq(nodeInGroup(node1, 0), false);
-        assertEq(node1DelegationRewardBefore - disqualifiedNodePenaltyAmount, staking.getDelegationReward(node1));
-        assertEq(nodeInGroup(node2, 0), false);
-        assertEq(node2DelegationRewardBefore - disqualifiedNodePenaltyAmount, staking.getDelegationReward(node2));
-        assertEq(nodeInGroup(node3, 0), false);
-        assertEq(node3DelegationRewardBefore - disqualifiedNodePenaltyAmount, staking.getDelegationReward(node3));
+        // assert _node1, _node2, and _node3 were slashed
+        assertEq(nodeInGroup(_node1, 0), false);
+        assertEq(node1DelegationRewardBefore - _disqualifiedNodePenaltyAmount, _staking.getDelegationReward(_node1));
+        assertEq(nodeInGroup(_node2, 0), false);
+        assertEq(node2DelegationRewardBefore - _disqualifiedNodePenaltyAmount, _staking.getDelegationReward(_node2));
+        assertEq(nodeInGroup(_node3, 0), false);
+        assertEq(node3DelegationRewardBefore - _disqualifiedNodePenaltyAmount, _staking.getDelegationReward(_node3));
     }
 
     // *  Disqualified Node Mixed Reporting
@@ -415,24 +415,24 @@ contract DKGScenarioTest is RandcastTestHelper {
         address[] memory dn4 = new address[](1);
         address[] memory dn5 = new address[](1);
 
-        dn1[0] = node1;
-        dn2[0] = node2;
-        dn3[0] = node3;
-        dn4[0] = node4;
-        dn5[0] = node5;
+        dn1[0] = _node1;
+        dn2[0] = _node2;
+        dn3[0] = _node3;
+        dn4[0] = _node4;
+        dn5[0] = _node5;
 
-        params[0] = Params(node1, false, err, 0, 3, publicKey, partialPublicKey1, dn2);
-        params[1] = Params(node2, false, err, 0, 3, publicKey, partialPublicKey2, dn3);
-        params[2] = Params(node3, false, err, 0, 3, publicKey, partialPublicKey3, dn4);
-        params[3] = Params(node4, false, err, 0, 3, publicKey, partialPublicKey4, dn5);
-        params[4] = Params(node5, false, err, 0, 3, publicKey, partialPublicKey5, dn1);
+        params[0] = Params(_node1, false, err, 0, 3, _publicKey, _partialPublicKey1, dn2);
+        params[1] = Params(_node2, false, err, 0, 3, _publicKey, _partialPublicKey2, dn3);
+        params[2] = Params(_node3, false, err, 0, 3, _publicKey, _partialPublicKey3, dn4);
+        params[3] = Params(_node4, false, err, 0, 3, _publicKey, _partialPublicKey4, dn5);
+        params[4] = Params(_node5, false, err, 0, 3, _publicKey, _partialPublicKey5, dn1);
         dkgHelper(params);
         // printGroupInfo(0);
 
         // assert group state is correct
         assertEq(checkIsStrictlyMajorityConsensusReached(0), false);
-        assertEq(controller.getGroup(0).members.length, 5);
-        assertEq(controller.getGroup(0).size, 5);
+        assertEq(_controller.getGroup(0).members.length, 5);
+        assertEq(_controller.getGroup(0).size, 5);
     }
 
     // * PPDKG Node Mixed Reporting
@@ -443,32 +443,32 @@ contract DKGScenarioTest is RandcastTestHelper {
         // Set the coordinator to completed phase
         setPhase(0, 4);
 
-        uint256 node1DelegationRewardBefore = staking.getDelegationReward(node1);
-        uint256 node2DelegationRewardBefore = staking.getDelegationReward(node2);
-        uint256 node3DelegationRewardBefore = staking.getDelegationReward(node3);
-        uint256 node4DelegationRewardBefore = staking.getDelegationReward(node4);
-        uint256 node5DelegationRewardBefore = staking.getDelegationReward(node5);
+        uint256 node1DelegationRewardBefore = _staking.getDelegationReward(_node1);
+        uint256 node2DelegationRewardBefore = _staking.getDelegationReward(_node2);
+        uint256 node3DelegationRewardBefore = _staking.getDelegationReward(_node3);
+        uint256 node4DelegationRewardBefore = _staking.getDelegationReward(_node4);
+        uint256 node5DelegationRewardBefore = _staking.getDelegationReward(_node5);
 
-        // call postProcessDkg as node1
-        vm.prank(node1);
-        controller.postProcessDkg(0, 3);
+        // call postProcessDkg as _node1
+        vm.prank(_node1);
+        _controller.postProcessDkg(0, 3);
         printGroupInfo(0);
 
         // assert group state is correct
         assertEq(checkIsStrictlyMajorityConsensusReached(0), false);
-        assertEq(controller.getGroup(0).members.length, 0);
-        assertEq(controller.getGroup(0).size, 0);
+        assertEq(_controller.getGroup(0).members.length, 0);
+        assertEq(_controller.getGroup(0).size, 0);
 
         // assert nodes are slashed
-        assertEq(nodeInGroup(node1, 0), false);
-        assertEq(node1DelegationRewardBefore - disqualifiedNodePenaltyAmount, staking.getDelegationReward(node1));
-        assertEq(nodeInGroup(node2, 0), false);
-        assertEq(node2DelegationRewardBefore - disqualifiedNodePenaltyAmount, staking.getDelegationReward(node2));
-        assertEq(nodeInGroup(node3, 0), false);
-        assertEq(node3DelegationRewardBefore - disqualifiedNodePenaltyAmount, staking.getDelegationReward(node3));
-        assertEq(nodeInGroup(node4, 0), false);
-        assertEq(node4DelegationRewardBefore - disqualifiedNodePenaltyAmount, staking.getDelegationReward(node4));
-        assertEq(nodeInGroup(node5, 0), false);
-        assertEq(node5DelegationRewardBefore - disqualifiedNodePenaltyAmount, staking.getDelegationReward(node5));
+        assertEq(nodeInGroup(_node1, 0), false);
+        assertEq(node1DelegationRewardBefore - _disqualifiedNodePenaltyAmount, _staking.getDelegationReward(_node1));
+        assertEq(nodeInGroup(_node2, 0), false);
+        assertEq(node2DelegationRewardBefore - _disqualifiedNodePenaltyAmount, _staking.getDelegationReward(_node2));
+        assertEq(nodeInGroup(_node3, 0), false);
+        assertEq(node3DelegationRewardBefore - _disqualifiedNodePenaltyAmount, _staking.getDelegationReward(_node3));
+        assertEq(nodeInGroup(_node4, 0), false);
+        assertEq(node4DelegationRewardBefore - _disqualifiedNodePenaltyAmount, _staking.getDelegationReward(_node4));
+        assertEq(nodeInGroup(_node5, 0), false);
+        assertEq(node5DelegationRewardBefore - _disqualifiedNodePenaltyAmount, _staking.getDelegationReward(_node5));
     }
 }

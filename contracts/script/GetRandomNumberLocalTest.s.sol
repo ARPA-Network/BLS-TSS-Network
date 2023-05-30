@@ -1,16 +1,12 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity ^0.8.13;
 
-import "forge-std/Script.sol";
-import "./ArpaLocalTest.sol";
+import {Script} from "forge-std/Script.sol";
+import {Arpa} from "./ArpaLocalTest.sol";
 import {IAdapter} from "../src/interfaces/IAdapter.sol";
-import "../src/user/examples/GetRandomNumberExample.sol";
-import "openzeppelin-contracts/contracts/token/ERC20/IERC20.sol";
-import "openzeppelin-contracts/contracts/token/ERC20/ERC20.sol";
+import {GetRandomNumberExample} from "../src/user/examples/GetRandomNumberExample.sol";
 
 contract GetRandomNumberLocalTestScript is Script {
-    function setUp() public {}
-
     function run() external {
         GetRandomNumberExample getRandomNumberExample;
         Arpa arpa;

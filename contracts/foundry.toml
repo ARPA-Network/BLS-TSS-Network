@@ -3,6 +3,7 @@ src = 'src'
 out = 'out'
 libs = ['lib']
 optimizer = false
+ignored_error_codes = [5159, 5574]
 
 gas_price = 1000000000
 # Use this to verify contracts on etherscan

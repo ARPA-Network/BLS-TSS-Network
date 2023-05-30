@@ -1,12 +1,10 @@
 // SPDX-License-Identifier: MIT
 pragma solidity >=0.8.10;
 
-import "forge-std/Test.sol";
-import "../src/libraries/BLS.sol";
+import {Test} from "forge-std/Test.sol";
+import {BLS} from "../src/libraries/BLS.sol";
 
 contract BLSTest is Test {
-    function setUp() public {}
-
     function testHashToPoint() public {
         uint256[2] memory p = BLS.hashToPoint("hello");
 
