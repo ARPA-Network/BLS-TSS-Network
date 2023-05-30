@@ -327,9 +327,7 @@ pub mod coordinator_tests {
         let res = client.publish(mock_value.clone()).await;
         assert!(res.is_err());
         let err = res.unwrap_err();
-        assert!(err
-            .to_string()
-            .contains("you have already published your shares"));
+        assert!(err.to_string().contains("share existed"));
     }
 
     #[test]
