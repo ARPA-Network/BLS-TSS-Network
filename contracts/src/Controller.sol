@@ -408,8 +408,8 @@ contract Controller is Initializable, IController, IControllerOwner, OwnableUpgr
         return _groupData.groups[groupIndex];
     }
 
-    function getGroupThreshold(uint256 groupIndex) public view override(IController) returns (uint256) {
-        return _groupData.groups[groupIndex].threshold;
+    function getGroupThreshold(uint256 groupIndex) public view override(IController) returns (uint256, uint256) {
+        return (_groupData.groups[groupIndex].threshold, _groupData.groups[groupIndex].size);
     }
 
     function getNode(address nodeAddress) public view override(IController) returns (Node memory) {

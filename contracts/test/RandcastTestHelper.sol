@@ -425,7 +425,7 @@ abstract contract RandcastTestHelper is Test {
         _staking.stake(_operatorStakeAmount);
     }
 
-    function prepareAnAvailableGroup() public returns (uint256 threshold) {
+    function prepareAnAvailableGroup() public returns (uint256 threshold, uint256 size) {
         // deal nodes
         vm.deal(_node1, 1 * 10 ** 18);
         vm.deal(_node2, 1 * 10 ** 18);
@@ -455,7 +455,9 @@ abstract contract RandcastTestHelper is Test {
 
         uint256 groupIndex = 0;
         uint256 groupEpoch = 3;
+
         threshold = 3;
+        size = 5;
 
         address[] memory disqualifiedNodes = new address[](0);
         IController.CommitDkgParams memory params;

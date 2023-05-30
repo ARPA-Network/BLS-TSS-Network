@@ -187,7 +187,8 @@ contract ConsumerRequestBalanceTest is RandcastTestHelper {
 
         // give the balance just enough for one request
         // give more than 3 times actual payment since we estimate 3 times max gas fee
-        uint256 someEthBalance = 11 * 3 * 1e14;
+        // (501728+30000) + 50000 * (5-3) + 530000 + 9000*5 = 1206728
+        uint256 someEthBalance = 1210 * 3 * 1e12;
         _prepareSubscription(_user, address(_rollDiceExample), someEthBalance);
         uint32 bunch = 10;
         vm.prank(_user);
@@ -201,8 +202,8 @@ contract ConsumerRequestBalanceTest is RandcastTestHelper {
 
     function testRequestAdvancedExampleWithEnoughBalanceThenSuccessfullyFulfill() public {
         deal(_user, 1 * 1e18);
-
-        uint256 plentyOfEthBalance = 1e15;
+        // 350000 + 50000 * (5-3) + 530000 + 9000*5 = 1025000
+        uint256 plentyOfEthBalance = 1050e12;
         uint64 subId = _prepareSubscription(_user, address(_advancedGetShuffledArrayExample), plentyOfEthBalance);
 
         uint32 upper = 10;

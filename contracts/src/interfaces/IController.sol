@@ -74,7 +74,7 @@ interface IController {
 
     function getGroup(uint256 index) external view returns (Group memory);
 
-    function getGroupThreshold(uint256 groupIndex) external view returns (uint256);
+    function getGroupThreshold(uint256 groupIndex) external view returns (uint256, uint256);
 
     function getNode(address nodeAddress) external view returns (Node memory);
 

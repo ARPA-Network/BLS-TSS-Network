@@ -22,7 +22,9 @@ contract Adapter is UUPSUpgradeable, IAdapter, IAdapterOwner, RequestIdBase, Ran
     // *Constants*
     uint16 public constant MAX_CONSUMERS = 100;
     uint16 public constant MAX_REQUEST_CONFIRMATIONS = 200;
-    uint256 public constant RANDOMNESS_REWARD_GAS = 8500;
+    uint256 public constant RANDOMNESS_REWARD_GAS = 9000;
+    uint256 public constant VERIFICATION_GAS_OVER_MINIMUM_THRESHOLD = 50000;
+    uint256 public constant DEFAULT_MINIMUM_THRESHOLD = 3;
 
     // *State Variables*
     IController internal _controller;
@@ -361,13 +363,15 @@ contract Adapter is UUPSUpgradeable, IAdapter, IAdapterOwner, RequestIdBase, Ran
         _cancelSubscriptionHelper(subId, to);
     }
 
-    function requestRandomness(RandomnessRequestParams memory p)
+    function requestRandomness(RandomnessRequestParams calldata params)
         public
         virtual
         override(IAdapter)
         nonReentrant
         returns (bytes32)
     {
+        RandomnessRequestParams memory p = params;
+
         // solhint-disable-next-line avoid-tx-origin
         if (msg.sender == tx.origin) {
             revert InvalidRequestByEOA();
@@ -394,13 +398,10 @@ contract Adapter is UUPSUpgradeable, IAdapter, IAdapterOwner, RequestIdBase, Ran
         _consumers[msg.sender].nonces[p.subId] += 1;
         bytes32 requestId = _makeRequestId(rawSeed);
 
-        uint256 payment = _freezePaymentBySubscription(
-            sub,
-            requestId,
-            _controller.getGroupThreshold(_lastAssignedGroupIndex),
-            p.callbackGasLimit,
-            p.callbackMaxGasPrice
-        );
+        (, uint256 groupSize) = _controller.getGroupThreshold(_lastAssignedGroupIndex);
+
+        uint256 payment =
+            _freezePaymentBySubscription(sub, requestId, groupSize, p.callbackGasLimit, p.callbackMaxGasPrice);
 
         _requestCommitments[requestId] = keccak256(
             abi.encode(
@@ -486,8 +487,6 @@ contract Adapter is UUPSUpgradeable, IAdapter, IAdapterOwner, RequestIdBase, Ran
         address[] memory participantMembers =
             _verifySignature(groupIndex, requestDetail.seed, requestDetail.blockNum, signature, partialSignatures);
 
-        uint256 groupThreshold = _controller.getGroupThreshold(groupIndex);
-
         delete _requestCommitments[requestId];
 
         uint256 randomness = uint256(keccak256(abi.encode(signature)));
@@ -498,7 +497,8 @@ contract Adapter is UUPSUpgradeable, IAdapter, IAdapterOwner, RequestIdBase, Ran
         // call user fulfill_randomness callback
         bool success = _fulfillCallback(requestId, randomness, requestDetail);
 
-        uint256 payment = _payBySubscription(_subscriptions[requestDetail.subId], requestId, groupThreshold, startGas);
+        uint256 payment =
+            _payBySubscription(_subscriptions[requestDetail.subId], requestId, partialSignatures.length, startGas);
 
         // rewardRandomness for participants
         _rewardRandomness(participantMembers, payment);
@@ -616,7 +616,7 @@ contract Adapter is UUPSUpgradeable, IAdapter, IAdapterOwner, RequestIdBase, Ran
     function _freezePaymentBySubscription(
         Subscription storage sub,
         bytes32 requestId,
-        uint256 groupThreshold,
+        uint256 groupSize,
         uint256 callbackGasLimit,
         uint256 callbackMaxGasPrice
     ) internal returns (uint256) {
@@ -640,7 +640,8 @@ contract Adapter is UUPSUpgradeable, IAdapter, IAdapterOwner, RequestIdBase, Ran
         // Estimate upper cost of this fulfillment.
         uint256 payment = estimatePaymentAmountInETH(
             callbackGasLimit,
-            _config.gasExceptCallback + RANDOMNESS_REWARD_GAS * groupThreshold,
+            uint256(_config.gasExceptCallback) + RANDOMNESS_REWARD_GAS * groupSize
+                + VERIFICATION_GAS_OVER_MINIMUM_THRESHOLD * (groupSize - DEFAULT_MINIMUM_THRESHOLD),
             sub.freeRequestCount > 0
                 ? 0
                 : (getFeeTier(reqCount) * _flatFeeConfig.flatFeePromotionGlobalPercentage / 100),
@@ -657,10 +658,12 @@ contract Adapter is UUPSUpgradeable, IAdapter, IAdapterOwner, RequestIdBase, Ran
         return payment;
     }
 
-    function _payBySubscription(Subscription storage sub, bytes32 requestId, uint256 groupThreshold, uint256 startGas)
-        internal
-        returns (uint256)
-    {
+    function _payBySubscription(
+        Subscription storage sub,
+        bytes32 requestId,
+        uint256 partialSignersCount,
+        uint256 startGas
+    ) internal returns (uint256) {
         // Increment the req count for fee tier selection.
         sub.reqCount += 1;
         uint64 reqCount;
@@ -698,7 +701,7 @@ contract Adapter is UUPSUpgradeable, IAdapter, IAdapterOwner, RequestIdBase, Ran
         // 1 eth / 1e6 = 1e18 eth wei / 1e6 = 1e12 eth wei.
         uint256 payment = _calculatePaymentAmountInETH(
             startGas,
-            _config.gasAfterPaymentCalculation + RANDOMNESS_REWARD_GAS * groupThreshold,
+            uint256(_config.gasAfterPaymentCalculation) + RANDOMNESS_REWARD_GAS * partialSignersCount,
             isFlatFeeFree ? 0 : (getFeeTier(reqCount) * _flatFeeConfig.flatFeePromotionGlobalPercentage / 100),
             tx.gasprice
         );

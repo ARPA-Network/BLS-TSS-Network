@@ -36,7 +36,7 @@ interface IAdapter is IRequestTypeBase {
     function nodeWithdrawETH(address recipient, uint256 ethAmount) external;
 
     // consumer contract transaction
-    function requestRandomness(RandomnessRequestParams memory p) external returns (bytes32);
+    function requestRandomness(RandomnessRequestParams calldata params) external returns (bytes32);
 
     function fulfillRandomness(
         uint256 groupIndex,

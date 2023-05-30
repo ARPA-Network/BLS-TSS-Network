@@ -56,7 +56,6 @@ anvil
 ### deploy the staking, the controller and the adapter contract:
 
 ```bash
-# user contract address 0x8464135c8f25da09e49bc8782676a84730c318bc
 # see .env for more deployment addresses
 forge script script/ControllerLocalTest.s.sol:ControllerLocalTestScript --fork-url http://localhost:8545 --optimize --broadcast
 ```

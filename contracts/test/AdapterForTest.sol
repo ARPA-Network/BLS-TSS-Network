@@ -10,7 +10,7 @@ contract AdapterForTest is Adapter {
         initialize(controller);
     }
 
-    function requestRandomness(RandomnessRequestParams memory p) public override returns (bytes32) {
+    function requestRandomness(RandomnessRequestParams calldata p) public override returns (bytes32) {
         bytes32 requestId = super.requestRandomness(p);
         uint256 rawSeed = _makeRandcastInputSeed(p.seed, msg.sender, _consumers[msg.sender].nonces[p.subId] - 1);
 

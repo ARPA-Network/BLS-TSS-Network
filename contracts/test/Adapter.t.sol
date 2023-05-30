@@ -140,7 +140,7 @@ contract AdapterTest is RandcastTestHelper {
     }
 
     function testRequestRandomness() public {
-        uint256 threshold = prepareAnAvailableGroup();
+        (, uint256 groupSize) = prepareAnAvailableGroup();
         deal(_user, 1 * 1e18);
 
         uint32 times = 10;
@@ -155,7 +155,9 @@ contract AdapterTest is RandcastTestHelper {
 
             // 0 flat fee until the first request is actually fulfilled
             uint256 payment = _adapter.estimatePaymentAmountInETH(
-                _getRandomNumberExample.callbackGasLimit() + _adapter.RANDOMNESS_REWARD_GAS() * threshold,
+                _getRandomNumberExample.callbackGasLimit() + _adapter.RANDOMNESS_REWARD_GAS() * groupSize
+                    + _adapter.VERIFICATION_GAS_OVER_MINIMUM_THRESHOLD()
+                        * (groupSize - _adapter.DEFAULT_MINIMUM_THRESHOLD()),
                 _gasExceptCallback,
                 0,
                 tx.gasprice * 3
