@@ -16,7 +16,6 @@ ${CONFIG_PATH}                      tests/scenarios/src/environment/node_config/
 Compile Proto
     Run    mv ${PROTO_PATH}; mkdir ${PROTO_PATH}
     Run    cp crates/arpa-node/proto/*.proto ${PROTO_PATH}
-    Run    cp crates/randcast-contract-mock/proto/*.proto ${PROTO_PATH}
     Run    python -m grpc_tools.protoc -I=${PROTO_PATH} --python_out=${PROTO_PATH} --grpc_python_out=${PROTO_PATH} management.proto
 
 List Fixed Tasks
@@ -91,7 +90,7 @@ Partial Sign
 Aggregate Partial Signatures
     [Arguments]    ${node_index}    ${threshold}    ${partial_sigs}
     ${node_port} =    Get Node Port From Index    ${node_index}
-    ${msg} =    Convert To Bytes    ${partial_sigs}
+
     ${res} =    Call Request    ${node_port}    AggregatePartialSignatures    threshold=${threshold}    partial_sigs=${partial_sigs}
     RETURN    ${res}
 

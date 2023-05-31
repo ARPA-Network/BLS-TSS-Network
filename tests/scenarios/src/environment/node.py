@@ -229,7 +229,7 @@ def get_node_port_from_index(node_idx):
     Get the port of a node from its index.
     node_idx: index of the node.
     """
-    port = 50161 + int(node_idx) - 1
+    port = 50201 + int(node_idx) - 1
     return  'localhost:' + str(port)
 
 def add_process_to_list(proc, node_list):

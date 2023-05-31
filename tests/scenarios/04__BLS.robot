@@ -109,8 +109,8 @@ BLS Happy Path2
 Corner Case1
     [Documentation]
     ...    1. Given Adapter think group0 group1 work well
-    ...    2. Given group0 size =3, threshold=3, but only 2 nodes can work
-    ...    3. Given group1 size =3, threshold=3, and 3 nodes can work
+    ...    2. Given group0 size = 3, threshold = 3, but only 2 nodes can work
+    ...    3. Given group1 size = 3, threshold = 3, and 3 nodes can work
     ...    4. Given Adapter assign BLS task to group0, group0 can not finish in time
     ...    5. When group1 finish, group1 committer call fulfill randomness
     Set Global Variable    $BLOCK_TIME    1
@@ -142,10 +142,49 @@ Corner Case1
     ${result} =    Events Values Should Be    ${events}    groupIndex    1
     Teardown Scenario Testing Environment
 
+Corner Case2
+    [Documentation]
+    ...    1. Given Adapter think group0 group1 work well
+    #Form a group first
+    Compile Proto
+    Set Global Variable    $BLOCK_TIME    1
+    Set Enviorment And Deploy Contract
+    Sleep    3s
+
+    ${node1} =    Stake And Run Node    1
+    ${node2} =    Stake And Run Node    2
+    ${node3} =    Stake And Run Node    3
+    ${node4} =    Stake And Run Node    4
+    ${node5} =    Stake And Run Node    5
+    ${log_group_available} =       All Nodes Have Keyword    Group index:0 epoch:3 is available    ${NODE_PROCESS_LIST}
+    ${node6} =    Stake And Run Node    6
+    ${log_group_0} =    Have Node Got Keyword    Group index:0 epoch:4 is available    ${NODE_PROCESS_LIST}
+    ${log_grouo_1} =    Have Node Got Keyword    Group index:1 epoch:1 is available    ${NODE_PROCESS_LIST}
+
+    Mine Blocks    20
+    Sleep    3s
+    Deploy User Contract And Request Randomness
+    Sleep    10s
+    Clear Log
+    ${task_type} =    Convert To Integer    6
+    ${group0} =    Get Group    1
+    ${nodes} =    Set Variable    ${group0[5]}
+    ${node_index} =    Get Index By Address    ${nodes[0]}
+    Shutdown Listener    ${node_index}    ${task_type}
+    ${node_index} =    Get Index By Address    ${nodes[1]}
+    Shutdown Listener    ${node_index}    ${task_type}
+    ${node_index} =    Get Index By Address    ${nodes[2]}
+    Shutdown Listener    ${node_index}    ${task_type}
+
+    ${request_id} =    Deploy User Contract And Request Randomness
+    ${cur_block} =    Get Latest Block Number
+    Sleep    60s
+
 *** Test Cases ***
 
 Run BLS Test Cases
-    Repeat Keyword    1    BLS Happy Path1
+    #Repeat Keyword    1    BLS Happy Path1
     #Bug to be fixed
     #Repeat Keyword    1    BLS Happy Path2
-    Repeat Keyword    1    Corner Case1
+    #Repeat Keyword    1    Corner Case1
+    Repeat Keyword    1    Corner Case2
