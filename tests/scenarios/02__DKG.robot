@@ -41,7 +41,6 @@ Test Rebalance
     Group Node Number Should Be    0    3
     Group Node Number Should Be    1    3
     ${result} =    Get Err Log From Chain
-    #Should Be Equal As Strings    ${result}    None
     Teardown Scenario Testing Environment
 
 DKG Happy Path1

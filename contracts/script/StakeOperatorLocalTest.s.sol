@@ -1,70 +1,68 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity ^0.8.13;
 
-import "forge-std/Script.sol";
+import {Script} from "forge-std/Script.sol";
 import {Staking} from "Staking-v0.1/Staking.sol";
-import "./ArpaLocalTest.sol";
+import {Arpa} from "./ArpaLocalTest.sol";
 
 contract StakeOperatorLocalTestScript is Script {
-    uint256 deployerPrivateKey = vm.envUint("ADMIN_PRIVATE_KEY");
-    uint256 userPrivateKey = vm.envUint("USER_PRIVATE_KEY");
+    uint256 internal _deployerPrivateKey = vm.envUint("ADMIN_PRIVATE_KEY");
+    uint256 internal _userPrivateKey = vm.envUint("USER_PRIVATE_KEY");
 
-    address stakingAddress = vm.envAddress("STAKING_ADDRESS");
-    address arpaAddress = vm.envAddress("ARPA_ADDRESS");
+    address internal _stakingAddress = vm.envAddress("STAKING_ADDRESS");
+    address internal _arpaAddress = vm.envAddress("ARPA_ADDRESS");
 
-    uint256 rewardAmount = vm.envUint("REWARD_AMOUNT");
-    uint256 operatorStakeAmount = vm.envUint("OPERATOR_STAKE_AMOUNT");
+    uint256 internal _rewardAmount = vm.envUint("REWARD_AMOUNT");
+    uint256 internal _operatorStakeAmount = vm.envUint("OPERATOR_STAKE_AMOUNT");
 
-    address[] operators;
-    string mnemonic = vm.envString("STAKING_NODES_MNEMONIC");
-    uint32 stakingNodesIndexOffset = uint32(vm.envUint("STAKING_NODES_INDEX_OFFSET"));
-    uint32 stakingNodesIndexLength = 10;
+    address[] internal _operators;
+    string internal _mnemonic = vm.envString("STAKING_NODES_MNEMONIC");
+    uint32 internal _stakingNodesIndexOffset = uint32(vm.envUint("STAKING_NODES_INDEX_OFFSET"));
+    uint32 internal _stakingNodesIndexLength = 10;
 
-    Staking staking;
-    Arpa arpa;
-
-    function setUp() public {}
+    Staking internal _staking;
+    Arpa internal _arpa;
 
     function run() external {
-        arpa = Arpa(arpaAddress);
-        staking = Staking(stakingAddress);
+        _arpa = Arpa(_arpaAddress);
+        _staking = Staking(_stakingAddress);
 
         // add operators
-        for (uint32 i = stakingNodesIndexOffset; i < stakingNodesIndexOffset + stakingNodesIndexLength; i++) {
-            address operator = vm.rememberKey(vm.deriveKey(mnemonic, i));
-            operators.push(operator);
+        for (uint32 i = _stakingNodesIndexOffset; i < _stakingNodesIndexOffset + _stakingNodesIndexLength; i++) {
+            address operator = vm.rememberKey(vm.deriveKey(_mnemonic, i));
+            _operators.push(operator);
 
-            address payable to_operator = payable(operator);
-            vm.broadcast(deployerPrivateKey);
-            to_operator.transfer(1 ether);
+            address payable toOperator = payable(operator);
+            vm.broadcast(_deployerPrivateKey);
+            toOperator.transfer(1 ether);
         }
 
-        vm.broadcast(deployerPrivateKey);
-        staking.addOperators(operators);
+        vm.broadcast(_deployerPrivateKey);
+        _staking.addOperators(_operators);
 
-        // start the staking pool
-        vm.broadcast(deployerPrivateKey);
-        arpa.mint(vm.addr(deployerPrivateKey), rewardAmount);
+        // start the _staking pool
+        vm.broadcast(_deployerPrivateKey);
+        _arpa.mint(vm.addr(_deployerPrivateKey), _rewardAmount);
 
-        vm.broadcast(deployerPrivateKey);
-        arpa.approve(address(staking), rewardAmount);
+        vm.broadcast(_deployerPrivateKey);
+        _arpa.approve(address(_staking), _rewardAmount);
 
-        vm.broadcast(deployerPrivateKey);
-        staking.start(rewardAmount, 30 days);
+        vm.broadcast(_deployerPrivateKey);
+        _staking.start(_rewardAmount, 30 days);
 
         // let a user stake to accumulate some rewards
-        vm.rememberKey(userPrivateKey);
-        stake(vm.addr(userPrivateKey));
+        vm.rememberKey(_userPrivateKey);
+        _stake(vm.addr(_userPrivateKey));
     }
 
-    function stake(address sender) internal {
+    function _stake(address sender) internal {
         vm.broadcast(sender);
-        arpa.mint(sender, operatorStakeAmount);
+        _arpa.mint(sender, _operatorStakeAmount);
 
         vm.broadcast(sender);
-        arpa.approve(address(staking), operatorStakeAmount);
+        _arpa.approve(address(_staking), _operatorStakeAmount);
 
         vm.broadcast(sender);
-        staking.stake(operatorStakeAmount);
+        _staking.stake(_operatorStakeAmount);
     }
 }

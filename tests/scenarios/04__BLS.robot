@@ -30,14 +30,15 @@ BLS Happy Path1
     ${node6} =    Stake And Run Node    6
     ${log_group_0} =    Have Node Got Keyword    Group index:0 epoch:4 is available    ${NODE_PROCESS_LIST}
     ${log_grouo_1} =    Have Node Got Keyword    Group index:1 epoch:1 is available    ${NODE_PROCESS_LIST}
-    
-    Wait For Process    timeout=20s
-
+    Mine Blocks    20
+    Sleep    3s
+    Deploy User Contract And Request Randomness
+    Sleep    10s
     ${current_randomness} =    Set Variable    1
     ${cur_block} =    Convert To Integer    0
     ${last_group} =    Convert To Integer    -1
     ${cur_group} =    Convert To Integer    -2
-    WHILE    ${cur_block < 1000}
+    WHILE    ${cur_block < 500}
         ${cur_block} =    Get Latest Block Number
         Deploy User Contract And Request Randomness
         Wait For Process    timeout=30s
@@ -74,9 +75,10 @@ BLS Happy Path2
     Wait For Process    timeout=20s
 
     ${request_id} =    Deploy User Contract And Request Randomness
-    Wait For Process    timeout=60s
+    Wait For Process    timeout=10s
     Clear Log
     ${request_id} =    Deploy User Contract And Request Randomness
+    ${start_block} =    Get Latest Block Number
     Wait For Process    timeout=10s
     ${index} =    Convert To Integer    1
     ${count} =    Convert To Integer    0
@@ -99,7 +101,7 @@ BLS Happy Path2
     ${count} =    Convert To String    ${count}
     Should Be Equal As Strings    ${count}    3
     
-    ${node_rewards} =    get_events    ${CONTROLLER_CONTRACT}    NodeRewarded
+    ${node_rewards} =    get_events    ${CONTROLLER_CONTRACT}    NodeRewarded    ${start_block}
     Log    ${node_rewards}
     ${final_committer_reward} =    Get Amount Count From Reward Events    ${node_rewards}    ${final_committer}
 
@@ -184,7 +186,6 @@ Corner Case2
 
 Run BLS Test Cases
     #Repeat Keyword    1    BLS Happy Path1
-    #Bug to be fixed
     #Repeat Keyword    1    BLS Happy Path2
     #Repeat Keyword    1    Corner Case1
     Repeat Keyword    1    Corner Case2

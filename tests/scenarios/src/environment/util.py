@@ -64,8 +64,8 @@ def get_amount_count_from_reward_events(event_list, address):
     amount = 0
     for node in event_list:
         node_address = node["args"]["nodeAddress"]
-        if node_address == address:
-            amount += node["args"]["amount"]
+        if str(node_address).upper() == str(address).upper():
+            amount += int(node["args"]["arpaAmount"])
     return amount
 
 def get_account_index_from_list(address, account_list):

@@ -1,147 +1,149 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity ^0.8.13;
 
-import "forge-std/Script.sol";
-import "../src/Controller.sol";
-import "../src/interfaces/IControllerOwner.sol";
-import "../src/Adapter.sol";
-import "../src/interfaces/IAdapterOwner.sol";
-import "../src/ControllerProxy.sol";
-import "./MockArpaEthOracle.sol";
-import "./ArpaLocalTest.sol";
-import "../src/interfaces/IController.sol";
-import "openzeppelin-contracts/contracts/token/ERC20/IERC20.sol";
-import "openzeppelin-contracts/contracts/token/ERC20/ERC20.sol";
-import "openzeppelin-contracts/contracts/proxy/ERC1967/ERC1967Proxy.sol";
-import {Staking, ArpaTokenInterface} from "Staking-v0.1/Staking.sol";
+import {Script} from "forge-std/Script.sol";
+import {Controller} from "../src/Controller.sol";
+import {ControllerProxy} from "../src/ControllerProxy.sol";
+import {IControllerOwner} from "../src/interfaces/IControllerOwner.sol";
+import {Adapter} from "../src/Adapter.sol";
+import {IAdapterOwner} from "../src/interfaces/IAdapterOwner.sol";
+import {Arpa} from "./ArpaLocalTest.sol";
+import {IERC20} from "openzeppelin-contracts/contracts/token/ERC20/IERC20.sol";
+import {ERC20} from "openzeppelin-contracts/contracts/token/ERC20/ERC20.sol";
+import {ERC1967Proxy} from "openzeppelin-contracts/contracts/proxy/ERC1967/ERC1967Proxy.sol";
+import {Staking} from "Staking-v0.1/Staking.sol";
 
+// solhint-disable-next-line max-states-count
 contract ControllerLocalTestProxyScript is Script {
-    uint256 deployerPrivateKey = vm.envUint("ADMIN_PRIVATE_KEY");
+    uint256 internal _deployerPrivateKey = vm.envUint("ADMIN_PRIVATE_KEY");
 
-    uint256 disqualifiedNodePenaltyAmount = vm.envUint("DISQUALIFIED_NODE_PENALTY_AMOUNT");
-    uint256 defaultNumberOfCommitters = vm.envUint("DEFAULT_NUMBER_OF_COMMITTERS");
-    uint256 defaultDkgPhaseDuration = vm.envUint("DEFAULT_DKG_PHASE_DURATION");
-    uint256 groupMaxCapacity = vm.envUint("GROUP_MAX_CAPACITY");
-    uint256 idealNumberOfGroups = vm.envUint("IDEAL_NUMBER_OF_GROUPS");
-    uint256 pendingBlockAfterQuit = vm.envUint("PENDING_BLOCK_AFTER_QUIT");
-    uint256 dkgPostProcessReward = vm.envUint("DKG_POST_PROCESS_REWARD");
-    uint256 last_output = vm.envUint("LAST_OUTPUT");
+    uint256 internal _disqualifiedNodePenaltyAmount = vm.envUint("DISQUALIFIED_NODE_PENALTY_AMOUNT");
+    uint256 internal _defaultNumberOfCommitters = vm.envUint("DEFAULT_NUMBER_OF_COMMITTERS");
+    uint256 internal _defaultDkgPhaseDuration = vm.envUint("DEFAULT_DKG_PHASE_DURATION");
+    uint256 internal _groupMaxCapacity = vm.envUint("GROUP_MAX_CAPACITY");
+    uint256 internal _idealNumberOfGroups = vm.envUint("IDEAL_NUMBER_OF_GROUPS");
+    uint256 internal _pendingBlockAfterQuit = vm.envUint("PENDING_BLOCK_AFTER_QUIT");
+    uint256 internal _dkgPostProcessReward = vm.envUint("DKG_POST_PROCESS_REWARD");
+    uint256 internal _lastOutput = vm.envUint("LAST_OUTPUT");
 
-    uint16 minimumRequestConfirmations = uint16(vm.envUint("MINIMUM_REQUEST_CONFIRMATIONS"));
-    uint32 maxGasLimit = uint32(vm.envUint("MAX_GAS_LIMIT"));
-    uint32 stalenessSeconds = uint32(vm.envUint("STALENESS_SECONDS"));
-    uint32 gasAfterPaymentCalculation = uint32(vm.envUint("GAS_AFTER_PAYMENT_CALCULATION"));
-    uint32 gasExceptCallback = uint32(vm.envUint("GAS_EXCEPT_CALLBACK"));
-    int256 fallbackWeiPerUnitArpa = vm.envInt("FALLBACK_WEI_PER_UNIT_ARPA");
-    uint256 signatureTaskExclusiveWindow = vm.envUint("SIGNATURE_TASK_EXCLUSIVE_WINDOW");
-    uint256 rewardPerSignature = vm.envUint("REWARD_PER_SIGNATURE");
-    uint256 committerRewardPerSignature = vm.envUint("COMMITTER_REWARD_PER_SIGNATURE");
+    uint16 internal _minimumRequestConfirmations = uint16(vm.envUint("MINIMUM_REQUEST_CONFIRMATIONS"));
+    uint32 internal _maxGasLimit = uint32(vm.envUint("MAX_GAS_LIMIT"));
+    uint32 internal _gasAfterPaymentCalculation = uint32(vm.envUint("GAS_AFTER_PAYMENT_CALCULATION"));
+    uint32 internal _gasExceptCallback = uint32(vm.envUint("GAS_EXCEPT_CALLBACK"));
+    uint256 internal _signatureTaskExclusiveWindow = vm.envUint("SIGNATURE_TASK_EXCLUSIVE_WINDOW");
+    uint256 internal _rewardPerSignature = vm.envUint("REWARD_PER_SIGNATURE");
+    uint256 internal _committerRewardPerSignature = vm.envUint("COMMITTER_REWARD_PER_SIGNATURE");
 
-    uint32 fulfillmentFlatFeeArpaPPMTier1 = uint32(vm.envUint("FULFILLMENT_FLAT_FEE_ARPA_PPM_TIER1"));
-    uint32 fulfillmentFlatFeeArpaPPMTier2 = uint32(vm.envUint("FULFILLMENT_FLAT_FEE_ARPA_PPM_TIER2"));
-    uint32 fulfillmentFlatFeeArpaPPMTier3 = uint32(vm.envUint("FULFILLMENT_FLAT_FEE_ARPA_PPM_TIER3"));
-    uint32 fulfillmentFlatFeeArpaPPMTier4 = uint32(vm.envUint("FULFILLMENT_FLAT_FEE_ARPA_PPM_TIER4"));
-    uint32 fulfillmentFlatFeeArpaPPMTier5 = uint32(vm.envUint("FULFILLMENT_FLAT_FEE_ARPA_PPM_TIER5"));
-    uint24 reqsForTier2 = uint24(vm.envUint("REQS_FOR_TIER2"));
-    uint24 reqsForTier3 = uint24(vm.envUint("REQS_FOR_TIER3"));
-    uint24 reqsForTier4 = uint24(vm.envUint("REQS_FOR_TIER4"));
-    uint24 reqsForTier5 = uint24(vm.envUint("REQS_FOR_TIER5"));
+    uint32 internal _fulfillmentFlatFeeEthPPMTier1 = uint32(vm.envUint("FULFILLMENT_FLAT_FEE_ARPA_PPM_TIER1"));
+    uint32 internal _fulfillmentFlatFeeEthPPMTier2 = uint32(vm.envUint("FULFILLMENT_FLAT_FEE_ARPA_PPM_TIER2"));
+    uint32 internal _fulfillmentFlatFeeEthPPMTier3 = uint32(vm.envUint("FULFILLMENT_FLAT_FEE_ARPA_PPM_TIER3"));
+    uint32 internal _fulfillmentFlatFeeEthPPMTier4 = uint32(vm.envUint("FULFILLMENT_FLAT_FEE_ARPA_PPM_TIER4"));
+    uint32 internal _fulfillmentFlatFeeEthPPMTier5 = uint32(vm.envUint("FULFILLMENT_FLAT_FEE_ARPA_PPM_TIER5"));
+    uint24 internal _reqsForTier2 = uint24(vm.envUint("REQS_FOR_TIER2"));
+    uint24 internal _reqsForTier3 = uint24(vm.envUint("REQS_FOR_TIER3"));
+    uint24 internal _reqsForTier4 = uint24(vm.envUint("REQS_FOR_TIER4"));
+    uint24 internal _reqsForTier5 = uint24(vm.envUint("REQS_FOR_TIER5"));
 
-    uint256 initialMaxPoolSize = vm.envUint("INITIAL_MAX_POOL_SIZE");
-    uint256 initialMaxCommunityStakeAmount = vm.envUint("INITIAL_MAX_COMMUNITY_STAKE_AMOUNT");
-    uint256 minCommunityStakeAmount = vm.envUint("MIN_COMMUNITY_STAKE_AMOUNT");
-    uint256 operatorStakeAmount = vm.envUint("OPERATOR_STAKE_AMOUNT");
-    uint256 minInitialOperatorCount = vm.envUint("MIN_INITIAL_OPERATOR_COUNT");
-    uint256 minRewardDuration = vm.envUint("MIN_REWARD_DURATION");
-    uint256 delegationRateDenominator = vm.envUint("DELEGATION_RATE_DENOMINATOR");
-    uint256 unstakeFreezingDuration = vm.envUint("UNSTAKE_FREEZING_DURATION");
+    uint16 internal _flatFeePromotionGlobalPercentage = uint16(vm.envUint("FLAT_FEE_PROMOTION_GLOBAL_PERCENTAGE"));
+    bool internal _isFlatFeePromotionEnabledPermanently = vm.envBool("IS_FLAT_FEE_PROMOTION_ENABLED_PERMANENTLY");
+    uint256 internal _flatFeePromotionStartTimestamp = vm.envUint("FLAT_FEE_PROMOTION_START_TIMESTAMP");
+    uint256 internal _flatFeePromotionEndTimestamp = vm.envUint("FLAT_FEE_PROMOTION_END_TIMESTAMP");
 
-    function setUp() public {}
+    uint256 internal _initialMaxPoolSize = vm.envUint("INITIAL_MAX_POOL_SIZE");
+    uint256 internal _initialMaxCommunityStakeAmount = vm.envUint("INITIAL_MAX_COMMUNITY_STAKE_AMOUNT");
+    uint256 internal _minCommunityStakeAmount = vm.envUint("MIN_COMMUNITY_STAKE_AMOUNT");
+    uint256 internal _operatorStakeAmount = vm.envUint("OPERATOR_STAKE_AMOUNT");
+    uint256 internal _minInitialOperatorCount = vm.envUint("MIN_INITIAL_OPERATOR_COUNT");
+    uint256 internal _minRewardDuration = vm.envUint("MIN_REWARD_DURATION");
+    uint256 internal _delegationRateDenominator = vm.envUint("DELEGATION_RATE_DENOMINATOR");
+    uint256 internal _unstakeFreezingDuration = vm.envUint("UNSTAKE_FREEZING_DURATION");
 
     function run() external {
         Controller controller;
         ControllerProxy proxy;
         ERC1967Proxy adapter;
-        Adapter adapter_impl;
+        Adapter adapterImpl;
         Staking staking;
-        MockArpaEthOracle oracle;
         IERC20 arpa;
 
-        vm.broadcast(deployerPrivateKey);
+        vm.broadcast(_deployerPrivateKey);
         arpa = new Arpa();
 
-        vm.broadcast(deployerPrivateKey);
-        oracle = new MockArpaEthOracle();
-
         Staking.PoolConstructorParams memory params = Staking.PoolConstructorParams(
-            ArpaTokenInterface(address(arpa)),
-            initialMaxPoolSize,
-            initialMaxCommunityStakeAmount,
-            minCommunityStakeAmount,
-            operatorStakeAmount,
-            minInitialOperatorCount,
-            minRewardDuration,
-            delegationRateDenominator,
-            unstakeFreezingDuration
+            IERC20(address(arpa)),
+            _initialMaxPoolSize,
+            _initialMaxCommunityStakeAmount,
+            _minCommunityStakeAmount,
+            _operatorStakeAmount,
+            _minInitialOperatorCount,
+            _minRewardDuration,
+            _delegationRateDenominator,
+            _unstakeFreezingDuration
         );
-        vm.broadcast(deployerPrivateKey);
+        vm.broadcast(_deployerPrivateKey);
         staking = new Staking(params);
 
-        vm.broadcast(deployerPrivateKey);
+        vm.broadcast(_deployerPrivateKey);
         controller = new Controller();
         
-        vm.broadcast(deployerPrivateKey);
+        vm.broadcast(_deployerPrivateKey);
         proxy = new ControllerProxy(address(controller));
 
-        vm.broadcast(deployerPrivateKey);
-        IControllerOwner(address(proxy)).initialize(address(staking), last_output);
+        vm.broadcast(_deployerPrivateKey);
+        IControllerOwner(address(proxy)).initialize(address(staking), _lastOutput);
 
-        vm.broadcast(deployerPrivateKey);
-        adapter_impl = new Adapter();
+        vm.broadcast(_deployerPrivateKey);
+        adapterImpl = new Adapter();
 
-        vm.broadcast(deployerPrivateKey);
+        vm.broadcast(_deployerPrivateKey);
         adapter =
-        new ERC1967Proxy(address(adapter_impl),abi.encodeWithSignature("initialize(address,address,address)",address(proxy), address(arpa), address(oracle)));
+            new ERC1967Proxy(address(adapterImpl),abi.encodeWithSignature("initialize(address)",address(proxy)));
 
-        vm.broadcast(deployerPrivateKey);
+        vm.broadcast(_deployerPrivateKey);
         IControllerOwner(address(proxy)).setControllerConfig(
             address(staking),
             address(adapter),
-            operatorStakeAmount,
-            disqualifiedNodePenaltyAmount,
-            defaultNumberOfCommitters,
-            defaultDkgPhaseDuration,
-            groupMaxCapacity,
-            idealNumberOfGroups,
-            pendingBlockAfterQuit,
-            dkgPostProcessReward
+            _operatorStakeAmount,
+            _disqualifiedNodePenaltyAmount,
+            _defaultNumberOfCommitters,
+            _defaultDkgPhaseDuration,
+            _groupMaxCapacity,
+            _idealNumberOfGroups,
+            _pendingBlockAfterQuit,
+            _dkgPostProcessReward
         );
 
-        vm.broadcast(deployerPrivateKey);
+        vm.broadcast(_deployerPrivateKey);
         IAdapterOwner(address(adapter)).setAdapterConfig(
-            minimumRequestConfirmations,
-            maxGasLimit,
-            stalenessSeconds,
-            gasAfterPaymentCalculation,
-            gasExceptCallback,
-            fallbackWeiPerUnitArpa,
-            signatureTaskExclusiveWindow,
-            rewardPerSignature,
-            committerRewardPerSignature,
+            _minimumRequestConfirmations,
+            _maxGasLimit,
+            _gasAfterPaymentCalculation,
+            _gasExceptCallback,
+            _signatureTaskExclusiveWindow,
+            _rewardPerSignature,
+            _committerRewardPerSignature
+            );
+
+        vm.broadcast(_deployerPrivateKey);        
+        IAdapterOwner(address(adapter)).setFlatFeeConfig(
             IAdapterOwner.FeeConfig(
-                fulfillmentFlatFeeArpaPPMTier1,
-                fulfillmentFlatFeeArpaPPMTier2,
-                fulfillmentFlatFeeArpaPPMTier3,
-                fulfillmentFlatFeeArpaPPMTier4,
-                fulfillmentFlatFeeArpaPPMTier5,
-                reqsForTier2,
-                reqsForTier3,
-                reqsForTier4,
-                reqsForTier5
-            )
+                _fulfillmentFlatFeeEthPPMTier1,
+                _fulfillmentFlatFeeEthPPMTier2,
+                _fulfillmentFlatFeeEthPPMTier3,
+                _fulfillmentFlatFeeEthPPMTier4,
+                _fulfillmentFlatFeeEthPPMTier5,
+                _reqsForTier2,
+                _reqsForTier3,
+                _reqsForTier4,
+                _reqsForTier5
+            ),
+            _flatFeePromotionGlobalPercentage,
+            _isFlatFeePromotionEnabledPermanently,
+            _flatFeePromotionStartTimestamp,
+            _flatFeePromotionEndTimestamp
         );
 
-        vm.broadcast(deployerPrivateKey);
+        vm.broadcast(_deployerPrivateKey);
         staking.setController(address(proxy));
     }
 }

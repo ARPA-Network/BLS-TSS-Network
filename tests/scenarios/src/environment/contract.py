@@ -108,12 +108,12 @@ def get_latest_event(contract, event_name, from_block=0):
     print(log[-1])
     return log[-1]
 
-def get_events(contract, event_name):
+def get_events(contract, event_name, from_block=0):
     """
     Get events from contract.
     """
     event = getattr(contract.events, event_name)
-    event_filter = event.create_filter(fromBlock=0)
+    event_filter = event.create_filter(fromBlock=from_block)
     logs = event_filter.get_new_entries()
     print(logs)
     return logs
