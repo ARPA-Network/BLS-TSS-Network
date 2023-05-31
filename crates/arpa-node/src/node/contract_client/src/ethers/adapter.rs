@@ -10,7 +10,9 @@ use crate::{
 };
 use arpa_node_core::{
     ChainIdentity, ExponentialBackoffRetryDescriptor, GeneralChainIdentity, PartialSignature,
-    RandomnessRequestType, RandomnessTask, WalletSigner, FULFILL_RANDOMNESS_GAS_EXCEPT_CALLBACK,
+    RandomnessRequestType, RandomnessTask, WalletSigner, DEFAULT_MINIMUM_THRESHOLD,
+    FULFILL_RANDOMNESS_GAS_EXCEPT_CALLBACK, RANDOMNESS_REWARD_GAS,
+    VERIFICATION_GAS_OVER_MINIMUM_THRESHOLD,
 };
 use async_trait::async_trait;
 use ethers::{prelude::*, utils::hex};
@@ -117,10 +119,26 @@ impl AdapterTransactions for AdapterClient {
 
         let call = adapter_contract.fulfill_randomness(group_index.into(), r_id, sig, rd, ps);
 
+        let partial_signers_count = partial_signatures.len() as u64;
+
+        let extra_verification_gas = if partial_signers_count > DEFAULT_MINIMUM_THRESHOLD {
+            VERIFICATION_GAS_OVER_MINIMUM_THRESHOLD
+                * (partial_signers_count - DEFAULT_MINIMUM_THRESHOLD)
+        } else {
+            0
+        };
+
+        let extra_add_reward_gas = partial_signers_count * RANDOMNESS_REWARD_GAS;
+
         AdapterClient::call_contract_transaction(
             "fulfill_randomness",
-            call.gas(task.callback_gas_limit + FULFILL_RANDOMNESS_GAS_EXCEPT_CALLBACK)
-                .gas_price(task.callback_max_gas_price),
+            call.gas(
+                task.callback_gas_limit
+                    + FULFILL_RANDOMNESS_GAS_EXCEPT_CALLBACK
+                    + extra_verification_gas
+                    + extra_add_reward_gas,
+            )
+            .gas_price(task.callback_max_gas_price),
             self.contract_transaction_retry_descriptor,
             false,
         )

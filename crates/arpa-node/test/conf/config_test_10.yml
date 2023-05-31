@@ -1,6 +1,6 @@
-node_committer_rpc_endpoint: "[::1]:50061"
+node_committer_rpc_endpoint: "[::1]:50070"
 
-node_management_rpc_endpoint: "[::1]:50091"
+node_management_rpc_endpoint: "[::1]:50100"
 
 node_management_rpc_token: "for_test"
 
@@ -12,10 +12,10 @@ controller_address: "0xdc64a140aa3e981100a9beca4e685f962f0cf6c9"
 
 adapter_address: "0xa513e6e4b8f2a923d98304ec87f64353c4d5c853"
 
-data_path: "./data1.sqlite"
+data_path: "./data10.sqlite"
 
 account:
-  private_key: "f214f2b2cd398c806f84e317254e0f0b801d0643303237d97a22a48e01628897"
+  private_key: "df57089febbacf7ba0bc227dafbffa9fc08a93fdc68e1e42411a14efcf23656e"
 
 listeners:
   - l_type: Block
@@ -64,4 +64,4 @@ time_limits:
 
 context_logging: false
 
-node_id: 1
+node_id: 10
