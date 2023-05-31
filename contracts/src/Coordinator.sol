@@ -1,10 +1,7 @@
-// Using the ABIEncoderV2 poses little risk here because we only use it for fetching the byte arrays
-// of shares/responses/justifications
-// pragma experimental ABIEncoderV2;  // don't think we need this
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.15;
 
-import "openzeppelin-contracts/contracts/access/Ownable.sol";
+import {Ownable} from "openzeppelin-contracts/contracts/access/Ownable.sol";
 
 contract Coordinator is Ownable {
     /// Mapping of Ethereum Address => DKG public keys
@@ -23,10 +20,10 @@ contract Coordinator is Ownable {
     address[] public participants;
 
     /// The duration of each phase
-    uint256 public immutable PHASE_DURATION;
+    uint256 public immutable phaseDuration;
 
-    /// The threshold of the DKG
-    uint256 public immutable THRESHOLD;
+    /// The dkgThreshold of the DKG
+    uint256 public immutable dkgThreshold;
 
     /// If it's 0 then the DKG is still pending start. If >0, it is the DKG's start block
     uint256 public startBlock = 0;
@@ -44,8 +41,8 @@ contract Coordinator is Ownable {
     }
 
     constructor(uint256 threshold, uint256 duration) {
-        THRESHOLD = threshold;
-        PHASE_DURATION = duration;
+        dkgThreshold = threshold;
+        phaseDuration = duration;
     }
 
     function initialize(address[] calldata nodes, bytes[] calldata publicKeys) external onlyWhenNotStarted onlyOwner {
@@ -63,14 +60,14 @@ contract Coordinator is Ownable {
     function publish(bytes calldata value) external onlyGroupMember {
         uint256 blocksSinceStart = block.number - startBlock;
 
-        if (blocksSinceStart <= PHASE_DURATION) {
-            require(shares[msg.sender].length == 0, "you have already published your shares");
+        if (blocksSinceStart <= phaseDuration) {
+            require(shares[msg.sender].length == 0, "share existed");
             shares[msg.sender] = value;
-        } else if (blocksSinceStart <= 2 * PHASE_DURATION) {
-            require(responses[msg.sender].length == 0, "you have already published your responses");
+        } else if (blocksSinceStart <= 2 * phaseDuration) {
+            require(responses[msg.sender].length == 0, "response existed");
             responses[msg.sender] = value;
-        } else if (blocksSinceStart <= 3 * PHASE_DURATION) {
-            require(justifications[msg.sender].length == 0, "you have already published your justifications");
+        } else if (blocksSinceStart <= 3 * phaseDuration) {
+            require(justifications[msg.sender].length == 0, "justification existed");
             justifications[msg.sender] = value;
         } else {
             revert("DKG Publish has ended");
@@ -122,7 +119,7 @@ contract Coordinator is Ownable {
             _keys[i] = keys[participants[i]];
         }
 
-        return (THRESHOLD, _keys);
+        return (dkgThreshold, _keys);
     }
 
     /// Returns the current phase of the DKG.
@@ -134,18 +131,18 @@ contract Coordinator is Ownable {
 
         uint256 blocksSinceStart = block.number - startBlock;
 
-        if (blocksSinceStart <= PHASE_DURATION) {
+        if (blocksSinceStart <= phaseDuration) {
             return 1; // share
         }
 
-        if (blocksSinceStart <= 2 * PHASE_DURATION) {
+        if (blocksSinceStart <= 2 * phaseDuration) {
             return 2; // response
         }
 
-        if (blocksSinceStart <= 3 * PHASE_DURATION) {
+        if (blocksSinceStart <= 3 * phaseDuration) {
             return 3; // justification
         }
-        if (blocksSinceStart <= 4 * PHASE_DURATION) {
+        if (blocksSinceStart <= 4 * phaseDuration) {
             return 4; // Commit DKG: Handled in controller
         }
 

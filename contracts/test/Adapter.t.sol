@@ -1,164 +1,173 @@
 // SPDX-License-Identifier: MIT
 pragma solidity >=0.8.10;
 
-import "../src/user/examples/GetRandomNumberExample.sol";
-import "./RandcastTestHelper.sol";
+import {GetRandomNumberExample} from "../src/user/examples/GetRandomNumberExample.sol";
+import {IAdapterOwner} from "../src/interfaces/IAdapterOwner.sol";
+import {RandcastTestHelper, IAdapter, Adapter, ControllerForTest, AdapterForTest} from "./RandcastTestHelper.sol";
+import {ERC20} from "openzeppelin-contracts/contracts/token/ERC20/ERC20.sol";
 
+// solhint-disable-next-line max-states-count
 contract AdapterTest is RandcastTestHelper {
-    GetRandomNumberExample getRandomNumberExample;
-    uint64 subId;
+    GetRandomNumberExample internal _getRandomNumberExample;
+    uint64 internal _subId;
 
-    uint256 disqualifiedNodePenaltyAmount = 1000;
-    uint256 defaultNumberOfCommitters = 3;
-    uint256 defaultDkgPhaseDuration = 10;
-    uint256 groupMaxCapacity = 10;
-    uint256 idealNumberOfGroups = 5;
-    uint256 pendingBlockAfterQuit = 100;
-    uint256 dkgPostProcessReward = 100;
-    uint256 last_output = 2222222222222222;
+    uint256 internal _disqualifiedNodePenaltyAmount = 1000;
+    uint256 internal _defaultNumberOfCommitters = 3;
+    uint256 internal _defaultDkgPhaseDuration = 10;
+    uint256 internal _groupMaxCapacity = 10;
+    uint256 internal _idealNumberOfGroups = 5;
+    uint256 internal _pendingBlockAfterQuit = 100;
+    uint256 internal _dkgPostProcessReward = 100;
+    uint256 internal _lastOutput = 2222222222222222;
 
-    uint16 minimumRequestConfirmations = 3;
-    uint32 maxGasLimit = 2000000;
-    uint32 stalenessSeconds = 30;
-    uint32 gasAfterPaymentCalculation = 30000;
-    uint32 gasExceptCallback = 200000;
-    int256 fallbackWeiPerUnitArpa = 1e12;
-    uint256 signatureTaskExclusiveWindow = 10;
-    uint256 rewardPerSignature = 50;
-    uint256 committerRewardPerSignature = 100;
+    uint16 internal _minimumRequestConfirmations = 3;
+    uint32 internal _maxGasLimit = 2000000;
+    uint32 internal _gasAfterPaymentCalculation = 30000;
+    uint32 internal _gasExceptCallback = 530000;
+    uint256 internal _signatureTaskExclusiveWindow = 10;
+    uint256 internal _rewardPerSignature = 50;
+    uint256 internal _committerRewardPerSignature = 100;
 
-    uint32 fulfillmentFlatFeeArpaPPMTier1 = 250000;
-    uint32 fulfillmentFlatFeeArpaPPMTier2 = 250000;
-    uint32 fulfillmentFlatFeeArpaPPMTier3 = 250000;
-    uint32 fulfillmentFlatFeeArpaPPMTier4 = 250000;
-    uint32 fulfillmentFlatFeeArpaPPMTier5 = 250000;
-    uint24 reqsForTier2 = 0;
-    uint24 reqsForTier3 = 0;
-    uint24 reqsForTier4 = 0;
-    uint24 reqsForTier5 = 0;
+    uint32 internal _fulfillmentFlatFeeEthPPMTier1 = 250000;
+    uint32 internal _fulfillmentFlatFeeEthPPMTier2 = 250000;
+    uint32 internal _fulfillmentFlatFeeEthPPMTier3 = 250000;
+    uint32 internal _fulfillmentFlatFeeEthPPMTier4 = 250000;
+    uint32 internal _fulfillmentFlatFeeEthPPMTier5 = 250000;
+    uint24 internal _reqsForTier2 = 0;
+    uint24 internal _reqsForTier3 = 0;
+    uint24 internal _reqsForTier4 = 0;
+    uint24 internal _reqsForTier5 = 0;
 
-    uint96 plentyOfArpaBalance = 1e6 * 1e18;
+    uint16 internal _flatFeePromotionGlobalPercentage = 100;
+    bool internal _isFlatFeePromotionEnabledPermanently = false;
+    uint256 internal _flatFeePromotionStartTimestamp = 0;
+    uint256 internal _flatFeePromotionEndTimestamp = 0;
+
+    uint256 internal _plentyOfEthBalance = 1e6 * 1e18;
 
     function setUp() public {
         skip(1000);
 
-        vm.prank(admin);
-        arpa = new ERC20("arpa token", "ARPA");
-        vm.prank(admin);
-        oracle = new MockArpaEthOracle();
+        vm.prank(_admin);
+        _arpa = new ERC20("_arpa token", "ARPA");
 
         address[] memory operators = new address[](5);
-        operators[0] = node1;
-        operators[1] = node2;
-        operators[2] = node3;
-        operators[3] = node4;
-        operators[4] = node5;
-        prepareStakingContract(stakingDeployer, address(arpa), operators);
+        operators[0] = _node1;
+        operators[1] = _node2;
+        operators[2] = _node3;
+        operators[3] = _node4;
+        operators[4] = _node5;
+        _prepareStakingContract(_stakingDeployer, address(_arpa), operators);
 
-        vm.prank(admin);
-        controller = new ControllerForTest(address(arpa), last_output);
+        vm.prank(_admin);
+        _controller = new ControllerForTest(address(_arpa), _lastOutput);
 
-        vm.prank(admin);
-        adapter = new AdapterForTest(address(controller), address(arpa), address(oracle));
+        vm.prank(_admin);
+        _adapter = new AdapterForTest(address(_controller));
 
-        vm.prank(user);
-        getRandomNumberExample = new GetRandomNumberExample(
-            address(adapter)
+        vm.prank(_user);
+        _getRandomNumberExample = new GetRandomNumberExample(
+            address(_adapter)
         );
 
-        vm.prank(admin);
-        controller.setControllerConfig(
-            address(staking),
-            address(adapter),
-            operatorStakeAmount,
-            disqualifiedNodePenaltyAmount,
-            defaultNumberOfCommitters,
-            defaultDkgPhaseDuration,
-            groupMaxCapacity,
-            idealNumberOfGroups,
-            pendingBlockAfterQuit,
-            dkgPostProcessReward
+        vm.prank(_admin);
+        _controller.setControllerConfig(
+            address(_staking),
+            address(_adapter),
+            _operatorStakeAmount,
+            _disqualifiedNodePenaltyAmount,
+            _defaultNumberOfCommitters,
+            _defaultDkgPhaseDuration,
+            _groupMaxCapacity,
+            _idealNumberOfGroups,
+            _pendingBlockAfterQuit,
+            _dkgPostProcessReward
         );
 
-        vm.prank(admin);
-        adapter.setAdapterConfig(
-            minimumRequestConfirmations,
-            maxGasLimit,
-            stalenessSeconds,
-            gasAfterPaymentCalculation,
-            gasExceptCallback,
-            fallbackWeiPerUnitArpa,
-            signatureTaskExclusiveWindow,
-            rewardPerSignature,
-            committerRewardPerSignature,
+        vm.prank(_admin);
+        _adapter.setAdapterConfig(
+            _minimumRequestConfirmations,
+            _maxGasLimit,
+            _gasAfterPaymentCalculation,
+            _gasExceptCallback,
+            _signatureTaskExclusiveWindow,
+            _rewardPerSignature,
+            _committerRewardPerSignature
+        );
+
+        vm.broadcast(_admin);
+        IAdapterOwner(address(_adapter)).setFlatFeeConfig(
             IAdapterOwner.FeeConfig(
-                fulfillmentFlatFeeArpaPPMTier1,
-                fulfillmentFlatFeeArpaPPMTier2,
-                fulfillmentFlatFeeArpaPPMTier3,
-                fulfillmentFlatFeeArpaPPMTier4,
-                fulfillmentFlatFeeArpaPPMTier5,
-                reqsForTier2,
-                reqsForTier3,
-                reqsForTier4,
-                reqsForTier5
-            )
+                _fulfillmentFlatFeeEthPPMTier1,
+                _fulfillmentFlatFeeEthPPMTier2,
+                _fulfillmentFlatFeeEthPPMTier3,
+                _fulfillmentFlatFeeEthPPMTier4,
+                _fulfillmentFlatFeeEthPPMTier5,
+                _reqsForTier2,
+                _reqsForTier3,
+                _reqsForTier4,
+                _reqsForTier5
+            ),
+            _flatFeePromotionGlobalPercentage,
+            _isFlatFeePromotionEnabledPermanently,
+            _flatFeePromotionStartTimestamp,
+            _flatFeePromotionEndTimestamp
         );
 
-        vm.prank(stakingDeployer);
-        staking.setController(address(controller));
+        vm.prank(_stakingDeployer);
+        _staking.setController(address(_controller));
 
-        deal(address(arpa), address(user), plentyOfArpaBalance);
-
-        vm.prank(user);
-        arpa.approve(address(controller), 3 * plentyOfArpaBalance);
-
-        vm.startPrank(user);
-        subId = prepareSubscription(address(getRandomNumberExample), plentyOfArpaBalance);
-        vm.stopPrank();
+        _subId = _prepareSubscription(_user, address(_getRandomNumberExample), _plentyOfEthBalance);
     }
 
     function testAdapterAddress() public {
-        emit log_address(address(adapter));
-        assertEq(getRandomNumberExample.adapter(), address(adapter));
+        emit log_address(address(_adapter));
+        assertEq(_getRandomNumberExample.adapter(), address(_adapter));
     }
 
     function testUserContractOwner() public {
-        emit log_address(address(getRandomNumberExample));
-        assertEq(getRandomNumberExample.owner(), user);
+        emit log_address(address(_getRandomNumberExample));
+        assertEq(_getRandomNumberExample.owner(), _user);
     }
 
     function testCannotRequestByEOA() public {
-        deal(user, 1 * 1e18);
+        deal(_user, 1 * 1e18);
         vm.expectRevert(abi.encodeWithSelector(Adapter.InvalidRequestByEOA.selector));
 
         IAdapter.RandomnessRequestParams memory p;
-        vm.broadcast(user);
-        adapter.requestRandomness(p);
+        vm.broadcast(_user);
+        _adapter.requestRandomness(p);
     }
 
     function testRequestRandomness() public {
-        prepareAnAvailableGroup();
-        deal(user, 1 * 1e18);
+        (, uint256 groupSize) = prepareAnAvailableGroup();
+        deal(_user, 1 * 1e18);
 
         uint32 times = 10;
+        uint256 _inflightCost;
+
         for (uint256 i = 0; i < times; i++) {
-            vm.startBroadcast(user);
-            bytes32 requestId = getRandomNumberExample.getRandomNumber();
+            vm.prank(_user);
+            bytes32 requestId = _getRandomNumberExample.getRandomNumber();
             emit log_bytes32(requestId);
-            vm.stopBroadcast();
-            (, uint96 inflightCost,,,) = adapter.getSubscription(subId);
+            (, uint256 inflightCost,,,) = _adapter.getSubscription(_subId);
             emit log_uint(inflightCost);
 
-            uint96 payment = adapter.estimatePaymentAmount(
-                getRandomNumberExample.callbackGasLimit(),
-                gasExceptCallback,
-                fulfillmentFlatFeeArpaPPMTier1,
+            // 0 flat fee until the first request is actually fulfilled
+            uint256 payment = _adapter.estimatePaymentAmountInETH(
+                _getRandomNumberExample.callbackGasLimit() + _adapter.RANDOMNESS_REWARD_GAS() * groupSize
+                    + _adapter.VERIFICATION_GAS_OVER_MINIMUM_THRESHOLD()
+                        * (groupSize - _adapter.DEFAULT_MINIMUM_THRESHOLD()),
+                _gasExceptCallback,
+                0,
                 tx.gasprice * 3
             );
 
-            assertEq(inflightCost, payment * (i + 1));
+            _inflightCost += payment;
 
-            Adapter.RequestDetail memory rd = adapter.getPendingRequest(requestId);
+            assertEq(inflightCost, _inflightCost);
+
+            Adapter.RequestDetail memory rd = _adapter.getPendingRequest(requestId);
             bytes memory actualSeed = abi.encodePacked(rd.seed, rd.blockNum);
 
             emit log_named_bytes("actualSeed", actualSeed);
@@ -169,24 +178,22 @@ contract AdapterTest is RandcastTestHelper {
 
     function testFulfillRandomness() public {
         prepareAnAvailableGroup();
-        deal(user, 1 * 1e18);
+        deal(_user, 1 * 1e18);
 
         uint32 times = 1;
 
-        vm.broadcast(user);
-        bytes32 requestId = getRandomNumberExample.getRandomNumber();
+        vm.broadcast(_user);
+        bytes32 requestId = _getRandomNumberExample.getRandomNumber();
         emit log_bytes32(requestId);
 
-        Adapter.RequestDetail memory rd = adapter.getPendingRequest(requestId);
+        Adapter.RequestDetail memory rd = _adapter.getPendingRequest(requestId);
         bytes memory rawSeed = abi.encodePacked(rd.seed);
         emit log_named_bytes("rawSeed", rawSeed);
 
-        vm.startBroadcast(node1);
-        fulfillRequest(requestId, 0);
-        vm.stopBroadcast();
+        _fulfillRequest(_node1, requestId, 0);
 
         vm.roll(block.number + 1);
-        assertEq(getRandomNumberExample.randomnessResults(0), adapter.getLastRandomness());
-        assertEq(getRandomNumberExample.lengthOfRandomnessResults(), times);
+        assertEq(_getRandomNumberExample.randomnessResults(0), _adapter.getLastRandomness());
+        assertEq(_getRandomNumberExample.lengthOfRandomnessResults(), times);
     }
 }

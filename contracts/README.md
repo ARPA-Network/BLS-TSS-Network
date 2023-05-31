@@ -56,7 +56,6 @@ anvil
 ### deploy the staking, the controller and the adapter contract:
 
 ```bash
-# user contract address 0x8464135c8f25da09e49bc8782676a84730c318bc
 # see .env for more deployment addresses
 forge script script/ControllerLocalTest.s.sol:ControllerLocalTestScript --fork-url http://localhost:8545 --optimize --broadcast
 ```
@@ -71,7 +70,7 @@ forge script script/StakeNodeLocalTest.s.sol:StakeNodeLocalTestScript --fork-url
 
 ### run some nodes to get an available group:
 
-See crate arpa-node [` README.md`](../crates/arpa-node/README.md) for details.
+See crate arpa-node [`README.md`](../crates/arpa-node/README.md) for details.
 
 ### deploy the user contract([`GetRandomNumberExample`](src/user/examples/GetRandomNumberExample.sol)) and request a randomness:
 

@@ -1,38 +1,42 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.15;
 
-import "openzeppelin-contracts/contracts/token/ERC20/IERC20.sol";
-import "openzeppelin-contracts/contracts/token/ERC20/utils/SafeERC20.sol";
-import "openzeppelin-contracts-upgradeable/contracts/access/OwnableUpgradeable.sol";
-import "openzeppelin-contracts-upgradeable/contracts/proxy/utils/Initializable.sol";
-import "./interfaces/IController.sol";
-import "./interfaces/IControllerOwner.sol";
-import "./interfaces/ICoordinator.sol";
-import "Staking-v0.1/interfaces/INodeStaking.sol";
+import {IERC20, SafeERC20} from "openzeppelin-contracts/contracts/token/ERC20/utils/SafeERC20.sol";
+import {OwnableUpgradeable} from "openzeppelin-contracts-upgradeable/contracts/access/OwnableUpgradeable.sol";
+import {Initializable} from "openzeppelin-contracts-upgradeable/contracts/proxy/utils/Initializable.sol";
+import {IController} from "./interfaces/IController.sol";
+import {IControllerOwner} from "./interfaces/IControllerOwner.sol";
+import {IAdapter} from "./interfaces/IAdapter.sol";
+import {ICoordinator} from "./interfaces/ICoordinator.sol";
+import {INodeStaking} from "Staking-v0.1/interfaces/INodeStaking.sol";
 import {BLS} from "./libraries/BLS.sol";
-import "./libraries/GroupLib.sol";
+import {GroupLib} from "./libraries/GroupLib.sol";
 import {Coordinator} from "./Coordinator.sol";
 
 contract Controller is Initializable, IController, IControllerOwner, OwnableUpgradeable {
     using SafeERC20 for IERC20;
     using GroupLib for GroupLib.GroupData;
 
+    // *Constants*
+    uint16 public constant BALANCE_BASE = 1;
+
     // *Controller Config*
-    ControllerConfig private s_config;
-    IERC20 private i_ARPA;
+    ControllerConfig private _config;
+    IERC20 private _arpa;
 
     // *Node State Variables*
-    mapping(address => Node) private s_nodes; // maps node address to Node Struct
-    mapping(address => uint256) private s_rewards; // maps node address to reward amount
+    mapping(address => Node) private _nodes; // maps node address to Node Struct
+    mapping(address => uint256) private _withdrawableEths; // maps node address to withdrawable eth amount
+    mapping(address => uint256) private _arpaRewards; // maps node address to arpa rewards
 
     // *DKG Variables*
-    mapping(uint256 => address) private s_coordinators; // maps group index to coordinator address
+    mapping(uint256 => address) private _coordinators; // maps group index to coordinator address
 
     // *Group Variables*
-    GroupLib.GroupData s_groupData;
+    GroupLib.GroupData internal _groupData;
 
     // *Task Variables*
-    uint256 private s_lastOutput;
+    uint256 private _lastOutput;
 
     // *Structs*
     struct ControllerConfig {
@@ -51,7 +55,7 @@ contract Controller is Initializable, IController, IControllerOwner, OwnableUpgr
     event NodeQuit(address indexed nodeAddress);
     event DkgPublicKeyChanged(address indexed nodeAddress, bytes dkgPublicKey);
     event NodeSlashed(address indexed nodeIdAddress, uint256 stakingRewardPenalty, uint256 pendingBlock);
-    event NodeRewarded(address indexed nodeAddress, uint256 amount);
+    event NodeRewarded(address indexed nodeAddress, uint256 ethAmount, uint256 arpaAmount);
     event ControllerConfigSet(
         address stakingContractAddress,
         address adapterContractAddress,
@@ -88,11 +92,10 @@ contract Controller is Initializable, IController, IControllerOwner, OwnableUpgr
     error NodeNotInGroup(uint256 groupIndex, address nodeIdAddress);
     error PartialKeyAlreadyRegistered(uint256 groupIndex, address nodeIdAddress);
     error SenderNotAdapter();
-    error InsufficientBalance();
 
     function initialize(address arpa, uint256 lastOutput) public initializer {
-        i_ARPA = IERC20(arpa);
-        s_lastOutput = lastOutput;
+        _arpa = IERC20(arpa);
+        _lastOutput = lastOutput;
 
         __Ownable_init();
     }
@@ -112,7 +115,7 @@ contract Controller is Initializable, IController, IControllerOwner, OwnableUpgr
         uint256 pendingBlockAfterQuit,
         uint256 dkgPostProcessReward
     ) external override(IControllerOwner) onlyOwner {
-        s_config = ControllerConfig({
+        _config = ControllerConfig({
             stakingContractAddress: stakingContractAddress,
             adapterContractAddress: adapterContractAddress,
             nodeStakingAmount: nodeStakingAmount,
@@ -122,7 +125,7 @@ contract Controller is Initializable, IController, IControllerOwner, OwnableUpgr
             dkgPostProcessReward: dkgPostProcessReward
         });
 
-        s_groupData.setConfig(idealNumberOfGroups, groupMaxCapacity, defaultNumberOfCommitters);
+        _groupData.setConfig(idealNumberOfGroups, groupMaxCapacity, defaultNumberOfCommitters);
 
         emit ControllerConfigSet(
             stakingContractAddress,
@@ -142,7 +145,7 @@ contract Controller is Initializable, IController, IControllerOwner, OwnableUpgr
     // IController
     // =============
     function nodeRegister(bytes calldata dkgPublicKey) external override(IController) {
-        if (s_nodes[msg.sender].idAddress != address(0)) {
+        if (_nodes[msg.sender].idAddress != address(0)) {
             revert NodeAlreadyRegistered();
         }
 
@@ -151,25 +154,29 @@ contract Controller is Initializable, IController, IControllerOwner, OwnableUpgr
             revert BLS.InvalidPublicKey();
         }
         // Lock staking amount in Staking contract
-        INodeStaking(s_config.stakingContractAddress).lock(msg.sender, s_config.nodeStakingAmount);
+        INodeStaking(_config.stakingContractAddress).lock(msg.sender, _config.nodeStakingAmount);
 
         // Populate Node struct and insert into nodes
-        Node storage n = s_nodes[msg.sender];
+        Node storage n = _nodes[msg.sender];
         n.idAddress = msg.sender;
         n.dkgPublicKey = dkgPublicKey;
         n.state = true;
 
-        (uint256 groupIndex, uint256[] memory groupIndicesToEmitEvent) = s_groupData.nodeJoin(msg.sender, s_lastOutput);
+        // Initialize withdrawable eths and arpa rewards to save gas for adapter call
+        _withdrawableEths[msg.sender] = BALANCE_BASE;
+        _arpaRewards[msg.sender] = BALANCE_BASE;
+
+        (uint256 groupIndex, uint256[] memory groupIndicesToEmitEvent) = _groupData.nodeJoin(msg.sender, _lastOutput);
 
         for (uint256 i = 0; i < groupIndicesToEmitEvent.length; i++) {
-            emitGroupEvent(groupIndicesToEmitEvent[i]);
+            _emitGroupEvent(groupIndicesToEmitEvent[i]);
         }
 
         emit NodeRegistered(msg.sender, dkgPublicKey, groupIndex);
     }
 
     function nodeActivate() external override(IController) {
-        Node storage node = s_nodes[msg.sender];
+        Node storage node = _nodes[msg.sender];
         if (node.idAddress != msg.sender) {
             revert NodeNotRegistered();
         }
@@ -183,44 +190,44 @@ contract Controller is Initializable, IController, IControllerOwner, OwnableUpgr
         }
 
         // lock up to staking amount in Staking contract
-        uint256 lockedAmount = INodeStaking(s_config.stakingContractAddress).getLockedAmount(msg.sender);
-        if (lockedAmount < s_config.nodeStakingAmount) {
-            INodeStaking(s_config.stakingContractAddress).lock(msg.sender, s_config.nodeStakingAmount - lockedAmount);
+        uint256 lockedAmount = INodeStaking(_config.stakingContractAddress).getLockedAmount(msg.sender);
+        if (lockedAmount < _config.nodeStakingAmount) {
+            INodeStaking(_config.stakingContractAddress).lock(msg.sender, _config.nodeStakingAmount - lockedAmount);
         }
 
         node.state = true;
 
-        (uint256 groupIndex, uint256[] memory groupIndicesToEmitEvent) = s_groupData.nodeJoin(msg.sender, s_lastOutput);
+        (uint256 groupIndex, uint256[] memory groupIndicesToEmitEvent) = _groupData.nodeJoin(msg.sender, _lastOutput);
 
         for (uint256 i = 0; i < groupIndicesToEmitEvent.length; i++) {
-            emitGroupEvent(groupIndicesToEmitEvent[i]);
+            _emitGroupEvent(groupIndicesToEmitEvent[i]);
         }
 
         emit NodeActivated(msg.sender, groupIndex);
     }
 
     function nodeQuit() external override(IController) {
-        Node storage node = s_nodes[msg.sender];
+        Node storage node = _nodes[msg.sender];
 
         if (node.idAddress != msg.sender) {
             revert NodeNotRegistered();
         }
-        uint256[] memory groupIndicesToEmitEvent = s_groupData.nodeLeave(msg.sender, s_lastOutput);
+        uint256[] memory groupIndicesToEmitEvent = _groupData.nodeLeave(msg.sender, _lastOutput);
 
         for (uint256 i = 0; i < groupIndicesToEmitEvent.length; i++) {
-            emitGroupEvent(groupIndicesToEmitEvent[i]);
+            _emitGroupEvent(groupIndicesToEmitEvent[i]);
         }
 
-        freezeNode(msg.sender, s_config.pendingBlockAfterQuit);
+        _freezeNode(msg.sender, _config.pendingBlockAfterQuit);
 
         // unlock staking amount in Staking contract
-        INodeStaking(s_config.stakingContractAddress).unlock(msg.sender, s_config.nodeStakingAmount);
+        INodeStaking(_config.stakingContractAddress).unlock(msg.sender, _config.nodeStakingAmount);
 
         emit NodeQuit(msg.sender);
     }
 
     function changeDkgPublicKey(bytes calldata dkgPublicKey) external override(IController) {
-        Node storage node = s_nodes[msg.sender];
+        Node storage node = _nodes[msg.sender];
         if (node.idAddress != msg.sender) {
             revert NodeNotRegistered();
         }
@@ -240,26 +247,26 @@ contract Controller is Initializable, IController, IControllerOwner, OwnableUpgr
     }
 
     function commitDkg(CommitDkgParams memory params) external override(IController) {
-        if (params.groupIndex >= s_groupData.s_groupCount) revert GroupNotExist(params.groupIndex);
+        if (params.groupIndex >= _groupData.groupCount) revert GroupNotExist(params.groupIndex);
 
         // require coordinator exists
-        if (s_coordinators[params.groupIndex] == address(0)) {
+        if (_coordinators[params.groupIndex] == address(0)) {
             revert CoordinatorNotFound(params.groupIndex);
         }
 
         // Ensure DKG Proccess is in Phase
-        ICoordinator coordinator = ICoordinator(s_coordinators[params.groupIndex]);
+        ICoordinator coordinator = ICoordinator(_coordinators[params.groupIndex]);
         if (coordinator.inPhase() == -1) {
             revert DkgNotInProgress(params.groupIndex);
         }
 
         // Ensure epoch is correct, node is in group, and has not already submitted a partial key
-        Group storage g = s_groupData.s_groups[params.groupIndex];
+        Group storage g = _groupData.groups[params.groupIndex];
         if (params.groupEpoch != g.epoch) {
             revert EpochMismatch(params.groupIndex, params.groupEpoch, g.epoch);
         }
 
-        if (s_groupData.getMemberIndexByAddress(params.groupIndex, msg.sender) == -1) {
+        if (_groupData.getMemberIndexByAddress(params.groupIndex, msg.sender) == -1) {
             revert NodeNotInGroup(params.groupIndex, msg.sender);
         }
 
@@ -286,7 +293,7 @@ contract Controller is Initializable, IController, IControllerOwner, OwnableUpgr
             disqualifiedNodes: params.disqualifiedNodes
         });
 
-        if (!s_groupData.tryAddToExistingCommitCache(params.groupIndex, commitResult)) {
+        if (!_groupData.tryAddToExistingCommitCache(params.groupIndex, commitResult)) {
             CommitCache memory commitCache = CommitCache({commitResult: commitResult, nodeIdAddress: new address[](1)});
 
             commitCache.nodeIdAddress[0] = msg.sender;
@@ -294,111 +301,119 @@ contract Controller is Initializable, IController, IControllerOwner, OwnableUpgr
         }
 
         // no matter consensus previously reached, update the partial public key of the given node's member entry in the group
-        g.members[uint256(s_groupData.getMemberIndexByAddress(params.groupIndex, msg.sender))].partialPublicKey =
+        g.members[uint256(_groupData.getMemberIndexByAddress(params.groupIndex, msg.sender))].partialPublicKey =
             partialPublicKey;
 
         // if not.. call get StrictlyMajorityIdenticalCommitmentResult for the group and check if consensus has been reached.
         if (!g.isStrictlyMajorityConsensusReached) {
             (bool success, address[] memory disqualifiedNodes) =
-                s_groupData.tryEnableGroup(params.groupIndex, s_lastOutput);
+                _groupData.tryEnableGroup(params.groupIndex, _lastOutput);
 
             if (success) {
                 // Iterate over disqualified nodes and call slashNode on each.
                 for (uint256 i = 0; i < disqualifiedNodes.length; i++) {
-                    slashNode(disqualifiedNodes[i], s_config.disqualifiedNodePenaltyAmount, 0);
+                    _slashNode(disqualifiedNodes[i], _config.disqualifiedNodePenaltyAmount, 0);
                 }
             }
         }
     }
 
     function postProcessDkg(uint256 groupIndex, uint256 groupEpoch) external override(IController) {
-        if (groupIndex >= s_groupData.s_groupCount) revert GroupNotExist(groupIndex);
+        if (groupIndex >= _groupData.groupCount) revert GroupNotExist(groupIndex);
 
         // require calling node is in group
-        if (s_groupData.getMemberIndexByAddress(groupIndex, msg.sender) == -1) {
+        if (_groupData.getMemberIndexByAddress(groupIndex, msg.sender) == -1) {
             revert NodeNotInGroup(groupIndex, msg.sender);
         }
 
         // require correct epoch
-        Group storage g = s_groupData.s_groups[groupIndex];
+        Group storage g = _groupData.groups[groupIndex];
         if (groupEpoch != g.epoch) {
             revert EpochMismatch(groupIndex, groupEpoch, g.epoch);
         }
 
         // require coordinator exists
-        if (s_coordinators[groupIndex] == address(0)) {
+        if (_coordinators[groupIndex] == address(0)) {
             revert CoordinatorNotFound(groupIndex);
         }
 
         // Ensure DKG Proccess is out of phase
-        ICoordinator coordinator = ICoordinator(s_coordinators[groupIndex]);
+        ICoordinator coordinator = ICoordinator(_coordinators[groupIndex]);
         if (coordinator.inPhase() != -1) {
             revert DkgStillInProgress(groupIndex, coordinator.inPhase());
         }
 
         // delete coordinator
         coordinator.selfDestruct(); // coordinator self destructs
-        s_coordinators[groupIndex] = address(0); // remove coordinator from mapping
+        _coordinators[groupIndex] = address(0); // remove coordinator from mapping
 
         if (!g.isStrictlyMajorityConsensusReached) {
             (address[] memory nodesToBeSlashed, uint256[] memory groupIndicesToEmitEvent) =
-                s_groupData.handleUnsuccessfulGroupDkg(groupIndex, s_lastOutput);
+                _groupData.handleUnsuccessfulGroupDkg(groupIndex, _lastOutput);
 
             for (uint256 i = 0; i < nodesToBeSlashed.length; i++) {
-                slashNode(nodesToBeSlashed[i], s_config.disqualifiedNodePenaltyAmount, 0);
+                _slashNode(nodesToBeSlashed[i], _config.disqualifiedNodePenaltyAmount, 0);
             }
             for (uint256 i = 0; i < groupIndicesToEmitEvent.length; i++) {
-                emitGroupEvent(groupIndicesToEmitEvent[i]);
+                _emitGroupEvent(groupIndicesToEmitEvent[i]);
             }
         }
 
         // update rewards for calling node
-        s_rewards[msg.sender] += s_config.dkgPostProcessReward;
+        _arpaRewards[msg.sender] += _config.dkgPostProcessReward;
 
-        emit NodeRewarded(msg.sender, s_config.dkgPostProcessReward);
+        emit NodeRewarded(msg.sender, 0, _config.dkgPostProcessReward);
     }
 
-    function claimReward(address recipient, uint256 amount) external override(IController) {
-        if (s_rewards[msg.sender] < amount) {
-            revert InsufficientBalance();
+    function nodeWithdraw(address recipient) external override(IController) {
+        uint256 ethAmount = _withdrawableEths[msg.sender];
+        uint256 arpaAmount = _arpaRewards[msg.sender];
+        if (ethAmount > BALANCE_BASE) {
+            _withdrawableEths[msg.sender] = BALANCE_BASE;
+            IAdapter(_config.adapterContractAddress).nodeWithdrawETH(recipient, ethAmount - BALANCE_BASE);
         }
-        s_rewards[recipient] -= amount;
-        i_ARPA.safeTransfer(recipient, amount);
+        if (arpaAmount > BALANCE_BASE) {
+            _arpaRewards[msg.sender] = BALANCE_BASE;
+            _arpa.safeTransfer(recipient, arpaAmount - BALANCE_BASE);
+        }
     }
 
-    event TestEvent(uint256);
-    function addReward(address[] memory nodes, uint256 amount) public override(IController) {
-        if (msg.sender != s_config.adapterContractAddress) {
+    function addReward(address[] memory nodes, uint256 ethAmount, uint256 arpaAmount) public override(IController) {
+        if (msg.sender != _config.adapterContractAddress) {
             revert SenderNotAdapter();
         }
-        emit TestEvent(nodes.length);
         for (uint256 i = 0; i < nodes.length; i++) {
-            s_rewards[nodes[i]] += amount;
-            emit NodeRewarded(nodes[i], amount);
+            _withdrawableEths[nodes[i]] += ethAmount;
+            _arpaRewards[nodes[i]] += arpaAmount;
+            emit NodeRewarded(nodes[i], ethAmount, arpaAmount);
         }
     }
 
     function setLastOutput(uint256 lastOutput) external override(IController) {
-        if (msg.sender != s_config.adapterContractAddress) {
+        if (msg.sender != _config.adapterContractAddress) {
             revert SenderNotAdapter();
         }
-        s_lastOutput = lastOutput;
+        _lastOutput = lastOutput;
     }
 
     function getValidGroupIndices() public view override(IController) returns (uint256[] memory) {
-        return s_groupData.getValidGroupIndices();
+        return _groupData.getValidGroupIndices();
     }
 
     function getGroupCount() external view override(IController) returns (uint256) {
-        return s_groupData.s_groupCount;
+        return _groupData.groupCount;
     }
 
     function getGroup(uint256 groupIndex) public view override(IController) returns (Group memory) {
-        return s_groupData.s_groups[groupIndex];
+        return _groupData.groups[groupIndex];
+    }
+
+    function getGroupThreshold(uint256 groupIndex) public view override(IController) returns (uint256, uint256) {
+        return (_groupData.groups[groupIndex].threshold, _groupData.groups[groupIndex].size);
     }
 
     function getNode(address nodeAddress) public view override(IController) returns (Node memory) {
-        return s_nodes[nodeAddress];
+        return _nodes[nodeAddress];
     }
 
     function getMember(uint256 groupIndex, uint256 memberIndex)
@@ -407,23 +422,31 @@ contract Controller is Initializable, IController, IControllerOwner, OwnableUpgr
         override(IController)
         returns (Member memory)
     {
-        return s_groupData.s_groups[groupIndex].members[memberIndex];
+        return _groupData.groups[groupIndex].members[memberIndex];
     }
 
     function getBelongingGroup(address nodeAddress) external view override(IController) returns (int256, int256) {
-        return s_groupData.getBelongingGroupByMemberAddress(nodeAddress);
+        return _groupData.getBelongingGroupByMemberAddress(nodeAddress);
     }
 
     function getCoordinator(uint256 groupIndex) public view override(IController) returns (address) {
-        return s_coordinators[groupIndex];
+        return _coordinators[groupIndex];
     }
 
-    function getNodeReward(address nodeAddress) public view override(IController) returns (uint256) {
-        return s_rewards[nodeAddress];
+    function getNodeWithdrawableTokens(address nodeAddress)
+        public
+        view
+        override(IController)
+        returns (uint256, uint256)
+    {
+        return (
+            _withdrawableEths[nodeAddress] == 0 ? 0 : (_withdrawableEths[nodeAddress] - BALANCE_BASE),
+            _arpaRewards[nodeAddress] == 0 ? 0 : (_arpaRewards[nodeAddress] - BALANCE_BASE)
+        );
     }
 
     function getLastOutput() external view returns (uint256) {
-        return s_lastOutput;
+        return _lastOutput;
     }
 
     /// Check to see if a group has a partial public key registered for a given node.
@@ -433,7 +456,7 @@ contract Controller is Initializable, IController, IControllerOwner, OwnableUpgr
         override(IController)
         returns (bool)
     {
-        Group memory g = s_groupData.s_groups[groupIndex];
+        Group memory g = _groupData.groups[groupIndex];
         for (uint256 i = 0; i < g.members.length; i++) {
             if (g.members[i].nodeIdAddress == nodeIdAddress) {
                 return g.members[i].partialPublicKey[0] != 0;
@@ -446,15 +469,15 @@ contract Controller is Initializable, IController, IControllerOwner, OwnableUpgr
     // Internal
     // =============
 
-    function emitGroupEvent(uint256 groupIndex) internal {
-        s_groupData.prepareGroupEvent(groupIndex);
+    function _emitGroupEvent(uint256 groupIndex) internal {
+        _groupData.prepareGroupEvent(groupIndex);
 
-        Group memory g = s_groupData.s_groups[groupIndex];
+        Group memory g = _groupData.groups[groupIndex];
 
         // Deploy coordinator, add to coordinators mapping
         Coordinator coordinator;
-        coordinator = new Coordinator(g.threshold, s_config.defaultDkgPhaseDuration);
-        s_coordinators[groupIndex] = address(coordinator);
+        coordinator = new Coordinator(g.threshold, _config.defaultDkgPhaseDuration);
+        _coordinators[groupIndex] = address(coordinator);
 
         // Initialize Coordinator
         address[] memory groupNodes = new address[](g.size);
@@ -462,38 +485,38 @@ contract Controller is Initializable, IController, IControllerOwner, OwnableUpgr
 
         for (uint256 i = 0; i < g.size; i++) {
             groupNodes[i] = g.members[i].nodeIdAddress;
-            groupKeys[i] = s_nodes[g.members[i].nodeIdAddress].dkgPublicKey;
+            groupKeys[i] = _nodes[g.members[i].nodeIdAddress].dkgPublicKey;
         }
 
         coordinator.initialize(groupNodes, groupKeys);
 
         emit DkgTask(
-            s_groupData.s_epoch, g.index, g.epoch, g.size, g.threshold, groupNodes, block.number, address(coordinator)
+            _groupData.epoch, g.index, g.epoch, g.size, g.threshold, groupNodes, block.number, address(coordinator)
         );
     }
 
     // Give node staking reward penalty and freezeNode
-    function slashNode(address nodeIdAddress, uint256 stakingRewardPenalty, uint256 pendingBlock) internal {
+    function _slashNode(address nodeIdAddress, uint256 stakingRewardPenalty, uint256 pendingBlock) internal {
         // slash staking reward in Staking contract
-        INodeStaking(s_config.stakingContractAddress).slashDelegationReward(nodeIdAddress, stakingRewardPenalty);
+        INodeStaking(_config.stakingContractAddress).slashDelegationReward(nodeIdAddress, stakingRewardPenalty);
 
         // remove node from group if handleGroup is true and deactivate it
-        freezeNode(nodeIdAddress, pendingBlock);
+        _freezeNode(nodeIdAddress, pendingBlock);
 
         emit NodeSlashed(nodeIdAddress, stakingRewardPenalty, pendingBlock);
     }
 
-    function freezeNode(address nodeIdAddress, uint256 pendingBlock) internal {
+    function _freezeNode(address nodeIdAddress, uint256 pendingBlock) internal {
         // set node state to false for frozen node
-        s_nodes[nodeIdAddress].state = false;
+        _nodes[nodeIdAddress].state = false;
 
         uint256 currentBlock = block.number;
         // if the node is already pending, add the pending block to the current pending block
-        if (s_nodes[nodeIdAddress].pendingUntilBlock > currentBlock) {
-            s_nodes[nodeIdAddress].pendingUntilBlock += pendingBlock;
+        if (_nodes[nodeIdAddress].pendingUntilBlock > currentBlock) {
+            _nodes[nodeIdAddress].pendingUntilBlock += pendingBlock;
             // else set the pending block to the current block + pending block
         } else {
-            s_nodes[nodeIdAddress].pendingUntilBlock = currentBlock + pendingBlock;
+            _nodes[nodeIdAddress].pendingUntilBlock = currentBlock + pendingBlock;
         }
     }
 }

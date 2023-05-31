@@ -1,51 +1,52 @@
 // SPDX-License-Identifier: MIT
 pragma solidity >=0.8.10;
 
-import "openzeppelin-contracts/contracts/token/ERC20/IERC20.sol";
-import "openzeppelin-contracts/contracts/token/ERC20/utils/SafeERC20.sol";
-import "openzeppelin-contracts-upgradeable/contracts/access/OwnableUpgradeable.sol";
-import "openzeppelin-contracts-upgradeable/contracts/proxy/utils/UUPSUpgradeable.sol";
-import "./interfaces/IAdapter.sol";
-import "./interfaces/IAdapterOwner.sol";
-import "./interfaces/IController.sol";
-import "./interfaces/IBasicRandcastConsumerBase.sol";
-import "./interfaces/IAggregatorV3.sol";
-import "./utils/Utils.sol";
-import "./utils/RequestIdBase.sol";
-import "./utils/RandomnessHandler.sol";
+import {IERC20} from "openzeppelin-contracts/contracts/token/ERC20/IERC20.sol";
+import {SafeERC20, Address} from "openzeppelin-contracts/contracts/token/ERC20/utils/SafeERC20.sol";
+import {OwnableUpgradeable} from "openzeppelin-contracts-upgradeable/contracts/access/OwnableUpgradeable.sol";
+import {UUPSUpgradeable} from "openzeppelin-contracts-upgradeable/contracts/proxy/utils/UUPSUpgradeable.sol";
+import {IAdapter} from "./interfaces/IAdapter.sol";
+import {IAdapterOwner} from "./interfaces/IAdapterOwner.sol";
+import {IController} from "./interfaces/IController.sol";
+import {IBasicRandcastConsumerBase} from "./interfaces/IBasicRandcastConsumerBase.sol";
+import {RequestIdBase} from "./utils/RequestIdBase.sol";
+import {RandomnessHandler} from "./utils/RandomnessHandler.sol";
 import {BLS} from "./libraries/BLS.sol";
+// solhint-disable-next-line no-global-import
+import "./utils/Utils.sol" as Utils;
 
 contract Adapter is UUPSUpgradeable, IAdapter, IAdapterOwner, RequestIdBase, RandomnessHandler, OwnableUpgradeable {
     using SafeERC20 for IERC20;
     using Address for address;
 
     // *Constants*
-    // We need to maintain a list of consuming addresses.
-    // This bound ensures we are able to loop over them as needed.
-    // Should a user require more consumers, they can use multiple subscriptions.
     uint16 public constant MAX_CONSUMERS = 100;
-    // TODO Set this maximum to 200 to give us a 56 block window to fulfill
-    // the request before requiring the block hash feeder.
     uint16 public constant MAX_REQUEST_CONFIRMATIONS = 200;
+    uint256 public constant RANDOMNESS_REWARD_GAS = 9000;
+    uint256 public constant VERIFICATION_GAS_OVER_MINIMUM_THRESHOLD = 50000;
+    uint256 public constant DEFAULT_MINIMUM_THRESHOLD = 3;
 
     // *State Variables*
-    IERC20 internal i_ARPA;
-    AggregatorV3Interface internal i_ARPA_ETH_Feed;
-    IController internal s_controller;
+    IController internal _controller;
 
     // Randomness Task State
-    uint256 internal s_lastAssignedGroupIndex;
-    uint256 internal s_lastRandomness;
-    uint256 internal s_randomnessCount;
+    uint256 internal _lastAssignedGroupIndex;
+    uint256 internal _lastRandomness;
+    uint256 internal _randomnessCount;
 
-    AdapterConfig internal s_config;
-    FeeConfig internal s_feeConfig;
-    mapping(bytes32 => bytes32) internal s_requestCommitments;
+    AdapterConfig internal _config;
+    mapping(bytes32 => bytes32) internal _requestCommitments;
     /* consumerAddress - consumer */
-    mapping(address => Consumer) internal s_consumers;
+    mapping(address => Consumer) internal _consumers;
     /* subId - subscription */
-    mapping(uint64 => Subscription) internal s_subscriptions;
-    uint64 internal s_currentSubId;
+    mapping(uint64 => Subscription) internal _subscriptions;
+    uint64 internal _currentSubId;
+
+    // Referral Promotion
+    ReferralConfig internal _referralConfig;
+
+    // Flat Fee Promotion
+    FlatFeeConfig internal _flatFeeConfig;
 
     // *Structs*
     // Note a nonce of 0 indicates an the consumer is not assigned to that subscription.
@@ -59,28 +60,43 @@ contract Adapter is UUPSUpgradeable, IAdapter, IAdapterOwner, RequestIdBase, Ran
         address owner; // Owner can fund/withdraw/cancel the sub.
         address requestedOwner; // For safely transferring sub ownership.
         address[] consumers;
-        uint96 balance; // Arpa balance used for all consumer requests.
-        uint96 inflightCost; // Arpa upper cost for pending requests.
-        mapping(bytes32 => uint96) inflightPayments;
+        uint256 balance; // Token balance used for all consumer requests.
+        uint256 inflightCost; // Upper cost for pending requests(except drastic exchange rate changes).
+        mapping(bytes32 => uint256) inflightPayments;
         uint64 reqCount; // For fee tiers
+        uint64 freeRequestCount; // Number of free requests(flat fee) for this sub.
+        uint64 referralSubId; //
+        uint64 reqCountInCurrentPeriod;
+        // Number of requests in the current period.
+        uint256 lastRequestTimestamp; // Timestamp of the last request.
     }
 
     // *Events*
     event AdapterConfigSet(
         uint16 minimumRequestConfirmations,
         uint32 maxGasLimit,
-        uint32 stalenessSeconds,
         uint32 gasAfterPaymentCalculation,
         uint32 gasExceptCallback,
-        int256 fallbackWeiPerUnitArpa,
         uint256 signatureTaskExclusiveWindow,
         uint256 rewardPerSignature,
-        uint256 committerRewardPerSignature,
-        FeeConfig feeConfig
+        uint256 committerRewardPerSignature
     );
-    event SubscriptionCreated(uint64 indexed subId, address owner);
+    event FlatFeeConfigSet(
+        FeeConfig flatFeeConfig,
+        uint16 flatFeePromotionGlobalPercentage,
+        bool isFlatFeePromotionEnabledPermanently,
+        uint256 flatFeePromotionStartTimestamp,
+        uint256 flatFeePromotionEndTimestamp
+    );
+    event ReferralConfigSet(
+        bool isReferralEnabled, uint16 freeRequestCountForReferrer, uint16 freeRequestCountForReferee
+    );
+    event SubscriptionCreated(uint64 indexed subId, address indexed owner);
     event SubscriptionFunded(uint64 indexed subId, uint256 oldBalance, uint256 newBalance);
     event SubscriptionConsumerAdded(uint64 indexed subId, address consumer);
+    event SubscriptionReferralSet(uint64 indexed subId, uint64 indexed referralSubId);
+    event SubscriptionCanceled(uint64 indexed subId, address to, uint256 amount);
+    event SubscriptionConsumerRemoved(uint64 indexed subId, address consumer);
     event RandomnessRequest(
         bytes32 indexed requestId,
         uint64 indexed subId,
@@ -92,7 +108,7 @@ contract Adapter is UUPSUpgradeable, IAdapter, IAdapterOwner, RequestIdBase, Ran
         uint16 requestConfirmations,
         uint256 callbackGasLimit,
         uint256 callbackMaxGasPrice,
-        uint96 estimatedPayment
+        uint256 estimatedPayment
     );
     event RandomnessRequestResult(
         bytes32 indexed requestId,
@@ -112,9 +128,11 @@ contract Adapter is UUPSUpgradeable, IAdapter, IAdapterOwner, RequestIdBase, Ran
     error InsufficientBalanceWhenFulfill();
     error InvalidConsumer(uint64 subId, address consumer);
     error InvalidSubscription();
+    error ReferralPromotionDisabled();
+    error SubscriptionAlreadyHasReferral();
+    error AtLeastOneRequestIsRequired();
     error MustBeSubOwner(address owner);
     error PaymentTooLarge();
-    error InvalidArpaWeiPrice(int256 arpaWei);
     error NoAvailableGroups();
     error NoCorrespondingRequest();
     error IncorrectCommitment();
@@ -123,10 +141,12 @@ contract Adapter is UUPSUpgradeable, IAdapter, IAdapterOwner, RequestIdBase, Ran
     error TaskStillWithinRequestConfirmations();
     error NotFromCommitter();
     error GroupNotExist(uint256 groupIndex);
+    error SenderNotController();
+    error PendingRequestExists();
 
     // *Modifiers*
     modifier onlySubOwner(uint64 subId) {
-        address owner = s_subscriptions[subId].owner;
+        address owner = _subscriptions[subId].owner;
         if (owner == address(0)) {
             revert InvalidSubscription();
         }
@@ -137,20 +157,19 @@ contract Adapter is UUPSUpgradeable, IAdapter, IAdapterOwner, RequestIdBase, Ran
     }
 
     modifier nonReentrant() {
-        if (s_config.reentrancyLock) {
+        if (_config.reentrancyLock) {
             revert Reentrant();
         }
         _;
     }
 
-    function initialize(address controller, address arpa, address arpaEthFeed) public initializer {
-        s_controller = IController(controller);
-        i_ARPA = IERC20(arpa);
-        i_ARPA_ETH_Feed = AggregatorV3Interface(arpaEthFeed);
+    function initialize(address controller) public initializer {
+        _controller = IController(controller);
 
         __Ownable_init();
     }
 
+    // solhint-disable-next-line no-empty-blocks
     function _authorizeUpgrade(address) internal override onlyOwner {}
 
     // =============
@@ -159,28 +178,20 @@ contract Adapter is UUPSUpgradeable, IAdapter, IAdapterOwner, RequestIdBase, Ran
     function setAdapterConfig(
         uint16 minimumRequestConfirmations,
         uint32 maxGasLimit,
-        uint32 stalenessSeconds,
         uint32 gasAfterPaymentCalculation,
         uint32 gasExceptCallback,
-        int256 fallbackWeiPerUnitArpa,
         uint256 signatureTaskExclusiveWindow,
         uint256 rewardPerSignature,
-        uint256 committerRewardPerSignature,
-        FeeConfig memory feeConfig
+        uint256 committerRewardPerSignature
     ) external override(IAdapterOwner) onlyOwner {
         if (minimumRequestConfirmations > MAX_REQUEST_CONFIRMATIONS) {
             revert InvalidRequestConfirmations(
                 minimumRequestConfirmations, minimumRequestConfirmations, MAX_REQUEST_CONFIRMATIONS
             );
         }
-        if (fallbackWeiPerUnitArpa <= 0) {
-            revert InvalidArpaWeiPrice(fallbackWeiPerUnitArpa);
-        }
-        s_config = AdapterConfig({
+        _config = AdapterConfig({
             minimumRequestConfirmations: minimumRequestConfirmations,
             maxGasLimit: maxGasLimit,
-            stalenessSeconds: stalenessSeconds,
-            fallbackWeiPerUnitArpa: fallbackWeiPerUnitArpa,
             gasAfterPaymentCalculation: gasAfterPaymentCalculation,
             gasExceptCallback: gasExceptCallback,
             signatureTaskExclusiveWindow: signatureTaskExclusiveWindow,
@@ -188,116 +199,215 @@ contract Adapter is UUPSUpgradeable, IAdapter, IAdapterOwner, RequestIdBase, Ran
             committerRewardPerSignature: committerRewardPerSignature,
             reentrancyLock: false
         });
-        s_feeConfig = feeConfig;
 
         emit AdapterConfigSet(
             minimumRequestConfirmations,
             maxGasLimit,
-            stalenessSeconds,
             gasAfterPaymentCalculation,
             gasExceptCallback,
-            fallbackWeiPerUnitArpa,
             signatureTaskExclusiveWindow,
             rewardPerSignature,
-            committerRewardPerSignature,
-            s_feeConfig
+            committerRewardPerSignature
         );
+    }
+
+    function setFlatFeeConfig(
+        FeeConfig memory flatFeeConfig,
+        uint16 flatFeePromotionGlobalPercentage,
+        bool isFlatFeePromotionEnabledPermanently,
+        uint256 flatFeePromotionStartTimestamp,
+        uint256 flatFeePromotionEndTimestamp
+    ) external override(IAdapterOwner) onlyOwner {
+        _flatFeeConfig = FlatFeeConfig({
+            config: flatFeeConfig,
+            flatFeePromotionGlobalPercentage: flatFeePromotionGlobalPercentage,
+            isFlatFeePromotionEnabledPermanently: isFlatFeePromotionEnabledPermanently,
+            flatFeePromotionStartTimestamp: flatFeePromotionStartTimestamp,
+            flatFeePromotionEndTimestamp: flatFeePromotionEndTimestamp
+        });
+
+        emit FlatFeeConfigSet(
+            flatFeeConfig,
+            flatFeePromotionGlobalPercentage,
+            isFlatFeePromotionEnabledPermanently,
+            flatFeePromotionStartTimestamp,
+            flatFeePromotionEndTimestamp
+        );
+    }
+
+    function setReferralConfig(
+        bool isReferralEnabled,
+        uint16 freeRequestCountForReferrer,
+        uint16 freeRequestCountForReferee
+    ) external override(IAdapterOwner) onlyOwner {
+        _referralConfig = ReferralConfig({
+            isReferralEnabled: isReferralEnabled,
+            freeRequestCountForReferrer: freeRequestCountForReferrer,
+            freeRequestCountForReferee: freeRequestCountForReferee
+        });
+
+        emit ReferralConfigSet(isReferralEnabled, freeRequestCountForReferrer, freeRequestCountForReferee);
+    }
+
+    function setFreeRequestCount(uint64[] memory subIds, uint64[] memory freeRequestCounts)
+        external
+        override(IAdapterOwner)
+        onlyOwner
+    {
+        for (uint256 i = 0; i < subIds.length; i++) {
+            _subscriptions[subIds[i]].freeRequestCount = freeRequestCounts[i];
+        }
+    }
+
+    function ownerCancelSubscription(uint64 subId) external override(IAdapterOwner) onlyOwner {
+        if (_subscriptions[subId].owner == address(0)) {
+            revert InvalidSubscription();
+        }
+        _cancelSubscriptionHelper(subId, _subscriptions[subId].owner);
     }
 
     // =============
     // IAdapter
     // =============
+    function nodeWithdrawETH(address recipient, uint256 ethAmount) external {
+        if (msg.sender != address(_controller)) {
+            revert SenderNotController();
+        }
+        (bool sent,) = payable(recipient).call{value: ethAmount}("");
+        require(sent, "Failed to send Ether");
+    }
+
     function createSubscription() external override(IAdapter) nonReentrant returns (uint64) {
-        s_currentSubId++;
+        _currentSubId++;
 
-        s_subscriptions[s_currentSubId].owner = msg.sender;
+        _subscriptions[_currentSubId].owner = msg.sender;
+        // flat fee free for the first request for each subscription
+        _subscriptions[_currentSubId].freeRequestCount = 1;
 
-        emit SubscriptionCreated(s_currentSubId, msg.sender);
-        return s_currentSubId;
+        emit SubscriptionCreated(_currentSubId, msg.sender);
+        return _currentSubId;
     }
 
     function addConsumer(uint64 subId, address consumer) external override(IAdapter) onlySubOwner(subId) nonReentrant {
         // Already maxed, cannot add any more consumers.
-        if (s_subscriptions[subId].consumers.length == MAX_CONSUMERS) {
+        if (_subscriptions[subId].consumers.length == MAX_CONSUMERS) {
             revert TooManyConsumers();
         }
-        if (s_consumers[consumer].nonces[subId] != 0) {
+        if (_consumers[consumer].nonces[subId] != 0) {
             // Idempotence - do nothing if already added.
             // Ensures uniqueness in subscriptions[subId].consumers.
             return;
         }
         // Initialize the nonce to 1, indicating the consumer is allocated.
-        s_consumers[consumer].nonces[subId] = 1;
-        s_consumers[consumer].lastSubscription = subId;
-        s_subscriptions[subId].consumers.push(consumer);
+        _consumers[consumer].nonces[subId] = 1;
+        _consumers[consumer].lastSubscription = subId;
+        _subscriptions[subId].consumers.push(consumer);
 
         emit SubscriptionConsumerAdded(subId, consumer);
     }
 
-    function fundSubscription(uint64 subId, uint256 amount) external override(IAdapter) nonReentrant {
-        if (s_subscriptions[subId].owner == address(0)) {
-            revert InvalidSubscription();
+    function removeConsumer(uint64 subId, address consumer) external override onlySubOwner(subId) nonReentrant {
+        if (_subscriptions[subId].inflightCost != 0) {
+            revert PendingRequestExists();
         }
-        i_ARPA.safeTransferFrom(msg.sender, address(s_controller), amount);
-        // We do not check that the msg.sender is the subscription owner,
-        // anyone can fund a subscription.
-        uint256 oldBalance = s_subscriptions[subId].balance;
-        s_subscriptions[subId].balance += uint96(amount);
-        emit SubscriptionFunded(subId, oldBalance, oldBalance + amount);
+        address[] memory consumers = _subscriptions[subId].consumers;
+        if (consumers.length == 0) {
+            revert InvalidConsumer(subId, consumer);
+        }
+        // Note bounded by MAX_CONSUMERS
+        for (uint256 i = 0; i < consumers.length; i++) {
+            if (consumers[i] == consumer) {
+                _subscriptions[subId].consumers[i] = consumers[consumers.length - 1];
+                _subscriptions[subId].consumers.pop();
+
+                emit SubscriptionConsumerRemoved(subId, consumer);
+                return;
+            }
+        }
+        revert InvalidConsumer(subId, consumer);
     }
 
-    function requestRandomness(RandomnessRequestParams memory p)
+    function fundSubscription(uint64 subId) external payable override(IAdapter) nonReentrant {
+        if (_subscriptions[subId].owner == address(0)) {
+            revert InvalidSubscription();
+        }
+
+        // We do not check that the msg.sender is the subscription owner,
+        // anyone can fund a subscription.
+        uint256 oldBalance = _subscriptions[subId].balance;
+        _subscriptions[subId].balance += msg.value;
+        emit SubscriptionFunded(subId, oldBalance, oldBalance + msg.value);
+    }
+
+    function setReferral(uint64 subId, uint64 referralSubId) external onlySubOwner(subId) nonReentrant {
+        if (!_referralConfig.isReferralEnabled) {
+            revert ReferralPromotionDisabled();
+        }
+        if (_subscriptions[subId].referralSubId != 0) {
+            revert SubscriptionAlreadyHasReferral();
+        }
+        if (_subscriptions[subId].reqCount == 0 || _subscriptions[referralSubId].reqCount == 0) {
+            revert AtLeastOneRequestIsRequired();
+        }
+        _subscriptions[referralSubId].freeRequestCount += _referralConfig.freeRequestCountForReferrer;
+        _subscriptions[subId].freeRequestCount += _referralConfig.freeRequestCountForReferee;
+        _subscriptions[subId].referralSubId = referralSubId;
+
+        emit SubscriptionReferralSet(subId, referralSubId);
+    }
+
+    function cancelSubscription(uint64 subId, address to) external override onlySubOwner(subId) nonReentrant {
+        if (_subscriptions[subId].inflightCost != 0) {
+            revert PendingRequestExists();
+        }
+        _cancelSubscriptionHelper(subId, to);
+    }
+
+    function requestRandomness(RandomnessRequestParams calldata params)
         public
         virtual
         override(IAdapter)
         nonReentrant
         returns (bytes32)
     {
+        RandomnessRequestParams memory p = params;
+
+        // solhint-disable-next-line avoid-tx-origin
         if (msg.sender == tx.origin) {
             revert InvalidRequestByEOA();
         }
 
+        Subscription storage sub = _subscriptions[p.subId];
+
         // Input validation using the subscription storage.
-        if (s_subscriptions[p.subId].owner == address(0)) {
+        if (sub.owner == address(0)) {
             revert InvalidSubscription();
         }
         // Its important to ensure that the consumer is in fact who they say they
         // are, otherwise they could use someone else's subscription balance.
         // A nonce of 0 indicates consumer is not allocated to the sub.
-        if (s_consumers[msg.sender].nonces[p.subId] == 0) {
+        if (_consumers[msg.sender].nonces[p.subId] == 0) {
             revert InvalidConsumer(p.subId, msg.sender);
         }
 
         // Choose current available group to handle randomness request(by round robin)
-        uint256 currentAssignedGroupIndex = findGroupToAssignTask();
-
-        // Update global state
-        s_lastAssignedGroupIndex = currentAssignedGroupIndex;
+        _lastAssignedGroupIndex = _findGroupToAssignTask();
 
         // Calculate requestId for the task
-        uint256 rawSeed = makeRandcastInputSeed(p.seed, msg.sender, s_consumers[msg.sender].nonces[p.subId]);
-        s_consumers[msg.sender].nonces[p.subId] += 1;
-        bytes32 requestId = makeRequestId(rawSeed);
+        uint256 rawSeed = _makeRandcastInputSeed(p.seed, msg.sender, _consumers[msg.sender].nonces[p.subId]);
+        _consumers[msg.sender].nonces[p.subId] += 1;
+        bytes32 requestId = _makeRequestId(rawSeed);
 
-        // Estimate upper cost of this fulfillment.
-        uint96 payment = estimatePaymentAmount(
-            p.callbackGasLimit,
-            s_config.gasExceptCallback,
-            getFeeTier(s_subscriptions[p.subId].reqCount + 1),
-            p.callbackMaxGasPrice
-        );
+        (, uint256 groupSize) = _controller.getGroupThreshold(_lastAssignedGroupIndex);
 
-        if (s_subscriptions[p.subId].balance - s_subscriptions[p.subId].inflightCost < payment) {
-            revert InsufficientBalanceWhenRequest();
-        }
-        s_subscriptions[p.subId].inflightCost += payment;
-        s_subscriptions[p.subId].inflightPayments[requestId] = payment;
+        uint256 payment =
+            _freezePaymentBySubscription(sub, requestId, groupSize, p.callbackGasLimit, p.callbackMaxGasPrice);
 
-        s_requestCommitments[requestId] = keccak256(
+        _requestCommitments[requestId] = keccak256(
             abi.encode(
                 requestId,
                 p.subId,
-                currentAssignedGroupIndex,
+                _lastAssignedGroupIndex,
                 p.requestType,
                 p.params,
                 msg.sender,
@@ -312,7 +422,7 @@ contract Adapter is UUPSUpgradeable, IAdapter, IAdapterOwner, RequestIdBase, Ran
         emit RandomnessRequest(
             requestId,
             p.subId,
-            currentAssignedGroupIndex,
+            _lastAssignedGroupIndex,
             p.requestType,
             p.params,
             msg.sender,
@@ -335,7 +445,7 @@ contract Adapter is UUPSUpgradeable, IAdapter, IAdapterOwner, RequestIdBase, Ran
     ) public virtual override(IAdapter) nonReentrant {
         uint256 startGas = gasleft();
 
-        bytes32 commitment = s_requestCommitments[requestId];
+        bytes32 commitment = _requestCommitments[requestId];
         if (commitment == 0) {
             revert NoCorrespondingRequest();
         }
@@ -366,49 +476,32 @@ contract Adapter is UUPSUpgradeable, IAdapter, IAdapterOwner, RequestIdBase, Ran
 
         if (
             groupIndex != requestDetail.groupIndex
-                && block.number <= requestDetail.blockNum + s_config.signatureTaskExclusiveWindow
+                && block.number <= requestDetail.blockNum + _config.signatureTaskExclusiveWindow
         ) {
             revert TaskStillExclusive();
         }
-        if (groupIndex >= s_controller.getGroupCount()) {
+        if (groupIndex >= _controller.getGroupCount()) {
             revert GroupNotExist(groupIndex);
         }
 
         address[] memory participantMembers =
-            verifySignature(groupIndex, requestDetail.seed, requestDetail.blockNum, signature, partialSignatures);
+            _verifySignature(groupIndex, requestDetail.seed, requestDetail.blockNum, signature, partialSignatures);
 
-        delete s_requestCommitments[requestId];
+        delete _requestCommitments[requestId];
 
         uint256 randomness = uint256(keccak256(abi.encode(signature)));
 
-        s_randomnessCount += 1;
-        s_lastRandomness = randomness;
-        s_controller.setLastOutput(randomness);
+        _randomnessCount += 1;
+        _lastRandomness = randomness;
+        _controller.setLastOutput(randomness);
         // call user fulfill_randomness callback
-        bool success = fulfillCallback(requestId, randomness, requestDetail);
-        // Increment the req count for fee tier selection.
-        uint64 reqCount = s_subscriptions[requestDetail.subId].reqCount;
-        s_subscriptions[requestDetail.subId].reqCount += 1;
+        bool success = _fulfillCallback(requestId, randomness, requestDetail);
 
-        // We want to charge users exactly for how much gas they use in their callback.
-        // The gasAfterPaymentCalculation is meant to cover these additional operations where we
-        // decrement the subscription balance and increment the groups withdrawable balance.
-        // We also add the flat arpa fee to the payment amount.
-        // Its specified in millionths of arpa, if s_config.fulfillmentFlatFeeArpaPPM = 1
-        // 1 arpa / 1e6 = 1e18 arpa wei / 1e6 = 1e12 arpa wei.
-        uint96 payment =
-            calculatePaymentAmount(startGas, s_config.gasAfterPaymentCalculation, getFeeTier(reqCount), tx.gasprice);
-
-        if (s_subscriptions[requestDetail.subId].balance < payment) {
-            revert InsufficientBalanceWhenFulfill();
-        }
-        s_subscriptions[requestDetail.subId].inflightCost -=
-            s_subscriptions[requestDetail.subId].inflightPayments[requestId];
-        delete s_subscriptions[requestDetail.subId].inflightPayments[requestId];
-        s_subscriptions[requestDetail.subId].balance -= payment;
+        uint256 payment =
+            _payBySubscription(_subscriptions[requestDetail.subId], requestId, partialSignatures.length, startGas);
 
         // rewardRandomness for participants
-        rewardRandomness(participantMembers, payment);
+        _rewardRandomness(participantMembers, payment);
 
         // Include payment in the event for tracking costs.
         emit RandomnessRequestResult(
@@ -417,103 +510,254 @@ contract Adapter is UUPSUpgradeable, IAdapter, IAdapterOwner, RequestIdBase, Ran
     }
 
     function getLastSubscription(address consumer) public view override(IAdapter) returns (uint64) {
-        return s_consumers[consumer].lastSubscription;
+        return _consumers[consumer].lastSubscription;
     }
 
     function getSubscription(uint64 subId)
         public
         view
         override(IAdapter)
-        returns (uint96 balance, uint96 inflightCost, uint64 reqCount, address owner, address[] memory consumers)
+        returns (uint256 balance, uint256 inflightCost, uint64 reqCount, address owner, address[] memory consumers)
     {
-        if (s_subscriptions[subId].owner == address(0)) {
+        if (_subscriptions[subId].owner == address(0)) {
             revert InvalidSubscription();
         }
         return (
-            s_subscriptions[subId].balance,
-            s_subscriptions[subId].inflightCost,
-            s_subscriptions[subId].reqCount,
-            s_subscriptions[subId].owner,
-            s_subscriptions[subId].consumers
+            _subscriptions[subId].balance,
+            _subscriptions[subId].inflightCost,
+            _subscriptions[subId].reqCount,
+            _subscriptions[subId].owner,
+            _subscriptions[subId].consumers
         );
     }
 
     function getPendingRequestCommitment(bytes32 requestId) public view override(IAdapter) returns (bytes32) {
-        return s_requestCommitments[requestId];
+        return _requestCommitments[requestId];
     }
 
     function getLastRandomness() external view override(IAdapter) returns (uint256) {
-        return s_lastRandomness;
+        return _lastRandomness;
     }
 
     function getRandomnessCount() external view override(IAdapter) returns (uint256) {
-        return s_randomnessCount;
+        return _randomnessCount;
     }
 
     function getFeeTier(uint64 reqCount) public view override(IAdapter) returns (uint32) {
-        FeeConfig memory fc = s_feeConfig;
+        FeeConfig memory fc = _flatFeeConfig.config;
         if (0 <= reqCount && reqCount <= fc.reqsForTier2) {
-            return fc.fulfillmentFlatFeeArpaPPMTier1;
+            return fc.fulfillmentFlatFeeEthPPMTier1;
         }
         if (fc.reqsForTier2 < reqCount && reqCount <= fc.reqsForTier3) {
-            return fc.fulfillmentFlatFeeArpaPPMTier2;
+            return fc.fulfillmentFlatFeeEthPPMTier2;
         }
         if (fc.reqsForTier3 < reqCount && reqCount <= fc.reqsForTier4) {
-            return fc.fulfillmentFlatFeeArpaPPMTier3;
+            return fc.fulfillmentFlatFeeEthPPMTier3;
         }
         if (fc.reqsForTier4 < reqCount && reqCount <= fc.reqsForTier5) {
-            return fc.fulfillmentFlatFeeArpaPPMTier4;
+            return fc.fulfillmentFlatFeeEthPPMTier4;
         }
-        return fc.fulfillmentFlatFeeArpaPPMTier5;
+        return fc.fulfillmentFlatFeeEthPPMTier5;
     }
 
-    function estimatePaymentAmount(
+    function estimatePaymentAmountInETH(
         uint256 callbackGasLimit,
         uint256 gasExceptCallback,
-        uint32 fulfillmentFlatFeeArpaPPM,
+        uint32 fulfillmentFlatFeeEthPPM,
         uint256 weiPerUnitGas
-    ) public view override(IAdapter) returns (uint96) {
-        int256 weiPerUnitArpa;
-        weiPerUnitArpa = getFeedData();
-        if (weiPerUnitArpa <= 0) {
-            revert InvalidArpaWeiPrice(weiPerUnitArpa);
-        }
-        // (1e18 arpa wei/arpa) (wei/gas * gas) / (wei/arpa) = arpa wei
-        uint256 paymentNoFee = (1e18 * weiPerUnitGas * (gasExceptCallback + callbackGasLimit)) / uint256(weiPerUnitArpa);
-        uint256 fee = 1e12 * uint256(fulfillmentFlatFeeArpaPPM);
-        return uint96(paymentNoFee + fee);
+    ) public pure override(IAdapter) returns (uint256) {
+        uint256 paymentNoFee = weiPerUnitGas * (gasExceptCallback + callbackGasLimit);
+        return (paymentNoFee + 1e12 * uint256(fulfillmentFlatFeeEthPPM));
     }
 
     // =============
     // Internal
     // =============
 
-    function findGroupToAssignTask() internal view returns (uint256) {
-        uint256[] memory validGroupIndices = s_controller.getValidGroupIndices();
+    function _rewardRandomness(address[] memory participantMembers, uint256 payment) internal {
+        address[] memory committer = new address[](1);
+        committer[0] = msg.sender;
+        _controller.addReward(committer, payment, _config.committerRewardPerSignature);
+        _controller.addReward(participantMembers, 0, _config.rewardPerSignature);
+    }
+
+    function _fulfillCallback(bytes32 requestId, uint256 randomness, RequestDetail memory requestDetail)
+        internal
+        returns (bool success)
+    {
+        IBasicRandcastConsumerBase b;
+        bytes memory resp;
+        if (requestDetail.requestType == RequestType.Randomness) {
+            resp = abi.encodeWithSelector(b.rawFulfillRandomness.selector, requestId, randomness);
+        } else if (requestDetail.requestType == RequestType.RandomWords) {
+            uint32 numWords = abi.decode(requestDetail.params, (uint32));
+            uint256[] memory randomWords = new uint256[](numWords);
+            for (uint256 i = 0; i < numWords; i++) {
+                randomWords[i] = uint256(keccak256(abi.encode(randomness, i)));
+            }
+            resp = abi.encodeWithSelector(b.rawFulfillRandomWords.selector, requestId, randomWords);
+        } else if (requestDetail.requestType == RequestType.Shuffling) {
+            uint32 upper = abi.decode(requestDetail.params, (uint32));
+            uint256[] memory shuffledArray = _shuffle(upper, randomness);
+            resp = abi.encodeWithSelector(b.rawFulfillShuffledArray.selector, requestId, shuffledArray);
+        }
+
+        // Call with explicitly the amount of callback gas requested
+        // Important to not let them exhaust the gas budget and avoid oracle payment.
+        // Do not allow any non-view/non-pure coordinator functions to be called
+        // during the consumers callback code via reentrancyLock.
+        // Note that callWithExactGas will revert if we do not have sufficient gas
+        // to give the callee their requested amount.
+        _config.reentrancyLock = true;
+        success = Utils.callWithExactGas(requestDetail.callbackGasLimit, requestDetail.callbackContract, resp);
+        _config.reentrancyLock = false;
+    }
+
+    function _freezePaymentBySubscription(
+        Subscription storage sub,
+        bytes32 requestId,
+        uint256 groupSize,
+        uint256 callbackGasLimit,
+        uint256 callbackMaxGasPrice
+    ) internal returns (uint256) {
+        uint64 reqCount;
+        if (_flatFeeConfig.isFlatFeePromotionEnabledPermanently) {
+            reqCount = sub.reqCount;
+        } else if (
+            _flatFeeConfig
+                //solhint-disable-next-line not-rely-on-time
+                .flatFeePromotionStartTimestamp <= block.timestamp
+            //solhint-disable-next-line not-rely-on-time
+            && block.timestamp <= _flatFeeConfig.flatFeePromotionEndTimestamp
+        ) {
+            if (sub.lastRequestTimestamp < _flatFeeConfig.flatFeePromotionStartTimestamp) {
+                reqCount = 1;
+            } else {
+                reqCount = sub.reqCountInCurrentPeriod + 1;
+            }
+        }
+
+        // Estimate upper cost of this fulfillment.
+        uint256 payment = estimatePaymentAmountInETH(
+            callbackGasLimit,
+            uint256(_config.gasExceptCallback) + RANDOMNESS_REWARD_GAS * groupSize
+                + VERIFICATION_GAS_OVER_MINIMUM_THRESHOLD * (groupSize - DEFAULT_MINIMUM_THRESHOLD),
+            sub.freeRequestCount > 0
+                ? 0
+                : (getFeeTier(reqCount) * _flatFeeConfig.flatFeePromotionGlobalPercentage / 100),
+            callbackMaxGasPrice
+        );
+
+        if (sub.balance - sub.inflightCost < payment) {
+            revert InsufficientBalanceWhenRequest();
+        }
+
+        sub.inflightCost += payment;
+        sub.inflightPayments[requestId] = payment;
+
+        return payment;
+    }
+
+    function _payBySubscription(
+        Subscription storage sub,
+        bytes32 requestId,
+        uint256 partialSignersCount,
+        uint256 startGas
+    ) internal returns (uint256) {
+        // Increment the req count for fee tier selection.
+        sub.reqCount += 1;
+        uint64 reqCount;
+        if (_flatFeeConfig.isFlatFeePromotionEnabledPermanently) {
+            reqCount = sub.reqCount;
+        } else if (
+            _flatFeeConfig
+                //solhint-disable-next-line not-rely-on-time
+                .flatFeePromotionStartTimestamp <= block.timestamp
+            //solhint-disable-next-line not-rely-on-time
+            && block.timestamp <= _flatFeeConfig.flatFeePromotionEndTimestamp
+        ) {
+            if (sub.lastRequestTimestamp < _flatFeeConfig.flatFeePromotionStartTimestamp) {
+                sub.reqCountInCurrentPeriod == 1;
+            } else {
+                sub.reqCountInCurrentPeriod += 1;
+            }
+            reqCount = sub.reqCountInCurrentPeriod;
+        }
+
+        //solhint-disable-next-line not-rely-on-time
+        sub.lastRequestTimestamp = block.timestamp;
+
+        bool isFlatFeeFree = sub.freeRequestCount > 0;
+
+        if (isFlatFeeFree) {
+            sub.freeRequestCount -= 1;
+        }
+
+        // We want to charge users exactly for how much gas they use in their callback.
+        // The gasAfterPaymentCalculation is meant to cover these additional operations where we
+        // decrement the subscription balance and increment the groups withdrawable balance.
+        // We also add the flat eth fee to the payment amount.
+        // Its specified in millionths of eth, if _config.fulfillmentFlatFeeEthPPM = 1
+        // 1 eth / 1e6 = 1e18 eth wei / 1e6 = 1e12 eth wei.
+        uint256 payment = _calculatePaymentAmountInETH(
+            startGas,
+            uint256(_config.gasAfterPaymentCalculation) + RANDOMNESS_REWARD_GAS * partialSignersCount,
+            isFlatFeeFree ? 0 : (getFeeTier(reqCount) * _flatFeeConfig.flatFeePromotionGlobalPercentage / 100),
+            tx.gasprice
+        );
+
+        if (sub.balance < payment) {
+            revert InsufficientBalanceWhenFulfill();
+        }
+        sub.inflightCost -= sub.inflightPayments[requestId];
+        delete sub.inflightPayments[requestId];
+        sub.balance -= payment;
+
+        return payment;
+    }
+
+    function _cancelSubscriptionHelper(uint64 subId, address to) internal nonReentrant {
+        uint256 balance = _subscriptions[subId].balance;
+        delete _subscriptions[subId];
+        (bool sent,) = payable(to).call{value: balance}("");
+        require(sent, "Failed to send Ether");
+        emit SubscriptionCanceled(subId, to, balance);
+    }
+
+    // Get the amount of gas used for fulfillment
+    function _calculatePaymentAmountInETH(
+        uint256 startGas,
+        uint256 gasAfterPaymentCalculation,
+        uint32 fulfillmentFlatFeeEthPPM,
+        uint256 weiPerUnitGas
+    ) internal view returns (uint256) {
+        uint256 paymentNoFee = weiPerUnitGas * (gasAfterPaymentCalculation + startGas - gasleft());
+        uint256 fee = 1e12 * uint256(fulfillmentFlatFeeEthPPM);
+        if (paymentNoFee > (12e25 - fee)) {
+            revert PaymentTooLarge(); // Payment + fee cannot be more than all of the ETH in existence.
+        }
+        return paymentNoFee + fee;
+    }
+
+    function _findGroupToAssignTask() internal view returns (uint256) {
+        uint256[] memory validGroupIndices = _controller.getValidGroupIndices();
 
         if (validGroupIndices.length == 0) {
             revert NoAvailableGroups();
         }
 
-        uint256 groupCount = s_controller.getGroupCount();
+        uint256 groupCount = _controller.getGroupCount();
 
-        uint256 currentAssignedGroupIndex = (s_lastAssignedGroupIndex + 1) % groupCount;
+        uint256 currentAssignedGroupIndex = (_lastAssignedGroupIndex + 1) % groupCount;
 
-        while (!containElement(validGroupIndices, currentAssignedGroupIndex)) {
+        while (!Utils.containElement(validGroupIndices, currentAssignedGroupIndex)) {
             currentAssignedGroupIndex = (currentAssignedGroupIndex + 1) % groupCount;
         }
 
         return currentAssignedGroupIndex;
     }
 
-    function rewardRandomness(address[] memory participantMembers, uint96 payment) internal {
-        address[] memory committer = new address[](1);
-        committer[0] = msg.sender;
-        s_controller.addReward(committer, s_config.committerRewardPerSignature);
-        s_controller.addReward(participantMembers, s_config.rewardPerSignature + payment / participantMembers.length);
-    }
-
-    function verifySignature(
+    function _verifySignature(
         uint256 groupIndex,
         uint256 seed,
         uint256 blockNum,
@@ -528,9 +772,9 @@ contract Adapter is UUPSUpgradeable, IAdapter, IAdapterOwner, RequestIdBase, Ran
             revert BLS.EmptyPartialSignatures();
         }
 
-        IController.Group memory g = s_controller.getGroup(groupIndex);
+        IController.Group memory g = _controller.getGroup(groupIndex);
 
-        if (!containElement(g.committers, msg.sender)) {
+        if (!Utils.containElement(g.committers, msg.sender)) {
             revert NotFromCommitter();
         }
 
@@ -558,72 +802,5 @@ contract Adapter is UUPSUpgradeable, IAdapter, IAdapterOwner, RequestIdBase, Ran
         if (!BLS.verifyPartials(partials, pubkeys, message)) {
             revert BLS.InvalidPartialSignatures();
         }
-    }
-
-    function fulfillCallback(bytes32 requestId, uint256 randomness, RequestDetail memory requestDetail)
-        internal
-        returns (bool success)
-    {
-        IBasicRandcastConsumerBase b;
-        bytes memory resp;
-        if (requestDetail.requestType == RequestType.Randomness) {
-            resp = abi.encodeWithSelector(b.rawFulfillRandomness.selector, requestId, randomness);
-        } else if (requestDetail.requestType == RequestType.RandomWords) {
-            uint32 numWords = abi.decode(requestDetail.params, (uint32));
-            uint256[] memory randomWords = new uint256[](numWords);
-            for (uint256 i = 0; i < numWords; i++) {
-                randomWords[i] = uint256(keccak256(abi.encode(randomness, i)));
-            }
-            resp = abi.encodeWithSelector(b.rawFulfillRandomWords.selector, requestId, randomWords);
-        } else if (requestDetail.requestType == RequestType.Shuffling) {
-            uint32 upper = abi.decode(requestDetail.params, (uint32));
-            uint256[] memory shuffledArray = shuffle(upper, randomness);
-            resp = abi.encodeWithSelector(b.rawFulfillShuffledArray.selector, requestId, shuffledArray);
-        }
-
-        // Call with explicitly the amount of callback gas requested
-        // Important to not let them exhaust the gas budget and avoid oracle payment.
-        // Do not allow any non-view/non-pure coordinator functions to be called
-        // during the consumers callback code via reentrancyLock.
-        // Note that callWithExactGas will revert if we do not have sufficient gas
-        // to give the callee their requested amount.
-        s_config.reentrancyLock = true;
-        success = callWithExactGas(requestDetail.callbackGasLimit, requestDetail.callbackContract, resp);
-        s_config.reentrancyLock = false;
-    }
-
-    // Get the amount of gas used for fulfillment
-    function calculatePaymentAmount(
-        uint256 startGas,
-        uint256 gasAfterPaymentCalculation,
-        uint32 fulfillmentFlatFeeArpaPPM,
-        uint256 weiPerUnitGas
-    ) internal view returns (uint96) {
-        int256 weiPerUnitArpa;
-        weiPerUnitArpa = getFeedData();
-        if (weiPerUnitArpa <= 0) {
-            revert InvalidArpaWeiPrice(weiPerUnitArpa);
-        }
-        // (1e18 arpa wei/arpa) (wei/gas * gas) / (wei/arpa) = arpa wei
-        uint256 paymentNoFee =
-            (1e18 * weiPerUnitGas * (gasAfterPaymentCalculation + startGas - gasleft())) / uint256(weiPerUnitArpa);
-        uint256 fee = 1e12 * uint256(fulfillmentFlatFeeArpaPPM);
-        if (paymentNoFee > (15e26 - fee)) {
-            revert PaymentTooLarge(); // Payment + fee cannot be more than all of the arpa in existence.
-        }
-        return uint96(paymentNoFee + fee);
-    }
-
-    function getFeedData() private view returns (int256) {
-        uint32 stalenessSeconds = s_config.stalenessSeconds;
-        bool staleFallback = stalenessSeconds > 0;
-        uint256 timestamp;
-        int256 weiPerUnitArpa;
-        (, weiPerUnitArpa,, timestamp,) = i_ARPA_ETH_Feed.latestRoundData();
-        // solhint-disable-next-line not-rely-on-time
-        if (staleFallback && stalenessSeconds < block.timestamp - timestamp) {
-            weiPerUnitArpa = s_config.fallbackWeiPerUnitArpa;
-        }
-        return weiPerUnitArpa;
     }
 }
