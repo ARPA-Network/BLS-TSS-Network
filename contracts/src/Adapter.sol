@@ -117,6 +117,7 @@ contract Adapter is UUPSUpgradeable, IAdapter, IAdapterOwner, RequestIdBase, Ran
         address[] participantMembers,
         uint256 randommness,
         uint256 payment,
+        uint32 flatFee,
         bool success
     );
 
@@ -505,7 +506,7 @@ contract Adapter is UUPSUpgradeable, IAdapter, IAdapterOwner, RequestIdBase, Ran
         // call user fulfill_randomness callback
         bool success = _fulfillCallback(requestId, randomness, requestDetail);
 
-        uint256 payment =
+        (uint256 payment, uint32 flatFee) =
             _payBySubscription(_subscriptions[requestDetail.subId], requestId, partialSignatures.length, startGas);
 
         // rewardRandomness for participants
@@ -513,7 +514,7 @@ contract Adapter is UUPSUpgradeable, IAdapter, IAdapterOwner, RequestIdBase, Ran
 
         // Include payment in the event for tracking costs.
         emit RandomnessRequestResult(
-            requestId, groupIndex, msg.sender, participantMembers, randomness, payment, success
+            requestId, groupIndex, msg.sender, participantMembers, randomness, payment, flatFee, success
         );
     }
 
@@ -685,7 +686,7 @@ contract Adapter is UUPSUpgradeable, IAdapter, IAdapterOwner, RequestIdBase, Ran
         bytes32 requestId,
         uint256 partialSignersCount,
         uint256 startGas
-    ) internal returns (uint256) {
+    ) internal returns (uint256, uint32) {
         // Increment the req count for fee tier selection.
         sub.reqCount += 1;
         uint64 reqCount;
@@ -709,10 +710,11 @@ contract Adapter is UUPSUpgradeable, IAdapter, IAdapterOwner, RequestIdBase, Ran
         //solhint-disable-next-line not-rely-on-time
         sub.lastRequestTimestamp = block.timestamp;
 
-        bool isFlatFeeFree = sub.freeRequestCount > 0;
-
-        if (isFlatFeeFree) {
+        uint32 flatFee;
+        if (sub.freeRequestCount > 0) {
             sub.freeRequestCount -= 1;
+        } else {
+            flatFee = getFeeTier(reqCount) * _flatFeeConfig.flatFeePromotionGlobalPercentage / 100;
         }
 
         // We want to charge users exactly for how much gas they use in their callback.
@@ -724,7 +726,7 @@ contract Adapter is UUPSUpgradeable, IAdapter, IAdapterOwner, RequestIdBase, Ran
         uint256 payment = _calculatePaymentAmountInETH(
             startGas,
             uint256(_config.gasAfterPaymentCalculation) + RANDOMNESS_REWARD_GAS * partialSignersCount,
-            isFlatFeeFree ? 0 : (getFeeTier(reqCount) * _flatFeeConfig.flatFeePromotionGlobalPercentage / 100),
+            flatFee,
             tx.gasprice
         );
 
@@ -735,7 +737,7 @@ contract Adapter is UUPSUpgradeable, IAdapter, IAdapterOwner, RequestIdBase, Ran
         delete sub.inflightPayments[requestId];
         sub.balance -= payment;
 
-        return payment;
+        return (payment, flatFee);
     }
 
     function _cancelSubscriptionHelper(uint64 subId, address to) internal nonReentrant {
