@@ -81,17 +81,8 @@ library BN256G2 {
         return (mulmod(xx, c, FIELD_MODULUS), mulmod(xy, c, FIELD_MODULUS));
     }
 
-    function fq2Add(uint256 xx, uint256 xy, uint256 yx, uint256 yy) internal pure returns (uint256, uint256) {
-        return (addmod(xx, yx, FIELD_MODULUS), addmod(xy, yy, FIELD_MODULUS));
-    }
-
     function fq2Sub(uint256 xx, uint256 xy, uint256 yx, uint256 yy) internal pure returns (uint256 rx, uint256 ry) {
         return (submod(xx, yx, FIELD_MODULUS), submod(xy, yy, FIELD_MODULUS));
-    }
-
-    function fq2Div(uint256 xx, uint256 xy, uint256 yx, uint256 yy) internal view returns (uint256, uint256) {
-        (yx, yy) = fq2Inv(yx, yy);
-        return fq2Mul(xx, xy, yx, yy);
     }
 
     function fq2Inv(uint256 x, uint256 y) internal view returns (uint256, uint256) {

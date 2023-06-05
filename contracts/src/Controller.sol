@@ -92,6 +92,7 @@ contract Controller is Initializable, IController, IControllerOwner, OwnableUpgr
     error NodeNotInGroup(uint256 groupIndex, address nodeIdAddress);
     error PartialKeyAlreadyRegistered(uint256 groupIndex, address nodeIdAddress);
     error SenderNotAdapter();
+    error InvalidZeroAddress();
 
     function initialize(address arpa, uint256 lastOutput) public initializer {
         _arpa = IERC20(arpa);
@@ -366,15 +367,18 @@ contract Controller is Initializable, IController, IControllerOwner, OwnableUpgr
     }
 
     function nodeWithdraw(address recipient) external override(IController) {
+        if (recipient == address(0)) {
+            revert InvalidZeroAddress();
+        }
         uint256 ethAmount = _withdrawableEths[msg.sender];
         uint256 arpaAmount = _arpaRewards[msg.sender];
-        if (ethAmount > BALANCE_BASE) {
-            _withdrawableEths[msg.sender] = BALANCE_BASE;
-            IAdapter(_config.adapterContractAddress).nodeWithdrawETH(recipient, ethAmount - BALANCE_BASE);
-        }
         if (arpaAmount > BALANCE_BASE) {
             _arpaRewards[msg.sender] = BALANCE_BASE;
             _arpa.safeTransfer(recipient, arpaAmount - BALANCE_BASE);
+        }
+        if (ethAmount > BALANCE_BASE) {
+            _withdrawableEths[msg.sender] = BALANCE_BASE;
+            IAdapter(_config.adapterContractAddress).nodeWithdrawETH(recipient, ethAmount - BALANCE_BASE);
         }
     }
 

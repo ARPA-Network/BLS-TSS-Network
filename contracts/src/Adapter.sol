@@ -143,6 +143,7 @@ contract Adapter is UUPSUpgradeable, IAdapter, IAdapterOwner, RequestIdBase, Ran
     error GroupNotExist(uint256 groupIndex);
     error SenderNotController();
     error PendingRequestExists();
+    error InvalidZeroAddress();
 
     // *Modifiers*
     modifier onlySubOwner(uint64 subId) {
@@ -278,8 +279,7 @@ contract Adapter is UUPSUpgradeable, IAdapter, IAdapterOwner, RequestIdBase, Ran
         if (msg.sender != address(_controller)) {
             revert SenderNotController();
         }
-        (bool sent,) = payable(recipient).call{value: ethAmount}("");
-        require(sent, "Failed to send Ether");
+        payable(recipient).transfer(ethAmount);
     }
 
     function createSubscription() external override(IAdapter) nonReentrant returns (uint64) {
@@ -362,6 +362,9 @@ contract Adapter is UUPSUpgradeable, IAdapter, IAdapterOwner, RequestIdBase, Ran
     }
 
     function cancelSubscription(uint64 subId, address to) external override onlySubOwner(subId) nonReentrant {
+        if (to == address(0)) {
+            revert InvalidZeroAddress();
+        }
         if (_subscriptions[subId].inflightCost != 0) {
             revert PendingRequestExists();
         }
@@ -550,7 +553,7 @@ contract Adapter is UUPSUpgradeable, IAdapter, IAdapterOwner, RequestIdBase, Ran
 
     function getFeeTier(uint64 reqCount) public view override(IAdapter) returns (uint32) {
         FeeConfig memory fc = _flatFeeConfig.config;
-        if (0 <= reqCount && reqCount <= fc.reqsForTier2) {
+        if (reqCount <= fc.reqsForTier2) {
             return fc.fulfillmentFlatFeeEthPPMTier1;
         }
         if (fc.reqsForTier2 < reqCount && reqCount <= fc.reqsForTier3) {
@@ -682,7 +685,7 @@ contract Adapter is UUPSUpgradeable, IAdapter, IAdapterOwner, RequestIdBase, Ran
             && block.timestamp <= _flatFeeConfig.flatFeePromotionEndTimestamp
         ) {
             if (sub.lastRequestTimestamp < _flatFeeConfig.flatFeePromotionStartTimestamp) {
-                sub.reqCountInCurrentPeriod == 1;
+                sub.reqCountInCurrentPeriod = 1;
             } else {
                 sub.reqCountInCurrentPeriod += 1;
             }
@@ -723,10 +726,9 @@ contract Adapter is UUPSUpgradeable, IAdapter, IAdapterOwner, RequestIdBase, Ran
 
     function _cancelSubscriptionHelper(uint64 subId, address to) internal nonReentrant {
         uint256 balance = _subscriptions[subId].balance;
-        delete _subscriptions[subId];
-        (bool sent,) = payable(to).call{value: balance}("");
-        require(sent, "Failed to send Ether");
+        delete _subscriptions[subId].owner;
         emit SubscriptionCanceled(subId, to, balance);
+        payable(to).transfer(balance);
     }
 
     // Get the amount of gas used for fulfillment
