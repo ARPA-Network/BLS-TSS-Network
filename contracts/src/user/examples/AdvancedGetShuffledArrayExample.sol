@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity >=0.8.10;
+pragma solidity ^0.8.20;
 
 import {BasicRandcastConsumerBase} from "../BasicRandcastConsumerBase.sol";
 import {RandomnessHandler} from "../../utils/RandomnessHandler.sol";

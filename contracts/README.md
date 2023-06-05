@@ -12,10 +12,10 @@ NOTE: foundry.toml must contain "gas_price = 1000000000" for tests to pass
 cd contracts
 
 forge install # Install submodule dependencies
-forge build --optimize # Compile contracts
+forge build # Compile contracts
 
-forge test --optimize # Run tests
-forge test --match-test CommitDkg --optimize -vvvvv # Run a specific test
+forge test # Run tests
+forge test --mt CommitDkg -vvvvv # Run a specific test
 ```
 
 ## Coverage
@@ -57,7 +57,7 @@ anvil
 
 ```bash
 # see .env for more deployment addresses
-forge script script/ControllerLocalTest.s.sol:ControllerLocalTestScript --fork-url http://localhost:8545 --optimize --broadcast
+forge script script/ControllerLocalTest.s.sol:ControllerLocalTestScript --fork-url http://localhost:8545 --broadcast
 ```
 
 ### add operators, start the staking pool and stake for a user and some nodes:
@@ -65,7 +65,7 @@ forge script script/ControllerLocalTest.s.sol:ControllerLocalTestScript --fork-u
 ```bash
 # nodes addresses are generated from index 10 by mnemonic "test test test test test test test test test test test junk"(anvil default)
 # offset and length can be set by STAKING_NODES_INDEX_OFFSET and STAKING_NODES_INDEX_LENGTH in .env
-forge script script/StakeNodeLocalTest.s.sol:StakeNodeLocalTestScript --fork-url http://localhost:8545 --optimize --broadcast -g 150
+forge script script/StakeNodeLocalTest.s.sol:StakeNodeLocalTestScript --fork-url http://localhost:8545 --broadcast -g 150
 ```
 
 ### run some nodes to get an available group:
@@ -76,7 +76,7 @@ See crate arpa-node [`README.md`](../crates/arpa-node/README.md) for details.
 
 ```bash
 # this should be executed after we have an available group as logging e.g."Group index:0 epoch:1 is available, committers saved." in node terminal
-forge script script/GetRandomNumberLocalTest.s.sol:GetRandomNumberLocalTestScript --fork-url http://localhost:8545 --optimize --broadcast
+forge script script/GetRandomNumberLocalTest.s.sol:GetRandomNumberLocalTestScript --fork-url http://localhost:8545 --broadcast
 ```
 
 ### use cast to call views or send transactions to contracts we deployed:

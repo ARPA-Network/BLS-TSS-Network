@@ -1,5 +1,5 @@
-// SPDX-License-Identifier: UNLICENSED
-pragma solidity ^0.8.15;
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.20;
 
 import {Controller, GroupLib} from "../src/Controller.sol";
 // solhint-disable-next-line no-global-import

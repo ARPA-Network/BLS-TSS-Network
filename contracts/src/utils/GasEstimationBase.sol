@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity >=0.8.10;
+pragma solidity ^0.8.20;
 
 // solhint-disable-next-line no-global-import
 import "./StringAndUintConverter.sol" as StringAndUintConverter;

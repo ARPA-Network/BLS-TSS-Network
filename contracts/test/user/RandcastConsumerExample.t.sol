@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity >=0.8.10;
+pragma solidity ^0.8.20;
 
 import {GetRandomNumberExample} from "../../src/user/examples/GetRandomNumberExample.sol";
 import {GetShuffledArrayExample} from "../../src/user/examples/GetShuffledArrayExample.sol";
@@ -28,8 +28,8 @@ contract RandcastConsumerExampleTest is RandcastTestHelper {
 
     uint16 internal _minimumRequestConfirmations = 3;
     uint32 internal _maxGasLimit = 2000000;
-    uint32 internal _gasAfterPaymentCalculation = 30000;
-    uint32 internal _gasExceptCallback = 530000;
+    uint32 internal _gasAfterPaymentCalculation = 50000;
+    uint32 internal _gasExceptCallback = 550000;
     uint256 internal _signatureTaskExclusiveWindow = 10;
     uint256 internal _rewardPerSignature = 50;
     uint256 internal _committerRewardPerSignature = 100;
@@ -205,7 +205,7 @@ contract RandcastConsumerExampleTest is RandcastTestHelper {
         uint32 upper = 10;
         uint256 seed = 42;
         uint16 requestConfirmations = 0;
-        uint256 rdGasLimit = 350000;
+        uint32 rdGasLimit = 350000;
         uint256 rdMaxGasPrice = 1 * 1e9;
 
         vm.prank(_user);

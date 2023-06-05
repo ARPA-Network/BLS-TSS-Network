@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity >=0.8.10;
+pragma solidity ^0.8.20;
 
 contract RandomnessHandler {
     function _shuffle(uint256 upper, uint256 randomness) internal pure returns (uint256[] memory) {

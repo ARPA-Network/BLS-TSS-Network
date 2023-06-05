@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: LGPL 3.0
-pragma solidity ^0.8.15;
+pragma solidity ^0.8.20;
 
 /**
  * @title Elliptic curve operations on twist points for alt_bn128

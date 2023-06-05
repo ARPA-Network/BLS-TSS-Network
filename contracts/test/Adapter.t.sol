@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity >=0.8.10;
+pragma solidity ^0.8.20;
 
 import {GetRandomNumberExample} from "../src/user/examples/GetRandomNumberExample.sol";
 import {IAdapterOwner} from "../src/interfaces/IAdapterOwner.sol";
@@ -22,8 +22,8 @@ contract AdapterTest is RandcastTestHelper {
 
     uint16 internal _minimumRequestConfirmations = 3;
     uint32 internal _maxGasLimit = 2000000;
-    uint32 internal _gasAfterPaymentCalculation = 30000;
-    uint32 internal _gasExceptCallback = 530000;
+    uint32 internal _gasAfterPaymentCalculation = 50000;
+    uint32 internal _gasExceptCallback = 550000;
     uint256 internal _signatureTaskExclusiveWindow = 10;
     uint256 internal _rewardPerSignature = 50;
     uint256 internal _committerRewardPerSignature = 100;
@@ -155,9 +155,9 @@ contract AdapterTest is RandcastTestHelper {
 
             // 0 flat fee until the first request is actually fulfilled
             uint256 payment = _adapter.estimatePaymentAmountInETH(
-                _getRandomNumberExample.callbackGasLimit() + _adapter.RANDOMNESS_REWARD_GAS() * groupSize
+                _getRandomNumberExample.callbackGasLimit() + _adapter.RANDOMNESS_REWARD_GAS() * uint32(groupSize)
                     + _adapter.VERIFICATION_GAS_OVER_MINIMUM_THRESHOLD()
-                        * (groupSize - _adapter.DEFAULT_MINIMUM_THRESHOLD()),
+                        * (uint32(groupSize) - _adapter.DEFAULT_MINIMUM_THRESHOLD()),
                 _gasExceptCallback,
                 0,
                 tx.gasprice * 3
