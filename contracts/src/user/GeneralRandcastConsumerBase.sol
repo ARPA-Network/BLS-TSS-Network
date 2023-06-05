@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.20;
+pragma solidity ^0.8.18;
 
 import {RequestIdBase} from "../utils/RequestIdBase.sol";
 import {GasEstimationBase} from "../utils/GasEstimationBase.sol";

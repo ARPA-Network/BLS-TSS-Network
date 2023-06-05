@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: LGPL 3.0
-pragma solidity ^0.8.20;
+pragma solidity ^0.8.18;
 
 import {BN256G2} from "./BN256G2.sol";
 

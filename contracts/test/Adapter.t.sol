@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.20;
+pragma solidity ^0.8.18;
 
 import {GetRandomNumberExample} from "../src/user/examples/GetRandomNumberExample.sol";
 import {IAdapterOwner} from "../src/interfaces/IAdapterOwner.sol";

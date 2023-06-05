@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.20;
+pragma solidity ^0.8.18;
 
 contract RequestIdBase {
     function _makeRandcastInputSeed(uint256 _userSeed, address _requester, uint256 _nonce)
