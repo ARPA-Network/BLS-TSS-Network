@@ -117,7 +117,7 @@ contract Adapter is UUPSUpgradeable, IAdapter, IAdapterOwner, RequestIdBase, Ran
         address[] participantMembers,
         uint256 randommness,
         uint256 payment,
-        uint32 flatFee,
+        uint256 flatFee,
         bool success
     );
 
@@ -506,11 +506,11 @@ contract Adapter is UUPSUpgradeable, IAdapter, IAdapterOwner, RequestIdBase, Ran
         // call user fulfill_randomness callback
         bool success = _fulfillCallback(requestId, randomness, requestDetail);
 
-        (uint256 payment, uint32 flatFee) =
+        (uint256 payment, uint256 flatFee) =
             _payBySubscription(_subscriptions[requestDetail.subId], requestId, partialSignatures.length, startGas);
 
         // rewardRandomness for participants
-        _rewardRandomness(participantMembers, payment);
+        _rewardRandomness(participantMembers, payment, flatFee);
 
         // Include payment in the event for tracking costs.
         emit RandomnessRequestResult(
@@ -597,11 +597,11 @@ contract Adapter is UUPSUpgradeable, IAdapter, IAdapterOwner, RequestIdBase, Ran
     // Internal
     // =============
 
-    function _rewardRandomness(address[] memory participantMembers, uint256 payment) internal {
+    function _rewardRandomness(address[] memory participantMembers, uint256 payment, uint256 flatFee) internal {
         address[] memory committer = new address[](1);
         committer[0] = msg.sender;
-        _controller.addReward(committer, payment, _config.committerRewardPerSignature);
-        _controller.addReward(participantMembers, 0, _config.rewardPerSignature);
+        _controller.addReward(committer, payment - flatFee, _config.committerRewardPerSignature);
+        _controller.addReward(participantMembers, flatFee / participantMembers.length, _config.rewardPerSignature);
     }
 
     function _fulfillCallback(bytes32 requestId, uint256 randomness, RequestDetail memory requestDetail)
@@ -686,7 +686,7 @@ contract Adapter is UUPSUpgradeable, IAdapter, IAdapterOwner, RequestIdBase, Ran
         bytes32 requestId,
         uint256 partialSignersCount,
         uint256 startGas
-    ) internal returns (uint256, uint32) {
+    ) internal returns (uint256, uint256) {
         // Increment the req count for fee tier selection.
         sub.reqCount += 1;
         uint64 reqCount;
@@ -710,19 +710,18 @@ contract Adapter is UUPSUpgradeable, IAdapter, IAdapterOwner, RequestIdBase, Ran
         //solhint-disable-next-line not-rely-on-time
         sub.lastRequestTimestamp = block.timestamp;
 
-        uint32 flatFee;
+        uint256 flatFee;
         if (sub.freeRequestCount > 0) {
             sub.freeRequestCount -= 1;
         } else {
-            flatFee = getFeeTier(reqCount) * _flatFeeConfig.flatFeePromotionGlobalPercentage / 100;
+            // The flat eth fee is specified in millionths of eth, if _config.fulfillmentFlatFeeEthPPM = 1
+            // 1 eth / 1e6 = 1e18 eth wei / 1e6 = 1e12 eth wei.
+            flatFee = 1e12 * uint256(getFeeTier(reqCount)) * _flatFeeConfig.flatFeePromotionGlobalPercentage / 100;
         }
 
         // We want to charge users exactly for how much gas they use in their callback.
         // The gasAfterPaymentCalculation is meant to cover these additional operations where we
         // decrement the subscription balance and increment the groups withdrawable balance.
-        // We also add the flat eth fee to the payment amount.
-        // Its specified in millionths of eth, if _config.fulfillmentFlatFeeEthPPM = 1
-        // 1 eth / 1e6 = 1e18 eth wei / 1e6 = 1e12 eth wei.
         uint256 payment = _calculatePaymentAmountInETH(
             startGas,
             uint256(_config.gasAfterPaymentCalculation) + RANDOMNESS_REWARD_GAS * partialSignersCount,
@@ -751,15 +750,14 @@ contract Adapter is UUPSUpgradeable, IAdapter, IAdapterOwner, RequestIdBase, Ran
     function _calculatePaymentAmountInETH(
         uint256 startGas,
         uint256 gasAfterPaymentCalculation,
-        uint32 fulfillmentFlatFeeEthPPM,
+        uint256 flatFee,
         uint256 weiPerUnitGas
     ) internal view returns (uint256) {
         uint256 paymentNoFee = weiPerUnitGas * (gasAfterPaymentCalculation + startGas - gasleft());
-        uint256 fee = 1e12 * uint256(fulfillmentFlatFeeEthPPM);
-        if (paymentNoFee > (12e25 - fee)) {
-            revert PaymentTooLarge(); // Payment + fee cannot be more than all of the ETH in existence.
+        if (paymentNoFee > (12e25 - flatFee)) {
+            revert PaymentTooLarge(); // Payment + flatFee cannot be more than all of the ETH in existence.
         }
-        return paymentNoFee + fee;
+        return paymentNoFee + flatFee;
     }
 
     function _findGroupToAssignTask() internal view returns (uint256) {
