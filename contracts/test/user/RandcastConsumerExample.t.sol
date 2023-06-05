@@ -6,7 +6,13 @@ import {GetShuffledArrayExample} from "../../src/user/examples/GetShuffledArrayE
 import {RollDiceExample} from "../../src/user/examples/RollDiceExample.sol";
 import {AdvancedGetShuffledArrayExample} from "../../src/user/examples/AdvancedGetShuffledArrayExample.sol";
 import {
-    IAdapter, Adapter, RandcastTestHelper, ERC20, ControllerForTest, AdapterForTest
+    IAdapter,
+    Adapter,
+    RandcastTestHelper,
+    ERC20,
+    ControllerForTest,
+    AdapterForTest,
+    ERC1967Proxy
 } from "../RandcastTestHelper.sol";
 import {IAdapterOwner} from "../../src/interfaces/IAdapterOwner.sol";
 
@@ -56,7 +62,11 @@ contract RandcastConsumerExampleTest is RandcastTestHelper {
         _controller = new ControllerForTest(address(_arpa), _lastOutput);
 
         vm.prank(_admin);
-        _adapter = new AdapterForTest(address(_controller));
+        _adapterImpl = new AdapterForTest();
+
+        vm.prank(_admin);
+        _adapter =
+            new ERC1967Proxy(address(_adapterImpl),abi.encodeWithSignature("initialize(address)",address(_controller)));
 
         vm.prank(_user);
         _getRandomNumberExample = new GetRandomNumberExample(
@@ -91,7 +101,7 @@ contract RandcastConsumerExampleTest is RandcastTestHelper {
         );
 
         vm.prank(_admin);
-        _adapter.setAdapterConfig(
+        IAdapterOwner(address(_adapter)).setAdapterConfig(
             _minimumRequestConfirmations,
             _maxGasLimit,
             _gasAfterPaymentCalculation,
@@ -136,7 +146,7 @@ contract RandcastConsumerExampleTest is RandcastTestHelper {
             vm.prank(_user);
             bytes32 requestId = _getRandomNumberExample.getRandomNumber();
 
-            Adapter.RequestDetail memory rd = _adapter.getPendingRequest(requestId);
+            Adapter.RequestDetail memory rd = AdapterForTest(address(_adapter)).getPendingRequest(requestId);
             bytes memory rawSeed = abi.encodePacked(rd.seed);
             emit log_named_bytes("rawSeed", rawSeed);
 
@@ -159,7 +169,7 @@ contract RandcastConsumerExampleTest is RandcastTestHelper {
         vm.prank(_user);
         bytes32 requestId = _rollDiceExample.rollDice(bunch);
 
-        Adapter.RequestDetail memory rd = _adapter.getPendingRequest(requestId);
+        Adapter.RequestDetail memory rd = AdapterForTest(address(_adapter)).getPendingRequest(requestId);
         bytes memory rawSeed = abi.encodePacked(rd.seed);
         emit log_named_bytes("rawSeed", rawSeed);
 
@@ -180,7 +190,7 @@ contract RandcastConsumerExampleTest is RandcastTestHelper {
         vm.prank(_user);
         bytes32 requestId = _getShuffledArrayExample.getShuffledArray(upper);
 
-        Adapter.RequestDetail memory rd = _adapter.getPendingRequest(requestId);
+        Adapter.RequestDetail memory rd = AdapterForTest(address(_adapter)).getPendingRequest(requestId);
         bytes memory rawSeed = abi.encodePacked(rd.seed);
         emit log_named_bytes("rawSeed", rawSeed);
 
@@ -204,7 +214,7 @@ contract RandcastConsumerExampleTest is RandcastTestHelper {
 
         uint32 upper = 10;
         uint256 seed = 42;
-        uint16 requestConfirmations = 0;
+        uint16 requestConfirmations = 6;
         uint32 rdGasLimit = 350000;
         uint256 rdMaxGasPrice = 1 * 1e9;
 
@@ -213,7 +223,7 @@ contract RandcastConsumerExampleTest is RandcastTestHelper {
             upper, subId, seed, requestConfirmations, rdGasLimit, rdMaxGasPrice
         );
 
-        Adapter.RequestDetail memory rd = _adapter.getPendingRequest(requestId);
+        Adapter.RequestDetail memory rd = AdapterForTest(address(_adapter)).getPendingRequest(requestId);
         bytes memory rawSeed = abi.encodePacked(rd.seed);
         emit log_named_bytes("rawSeed", rawSeed);
 

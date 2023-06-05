@@ -10,11 +10,13 @@ import {ControllerForTest, Controller} from "./ControllerForTest.sol";
 import {IERC20} from "openzeppelin-contracts/contracts/token/ERC20/IERC20.sol";
 import {ERC20} from "openzeppelin-contracts/contracts/token/ERC20/ERC20.sol";
 import {Strings} from "openzeppelin-contracts/contracts/utils/Strings.sol";
+import {ERC1967Proxy} from "openzeppelin-contracts/contracts/proxy/ERC1967/ERC1967Proxy.sol";
 
 //solhint-disable-next-line max-states-count
 abstract contract RandcastTestHelper is Test {
     ControllerForTest internal _controller;
-    AdapterForTest internal _adapter;
+    ERC1967Proxy internal _adapter;
+    AdapterForTest internal _adapterImpl;
     IERC20 internal _arpa;
     Staking internal _staking;
 
@@ -343,7 +345,7 @@ abstract contract RandcastTestHelper is Test {
         hex"06a8e68091b66c6e6213fdab7adcaa1c7ef2145aecbad0518de6398ea84175180f55f1c03517e174a95b4317ffee31c4f99bb64b6d0ea179ca7f8e86a54574780678fb7b25f7aa9ef3b7e4108834a5f5517f0d6ce295efb363323e45c434a6162a730a0a82bf1d78eb6ac49c2841f77ed71fc14e5df27625dbeb97de7b78628a";
 
     function _fulfillRequest(address sender, bytes32 requestId, uint256 sigIndex) internal {
-        IAdapter.RequestDetail memory rd = _adapter.getPendingRequest(requestId);
+        IAdapter.RequestDetail memory rd = AdapterForTest(address(_adapter)).getPendingRequest(requestId);
 
         // mock confirmation times and SIGNATURE_TASK_EXCLUSIVE_WINDOW = 10;
         vm.roll(block.number + rd.requestConfirmations + 10);
@@ -355,7 +357,7 @@ abstract contract RandcastTestHelper is Test {
         partialSignatures[2] = IAdapter.PartialSignature(2, _sig[sigIndex][3]);
 
         vm.prank(sender);
-        _adapter.fulfillRandomness(
+        IAdapter(address(_adapter)).fulfillRandomness(
             0, // fixed group 0
             requestId,
             _sig[sigIndex][0],
@@ -366,17 +368,17 @@ abstract contract RandcastTestHelper is Test {
 
     function _prepareSubscription(address sender, address consumer, uint256 balance) internal returns (uint64) {
         vm.prank(sender);
-        uint64 subId = _adapter.createSubscription();
+        uint64 subId = IAdapter(address(_adapter)).createSubscription();
         vm.deal(sender, balance + 1e18);
         vm.prank(sender);
-        _adapter.fundSubscription{value: balance}(subId);
+        IAdapter(address(_adapter)).fundSubscription{value: balance}(subId);
         vm.prank(sender);
-        _adapter.addConsumer(subId, consumer);
+        IAdapter(address(_adapter)).addConsumer(subId, consumer);
         return subId;
     }
 
     function _getBalance(uint64 subId) internal view returns (uint256, uint256) {
-        (,, uint256 balance, uint256 inflightCost,,,,,) = _adapter.getSubscription(subId);
+        (,, uint256 balance, uint256 inflightCost,,,,,) = IAdapter(address(_adapter)).getSubscription(subId);
         return (balance, inflightCost);
     }
 

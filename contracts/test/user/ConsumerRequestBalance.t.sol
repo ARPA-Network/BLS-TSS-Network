@@ -6,7 +6,13 @@ import {GetShuffledArrayExample} from "../../src/user/examples/GetShuffledArrayE
 import {RollDiceExample} from "../../src/user/examples/RollDiceExample.sol";
 import {AdvancedGetShuffledArrayExample} from "../../src/user/examples/AdvancedGetShuffledArrayExample.sol";
 import {
-    IAdapter, Adapter, RandcastTestHelper, ERC20, ControllerForTest, AdapterForTest
+    IAdapter,
+    Adapter,
+    RandcastTestHelper,
+    ERC20,
+    ControllerForTest,
+    AdapterForTest,
+    ERC1967Proxy
 } from "../RandcastTestHelper.sol";
 import {IAdapterOwner} from "../../src/interfaces/IAdapterOwner.sol";
 
@@ -56,7 +62,11 @@ contract ConsumerRequestBalanceTest is RandcastTestHelper {
         _controller = new ControllerForTest(address(_arpa), _lastOutput);
 
         vm.prank(_admin);
-        _adapter = new AdapterForTest(address(_controller));
+        _adapterImpl = new AdapterForTest();
+
+        vm.prank(_admin);
+        _adapter =
+            new ERC1967Proxy(address(_adapterImpl),abi.encodeWithSignature("initialize(address)",address(_controller)));
 
         vm.prank(_user);
         _getRandomNumberExample = new GetRandomNumberExample(
@@ -91,7 +101,7 @@ contract ConsumerRequestBalanceTest is RandcastTestHelper {
         );
 
         vm.prank(_admin);
-        _adapter.setAdapterConfig(
+        IAdapterOwner(address(_adapter)).setAdapterConfig(
             _minimumRequestConfirmations,
             _maxGasLimit,
             _gasAfterPaymentCalculation,
@@ -187,8 +197,8 @@ contract ConsumerRequestBalanceTest is RandcastTestHelper {
 
         // give the balance just enough for one request
         // give more than 3 times actual payment since we estimate 3 times max gas fee
-        // (501728+30000) + 50000 * (5-3) + 530000 + 9000*5 = 1206728
-        uint256 someEthBalance = 1210 * 3 * 1e12;
+        // (501728+30000) + 50000 * (5-3) + 550000 + 9000*5 = 1226728
+        uint256 someEthBalance = 1230 * 3 * 1e12;
         _prepareSubscription(_user, address(_rollDiceExample), someEthBalance);
         uint32 bunch = 10;
         vm.prank(_user);
@@ -202,13 +212,13 @@ contract ConsumerRequestBalanceTest is RandcastTestHelper {
 
     function testRequestAdvancedExampleWithEnoughBalanceThenSuccessfullyFulfill() public {
         deal(_user, 1 * 1e18);
-        // 350000 + 50000 * (5-3) + 530000 + 9000*5 = 1025000
+        // 350000 + 50000 * (5-3) + 550000 + 9000*5 = 1045000
         uint256 plentyOfEthBalance = 1050e12;
         uint64 subId = _prepareSubscription(_user, address(_advancedGetShuffledArrayExample), plentyOfEthBalance);
 
         uint32 upper = 10;
         uint256 seed = 42;
-        uint16 requestConfirmations = 0;
+        uint16 requestConfirmations = 6;
         // just cover actual gasused
         uint32 callbackGasLimit = 350000;
         uint256 callbackMaxGasPrice = 1 * 1e9;
@@ -241,7 +251,7 @@ contract ConsumerRequestBalanceTest is RandcastTestHelper {
 
         uint32 upper = 10;
         uint256 seed = 42;
-        uint16 requestConfirmations = 0;
+        uint16 requestConfirmations = 6;
         uint32 callbackGasLimit = 2e6;
         uint256 callbackMaxGasPrice = 1e3 * 1e9;
         // payment = 2e6 * 1e3 * 1e9 = 2e18
