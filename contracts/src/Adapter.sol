@@ -22,9 +22,9 @@ contract Adapter is UUPSUpgradeable, IAdapter, IAdapterOwner, RequestIdBase, Ran
     // *Constants*
     uint16 public constant MAX_CONSUMERS = 100;
     uint16 public constant MAX_REQUEST_CONFIRMATIONS = 200;
-    uint256 public constant RANDOMNESS_REWARD_GAS = 9000;
-    uint256 public constant VERIFICATION_GAS_OVER_MINIMUM_THRESHOLD = 50000;
-    uint256 public constant DEFAULT_MINIMUM_THRESHOLD = 3;
+    uint32 public constant RANDOMNESS_REWARD_GAS = 9000;
+    uint32 public constant VERIFICATION_GAS_OVER_MINIMUM_THRESHOLD = 50000;
+    uint32 public constant DEFAULT_MINIMUM_THRESHOLD = 3;
 
     // *State Variables*
     IController internal _controller;
@@ -145,6 +145,7 @@ contract Adapter is UUPSUpgradeable, IAdapter, IAdapterOwner, RequestIdBase, Ran
     error SenderNotController();
     error PendingRequestExists();
     error InvalidZeroAddress();
+    error GasLimitTooBig(uint32 have, uint32 want);
 
     // *Modifiers*
     modifier onlySubOwner(uint64 subId) {
@@ -399,6 +400,21 @@ contract Adapter is UUPSUpgradeable, IAdapter, IAdapterOwner, RequestIdBase, Ran
             revert InvalidConsumer(p.subId, msg.sender);
         }
 
+        if (
+            p.requestConfirmations < _config.minimumRequestConfirmations
+                || p.requestConfirmations > MAX_REQUEST_CONFIRMATIONS
+        ) {
+            revert InvalidRequestConfirmations(
+                p.requestConfirmations, _config.minimumRequestConfirmations, MAX_REQUEST_CONFIRMATIONS
+            );
+        }
+        // No lower bound on the requested gas limit. A user could request 0
+        // and they would simply be billed for the proof verification and wouldn't be
+        // able to do anything with the random value.
+        if (p.callbackGasLimit > _config.maxGasLimit) {
+            revert GasLimitTooBig(p.callbackGasLimit, _config.maxGasLimit);
+        }
+
         // Choose current available group to handle randomness request(by round robin)
         _lastAssignedGroupIndex = _findGroupToAssignTask();
 
@@ -410,7 +426,7 @@ contract Adapter is UUPSUpgradeable, IAdapter, IAdapterOwner, RequestIdBase, Ran
         (, uint256 groupSize) = _controller.getGroupThreshold(_lastAssignedGroupIndex);
 
         uint256 payment =
-            _freezePaymentBySubscription(sub, requestId, groupSize, p.callbackGasLimit, p.callbackMaxGasPrice);
+            _freezePaymentBySubscription(sub, requestId, uint32(groupSize), p.callbackGasLimit, p.callbackMaxGasPrice);
 
         _requestCommitments[requestId] = keccak256(
             abi.encode(
@@ -584,8 +600,8 @@ contract Adapter is UUPSUpgradeable, IAdapter, IAdapterOwner, RequestIdBase, Ran
     }
 
     function estimatePaymentAmountInETH(
-        uint256 callbackGasLimit,
-        uint256 gasExceptCallback,
+        uint32 callbackGasLimit,
+        uint32 gasExceptCallback,
         uint32 fulfillmentFlatFeeEthPPM,
         uint256 weiPerUnitGas
     ) public pure override(IAdapter) returns (uint256) {
@@ -639,8 +655,8 @@ contract Adapter is UUPSUpgradeable, IAdapter, IAdapterOwner, RequestIdBase, Ran
     function _freezePaymentBySubscription(
         Subscription storage sub,
         bytes32 requestId,
-        uint256 groupSize,
-        uint256 callbackGasLimit,
+        uint32 groupSize,
+        uint32 callbackGasLimit,
         uint256 callbackMaxGasPrice
     ) internal returns (uint256) {
         uint64 reqCount;
@@ -663,7 +679,7 @@ contract Adapter is UUPSUpgradeable, IAdapter, IAdapterOwner, RequestIdBase, Ran
         // Estimate upper cost of this fulfillment.
         uint256 payment = estimatePaymentAmountInETH(
             callbackGasLimit,
-            uint256(_config.gasExceptCallback) + RANDOMNESS_REWARD_GAS * groupSize
+            _config.gasExceptCallback + RANDOMNESS_REWARD_GAS * groupSize
                 + VERIFICATION_GAS_OVER_MINIMUM_THRESHOLD * (groupSize - DEFAULT_MINIMUM_THRESHOLD),
             sub.freeRequestCount > 0
                 ? 0
@@ -724,7 +740,7 @@ contract Adapter is UUPSUpgradeable, IAdapter, IAdapterOwner, RequestIdBase, Ran
         // decrement the subscription balance and increment the groups withdrawable balance.
         uint256 payment = _calculatePaymentAmountInETH(
             startGas,
-            uint256(_config.gasAfterPaymentCalculation) + RANDOMNESS_REWARD_GAS * partialSignersCount,
+            _config.gasAfterPaymentCalculation + RANDOMNESS_REWARD_GAS * partialSignersCount,
             flatFee,
             tx.gasprice
         );

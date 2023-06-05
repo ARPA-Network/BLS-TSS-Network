@@ -20,7 +20,7 @@ contract AdvancedGetShuffledArrayExample is RequestIdBase, BasicRandcastConsumer
         uint64 subId,
         uint256 seed,
         uint16 requestConfirmations,
-        uint256 callbackGasLimit,
+        uint32 callbackGasLimit,
         uint256 callbackMaxGasPrice
     ) external returns (bytes32) {
         bytes memory params;

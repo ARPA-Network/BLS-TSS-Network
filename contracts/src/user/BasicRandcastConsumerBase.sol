@@ -38,7 +38,7 @@ abstract contract BasicRandcastConsumerBase is IRequestTypeBase {
         uint64 subId,
         uint256 seed,
         uint16 requestConfirmations,
-        uint256 callbackGasLimit,
+        uint32 callbackGasLimit,
         uint256 callbackMaxGasPrice
     ) internal returns (bytes32) {
         nonce = nonce + 1;

@@ -20,19 +20,25 @@ abstract contract GeneralRandcastConsumerBase is
     // Default blocks the working group to wait before responding to the request.
     uint16 private constant _DEFAULT_REQUEST_CONFIRMATIONS = 6;
     // TODO Gives a fixed buffer so that some logic differ in the callback slightly raising gas used will be supported.
-    uint256 private constant _GAS_FOR_CALLBACK_OVERHEAD = 30_000;
+    uint32 private constant _GAS_FOR_CALLBACK_OVERHEAD = 30_000;
     // Dummy randomness for estimating gas of callback.
     uint256 private constant _RANDOMNESS_PLACEHOLDER =
         103921425973949831153159651530394295952228049817797655588722524414385831936256;
+    uint32 private constant _MAX_GAS_LIMIT = 2000000;
     // Auto-calculating CallbackGasLimit in the first request call, also user can set it manually.
-    uint256 public callbackGasLimit;
+    uint32 public callbackGasLimit;
     // Auto-estimating CallbackMaxGasFee as 3 times tx.gasprice of the request call, also user can set it manually.
     // notes: tx.gasprice stands for effective_gas_price even post EIP-1559
     // priority_fee_per_gas = min(transaction.max_priority_fee_per_gas, transaction.max_fee_per_gas - block.base_fee_per_gas)
     // effective_gas_price = priority_fee_per_gas + block.base_fee_per_gas
     uint256 public callbackMaxGasFee;
 
-    function setCallbackGasConfig(uint256 _callbackGasLimit, uint256 _callbackMaxGasFee) external onlyOwner {
+    error GasLimitTooBig(uint256 have, uint32 want);
+
+    function setCallbackGasConfig(uint32 _callbackGasLimit, uint256 _callbackMaxGasFee) external onlyOwner {
+        if (_callbackGasLimit > _MAX_GAS_LIMIT) {
+            revert GasLimitTooBig(_callbackGasLimit, _MAX_GAS_LIMIT);
+        }
         callbackGasLimit = _callbackGasLimit;
         callbackMaxGasFee = _callbackMaxGasFee;
     }
@@ -77,9 +83,13 @@ abstract contract GeneralRandcastConsumerBase is
             // we pass this message to tell user that callback implementation need to be checked.
             uint256 gasUsed = _parseGasUsed(result);
 
+            if (gasUsed > _MAX_GAS_LIMIT) {
+                revert GasLimitTooBig(gasUsed, _MAX_GAS_LIMIT);
+            }
+
             require(!success && gasUsed != 0, "fulfillRandomness dry-run failed");
 
-            callbackGasLimit = gasUsed + _GAS_FOR_CALLBACK_OVERHEAD;
+            callbackGasLimit = uint32(gasUsed) + _GAS_FOR_CALLBACK_OVERHEAD;
         }
         return _rawRequestRandomness(
             requestType,

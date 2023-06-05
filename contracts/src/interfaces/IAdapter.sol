@@ -15,7 +15,7 @@ interface IAdapter is IRequestTypeBase {
         uint64 subId;
         uint256 seed;
         uint16 requestConfirmations;
-        uint256 callbackGasLimit;
+        uint32 callbackGasLimit;
         uint256 callbackMaxGasPrice;
     }
 
@@ -27,7 +27,7 @@ interface IAdapter is IRequestTypeBase {
         address callbackContract;
         uint256 seed;
         uint16 requestConfirmations;
-        uint256 callbackGasLimit;
+        uint32 callbackGasLimit;
         uint256 callbackMaxGasPrice;
         uint256 blockNum;
     }
@@ -92,8 +92,8 @@ interface IAdapter is IRequestTypeBase {
 
     // Estimate the amount of gas used for fulfillment
     function estimatePaymentAmountInETH(
-        uint256 callbackGasLimit,
-        uint256 gasExceptCallback,
+        uint32 callbackGasLimit,
+        uint32 gasExceptCallback,
         uint32 fulfillmentFlatFeeEthPPM,
         uint256 weiPerUnitGas
     ) external view returns (uint256);
