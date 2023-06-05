@@ -65,7 +65,17 @@ interface IAdapter is IRequestTypeBase {
     function getSubscription(uint64 subId)
         external
         view
-        returns (uint256 balance, uint256 inflightCost, uint64 reqCount, address owner, address[] memory consumers);
+        returns (
+            address owner,
+            address[] memory consumers,
+            uint256 balance,
+            uint256 inflightCost,
+            uint64 reqCount,
+            uint64 freeRequestCount,
+            uint64 referralSubId,
+            uint64 reqCountInCurrentPeriod,
+            uint256 lastRequestTimestamp
+        );
 
     function getPendingRequestCommitment(bytes32 requestId) external view returns (bytes32);
 

@@ -150,7 +150,7 @@ contract AdapterTest is RandcastTestHelper {
             vm.prank(_user);
             bytes32 requestId = _getRandomNumberExample.getRandomNumber();
             emit log_bytes32(requestId);
-            (, uint256 inflightCost,,,) = _adapter.getSubscription(_subId);
+            (,,, uint256 inflightCost,,,,,) = _adapter.getSubscription(_subId);
             emit log_uint(inflightCost);
 
             // 0 flat fee until the first request is actually fulfilled

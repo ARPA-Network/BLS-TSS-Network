@@ -522,20 +522,34 @@ contract Adapter is UUPSUpgradeable, IAdapter, IAdapterOwner, RequestIdBase, Ran
     }
 
     function getSubscription(uint64 subId)
-        public
+        external
         view
-        override(IAdapter)
-        returns (uint256 balance, uint256 inflightCost, uint64 reqCount, address owner, address[] memory consumers)
+        returns (
+            address owner,
+            address[] memory consumers,
+            uint256 balance,
+            uint256 inflightCost,
+            uint64 reqCount,
+            uint64 freeRequestCount,
+            uint64 referralSubId,
+            uint64 reqCountInCurrentPeriod,
+            uint256 lastRequestTimestamp
+        )
     {
-        if (_subscriptions[subId].owner == address(0)) {
+        Subscription storage sub = _subscriptions[subId];
+        if (sub.owner == address(0)) {
             revert InvalidSubscription();
         }
         return (
-            _subscriptions[subId].balance,
-            _subscriptions[subId].inflightCost,
-            _subscriptions[subId].reqCount,
-            _subscriptions[subId].owner,
-            _subscriptions[subId].consumers
+            sub.owner,
+            sub.consumers,
+            sub.balance,
+            sub.inflightCost,
+            sub.reqCount,
+            sub.freeRequestCount,
+            sub.referralSubId,
+            sub.reqCountInCurrentPeriod,
+            sub.lastRequestTimestamp
         );
     }
 

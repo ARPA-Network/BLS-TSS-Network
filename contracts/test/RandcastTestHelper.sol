@@ -376,7 +376,7 @@ abstract contract RandcastTestHelper is Test {
     }
 
     function _getBalance(uint64 subId) internal view returns (uint256, uint256) {
-        (uint256 balance, uint256 inflightCost,,,) = _adapter.getSubscription(subId);
+        (,, uint256 balance, uint256 inflightCost,,,,,) = _adapter.getSubscription(subId);
         return (balance, inflightCost);
     }
 
