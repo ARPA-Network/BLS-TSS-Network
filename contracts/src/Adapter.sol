@@ -28,6 +28,9 @@ contract Adapter is UUPSUpgradeable, IAdapter, IAdapterOwner, RequestIdBase, Ran
 
     // *State Variables*
     IController internal _controller;
+    uint256 internal _cumulativeFlatFee;
+    uint256 internal _cumulativeCommitterReward;
+    uint256 internal _cumulativePartialSignatureReward;
 
     // Randomness Task State
     uint256 internal _lastAssignedGroupIndex;
@@ -582,6 +585,10 @@ contract Adapter is UUPSUpgradeable, IAdapter, IAdapterOwner, RequestIdBase, Ran
         return _randomnessCount;
     }
 
+    function getCumulativeData() external view returns (uint256, uint256, uint256) {
+        return (_cumulativeFlatFee, _cumulativeCommitterReward, _cumulativePartialSignatureReward);
+    }
+
     function getFeeTier(uint64 reqCount) public view override(IAdapter) returns (uint32) {
         FeeConfig memory fc = _flatFeeConfig.config;
         if (reqCount <= fc.reqsForTier2) {
@@ -614,6 +621,9 @@ contract Adapter is UUPSUpgradeable, IAdapter, IAdapterOwner, RequestIdBase, Ran
     // =============
 
     function _rewardRandomness(address[] memory participantMembers, uint256 payment, uint256 flatFee) internal {
+        _cumulativeCommitterReward += _config.committerRewardPerSignature;
+        _cumulativePartialSignatureReward += _config.rewardPerSignature * participantMembers.length;
+
         address[] memory committer = new address[](1);
         committer[0] = msg.sender;
         _controller.addReward(committer, payment - flatFee, _config.committerRewardPerSignature);
@@ -751,6 +761,8 @@ contract Adapter is UUPSUpgradeable, IAdapter, IAdapterOwner, RequestIdBase, Ran
         sub.inflightCost -= sub.inflightPayments[requestId];
         delete sub.inflightPayments[requestId];
         sub.balance -= payment;
+
+        _cumulativeFlatFee += flatFee;
 
         return (payment, flatFee);
     }
