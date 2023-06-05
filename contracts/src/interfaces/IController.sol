@@ -66,9 +66,27 @@ interface IController {
     function setLastOutput(uint256 lastOutput) external;
 
     // view
+    function getControllerConfig()
+        external
+        view
+        returns (
+            address stakingContractAddress,
+            address adapterContractAddress,
+            uint256 nodeStakingAmount,
+            uint256 disqualifiedNodePenaltyAmount,
+            uint256 defaultNumberOfCommitters,
+            uint256 defaultDkgPhaseDuration,
+            uint256 groupMaxCapacity,
+            uint256 idealNumberOfGroups,
+            uint256 pendingBlockAfterQuit,
+            uint256 dkgPostProcessReward
+        );
+
     /// @notice Get list of all group indexes where group.isStrictlyMajorityConsensusReached == true
     /// @return uint256[] List of valid group indexes
     function getValidGroupIndices() external view returns (uint256[] memory);
+
+    function getGroupEpoch() external view returns (uint256);
 
     function getGroupCount() external view returns (uint256);
 

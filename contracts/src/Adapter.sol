@@ -581,6 +581,10 @@ contract Adapter is UUPSUpgradeable, IAdapter, IAdapterOwner, RequestIdBase, Ran
         return _requestCommitments[requestId];
     }
 
+    function getLastAssignedGroupIndex() external view returns (uint256) {
+        return _lastAssignedGroupIndex;
+    }
+
     function getLastRandomness() external view override(IAdapter) returns (uint256) {
         return _lastRandomness;
     }
@@ -589,8 +593,89 @@ contract Adapter is UUPSUpgradeable, IAdapter, IAdapterOwner, RequestIdBase, Ran
         return _randomnessCount;
     }
 
+    function getCurrentSubId() external view returns (uint64) {
+        return _currentSubId;
+    }
+
     function getCumulativeData() external view returns (uint256, uint256, uint256) {
         return (_cumulativeFlatFee, _cumulativeCommitterReward, _cumulativePartialSignatureReward);
+    }
+
+    function getController() external view returns (address) {
+        return address(_controller);
+    }
+
+    function getAdapterConfig()
+        external
+        view
+        returns (
+            uint16 minimumRequestConfirmations,
+            uint32 maxGasLimit,
+            uint32 gasAfterPaymentCalculation,
+            uint32 gasExceptCallback,
+            uint256 signatureTaskExclusiveWindow,
+            uint256 rewardPerSignature,
+            uint256 committerRewardPerSignature
+        )
+    {
+        return (
+            _config.minimumRequestConfirmations,
+            _config.maxGasLimit,
+            _config.gasAfterPaymentCalculation,
+            _config.gasExceptCallback,
+            _config.signatureTaskExclusiveWindow,
+            _config.rewardPerSignature,
+            _config.committerRewardPerSignature
+        );
+    }
+
+    function getFlatFeeConfig()
+        external
+        view
+        returns (
+            uint32 fulfillmentFlatFeeLinkPPMTier1,
+            uint32 fulfillmentFlatFeeLinkPPMTier2,
+            uint32 fulfillmentFlatFeeLinkPPMTier3,
+            uint32 fulfillmentFlatFeeLinkPPMTier4,
+            uint32 fulfillmentFlatFeeLinkPPMTier5,
+            uint24 reqsForTier2,
+            uint24 reqsForTier3,
+            uint24 reqsForTier4,
+            uint24 reqsForTier5,
+            uint16 flatFeePromotionGlobalPercentage,
+            bool isFlatFeePromotionEnabledPermanently,
+            uint256 flatFeePromotionStartTimestamp,
+            uint256 flatFeePromotionEndTimestamp
+        )
+    {
+        FeeConfig memory fc = _flatFeeConfig.config;
+        return (
+            fc.fulfillmentFlatFeeEthPPMTier1,
+            fc.fulfillmentFlatFeeEthPPMTier2,
+            fc.fulfillmentFlatFeeEthPPMTier3,
+            fc.fulfillmentFlatFeeEthPPMTier4,
+            fc.fulfillmentFlatFeeEthPPMTier5,
+            fc.reqsForTier2,
+            fc.reqsForTier3,
+            fc.reqsForTier4,
+            fc.reqsForTier5,
+            _flatFeeConfig.flatFeePromotionGlobalPercentage,
+            _flatFeeConfig.isFlatFeePromotionEnabledPermanently,
+            _flatFeeConfig.flatFeePromotionStartTimestamp,
+            _flatFeeConfig.flatFeePromotionEndTimestamp
+        );
+    }
+
+    function getReferralConfig()
+        external
+        view
+        returns (bool isReferralEnabled, uint16 freeRequestCountForReferrer, uint16 freeRequestCountForReferee)
+    {
+        return (
+            _referralConfig.isReferralEnabled,
+            _referralConfig.freeRequestCountForReferrer,
+            _referralConfig.freeRequestCountForReferee
+        );
     }
 
     function getFeeTier(uint64 reqCount) public view override(IAdapter) returns (uint32) {

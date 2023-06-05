@@ -3,7 +3,7 @@ src = 'src'
 out = 'out'
 libs = ['lib']
 optimizer = true
-optimizer_runs = 600
+optimizer_runs = 500
 ignored_error_codes = [5159, 5574]
 
 [profile.test]
@@ -13,3 +13,4 @@ gas_price = 1000000000
 [profile.ci]
 # Use this to verify contracts on etherscan
 # libraries = ["src/libraries/BLS.sol:BLS:0x0fd3ef730b4816d882dd8906348c98898d3d8a75", "src/libraries/GroupLib.sol:GroupLib:0xb029a3dcda100324b5d252c9d3c36110eed7c3ca"]
+# libraries = ["src/libraries/BLS.sol:BLS:0xFC1A362ebf942b0A9a3EbEf07F028C3B508FC558"]

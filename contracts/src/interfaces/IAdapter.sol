@@ -79,11 +79,54 @@ interface IAdapter is IRequestTypeBase {
 
     function getPendingRequestCommitment(bytes32 requestId) external view returns (bytes32);
 
+    function getLastAssignedGroupIndex() external view returns (uint256);
+
     function getLastRandomness() external view returns (uint256);
 
     function getRandomnessCount() external view returns (uint256);
 
+    function getCurrentSubId() external view returns (uint64);
+
     function getCumulativeData() external view returns (uint256, uint256, uint256);
+
+    function getController() external view returns (address);
+
+    function getAdapterConfig()
+        external
+        view
+        returns (
+            uint16 minimumRequestConfirmations,
+            uint32 maxGasLimit,
+            uint32 gasAfterPaymentCalculation,
+            uint32 gasExceptCallback,
+            uint256 signatureTaskExclusiveWindow,
+            uint256 rewardPerSignature,
+            uint256 committerRewardPerSignature
+        );
+
+    function getFlatFeeConfig()
+        external
+        view
+        returns (
+            uint32 fulfillmentFlatFeeLinkPPMTier1,
+            uint32 fulfillmentFlatFeeLinkPPMTier2,
+            uint32 fulfillmentFlatFeeLinkPPMTier3,
+            uint32 fulfillmentFlatFeeLinkPPMTier4,
+            uint32 fulfillmentFlatFeeLinkPPMTier5,
+            uint24 reqsForTier2,
+            uint24 reqsForTier3,
+            uint24 reqsForTier4,
+            uint24 reqsForTier5,
+            uint16 flatFeePromotionGlobalPercentage,
+            bool isFlatFeePromotionEnabledPermanently,
+            uint256 flatFeePromotionStartTimestamp,
+            uint256 flatFeePromotionEndTimestamp
+        );
+
+    function getReferralConfig()
+        external
+        view
+        returns (bool isReferralEnabled, uint16 freeRequestCountForReferrer, uint16 freeRequestCountForReferee);
 
     /*
      * @notice Compute fee based on the request count
