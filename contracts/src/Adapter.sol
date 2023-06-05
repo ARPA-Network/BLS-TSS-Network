@@ -163,6 +163,11 @@ contract Adapter is UUPSUpgradeable, IAdapter, IAdapterOwner, RequestIdBase, Ran
         _;
     }
 
+    /// @custom:oz-upgrades-unsafe-allow constructor
+    constructor() {
+        _disableInitializers();
+    }
+
     function initialize(address controller) public initializer {
         _controller = IController(controller);
 
