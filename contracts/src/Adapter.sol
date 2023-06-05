@@ -134,6 +134,7 @@ contract Adapter is UUPSUpgradeable, IAdapter, IAdapterOwner, RequestIdBase, Ran
     error InvalidSubscription();
     error ReferralPromotionDisabled();
     error SubscriptionAlreadyHasReferral();
+    error IdenticalSubscription();
     error AtLeastOneRequestIsRequired();
     error MustBeSubOwner(address owner);
     error PaymentTooLarge();
@@ -352,6 +353,9 @@ contract Adapter is UUPSUpgradeable, IAdapter, IAdapterOwner, RequestIdBase, Ran
     function setReferral(uint64 subId, uint64 referralSubId) external onlySubOwner(subId) nonReentrant {
         if (!_referralConfig.isReferralEnabled) {
             revert ReferralPromotionDisabled();
+        }
+        if (_subscriptions[subId].owner == _subscriptions[referralSubId].owner) {
+            revert IdenticalSubscription();
         }
         if (_subscriptions[subId].referralSubId != 0) {
             revert SubscriptionAlreadyHasReferral();
