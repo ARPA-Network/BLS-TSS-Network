@@ -18,8 +18,7 @@ pub struct Model {
     #[sea_orm(column_type = "Binary(BlobSize::Blob(None))")]
     pub seed: Vec<u8>,
     pub request_confirmations: i32,
-    #[sea_orm(column_type = "Binary(BlobSize::Blob(None))")]
-    pub callback_gas_limit: Vec<u8>,
+    pub callback_gas_limit: i32,
     #[sea_orm(column_type = "Binary(BlobSize::Blob(None))")]
     pub callback_max_gas_price: Vec<u8>,
     pub assignment_block_height: i32,

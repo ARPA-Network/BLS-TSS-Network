@@ -150,7 +150,7 @@ impl RandomnessTaskMutation {
         requester: String,
         seed: Vec<u8>,
         request_confirmations: i32,
-        callback_gas_limit: Vec<u8>,
+        callback_gas_limit: i32,
         callback_max_gas_price: Vec<u8>,
         assignment_block_height: i32,
     ) -> Result<randomness_task::ActiveModel, DbErr> {

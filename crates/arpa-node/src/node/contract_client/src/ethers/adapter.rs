@@ -106,7 +106,7 @@ impl AdapterTransactions for AdapterClient {
 
         let rd = RequestDetail {
             sub_id: task.subscription_id,
-            group_index: group_index.into(),
+            group_index: group_index as u32,
             request_type: task.request_type.to_u8(),
             params: task.params.into(),
             callback_contract: task.requester,
@@ -117,9 +117,9 @@ impl AdapterTransactions for AdapterClient {
             block_num: task.assignment_block_height.into(),
         };
 
-        let call = adapter_contract.fulfill_randomness(group_index.into(), r_id, sig, rd, ps);
+        let call = adapter_contract.fulfill_randomness(group_index as u32, r_id, sig, rd, ps);
 
-        let partial_signers_count = partial_signatures.len() as u64;
+        let partial_signers_count = partial_signatures.len() as u32;
 
         let extra_verification_gas = if partial_signers_count > DEFAULT_MINIMUM_THRESHOLD {
             VERIFICATION_GAS_OVER_MINIMUM_THRESHOLD
@@ -221,7 +221,7 @@ impl AdapterLogs for AdapterClient {
             let task = RandomnessTask {
                 request_id: request_id.to_vec(),
                 subscription_id: sub_id,
-                group_index: group_index.as_usize(),
+                group_index,
                 request_type: RandomnessRequestType::from(request_type),
                 params: params.to_vec(),
                 requester: sender,
