@@ -36,7 +36,10 @@ pub const DEFAULT_PROVIDER_POLLING_INTERVAL_MILLIS: u64 = 10000;
 
 pub const DEFAULT_DYNAMIC_TASK_CLEANER_INTERVAL_MILLIS: u64 = 1000;
 
-pub const FULFILL_RANDOMNESS_GAS_EXCEPT_CALLBACK: u64 = 700000;
+pub const FULFILL_RANDOMNESS_GAS_EXCEPT_CALLBACK: u32 = 650000;
+pub const RANDOMNESS_REWARD_GAS: u32 = 9000;
+pub const VERIFICATION_GAS_OVER_MINIMUM_THRESHOLD: u32 = 50000;
+pub const DEFAULT_MINIMUM_THRESHOLD: u32 = 3;
 
 pub fn jitter(duration: Duration) -> Duration {
     duration.mul_f64(thread_rng().gen_range(0.5..=1.0))
@@ -70,8 +73,8 @@ impl Default for Config {
             node_management_rpc_token: "for_test".to_string(),
             provider_endpoint: "localhost:8545".to_string(),
             chain_id: 0,
-            controller_address: "0x5fc8d32690cc91d4c39d9d3abcbd16989f875707".to_string(),
-            adapter_address: "0x2279b7a0a67db372996a5fab50d91eaa73d2ebe6".to_string(),
+            controller_address: "0xdc64a140aa3e981100a9beca4e685f962f0cf6c9".to_string(),
+            adapter_address: "0xa513e6e4b8f2a923d98304ec87f64353c4d5c853".to_string(),
             data_path: None,
             account: Default::default(),
             listeners: Default::default(),

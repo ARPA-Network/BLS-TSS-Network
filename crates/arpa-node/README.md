@@ -1,3 +1,19 @@
+- [Arpa Node](#arpa-node)
+- [Node-client bin](#node-client-bin)
+- [Management grpc server](#management-grpc-server)
+- [Node-account-client bin(WIP)](#node-account-client-binwip)
+- [Node-cmd-client bin(WIP)](#node-cmd-client-binwip)
+- [Dependencies](#dependencies)
+- [Troubleshooting](#troubleshooting)
+- [Node Config](#node-config)
+- [Local Test](#local-test)
+  - [start the local testnet by anvil:](#start-the-local-testnet-by-anvil)
+  - [deploy the controller and the adapter contract:](#deploy-the-controller-and-the-adapter-contract)
+    - [add operators, start the staking pool and stake for a user and some nodes:](#add-operators-start-the-staking-pool-and-stake-for-a-user-and-some-nodes)
+  - [run 3 nodes to make a group:](#run-3-nodes-to-make-a-group)
+  - [deploy the user contract(`GetRandomNumberExample`) and request a randomness:](#deploy-the-user-contractgetrandomnumberexample-and-request-a-randomness)
+  - [the nodes should sign the randomness and one of the committers in the group will fulfill the result, check the results by cast:](#the-nodes-should-sign-the-randomness-and-one-of-the-committers-in-the-group-will-fulfill-the-result-check-the-results-by-cast)
+
 # Arpa Node
 
 This crate provides a node side on-chain implementation to the provided DKG and Threshold-BLS based randomness service(Randcast).
@@ -189,10 +205,10 @@ anvil --block-time 1
 
 ```bash
 cd contracts
-# controller address 0x5fc8d32690cc91d4c39d9d3abcbd16989f875707
-# adapter_address: 0x2279b7a0a67db372996a5fab50d91eaa73d2ebe6
-# user contract address 0x8464135c8f25da09e49bc8782676a84730c318bc
-forge script script/ControllerLocalTest.s.sol:ControllerLocalTestScript --fork-url http://localhost:8545 --optimize --broadcast
+# controller address 0xdc64a140aa3e981100a9beca4e685f962f0cf6c9
+# adapter_address: 0xa513e6e4b8f2a923d98304ec87f64353c4d5c853
+# user contract address 0x712516e61C8B383dF4A63CFe83d7701Bce54B03e
+forge script script/ControllerLocalTest.s.sol:ControllerLocalTestScript --fork-url http://localhost:8545 --broadcast
 ```
 
 ### add operators, start the staking pool and stake for a user and some nodes:
@@ -200,7 +216,7 @@ forge script script/ControllerLocalTest.s.sol:ControllerLocalTestScript --fork-u
 ```bash
 # nodes addresses are generated from index 10 by mnemonic "test test test test test test test test test test test junk"(anvil default)
 # offset and length can be set by STAKING_NODES_INDEX_OFFSET and STAKING_NODES_INDEX_LENGTH in .env
-forge script script/StakeNodeLocalTest.s.sol:StakeNodeLocalTestScript --fork-url http://localhost:8545 --optimize --broadcast -g 150
+forge script script/StakeNodeLocalTest.s.sol:StakeNodeLocalTestScript --fork-url http://localhost:8545 --broadcast -g 150
 ```
 
 ## run 3 nodes to make a group:
@@ -217,19 +233,17 @@ cargo run --bin node-client -- -m new-run -c test/conf/config_test_3.yml
 ```bash
 cd contracts
 # this should be executed after we have an available group as logging e.g."Group index:0 epoch:1 is available, committers saved." in node terminal
-forge script script/GetRandomNumberLocalTest.s.sol:GetRandomNumberLocalTestScript --fork-url http://localhost:8545 --optimize --broadcast
+forge script script/GetRandomNumberLocalTest.s.sol:GetRandomNumberLocalTestScript --fork-url http://localhost:8545 --broadcast
 ```
 
-## the nodes should sign the randomness and one of the committers in the group will fulfill the result
-
-## check the results by cast:
+## the nodes should sign the randomness and one of the committers in the group will fulfill the result, check the results by cast:
 
 ```bash
 # check the randomness result recorded by the adapter and the user contract respectively
-cast call 0x2279b7a0a67db372996a5fab50d91eaa73d2ebe6 \
+cast call 0xa513e6e4b8f2a923d98304ec87f64353c4d5c853 \
   "getLastRandomness()(uint256)"
 
-cast call 0x8464135c8f25da09e49bc8782676a84730c318bc \
+cast call 0x712516e61C8B383dF4A63CFe83d7701Bce54B03e \
   "lastRandomnessResult()(uint256)"
 
 # the above two outputs of uint256 type should be identical

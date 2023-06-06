@@ -26,13 +26,13 @@ impl Task for RandomnessTask {
 pub struct RandomnessTask {
     pub request_id: Vec<u8>,
     pub subscription_id: u64,
-    pub group_index: usize,
+    pub group_index: u32,
     pub request_type: RandomnessRequestType,
     pub params: Vec<u8>,
     pub requester: Address,
     pub seed: U256,
     pub request_confirmations: u16,
-    pub callback_gas_limit: U256,
+    pub callback_gas_limit: u32,
     pub callback_max_gas_price: U256,
     pub assignment_block_height: usize,
 }
