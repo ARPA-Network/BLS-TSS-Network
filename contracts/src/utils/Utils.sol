@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity >=0.8.10;
+pragma solidity ^0.8.18;
 
 // 5k is plenty for an EXTCODESIZE call (2600) + warm CALL (100)
 // and some arithmetic operations.

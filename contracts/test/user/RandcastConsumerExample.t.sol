@@ -1,232 +1,243 @@
 // SPDX-License-Identifier: MIT
-pragma solidity >=0.8.10;
+pragma solidity ^0.8.18;
 
-import "../../src/user/examples/GetRandomNumberExample.sol";
-import "../../src/user/examples/GetShuffledArrayExample.sol";
-import "../../src/user/examples/RollDiceExample.sol";
-import "../../src/user/examples/AdvancedGetShuffledArrayExample.sol";
-import "../RandcastTestHelper.sol";
+import {GetRandomNumberExample} from "../../src/user/examples/GetRandomNumberExample.sol";
+import {GetShuffledArrayExample} from "../../src/user/examples/GetShuffledArrayExample.sol";
+import {RollDiceExample} from "../../src/user/examples/RollDiceExample.sol";
+import {AdvancedGetShuffledArrayExample} from "../../src/user/examples/AdvancedGetShuffledArrayExample.sol";
+import {
+    IAdapter,
+    Adapter,
+    RandcastTestHelper,
+    ERC20,
+    ControllerForTest,
+    AdapterForTest,
+    ERC1967Proxy
+} from "../RandcastTestHelper.sol";
+import {IAdapterOwner} from "../../src/interfaces/IAdapterOwner.sol";
 
+//solhint-disable-next-line max-states-count
 contract RandcastConsumerExampleTest is RandcastTestHelper {
-    GetRandomNumberExample getRandomNumberExample;
-    GetShuffledArrayExample getShuffledArrayExample;
-    RollDiceExample rollDiceExample;
-    AdvancedGetShuffledArrayExample advancedGetShuffledArrayExample;
+    GetRandomNumberExample internal _getRandomNumberExample;
+    GetShuffledArrayExample internal _getShuffledArrayExample;
+    RollDiceExample internal _rollDiceExample;
+    AdvancedGetShuffledArrayExample internal _advancedGetShuffledArrayExample;
 
-    uint256 disqualifiedNodePenaltyAmount = 1000;
-    uint256 defaultNumberOfCommitters = 3;
-    uint256 defaultDkgPhaseDuration = 10;
-    uint256 groupMaxCapacity = 10;
-    uint256 idealNumberOfGroups = 5;
-    uint256 pendingBlockAfterQuit = 100;
-    uint256 dkgPostProcessReward = 100;
-    uint256 last_output = 2222222222222222;
+    uint256 internal _disqualifiedNodePenaltyAmount = 1000;
+    uint256 internal _defaultNumberOfCommitters = 3;
+    uint256 internal _defaultDkgPhaseDuration = 10;
+    uint256 internal _groupMaxCapacity = 10;
+    uint256 internal _idealNumberOfGroups = 5;
+    uint256 internal _pendingBlockAfterQuit = 100;
+    uint256 internal _dkgPostProcessReward = 100;
+    uint256 internal _lastOutput = 2222222222222222;
 
-    uint16 minimumRequestConfirmations = 3;
-    uint32 maxGasLimit = 2000000;
-    uint32 stalenessSeconds = 30;
-    uint32 gasAfterPaymentCalculation = 30000;
-    uint32 gasExceptRequestDetail = 200000;
-    int256 fallbackWeiPerUnitArpa = 1e12;
-    uint256 signatureTaskExclusiveWindow = 10;
-    uint256 rewardPerSignature = 50;
-    uint256 committerRewardPerSignature = 100;
+    uint16 internal _minimumRequestConfirmations = 3;
+    uint32 internal _maxGasLimit = 2000000;
+    uint32 internal _gasAfterPaymentCalculation = 50000;
+    uint32 internal _gasExceptCallback = 550000;
+    uint256 internal _signatureTaskExclusiveWindow = 10;
+    uint256 internal _rewardPerSignature = 50;
+    uint256 internal _committerRewardPerSignature = 100;
+
+    uint16 internal _flatFeePromotionGlobalPercentage = 100;
+    bool internal _isFlatFeePromotionEnabledPermanently = false;
+    uint256 internal _flatFeePromotionStartTimestamp = 0;
+    uint256 internal _flatFeePromotionEndTimestamp = 0;
 
     function setUp() public {
         skip(1000);
-        vm.prank(admin);
-        arpa = new ERC20("arpa token", "ARPA");
-        vm.prank(admin);
-        oracle = new MockArpaEthOracle();
+        vm.prank(_admin);
+        _arpa = new ERC20("arpa token", "ARPA");
 
         address[] memory operators = new address[](5);
-        operators[0] = node1;
-        operators[1] = node2;
-        operators[2] = node3;
-        operators[3] = node4;
-        operators[4] = node5;
-        prepareStakingContract(stakingDeployer, address(arpa), operators);
+        operators[0] = _node1;
+        operators[1] = _node2;
+        operators[2] = _node3;
+        operators[3] = _node4;
+        operators[4] = _node5;
+        _prepareStakingContract(_stakingDeployer, address(_arpa), operators);
 
-        vm.prank(admin);
-        controller = new ControllerForTest(address(arpa), last_output);
+        vm.prank(_admin);
+        _controller = new ControllerForTest(address(_arpa), _lastOutput);
 
-        vm.prank(admin);
-        adapter = new AdapterForTest(address(controller), address(arpa), address(oracle));
+        vm.prank(_admin);
+        _adapterImpl = new AdapterForTest();
 
-        vm.prank(user);
-        getRandomNumberExample = new GetRandomNumberExample(
-            address(adapter)
+        vm.prank(_admin);
+        _adapter =
+            new ERC1967Proxy(address(_adapterImpl),abi.encodeWithSignature("initialize(address)",address(_controller)));
+
+        vm.prank(_user);
+        _getRandomNumberExample = new GetRandomNumberExample(
+            address(_adapter)
         );
 
-        vm.prank(user);
-        rollDiceExample = new RollDiceExample(address(adapter));
+        vm.prank(_user);
+        _rollDiceExample = new RollDiceExample(address(_adapter));
 
-        vm.prank(user);
-        getShuffledArrayExample = new GetShuffledArrayExample(
-            address(adapter)
+        vm.prank(_user);
+        _getShuffledArrayExample = new GetShuffledArrayExample(
+            address(_adapter)
         );
 
-        vm.prank(user);
-        advancedGetShuffledArrayExample = new AdvancedGetShuffledArrayExample(
-            address(adapter)
+        vm.prank(_user);
+        _advancedGetShuffledArrayExample = new AdvancedGetShuffledArrayExample(
+            address(_adapter)
         );
 
-        vm.prank(admin);
-        controller.setControllerConfig(
-            address(staking),
-            address(adapter),
-            operatorStakeAmount,
-            disqualifiedNodePenaltyAmount,
-            defaultNumberOfCommitters,
-            defaultDkgPhaseDuration,
-            groupMaxCapacity,
-            idealNumberOfGroups,
-            pendingBlockAfterQuit,
-            dkgPostProcessReward
+        vm.prank(_admin);
+        _controller.setControllerConfig(
+            address(_staking),
+            address(_adapter),
+            _operatorStakeAmount,
+            _disqualifiedNodePenaltyAmount,
+            _defaultNumberOfCommitters,
+            _defaultDkgPhaseDuration,
+            _groupMaxCapacity,
+            _idealNumberOfGroups,
+            _pendingBlockAfterQuit,
+            _dkgPostProcessReward
         );
 
-        vm.prank(admin);
-        adapter.setAdapterConfig(
-            minimumRequestConfirmations,
-            maxGasLimit,
-            stalenessSeconds,
-            gasAfterPaymentCalculation,
-            gasExceptRequestDetail,
-            fallbackWeiPerUnitArpa,
-            signatureTaskExclusiveWindow,
-            rewardPerSignature,
-            committerRewardPerSignature,
-            IAdapterOwner.FeeConfig(250000, 250000, 250000, 250000, 250000, 0, 0, 0, 0)
+        vm.prank(_admin);
+        IAdapterOwner(address(_adapter)).setAdapterConfig(
+            _minimumRequestConfirmations,
+            _maxGasLimit,
+            _gasAfterPaymentCalculation,
+            _gasExceptCallback,
+            _signatureTaskExclusiveWindow,
+            _rewardPerSignature,
+            _committerRewardPerSignature
         );
 
-        vm.prank(stakingDeployer);
-        staking.setController(address(controller));
+        vm.broadcast(_admin);
+        IAdapterOwner(address(_adapter)).setFlatFeeConfig(
+            IAdapterOwner.FeeConfig(250000, 250000, 250000, 250000, 250000, 0, 0, 0, 0),
+            _flatFeePromotionGlobalPercentage,
+            _isFlatFeePromotionEnabledPermanently,
+            _flatFeePromotionStartTimestamp,
+            _flatFeePromotionEndTimestamp
+        );
 
-        uint96 plentyOfArpaBalance = 1e6 * 1e18;
-        deal(address(arpa), address(admin), 3 * plentyOfArpaBalance);
+        vm.prank(_stakingDeployer);
+        _staking.setController(address(_controller));
 
-        vm.startPrank(admin);
-        prepareSubscription(address(getRandomNumberExample), plentyOfArpaBalance);
-        prepareSubscription(address(rollDiceExample), plentyOfArpaBalance);
-        prepareSubscription(address(getShuffledArrayExample), plentyOfArpaBalance);
-        vm.stopPrank();
+        uint256 plentyOfEthBalance = 1e6 * 1e18;
+
+        _prepareSubscription(_admin, address(_getRandomNumberExample), plentyOfEthBalance);
+        _prepareSubscription(_admin, address(_rollDiceExample), plentyOfEthBalance);
+        _prepareSubscription(_admin, address(_getShuffledArrayExample), plentyOfEthBalance);
         prepareAnAvailableGroup();
     }
 
     function testAdapterAddress() public {
-        emit log_address(address(adapter));
-        assertEq(getRandomNumberExample.adapter(), address(adapter));
-        assertEq(rollDiceExample.adapter(), address(adapter));
-        assertEq(getShuffledArrayExample.adapter(), address(adapter));
+        emit log_address(address(_adapter));
+        assertEq(_getRandomNumberExample.adapter(), address(_adapter));
+        assertEq(_rollDiceExample.adapter(), address(_adapter));
+        assertEq(_getShuffledArrayExample.adapter(), address(_adapter));
     }
 
     function testGetRandomNumber() public {
-        deal(user, 1 * 1e18);
-        vm.startPrank(user);
+        deal(_user, 1 * 1e18);
 
         uint32 times = 10;
         for (uint256 i = 0; i < times; i++) {
-            bytes32 requestId = getRandomNumberExample.getRandomNumber();
+            vm.prank(_user);
+            bytes32 requestId = _getRandomNumberExample.getRandomNumber();
 
-            Adapter.RequestDetail memory rd = adapter.getPendingRequest(requestId);
+            Adapter.RequestDetail memory rd = AdapterForTest(address(_adapter)).getPendingRequest(requestId);
             bytes memory rawSeed = abi.encodePacked(rd.seed);
             emit log_named_bytes("rawSeed", rawSeed);
 
-            deal(node1, 1 * 1e18);
-            changePrank(node1);
-            fulfillRequest(requestId, i);
+            deal(_node1, 1 * 1e18);
+            _fulfillRequest(_node1, requestId, i);
 
-            changePrank(user);
             vm.roll(block.number + 1);
         }
 
-        for (uint256 i = 0; i < getRandomNumberExample.lengthOfRandomnessResults(); i++) {
-            emit log_uint(getRandomNumberExample.randomnessResults(i));
+        for (uint256 i = 0; i < _getRandomNumberExample.lengthOfRandomnessResults(); i++) {
+            emit log_uint(_getRandomNumberExample.randomnessResults(i));
         }
-        assertEq(getRandomNumberExample.lengthOfRandomnessResults(), times);
+        assertEq(_getRandomNumberExample.lengthOfRandomnessResults(), times);
     }
 
     function testRollDice() public {
-        deal(user, 1 * 1e18);
-        vm.startPrank(user);
+        deal(_user, 1 * 1e18);
 
         uint32 bunch = 10;
-        bytes32 requestId = rollDiceExample.rollDice(bunch);
+        vm.prank(_user);
+        bytes32 requestId = _rollDiceExample.rollDice(bunch);
 
-        Adapter.RequestDetail memory rd = adapter.getPendingRequest(requestId);
+        Adapter.RequestDetail memory rd = AdapterForTest(address(_adapter)).getPendingRequest(requestId);
         bytes memory rawSeed = abi.encodePacked(rd.seed);
         emit log_named_bytes("rawSeed", rawSeed);
 
-        deal(node1, 1 * 1e18);
-        changePrank(node1);
-        fulfillRequest(requestId, 10);
+        deal(_node1, 1 * 1e18);
+        _fulfillRequest(_node1, requestId, 10);
 
-        for (uint256 i = 0; i < rollDiceExample.lengthOfDiceResults(); i++) {
-            emit log_uint(rollDiceExample.diceResults(i));
-            assertTrue(rollDiceExample.diceResults(i) > 0 && rollDiceExample.diceResults(i) <= 6);
+        for (uint256 i = 0; i < _rollDiceExample.lengthOfDiceResults(); i++) {
+            emit log_uint(_rollDiceExample.diceResults(i));
+            assertTrue(_rollDiceExample.diceResults(i) > 0 && _rollDiceExample.diceResults(i) <= 6);
         }
-        assertEq(rollDiceExample.lengthOfDiceResults(), bunch);
+        assertEq(_rollDiceExample.lengthOfDiceResults(), bunch);
     }
 
     function testGetShuffledArray() public {
-        deal(user, 1 * 1e18);
-        vm.startPrank(user);
+        deal(_user, 1 * 1e18);
 
         uint32 upper = 10;
-        bytes32 requestId = getShuffledArrayExample.getShuffledArray(upper);
+        vm.prank(_user);
+        bytes32 requestId = _getShuffledArrayExample.getShuffledArray(upper);
 
-        Adapter.RequestDetail memory rd = adapter.getPendingRequest(requestId);
+        Adapter.RequestDetail memory rd = AdapterForTest(address(_adapter)).getPendingRequest(requestId);
         bytes memory rawSeed = abi.encodePacked(rd.seed);
         emit log_named_bytes("rawSeed", rawSeed);
 
-        deal(node1, 1 * 1e18);
-        changePrank(node1);
-        fulfillRequest(requestId, 11);
+        deal(_node1, 1 * 1e18);
+        _fulfillRequest(_node1, requestId, 11);
 
         for (uint256 i = 0; i < upper; i++) {
-            emit log_uint(getShuffledArrayExample.shuffleResults(i));
+            emit log_uint(_getShuffledArrayExample.shuffleResults(i));
             assertTrue(
-                getShuffledArrayExample.shuffleResults(i) >= 0 && getShuffledArrayExample.shuffleResults(i) < upper
+                _getShuffledArrayExample.shuffleResults(i) >= 0 && _getShuffledArrayExample.shuffleResults(i) < upper
             );
         }
-        assertEq(getShuffledArrayExample.lengthOfShuffleResults(), upper);
+        assertEq(_getShuffledArrayExample.lengthOfShuffleResults(), upper);
     }
 
     function testAdvancedGetShuffledArray() public {
-        vm.startPrank(admin);
-        uint96 plentyOfArpaBalance = 1e6 * 1e18;
-        deal(address(arpa), address(admin), plentyOfArpaBalance);
-        uint64 subId = prepareSubscription(address(advancedGetShuffledArrayExample), plentyOfArpaBalance);
+        uint256 plentyOfEthBalance = 1e6 * 1e18;
+        uint64 subId = _prepareSubscription(_admin, address(_advancedGetShuffledArrayExample), plentyOfEthBalance);
 
-        deal(user, 1 * 1e18);
-        changePrank(user);
+        deal(_user, 1 * 1e18);
 
         uint32 upper = 10;
         uint256 seed = 42;
-        uint16 requestConfirmations = 0;
-        uint256 rdGasLimit = 350000;
+        uint16 requestConfirmations = 6;
+        uint32 rdGasLimit = 350000;
         uint256 rdMaxGasPrice = 1 * 1e9;
 
-        bytes32 requestId = advancedGetShuffledArrayExample.getRandomNumberThenGenerateShuffledArray(
+        vm.prank(_user);
+        bytes32 requestId = _advancedGetShuffledArrayExample.getRandomNumberThenGenerateShuffledArray(
             upper, subId, seed, requestConfirmations, rdGasLimit, rdMaxGasPrice
         );
 
-        Adapter.RequestDetail memory rd = adapter.getPendingRequest(requestId);
+        Adapter.RequestDetail memory rd = AdapterForTest(address(_adapter)).getPendingRequest(requestId);
         bytes memory rawSeed = abi.encodePacked(rd.seed);
         emit log_named_bytes("rawSeed", rawSeed);
 
-        deal(node1, 1 * 1e18);
-        changePrank(node1);
-        fulfillRequest(requestId, 12);
+        deal(_node1, 1 * 1e18);
+        _fulfillRequest(_node1, requestId, 12);
 
-        assertEq(advancedGetShuffledArrayExample.lengthOfShuffleResults(), 1);
+        assertEq(_advancedGetShuffledArrayExample.lengthOfShuffleResults(), 1);
 
-        for (uint256 k = 0; k < advancedGetShuffledArrayExample.lengthOfShuffleResults(); k++) {
+        for (uint256 k = 0; k < _advancedGetShuffledArrayExample.lengthOfShuffleResults(); k++) {
             for (uint256 i = 0; i < upper; i++) {
-                emit log_uint(advancedGetShuffledArrayExample.shuffleResults(k, i));
+                emit log_uint(_advancedGetShuffledArrayExample.shuffleResults(k, i));
                 assertTrue(
-                    advancedGetShuffledArrayExample.shuffleResults(k, i) >= 0
-                        && advancedGetShuffledArrayExample.shuffleResults(k, i) < upper
+                    _advancedGetShuffledArrayExample.shuffleResults(k, i) >= 0
+                        && _advancedGetShuffledArrayExample.shuffleResults(k, i) < upper
                 );
             }
         }

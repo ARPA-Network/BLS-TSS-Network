@@ -1,20 +1,21 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.15;
+pragma solidity ^0.8.18;
 
-import "../interfaces/IController.sol";
-import "../utils/Utils.sol";
+import {IController} from "../interfaces/IController.sol";
+// solhint-disable-next-line no-global-import
+import "../utils/Utils.sol" as Utils;
 
 library GroupLib {
     // *Constants*
     uint256 public constant DEFAULT_MINIMUM_THRESHOLD = 3;
 
     struct GroupData {
-        uint256 s_epoch;
-        uint256 s_groupCount;
-        mapping(uint256 => IController.Group) s_groups; // group_index => Group struct
-        uint256 s_idealNumberOfGroups;
-        uint256 s_groupMaxCapacity;
-        uint256 s_defaultNumberOfCommitters;
+        uint256 epoch;
+        uint256 groupCount;
+        mapping(uint256 => IController.Group) groups; // group_index => Group struct
+        uint256 idealNumberOfGroups;
+        uint256 groupMaxCapacity;
+        uint256 defaultNumberOfCommitters;
     }
 
     event GroupRebalanced(uint256 indexed groupIndex1, uint256 indexed groupIndex2);
@@ -29,9 +30,9 @@ library GroupLib {
         uint256 groupMaxCapacity,
         uint256 defaultNumberOfCommitters
     ) public {
-        groupData.s_idealNumberOfGroups = idealNumberOfGroups;
-        groupData.s_groupMaxCapacity = groupMaxCapacity;
-        groupData.s_defaultNumberOfCommitters = defaultNumberOfCommitters;
+        groupData.idealNumberOfGroups = idealNumberOfGroups;
+        groupData.groupMaxCapacity = groupMaxCapacity;
+        groupData.defaultNumberOfCommitters = defaultNumberOfCommitters;
     }
 
     function nodeJoin(GroupData storage groupData, address idAddress, uint256 lastOutput)
@@ -87,7 +88,7 @@ library GroupLib {
         public
         returns (bool success, address[] memory disqualifiedNodes)
     {
-        IController.Group storage g = groupData.s_groups[groupIndex];
+        IController.Group storage g = groupData.groups[groupIndex];
         IController.CommitCache memory identicalCommits =
             getStrictlyMajorityIdenticalCommitmentResult(groupData, groupIndex);
 
@@ -96,7 +97,7 @@ library GroupLib {
 
             // Get list of majority members with disqualified nodes excluded
             address[] memory majorityMembers =
-                getNonDisqualifiedMajorityMembers(identicalCommits.nodeIdAddress, disqualifiedNodes);
+                Utils.getNonDisqualifiedMajorityMembers(identicalCommits.nodeIdAddress, disqualifiedNodes);
 
             if (majorityMembers.length >= g.threshold) {
                 // Remove all members from group where member.nodeIdAddress is in the disqualified nodes.
@@ -132,7 +133,7 @@ library GroupLib {
 
                 // Compute commiter_indices by calling pickRandomIndex with qualifiedIndices as input.
                 uint256[] memory committerIndices =
-                    pickRandomIndex(lastOutput, qualifiedIndices, groupData.s_defaultNumberOfCommitters);
+                    Utils.pickRandomIndex(lastOutput, qualifiedIndices, groupData.defaultNumberOfCommitters);
 
                 // For selected commiter_indices: add corresponding members into g.committers
                 g.committers = new address[](committerIndices.length);
@@ -149,7 +150,7 @@ library GroupLib {
         public
         returns (address[] memory nodesToBeSlashed, uint256[] memory groupIndicesToEmitEvent)
     {
-        IController.Group storage g = groupData.s_groups[groupIndex];
+        IController.Group storage g = groupData.groups[groupIndex];
 
         // get strictly majority identical commitment result
         IController.CommitCache memory majorityMembers =
@@ -172,7 +173,7 @@ library GroupLib {
         } else {
             address[] memory disqualifiedNodes = majorityMembers.commitResult.disqualifiedNodes;
             g.size -= disqualifiedNodes.length;
-            uint256 minimum = minimumThreshold(g.size);
+            uint256 minimum = Utils.minimumThreshold(g.size);
 
             // set g.threshold to max (default min threshold / minimum threshold)
             g.threshold = GroupLib.DEFAULT_MINIMUM_THRESHOLD > minimum ? GroupLib.DEFAULT_MINIMUM_THRESHOLD : minimum;
@@ -197,7 +198,7 @@ library GroupLib {
         uint256 groupIndex,
         IController.CommitResult memory commitResult
     ) public returns (bool isExist) {
-        IController.Group storage g = groupData.s_groups[groupIndex];
+        IController.Group storage g = groupData.groups[groupIndex];
         for (uint256 i = 0; i < g.commitCacheList.length; i++) {
             if (keccak256(abi.encode(g.commitCacheList[i].commitResult)) == keccak256(abi.encode(commitResult))) {
                 g.commitCacheList[i].nodeIdAddress.push(msg.sender);
@@ -207,8 +208,8 @@ library GroupLib {
     }
 
     function prepareGroupEvent(GroupData storage groupData, uint256 groupIndex) internal {
-        groupData.s_epoch++;
-        IController.Group storage g = groupData.s_groups[groupIndex];
+        groupData.epoch++;
+        IController.Group storage g = groupData.groups[groupIndex];
         g.epoch++;
         g.isStrictlyMajorityConsensusReached = false;
 
@@ -229,7 +230,7 @@ library GroupLib {
         view
         returns (int256, int256)
     {
-        for (uint256 i = 0; i < groupData.s_groupCount; i++) {
+        for (uint256 i = 0; i < groupData.groupCount; i++) {
             int256 memberIndex = getMemberIndexByAddress(groupData, i, nodeIdAddress);
             if (memberIndex != -1) {
                 return (int256(i), memberIndex);
@@ -243,7 +244,7 @@ library GroupLib {
         view
         returns (int256)
     {
-        IController.Group memory g = groupData.s_groups[groupIndex];
+        IController.Group memory g = groupData.groups[groupIndex];
         for (uint256 i = 0; i < g.members.length; i++) {
             if (g.members[i].nodeIdAddress == nodeIdAddress) {
                 return int256(i);
@@ -253,17 +254,17 @@ library GroupLib {
     }
 
     function getValidGroupIndices(GroupData storage groupData) public view returns (uint256[] memory) {
-        uint256[] memory groupIndices = new uint256[](groupData.s_groupCount); //max length is group count
+        uint256[] memory groupIndices = new uint256[](groupData.groupCount); //max length is group count
         uint256 index = 0;
-        for (uint256 i = 0; i < groupData.s_groupCount; i++) {
-            IController.Group memory g = groupData.s_groups[i];
+        for (uint256 i = 0; i < groupData.groupCount; i++) {
+            IController.Group memory g = groupData.groups[i];
             if (g.isStrictlyMajorityConsensusReached) {
                 groupIndices[index] = i;
                 index++;
             }
         }
 
-        return trimTrailingElements(groupIndices, index);
+        return Utils.trimTrailingElements(groupIndices, index);
     }
 
     // =============
@@ -276,7 +277,7 @@ library GroupLib {
         returns (uint256[] memory groupIndicesToEmitEvent)
     {
         groupIndicesToEmitEvent = new uint256[](0);
-        IController.Group storage g = groupData.s_groups[groupIndex];
+        IController.Group storage g = groupData.groups[groupIndex];
         if (g.size == 0) {
             return groupIndicesToEmitEvent;
         }
@@ -297,7 +298,7 @@ library GroupLib {
         for (uint256 i = 0; i < g.members.length; i++) {
             membersLeftInGroup[i] = g.members[i].nodeIdAddress;
         }
-        uint256[] memory involvedGroups = new uint256[](groupData.s_groupCount); // max number of groups involved is groupCount
+        uint256[] memory involvedGroups = new uint256[](groupData.groupCount); // max number of groups involved is groupCount
         uint256 currentIndex;
 
         // for each membersLeftInGroup, call findOrCreateTargetGroup and then add that member to the new group.
@@ -313,13 +314,13 @@ library GroupLib {
             // add member to target group
             addToGroup(groupData, membersLeftInGroup[i], targetGroupIndex);
 
-            if (groupData.s_groups[i].size >= DEFAULT_MINIMUM_THRESHOLD) {
+            if (groupData.groups[i].size >= DEFAULT_MINIMUM_THRESHOLD) {
                 involvedGroups[currentIndex] = targetGroupIndex;
                 currentIndex++;
             }
         }
 
-        return trimTrailingElements(involvedGroups, currentIndex);
+        return Utils.trimTrailingElements(involvedGroups, currentIndex);
     }
 
     function tryRebalanceGroup(GroupData storage groupData, uint256 groupIndex, uint256 lastOutput)
@@ -327,9 +328,9 @@ library GroupLib {
         returns (bool rebalanceSuccess, uint256 groupIndexToRebalance)
     {
         // get all group indices excluding the current groupIndex
-        uint256[] memory groupIndices = new uint256[](groupData.s_groupCount -1);
+        uint256[] memory groupIndices = new uint256[](groupData.groupCount -1);
         uint256 index = 0;
-        for (uint256 i = 0; i < groupData.s_groupCount; i++) {
+        for (uint256 i = 0; i < groupData.groupCount; i++) {
             if (i != groupIndex) {
                 groupIndices[index] = i;
                 index++;
@@ -348,8 +349,8 @@ library GroupLib {
         internal
         returns (bool)
     {
-        IController.Group memory groupA = groupData.s_groups[groupAIndex];
-        IController.Group memory groupB = groupData.s_groups[groupBIndex];
+        IController.Group memory groupA = groupData.groups[groupAIndex];
+        IController.Group memory groupB = groupData.groups[groupBIndex];
 
         if (groupB.size > groupA.size) {
             (groupA, groupB) = (groupB, groupA);
@@ -363,7 +364,7 @@ library GroupLib {
 
         // Move members from group A to group B
         for (uint256 i = 0; i < expectedSizeToMove; i++) {
-            uint256 memberIndex = pickRandomIndex(lastOutput, groupA.members.length - i);
+            uint256 memberIndex = Utils.pickRandomIndex(lastOutput, groupA.members.length - i);
             address memberAddress = getMemberAddressByIndex(groupData, groupAIndex, memberIndex);
             removeFromGroup(groupData, memberIndex, groupAIndex);
             addToGroup(groupData, memberAddress, groupBIndex);
@@ -379,15 +380,15 @@ library GroupLib {
         returns (uint256 groupIndex, bool needsRebalance)
     {
         // if group is empty, addgroup.
-        if (groupData.s_groupCount == 0) {
+        if (groupData.groupCount == 0) {
             return (addGroup(groupData), false);
         }
 
         // get the group index of the group with the minimum size, as well as the min size
         uint256 indexOfMinSize;
-        uint256 minSize = groupData.s_groupMaxCapacity;
-        for (uint256 i = 0; i < groupData.s_groupCount; i++) {
-            IController.Group memory g = groupData.s_groups[i];
+        uint256 minSize = groupData.groupMaxCapacity;
+        for (uint256 i = 0; i < groupData.groupCount; i++) {
+            IController.Group memory g = groupData.groups[i];
             if (g.size < minSize) {
                 minSize = g.size;
                 indexOfMinSize = i;
@@ -400,21 +401,19 @@ library GroupLib {
         // check if valid group count < ideal_number_of_groups || minSize == group_max_capacity
         // If either condition is met and the number of valid groups == group count, call add group and return (index of new group, true)
         if (
-            (validGroupCount < groupData.s_idealNumberOfGroups && validGroupCount == groupData.s_groupCount)
-                || (minSize == groupData.s_groupMaxCapacity)
-        ) {
-            return (addGroup(groupData), true);
-        }
+            (validGroupCount < groupData.idealNumberOfGroups && validGroupCount == groupData.groupCount)
+                || (minSize == groupData.groupMaxCapacity)
+        ) return (addGroup(groupData), true);
 
         // if none of the above conditions are met:
         return (indexOfMinSize, false);
     }
 
     function addGroup(GroupData storage groupData) internal returns (uint256) {
-        uint256 groupIndex = groupData.s_groupCount; // groupIndex starts at 0. groupCount is index of next group to be added
-        groupData.s_groupCount++;
+        uint256 groupIndex = groupData.groupCount; // groupIndex starts at 0. groupCount is index of next group to be added
+        groupData.groupCount++;
 
-        IController.Group storage g = groupData.s_groups[groupIndex];
+        IController.Group storage g = groupData.groups[groupIndex];
         g.index = groupIndex;
         g.size = 0;
         g.threshold = DEFAULT_MINIMUM_THRESHOLD;
@@ -427,7 +426,7 @@ library GroupLib {
         returns (bool needEmitGroupEvent)
     {
         // Get group from group index
-        IController.Group storage g = groupData.s_groups[groupIndex];
+        IController.Group storage g = groupData.groups[groupIndex];
 
         // Add Member Struct to group at group index
         IController.Member memory m;
@@ -438,7 +437,7 @@ library GroupLib {
         g.size++;
 
         // assign group threshold
-        uint256 minimum = minimumThreshold(g.size); // 51% of group size
+        uint256 minimum = Utils.minimumThreshold(g.size); // 51% of group size
         // max of 51% of group size and DEFAULT_MINIMUM_THRESHOLD
         g.threshold = minimum > DEFAULT_MINIMUM_THRESHOLD ? minimum : DEFAULT_MINIMUM_THRESHOLD;
 
@@ -451,7 +450,7 @@ library GroupLib {
         public
         returns (bool needRebalance, bool needEmitGroupEvent)
     {
-        IController.Group storage g = groupData.s_groups[groupIndex];
+        IController.Group storage g = groupData.groups[groupIndex];
         g.size--;
 
         if (g.size == 0) {
@@ -464,7 +463,7 @@ library GroupLib {
         g.members[memberIndex] = g.members[g.members.length - 1];
         g.members.pop();
 
-        uint256 minimum = minimumThreshold(g.size);
+        uint256 minimum = Utils.minimumThreshold(g.size);
         g.threshold = minimum > DEFAULT_MINIMUM_THRESHOLD ? minimum : DEFAULT_MINIMUM_THRESHOLD;
 
         if (g.size < 3) {
@@ -483,7 +482,7 @@ library GroupLib {
         IController.CommitCache memory emptyCache;
 
         // If there are no commit caches, return empty commit cache.
-        IController.Group memory g = groupData.s_groups[groupIndex];
+        IController.Group memory g = groupData.groups[groupIndex];
         if (g.commitCacheList.length == 0) {
             return (emptyCache);
         }
@@ -519,7 +518,7 @@ library GroupLib {
         view
         returns (address nodeIdAddress)
     {
-        IController.Group memory g = groupData.s_groups[groupIndex];
+        IController.Group memory g = groupData.groups[groupIndex];
         return g.members[memberIndex].nodeIdAddress;
     }
 }

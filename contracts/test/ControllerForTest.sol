@@ -1,7 +1,9 @@
-// SPDX-License-Identifier: UNLICENSED
-pragma solidity ^0.8.15;
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.18;
 
-import "../src/Controller.sol";
+import {Controller, GroupLib} from "../src/Controller.sol";
+// solhint-disable-next-line no-global-import
+import "../src/utils/Utils.sol" as Utils;
 
 contract ControllerForTest is Controller {
     using GroupLib for GroupLib.GroupData;
@@ -12,30 +14,30 @@ contract ControllerForTest is Controller {
 
     // Give node staking reward penalty and freezeNode
     function slashNodeForTest(address nodeIdAddress, uint256 stakingPenalty, uint256 pendingBlock) public {
-        slashNode(nodeIdAddress, stakingPenalty, pendingBlock);
+        _slashNode(nodeIdAddress, stakingPenalty, pendingBlock);
     }
 
     function removeFromGroupForTest(uint256 memberIndex, uint256 groupIndex)
         public
         returns (bool needRebalance, bool needEmitGroupEvent)
     {
-        return s_groupData.removeFromGroup(memberIndex, groupIndex);
+        return _groupData.removeFromGroup(memberIndex, groupIndex);
     }
 
     function rebalanceGroupForTest(uint256 groupAIndex, uint256 groupBIndex) public returns (bool) {
-        return s_groupData.rebalanceGroup(groupAIndex, groupBIndex, this.getLastOutput());
+        return _groupData.rebalanceGroup(groupAIndex, groupBIndex, this.getLastOutput());
     }
 
     function minimumThresholdForTest(uint256 groupSize) public pure returns (uint256) {
-        return minimumThreshold(groupSize);
+        return Utils.minimumThreshold(groupSize);
     }
 
     function emitGroupEventForTest(uint256 groupIndex) public {
-        return emitGroupEvent(groupIndex);
+        return _emitGroupEvent(groupIndex);
     }
 
     function getMemberIndexByAddressForTest(uint256 groupIndex, address nodeIdAddress) public view returns (int256) {
-        return s_groupData.getMemberIndexByAddress(groupIndex, nodeIdAddress);
+        return _groupData.getMemberIndexByAddress(groupIndex, nodeIdAddress);
     }
 
     function pickRandomIndexForTest(uint256 seed, uint256[] memory indices, uint256 count)
@@ -43,13 +45,13 @@ contract ControllerForTest is Controller {
         pure
         returns (uint256[] memory)
     {
-        return pickRandomIndex(seed, indices, count);
+        return Utils.pickRandomIndex(seed, indices, count);
     }
 
     function getNonDisqualifiedMajorityMembersForTest(
         address[] memory nodeAddresses,
         address[] memory disqualifiedNodes
     ) public pure returns (address[] memory) {
-        return getNonDisqualifiedMajorityMembers(nodeAddresses, disqualifiedNodes);
+        return Utils.getNonDisqualifiedMajorityMembers(nodeAddresses, disqualifiedNodes);
     }
 }

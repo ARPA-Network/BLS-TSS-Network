@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.15;
+pragma solidity ^0.8.18;
 
 interface IController {
     struct Group {
@@ -58,21 +58,41 @@ interface IController {
 
     function postProcessDkg(uint256 groupIndex, uint256 groupEpoch) external;
 
-    function claimReward(address recipient, uint256 amount) external;
+    function nodeWithdraw(address recipient) external;
 
     // adapter transaction
-    function addReward(address[] memory nodes, uint256 amount) external;
+    function addReward(address[] memory nodes, uint256 ethAmount, uint256 arpaAmount) external;
 
     function setLastOutput(uint256 lastOutput) external;
 
     // view
+    function getControllerConfig()
+        external
+        view
+        returns (
+            address stakingContractAddress,
+            address adapterContractAddress,
+            uint256 nodeStakingAmount,
+            uint256 disqualifiedNodePenaltyAmount,
+            uint256 defaultNumberOfCommitters,
+            uint256 defaultDkgPhaseDuration,
+            uint256 groupMaxCapacity,
+            uint256 idealNumberOfGroups,
+            uint256 pendingBlockAfterQuit,
+            uint256 dkgPostProcessReward
+        );
+
     /// @notice Get list of all group indexes where group.isStrictlyMajorityConsensusReached == true
     /// @return uint256[] List of valid group indexes
     function getValidGroupIndices() external view returns (uint256[] memory);
 
+    function getGroupEpoch() external view returns (uint256);
+
     function getGroupCount() external view returns (uint256);
 
     function getGroup(uint256 index) external view returns (Group memory);
+
+    function getGroupThreshold(uint256 groupIndex) external view returns (uint256, uint256);
 
     function getNode(address nodeAddress) external view returns (Node memory);
 
@@ -83,7 +103,7 @@ interface IController {
 
     function getCoordinator(uint256 groupIndex) external view returns (address);
 
-    function getNodeReward(address nodeAddress) external view returns (uint256);
+    function getNodeWithdrawableTokens(address nodeAddress) external view returns (uint256, uint256);
 
     function getLastOutput() external view returns (uint256);
 

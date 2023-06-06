@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
-pragma solidity >=0.8.10;
+pragma solidity ^0.8.18;
 
-import "../interfaces/IAdapter.sol";
+import {IAdapter, IRequestTypeBase} from "../interfaces/IAdapter.sol";
 
 /**
  * @notice Interface for contracts using VRF randomness.
@@ -13,31 +13,32 @@ abstract contract BasicRandcastConsumerBase is IRequestTypeBase {
     // which should be identical to the nonce on adapter's side, or it will be pointless.
     uint256 public nonce = 1;
     // Ignore fulfilling from adapter check during fee estimation.
-    bool isEstimatingCallbackGasLimit;
+    bool private _isEstimatingCallbackGasLimit;
 
     modifier calculateCallbackGasLimit() {
-        isEstimatingCallbackGasLimit = true;
+        _isEstimatingCallbackGasLimit = true;
         _;
-        isEstimatingCallbackGasLimit = false;
+        _isEstimatingCallbackGasLimit = false;
     }
 
     constructor(address _adapter) {
         adapter = _adapter;
     }
 
-    function fulfillRandomness(bytes32 requestId, uint256 randomness) internal virtual {}
+    // solhint-disable-next-line no-empty-blocks
+    function _fulfillRandomness(bytes32 requestId, uint256 randomness) internal virtual {}
+    // solhint-disable-next-line no-empty-blocks
+    function _fulfillRandomWords(bytes32 requestId, uint256[] memory randomWords) internal virtual {}
+    // solhint-disable-next-line no-empty-blocks
+    function _fulfillShuffledArray(bytes32 requestId, uint256[] memory shuffledArray) internal virtual {}
 
-    function fulfillRandomWords(bytes32 requestId, uint256[] memory randomWords) internal virtual {}
-
-    function fulfillShuffledArray(bytes32 requestId, uint256[] memory shuffledArray) internal virtual {}
-
-    function rawRequestRandomness(
+    function _rawRequestRandomness(
         RequestType requestType,
         bytes memory params,
         uint64 subId,
         uint256 seed,
         uint16 requestConfirmations,
-        uint256 callbackGasLimit,
+        uint32 callbackGasLimit,
         uint256 callbackMaxGasPrice
     ) internal returns (bytes32) {
         nonce = nonce + 1;
@@ -50,17 +51,17 @@ abstract contract BasicRandcastConsumerBase is IRequestTypeBase {
     }
 
     function rawFulfillRandomness(bytes32 requestId, uint256 randomness) external {
-        require(isEstimatingCallbackGasLimit || msg.sender == adapter, "Only adapter can fulfill");
-        fulfillRandomness(requestId, randomness);
+        require(_isEstimatingCallbackGasLimit || msg.sender == adapter, "Only adapter can fulfill");
+        _fulfillRandomness(requestId, randomness);
     }
 
     function rawFulfillRandomWords(bytes32 requestId, uint256[] memory randomWords) external {
-        require(isEstimatingCallbackGasLimit || msg.sender == adapter, "Only adapter can fulfill");
-        fulfillRandomWords(requestId, randomWords);
+        require(_isEstimatingCallbackGasLimit || msg.sender == adapter, "Only adapter can fulfill");
+        _fulfillRandomWords(requestId, randomWords);
     }
 
     function rawFulfillShuffledArray(bytes32 requestId, uint256[] memory shuffledArray) external {
-        require(isEstimatingCallbackGasLimit || msg.sender == adapter, "Only adapter can fulfill");
-        fulfillShuffledArray(requestId, shuffledArray);
+        require(_isEstimatingCallbackGasLimit || msg.sender == adapter, "Only adapter can fulfill");
+        _fulfillShuffledArray(requestId, shuffledArray);
     }
 }

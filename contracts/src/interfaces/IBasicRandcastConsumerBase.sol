@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity >=0.8.10;
+pragma solidity ^0.8.18;
 
 interface IBasicRandcastConsumerBase {
     function rawFulfillRandomness(bytes32 requestId, uint256 randomness) external;
