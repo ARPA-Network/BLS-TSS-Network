@@ -21,7 +21,7 @@ interface IAdapter is IRequestTypeBase {
 
     struct RequestDetail {
         uint64 subId;
-        uint256 groupIndex;
+        uint32 groupIndex;
         RequestType requestType;
         bytes params;
         address callbackContract;
@@ -39,7 +39,7 @@ interface IAdapter is IRequestTypeBase {
     function requestRandomness(RandomnessRequestParams calldata params) external returns (bytes32);
 
     function fulfillRandomness(
-        uint256 groupIndex,
+        uint32 groupIndex,
         bytes32 requestId,
         uint256 signature,
         RequestDetail calldata requestDetail,

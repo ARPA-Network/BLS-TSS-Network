@@ -33,7 +33,7 @@ contract Adapter is UUPSUpgradeable, IAdapter, IAdapterOwner, RequestIdBase, Ran
     uint256 internal _cumulativePartialSignatureReward;
 
     // Randomness Task State
-    uint256 internal _lastAssignedGroupIndex;
+    uint32 internal _lastAssignedGroupIndex;
     uint256 internal _lastRandomness;
     uint256 internal _randomnessCount;
 
@@ -103,19 +103,19 @@ contract Adapter is UUPSUpgradeable, IAdapter, IAdapterOwner, RequestIdBase, Ran
     event RandomnessRequest(
         bytes32 indexed requestId,
         uint64 indexed subId,
-        uint256 indexed groupIndex,
+        uint32 indexed groupIndex,
         RequestType requestType,
         bytes params,
         address sender,
         uint256 seed,
         uint16 requestConfirmations,
-        uint256 callbackGasLimit,
+        uint32 callbackGasLimit,
         uint256 callbackMaxGasPrice,
         uint256 estimatedPayment
     );
     event RandomnessRequestResult(
         bytes32 indexed requestId,
-        uint256 indexed groupIndex,
+        uint32 indexed groupIndex,
         address indexed committer,
         address[] participantMembers,
         uint256 randommness,
@@ -423,7 +423,7 @@ contract Adapter is UUPSUpgradeable, IAdapter, IAdapterOwner, RequestIdBase, Ran
         }
 
         // Choose current available group to handle randomness request(by round robin)
-        _lastAssignedGroupIndex = _findGroupToAssignTask();
+        _lastAssignedGroupIndex = uint32(_findGroupToAssignTask());
 
         // Calculate requestId for the task
         uint256 rawSeed = _makeRandcastInputSeed(p.seed, msg.sender, _consumers[msg.sender].nonces[p.subId]);
@@ -469,7 +469,7 @@ contract Adapter is UUPSUpgradeable, IAdapter, IAdapterOwner, RequestIdBase, Ran
     }
 
     function fulfillRandomness(
-        uint256 groupIndex,
+        uint32 groupIndex,
         bytes32 requestId,
         uint256 signature,
         RequestDetail calldata requestDetail,
