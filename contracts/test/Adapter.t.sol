@@ -1,9 +1,16 @@
 // SPDX-License-Identifier: MIT
-pragma solidity >=0.8.10;
+pragma solidity ^0.8.18;
 
 import {GetRandomNumberExample} from "../src/user/examples/GetRandomNumberExample.sol";
 import {IAdapterOwner} from "../src/interfaces/IAdapterOwner.sol";
-import {RandcastTestHelper, IAdapter, Adapter, ControllerForTest, AdapterForTest} from "./RandcastTestHelper.sol";
+import {
+    RandcastTestHelper,
+    IAdapter,
+    Adapter,
+    ControllerForTest,
+    AdapterForTest,
+    ERC1967Proxy
+} from "./RandcastTestHelper.sol";
 import {ERC20} from "openzeppelin-contracts/contracts/token/ERC20/ERC20.sol";
 
 // solhint-disable-next-line max-states-count
@@ -22,8 +29,8 @@ contract AdapterTest is RandcastTestHelper {
 
     uint16 internal _minimumRequestConfirmations = 3;
     uint32 internal _maxGasLimit = 2000000;
-    uint32 internal _gasAfterPaymentCalculation = 30000;
-    uint32 internal _gasExceptCallback = 530000;
+    uint32 internal _gasAfterPaymentCalculation = 50000;
+    uint32 internal _gasExceptCallback = 550000;
     uint256 internal _signatureTaskExclusiveWindow = 10;
     uint256 internal _rewardPerSignature = 50;
     uint256 internal _committerRewardPerSignature = 100;
@@ -63,7 +70,11 @@ contract AdapterTest is RandcastTestHelper {
         _controller = new ControllerForTest(address(_arpa), _lastOutput);
 
         vm.prank(_admin);
-        _adapter = new AdapterForTest(address(_controller));
+        _adapterImpl = new AdapterForTest();
+
+        vm.prank(_admin);
+        _adapter =
+            new ERC1967Proxy(address(_adapterImpl),abi.encodeWithSignature("initialize(address)",address(_controller)));
 
         vm.prank(_user);
         _getRandomNumberExample = new GetRandomNumberExample(
@@ -85,7 +96,7 @@ contract AdapterTest is RandcastTestHelper {
         );
 
         vm.prank(_admin);
-        _adapter.setAdapterConfig(
+        IAdapterOwner(address(_adapter)).setAdapterConfig(
             _minimumRequestConfirmations,
             _maxGasLimit,
             _gasAfterPaymentCalculation,
@@ -136,7 +147,7 @@ contract AdapterTest is RandcastTestHelper {
 
         IAdapter.RandomnessRequestParams memory p;
         vm.broadcast(_user);
-        _adapter.requestRandomness(p);
+        IAdapter(address(_adapter)).requestRandomness(p);
     }
 
     function testRequestRandomness() public {
@@ -150,14 +161,15 @@ contract AdapterTest is RandcastTestHelper {
             vm.prank(_user);
             bytes32 requestId = _getRandomNumberExample.getRandomNumber();
             emit log_bytes32(requestId);
-            (, uint256 inflightCost,,,) = _adapter.getSubscription(_subId);
+            (,,, uint256 inflightCost,,,,,) = IAdapter(address(_adapter)).getSubscription(_subId);
             emit log_uint(inflightCost);
 
             // 0 flat fee until the first request is actually fulfilled
-            uint256 payment = _adapter.estimatePaymentAmountInETH(
-                _getRandomNumberExample.callbackGasLimit() + _adapter.RANDOMNESS_REWARD_GAS() * groupSize
-                    + _adapter.VERIFICATION_GAS_OVER_MINIMUM_THRESHOLD()
-                        * (groupSize - _adapter.DEFAULT_MINIMUM_THRESHOLD()),
+            uint256 payment = IAdapter(address(_adapter)).estimatePaymentAmountInETH(
+                _getRandomNumberExample.callbackGasLimit()
+                    + Adapter(address(_adapter)).RANDOMNESS_REWARD_GAS() * uint32(groupSize)
+                    + Adapter(address(_adapter)).VERIFICATION_GAS_OVER_MINIMUM_THRESHOLD()
+                        * (uint32(groupSize) - Adapter(address(_adapter)).DEFAULT_MINIMUM_THRESHOLD()),
                 _gasExceptCallback,
                 0,
                 tx.gasprice * 3
@@ -167,7 +179,7 @@ contract AdapterTest is RandcastTestHelper {
 
             assertEq(inflightCost, _inflightCost);
 
-            Adapter.RequestDetail memory rd = _adapter.getPendingRequest(requestId);
+            Adapter.RequestDetail memory rd = AdapterForTest(address(_adapter)).getPendingRequest(requestId);
             bytes memory actualSeed = abi.encodePacked(rd.seed, rd.blockNum);
 
             emit log_named_bytes("actualSeed", actualSeed);
@@ -186,14 +198,14 @@ contract AdapterTest is RandcastTestHelper {
         bytes32 requestId = _getRandomNumberExample.getRandomNumber();
         emit log_bytes32(requestId);
 
-        Adapter.RequestDetail memory rd = _adapter.getPendingRequest(requestId);
+        Adapter.RequestDetail memory rd = AdapterForTest(address(_adapter)).getPendingRequest(requestId);
         bytes memory rawSeed = abi.encodePacked(rd.seed);
         emit log_named_bytes("rawSeed", rawSeed);
 
         _fulfillRequest(_node1, requestId, 0);
 
         vm.roll(block.number + 1);
-        assertEq(_getRandomNumberExample.randomnessResults(0), _adapter.getLastRandomness());
+        assertEq(_getRandomNumberExample.randomnessResults(0), IAdapter(address(_adapter)).getLastRandomness());
         assertEq(_getRandomNumberExample.lengthOfRandomnessResults(), times);
     }
 }

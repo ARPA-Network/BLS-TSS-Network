@@ -549,7 +549,7 @@ impl BLSTasksUpdater<RandomnessTask> for InMemoryBLSTasksQueue<RandomnessTask> {
             .iter_mut()
             .filter(|(_, task)| !task.state)
             .filter(|(_, task)| {
-                task.task.group_index == current_group_index
+                task.task.group_index == current_group_index as u32
                     || current_block_height
                         > task.task.assignment_block_height + randomness_task_exclusive_window
             })

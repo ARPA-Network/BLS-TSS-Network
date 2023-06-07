@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity >=0.8.10;
+pragma solidity ^0.8.18;
 
 function uintToString(uint256 v) pure returns (string memory str) {
     uint256 maxlength = 100;

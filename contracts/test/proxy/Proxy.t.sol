@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity >=0.8.10;
+pragma solidity ^0.8.18;
 
 import {Test} from "forge-std/Test.sol";
 import {IERC20} from "openzeppelin-contracts/contracts/token/ERC20/IERC20.sol";
@@ -48,8 +48,8 @@ contract ProxyTest is Test {
     // Adapter params
     uint16 internal _minimumRequestConfirmations = 3;
     uint32 internal _maxGasLimit = 2000000;
-    uint32 internal _gasAfterPaymentCalculation = 30000;
-    uint32 internal _gasExceptCallback = 530000;
+    uint32 internal _gasAfterPaymentCalculation = 50000;
+    uint32 internal _gasExceptCallback = 550000;
     uint256 internal _signatureTaskExclusiveWindow = 10;
     uint256 internal _rewardPerSignature = 50;
     uint256 internal _committerRewardPerSignature = 100;

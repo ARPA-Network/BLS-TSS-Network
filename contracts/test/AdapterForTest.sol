@@ -1,14 +1,10 @@
-// SPDX-License-Identifier: UNLICENSED
-pragma solidity ^0.8.15;
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.18;
 
 import {Adapter} from "../src/Adapter.sol";
 
 contract AdapterForTest is Adapter {
     mapping(bytes32 => RequestDetail) internal _requestDetails;
-
-    constructor(address controller) {
-        initialize(controller);
-    }
 
     function requestRandomness(RandomnessRequestParams calldata p) public override returns (bytes32) {
         bytes32 requestId = super.requestRandomness(p);

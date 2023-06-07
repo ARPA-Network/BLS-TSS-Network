@@ -55,7 +55,7 @@ impl MigrationTrait for Migration {
                     )
                     .col(
                         ColumnDef::new(RandomnessTask::CallbackGasLimit)
-                            .blob(BlobSize::Medium)
+                            .unsigned()
                             .not_null(),
                     )
                     .col(

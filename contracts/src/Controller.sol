@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.15;
+pragma solidity ^0.8.18;
 
 import {IERC20, SafeERC20} from "openzeppelin-contracts/contracts/token/ERC20/utils/SafeERC20.sol";
 import {OwnableUpgradeable} from "openzeppelin-contracts-upgradeable/contracts/access/OwnableUpgradeable.sol";
@@ -18,7 +18,7 @@ contract Controller is Initializable, IController, IControllerOwner, OwnableUpgr
     using GroupLib for GroupLib.GroupData;
 
     // *Constants*
-    uint16 public constant BALANCE_BASE = 1;
+    uint16 private constant _BALANCE_BASE = 1;
 
     // *Controller Config*
     ControllerConfig private _config;
@@ -92,6 +92,7 @@ contract Controller is Initializable, IController, IControllerOwner, OwnableUpgr
     error NodeNotInGroup(uint256 groupIndex, address nodeIdAddress);
     error PartialKeyAlreadyRegistered(uint256 groupIndex, address nodeIdAddress);
     error SenderNotAdapter();
+    error InvalidZeroAddress();
 
     function initialize(address arpa, uint256 lastOutput) public initializer {
         _arpa = IERC20(arpa);
@@ -163,8 +164,8 @@ contract Controller is Initializable, IController, IControllerOwner, OwnableUpgr
         n.state = true;
 
         // Initialize withdrawable eths and arpa rewards to save gas for adapter call
-        _withdrawableEths[msg.sender] = BALANCE_BASE;
-        _arpaRewards[msg.sender] = BALANCE_BASE;
+        _withdrawableEths[msg.sender] = _BALANCE_BASE;
+        _arpaRewards[msg.sender] = _BALANCE_BASE;
 
         (uint256 groupIndex, uint256[] memory groupIndicesToEmitEvent) = _groupData.nodeJoin(msg.sender, _lastOutput);
 
@@ -366,15 +367,18 @@ contract Controller is Initializable, IController, IControllerOwner, OwnableUpgr
     }
 
     function nodeWithdraw(address recipient) external override(IController) {
+        if (recipient == address(0)) {
+            revert InvalidZeroAddress();
+        }
         uint256 ethAmount = _withdrawableEths[msg.sender];
         uint256 arpaAmount = _arpaRewards[msg.sender];
-        if (ethAmount > BALANCE_BASE) {
-            _withdrawableEths[msg.sender] = BALANCE_BASE;
-            IAdapter(_config.adapterContractAddress).nodeWithdrawETH(recipient, ethAmount - BALANCE_BASE);
+        if (arpaAmount > _BALANCE_BASE) {
+            _arpaRewards[msg.sender] = _BALANCE_BASE;
+            _arpa.safeTransfer(recipient, arpaAmount - _BALANCE_BASE);
         }
-        if (arpaAmount > BALANCE_BASE) {
-            _arpaRewards[msg.sender] = BALANCE_BASE;
-            _arpa.safeTransfer(recipient, arpaAmount - BALANCE_BASE);
+        if (ethAmount > _BALANCE_BASE) {
+            _withdrawableEths[msg.sender] = _BALANCE_BASE;
+            IAdapter(_config.adapterContractAddress).nodeWithdrawETH(recipient, ethAmount - _BALANCE_BASE);
         }
     }
 
@@ -396,8 +400,42 @@ contract Controller is Initializable, IController, IControllerOwner, OwnableUpgr
         _lastOutput = lastOutput;
     }
 
+    function getControllerConfig()
+        external
+        view
+        returns (
+            address stakingContractAddress,
+            address adapterContractAddress,
+            uint256 nodeStakingAmount,
+            uint256 disqualifiedNodePenaltyAmount,
+            uint256 defaultNumberOfCommitters,
+            uint256 defaultDkgPhaseDuration,
+            uint256 groupMaxCapacity,
+            uint256 idealNumberOfGroups,
+            uint256 pendingBlockAfterQuit,
+            uint256 dkgPostProcessReward
+        )
+    {
+        return (
+            _config.stakingContractAddress,
+            _config.adapterContractAddress,
+            _config.nodeStakingAmount,
+            _config.disqualifiedNodePenaltyAmount,
+            _groupData.defaultNumberOfCommitters,
+            _config.defaultDkgPhaseDuration,
+            _groupData.groupMaxCapacity,
+            _groupData.idealNumberOfGroups,
+            _config.pendingBlockAfterQuit,
+            _config.dkgPostProcessReward
+        );
+    }
+
     function getValidGroupIndices() public view override(IController) returns (uint256[] memory) {
         return _groupData.getValidGroupIndices();
+    }
+
+    function getGroupEpoch() external view returns (uint256) {
+        return _groupData.epoch;
     }
 
     function getGroupCount() external view override(IController) returns (uint256) {
@@ -440,8 +478,8 @@ contract Controller is Initializable, IController, IControllerOwner, OwnableUpgr
         returns (uint256, uint256)
     {
         return (
-            _withdrawableEths[nodeAddress] == 0 ? 0 : (_withdrawableEths[nodeAddress] - BALANCE_BASE),
-            _arpaRewards[nodeAddress] == 0 ? 0 : (_arpaRewards[nodeAddress] - BALANCE_BASE)
+            _withdrawableEths[nodeAddress] == 0 ? 0 : (_withdrawableEths[nodeAddress] - _BALANCE_BASE),
+            _arpaRewards[nodeAddress] == 0 ? 0 : (_arpaRewards[nodeAddress] - _BALANCE_BASE)
         );
     }
 

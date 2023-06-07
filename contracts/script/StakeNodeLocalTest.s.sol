@@ -1,5 +1,5 @@
-// SPDX-License-Identifier: UNLICENSED
-pragma solidity ^0.8.13;
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.18;
 
 import {Script} from "forge-std/Script.sol";
 import {Staking} from "Staking-v0.1/Staking.sol";
@@ -48,7 +48,7 @@ contract StakeNodeLocalTestScript is Script {
         _arpa.approve(address(_staking), _rewardAmount);
 
         vm.broadcast(_deployerPrivateKey);
-        _staking.start(_rewardAmount, 30 days);
+        _staking.start(_rewardAmount, 3 days);
 
         // let a user stake to accumulate some rewards
         vm.rememberKey(_userPrivateKey);

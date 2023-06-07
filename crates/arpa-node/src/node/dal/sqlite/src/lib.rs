@@ -771,13 +771,13 @@ impl<C: PairingCurve + Sync + Send> BLSTasksFetcher<RandomnessTask>
         task.map(|model| RandomnessTask {
             request_id: model.request_id,
             subscription_id: model.subscription_id as u64,
-            group_index: model.group_index as usize,
+            group_index: model.group_index as u32,
             request_type: RandomnessRequestType::from(model.request_type as u8),
             params: model.params,
             requester: model.requester.parse::<Address>().unwrap(),
             seed: U256::from_big_endian(&model.seed),
             request_confirmations: model.request_confirmations as u16,
-            callback_gas_limit: U256::from_big_endian(&model.callback_gas_limit),
+            callback_gas_limit: model.callback_gas_limit as u32,
             callback_max_gas_price: U256::from_big_endian(&model.callback_max_gas_price),
             assignment_block_height: model.assignment_block_height as usize,
         })
@@ -816,7 +816,7 @@ impl<C: PairingCurve + Sync + Send> BLSTasksUpdater<RandomnessTask>
             address_to_string(task.requester),
             seed_bytes,
             task.request_confirmations as i32,
-            u256_to_vec(&task.callback_gas_limit),
+            task.callback_gas_limit as i32,
             u256_to_vec(&task.callback_max_gas_price),
             task.assignment_block_height as i32,
         )
@@ -853,13 +853,13 @@ impl<C: PairingCurve + Sync + Send> BLSTasksUpdater<RandomnessTask>
                 .map(|model| RandomnessTask {
                     request_id: model.request_id,
                     subscription_id: model.subscription_id as u64,
-                    group_index: model.group_index as usize,
+                    group_index: model.group_index as u32,
                     request_type: RandomnessRequestType::from(model.request_type as u8),
                     params: model.params,
                     requester: model.requester.parse::<Address>().unwrap(),
                     seed: U256::from_big_endian(&model.seed),
                     request_confirmations: model.request_confirmations as u16,
-                    callback_gas_limit: U256::from_big_endian(&model.callback_gas_limit),
+                    callback_gas_limit: model.callback_gas_limit as u32,
                     callback_max_gas_price: U256::from_big_endian(&model.callback_max_gas_price),
                     assignment_block_height: model.assignment_block_height as usize,
                 })
@@ -1247,7 +1247,7 @@ pub mod sqlite_tests {
             requester: PLACEHOLDER_ADDRESS,
             seed,
             request_confirmations: 0,
-            callback_gas_limit: 0.into(),
+            callback_gas_limit: 0,
             callback_max_gas_price: 0.into(),
             assignment_block_height: 100,
         };
@@ -1312,7 +1312,7 @@ pub mod sqlite_tests {
             requester: PLACEHOLDER_ADDRESS,
             seed,
             request_confirmations: 0,
-            callback_gas_limit: 0.into(),
+            callback_gas_limit: 0,
             callback_max_gas_price: 0.into(),
             assignment_block_height: 100,
         };

@@ -28,6 +28,6 @@ jobs:
         working-directory: contracts
       - name: Run Forge tests
         run: |
-          forge test --optimize -vv
+          forge test --gas-price 1000000000 -vv
         id: test
         working-directory: contracts
