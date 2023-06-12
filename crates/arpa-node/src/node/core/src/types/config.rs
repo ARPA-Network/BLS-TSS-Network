@@ -2,9 +2,11 @@ use crate::{ConfigError, SchedulerError};
 use ethers_core::rand::{thread_rng, Rng};
 use ethers_core::{k256::ecdsa::SigningKey, types::Address};
 use ethers_signers::{coins_bip39::English, LocalWallet, MnemonicBuilder, Wallet};
+use serde::de;
 use serde::{Deserialize, Serialize};
 use std::convert::TryFrom;
 use std::env;
+use std::fmt;
 use std::time::Duration;
 
 pub const PLACEHOLDER_ADDRESS: Address = Address::zero();
@@ -41,6 +43,8 @@ pub const RANDOMNESS_REWARD_GAS: u32 = 9000;
 pub const VERIFICATION_GAS_OVER_MINIMUM_THRESHOLD: u32 = 50000;
 pub const DEFAULT_MINIMUM_THRESHOLD: u32 = 3;
 
+pub const DEFAULT_ROLLING_LOG_FILE_SIZE: u64 = 10 * 1024 * 1024 * 1024;
+
 pub fn jitter(duration: Duration) -> Duration {
     duration.mul_f64(thread_rng().gen_range(0.5..=1.0))
 }
@@ -59,8 +63,7 @@ pub struct Config {
     pub data_path: Option<String>,
     pub account: Account,
     pub listeners: Option<Vec<ListenerDescriptor>>,
-    pub context_logging: bool,
-    pub node_id: Option<String>,
+    pub logger: Option<LoggerDescriptor>,
     pub time_limits: Option<TimeLimitDescriptor>,
 }
 
@@ -78,11 +81,107 @@ impl Default for Config {
             data_path: None,
             account: Default::default(),
             listeners: Default::default(),
-            context_logging: false,
-            node_id: None,
+            logger: Default::default(),
             time_limits: Default::default(),
         }
     }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct LoggerDescriptor {
+    pub node_id: String,
+    pub context_logging: bool,
+    pub log_file_path: String,
+    #[serde(deserialize_with = "deserialize_limit")]
+    pub rolling_file_size: u64,
+}
+
+impl LoggerDescriptor {
+    pub fn default() -> Self {
+        Self {
+            node_id: "running".to_string(),
+            context_logging: false,
+            log_file_path: "log/running".to_string(),
+            rolling_file_size: DEFAULT_ROLLING_LOG_FILE_SIZE,
+        }
+    }
+}
+
+fn deserialize_limit<'de, D>(d: D) -> Result<u64, D::Error>
+where
+    D: de::Deserializer<'de>,
+{
+    struct V;
+
+    impl<'de2> de::Visitor<'de2> for V {
+        type Value = u64;
+
+        fn expecting(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
+            fmt.write_str("a size")
+        }
+
+        fn visit_u64<E>(self, v: u64) -> Result<u64, E>
+        where
+            E: de::Error,
+        {
+            Ok(v)
+        }
+
+        fn visit_i64<E>(self, v: i64) -> Result<u64, E>
+        where
+            E: de::Error,
+        {
+            if v < 0 {
+                return Err(E::invalid_value(
+                    de::Unexpected::Signed(v),
+                    &"a non-negative number",
+                ));
+            }
+
+            Ok(v as u64)
+        }
+
+        fn visit_str<E>(self, v: &str) -> Result<u64, E>
+        where
+            E: de::Error,
+        {
+            let (number, unit) = match v.find(|c: char| !c.is_ascii_digit()) {
+                Some(n) => (v[..n].trim(), Some(v[n..].trim())),
+                None => (v.trim(), None),
+            };
+
+            let number = match number.parse::<u64>() {
+                Ok(n) => n,
+                Err(_) => return Err(E::invalid_value(de::Unexpected::Str(number), &"a number")),
+            };
+
+            let unit = match unit {
+                Some(u) => u,
+                None => return Ok(number),
+            };
+
+            let number = if unit.eq_ignore_ascii_case("b") {
+                Some(number)
+            } else if unit.eq_ignore_ascii_case("kb") || unit.eq_ignore_ascii_case("kib") {
+                number.checked_mul(1024)
+            } else if unit.eq_ignore_ascii_case("mb") || unit.eq_ignore_ascii_case("mib") {
+                number.checked_mul(1024 * 1024)
+            } else if unit.eq_ignore_ascii_case("gb") || unit.eq_ignore_ascii_case("gib") {
+                number.checked_mul(1024 * 1024 * 1024)
+            } else if unit.eq_ignore_ascii_case("tb") || unit.eq_ignore_ascii_case("tib") {
+                number.checked_mul(1024 * 1024 * 1024 * 1024)
+            } else {
+                return Err(E::invalid_value(de::Unexpected::Str(unit), &"a valid unit"));
+            };
+
+            match number {
+                Some(n) => Ok(n),
+                None => Err(E::invalid_value(de::Unexpected::Str(v), &"a byte size")),
+            }
+        }
+    }
+
+    d.deserialize_any(V)
 }
 
 #[derive(Debug, Copy, Clone, Serialize, Deserialize)]
@@ -149,8 +248,8 @@ impl Config {
             self.data_path = Some(String::from("data.sqlite"));
         }
 
-        if self.node_id.is_none() {
-            self.node_id = Some(String::from("running"));
+        if self.logger.is_none() {
+            self.logger = Some(LoggerDescriptor::default());
         }
 
         if self.listeners.is_none() {
@@ -412,9 +511,7 @@ mod tests {
         let config: Config =
             serde_yaml::from_str(config_str).expect("Error loading configuration file");
 
-        config.initialize();
-
-        // println!("config = {:?}", CONFIG.get().unwrap());
+        println!("config = {:?}", config.initialize());
     }
 
     #[test]

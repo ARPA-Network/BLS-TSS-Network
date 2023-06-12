@@ -14,7 +14,10 @@ use arpa_node_sqlite_db::SqliteDB;
 use ethers::signers::Signer;
 use log::{info, LevelFilter};
 use log4rs::append::console::ConsoleAppender;
-use log4rs::append::file::FileAppender;
+use log4rs::append::rolling_file::policy::compound::roll::delete::DeleteRoller;
+use log4rs::append::rolling_file::policy::compound::trigger::size::SizeTrigger;
+use log4rs::append::rolling_file::policy::compound::CompoundPolicy;
+use log4rs::append::rolling_file::RollingFileAppender;
 use log4rs::config::{Appender, Root};
 use log4rs::filter::threshold::ThresholdFilter;
 use log4rs::Config as LogConfig;
@@ -59,34 +62,53 @@ fn load_config(config_path: PathBuf) -> Config {
     config.initialize()
 }
 
-fn init_log(node_id: &str, context_logging: bool) {
+fn init_logger(node_id: &str, context_logging: bool, log_file_path: &str, rolling_file_size: u64) {
     let stdout = ConsoleAppender::builder()
         .encoder(Box::new(
-            JsonEncoder::default().context_logging(context_logging),
+            JsonEncoder::new(node_id.to_string()).context_logging(context_logging),
         ))
         .build();
 
-    let file = FileAppender::builder()
+    let rolling_file = RollingFileAppender::builder()
         .encoder(Box::new(
-            JsonEncoder::default().context_logging(context_logging),
+            JsonEncoder::new(node_id.to_string()).context_logging(context_logging),
         ))
-        .build(format!("log/{}/node.log", node_id))
+        .build(
+            format!(
+                "{}/node.log",
+                if log_file_path.ends_with("/") {
+                    &log_file_path[..log_file_path.len() - 1]
+                } else {
+                    log_file_path
+                }
+            ),
+            Box::new(CompoundPolicy::new(
+                Box::new(SizeTrigger::new(rolling_file_size)),
+                Box::new(DeleteRoller::default()),
+            )),
+        )
         .unwrap();
 
-    let err_file = FileAppender::builder()
+    let rolling_err_file = RollingFileAppender::builder()
         .encoder(Box::new(
-            JsonEncoder::default().context_logging(context_logging),
+            JsonEncoder::new(node_id.to_string()).context_logging(context_logging),
         ))
-        .build(format!("log/{}/node_err.log", node_id))
+        .build(
+            format!("{}/node_err.log", log_file_path),
+            Box::new(CompoundPolicy::new(
+                Box::new(SizeTrigger::new(rolling_file_size)),
+                Box::new(DeleteRoller::default()),
+            )),
+        )
         .unwrap();
 
     let log_config = LogConfig::builder()
         .appender(Appender::builder().build("stdout", Box::new(stdout)))
-        .appender(Appender::builder().build("file", Box::new(file)))
+        .appender(Appender::builder().build("file", Box::new(rolling_file)))
         .appender(
             Appender::builder()
                 .filter(Box::new(ThresholdFilter::new(LevelFilter::Error)))
-                .build("err_file", Box::new(err_file)),
+                .build("err_file", Box::new(rolling_err_file)),
         )
         .build(
             Root::builder()
@@ -107,7 +129,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let config = load_config(opt.config_path);
 
-    init_log(config.node_id.as_ref().unwrap(), config.context_logging);
+    init_logger(
+        &config.logger.as_ref().unwrap().node_id,
+        config.logger.as_ref().unwrap().context_logging,
+        &config.logger.as_ref().unwrap().log_file_path,
+        config.logger.as_ref().unwrap().rolling_file_size,
+    );
 
     info!("{:?}", config);
 

@@ -84,6 +84,23 @@ Configuration items in [`conf/config.yml`](conf/config.yml) are listed here:
 
 - data_path(Optional): Config DB file for persistence. (example: "data.sqlite")
 
+- logger(Optional): Config logger settings.
+
+  - example(default):
+
+    ```
+    logger:
+      node_id: running
+      context_logging: true
+      log_file_path: log/running/
+      rolling_file_size: 10 gb
+    ```
+
+  - node_id: Set a node id for logging.
+  - context_logging: Set whether to log context of current node info and group info. Since it will increase log size, it is recommended to set it to false in production.
+  - log_file_path: Set log file path.
+  - rolling_file_size: Log file will be deleted when it reaches this size.
+
 - account: Config node identity in the network. There are three available account types.
 
   - example(not recommended): private_key: "4c0883a69102937d6231471b5dbb6204fe5129617082792ae468d01a3f362318"
