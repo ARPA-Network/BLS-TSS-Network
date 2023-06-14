@@ -91,7 +91,7 @@ Configuration items in [`conf/config.yml`](conf/config.yml) are listed here:
     ```
     logger:
       node_id: running
-      context_logging: true
+      context_logging: false
       log_file_path: log/running/
       rolling_file_size: 10 gb
     ```

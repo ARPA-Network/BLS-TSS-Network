@@ -16,7 +16,7 @@ data_path: "./data9.sqlite"
 
 logger:
   node_id: 9
-  context_logging: true
+  context_logging: false
   log_file_path: log/9/
   rolling_file_size: 10 gb
 
