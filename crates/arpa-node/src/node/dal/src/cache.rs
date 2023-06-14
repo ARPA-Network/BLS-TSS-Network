@@ -1,5 +1,5 @@
 use crate::error::{DataAccessResult, GroupError, NodeInfoError};
-use crate::ContextInfoUpdater;
+use crate::{BLSResultCacheState, ContextInfoUpdater};
 
 use super::{
     BLSTasksFetcher, BLSTasksUpdater, BlockInfoFetcher, BlockInfoUpdater, GroupInfoFetcher,
@@ -563,16 +563,28 @@ impl BLSTasksUpdater<RandomnessTask> for InMemoryBLSTasksQueue<RandomnessTask> {
     }
 }
 
-#[derive(Debug, Default)]
-pub struct InMemorySignatureResultCache<T: ResultCache> {
-    signature_result_caches: HashMap<Vec<u8>, BLSResultCache<T>>,
+#[derive(Debug, Default, Clone)]
+pub struct InMemorySignatureResultCache<C: ResultCache> {
+    signature_result_caches: BTreeMap<Vec<u8>, BLSResultCache<C>>,
 }
 
-impl<T: ResultCache> InMemorySignatureResultCache<T> {
+impl<C: ResultCache> InMemorySignatureResultCache<C> {
     pub fn new() -> Self {
         InMemorySignatureResultCache {
-            signature_result_caches: HashMap::new(),
+            signature_result_caches: BTreeMap::new(),
         }
+    }
+
+    pub fn rebuild(results: Vec<BLSResultCache<C>>) -> Self {
+        let mut cache = InMemorySignatureResultCache::new();
+
+        for result in results {
+            cache
+                .signature_result_caches
+                .insert(result.result_cache.request_id().to_vec(), result);
+        }
+
+        cache
     }
 }
 
@@ -587,10 +599,10 @@ impl ResultCache for RandomnessResultCache {
     type M = Vec<u8>;
 }
 
-#[derive(Debug)]
-pub struct BLSResultCache<T: ResultCache> {
-    pub result_cache: T,
-    pub state: bool,
+#[derive(Debug, Clone)]
+pub struct BLSResultCache<C: ResultCache> {
+    pub result_cache: C,
+    pub state: BLSResultCacheState,
 }
 
 #[derive(Clone, Debug)]
@@ -599,23 +611,30 @@ pub struct RandomnessResultCache {
     pub randomness_task: RandomnessTask,
     pub message: Vec<u8>,
     pub threshold: usize,
-    pub partial_signatures: HashMap<Address, Vec<u8>>,
+    pub partial_signatures: BTreeMap<Address, Vec<u8>>,
 }
 
-impl<T: ResultCache> SignatureResultCacheFetcher<T> for InMemorySignatureResultCache<T> {
-    fn contains(&self, task_request_id: &[u8]) -> bool {
-        self.signature_result_caches.contains_key(task_request_id)
+#[async_trait]
+impl<C: ResultCache + Send + Sync> SignatureResultCacheFetcher<C>
+    for InMemorySignatureResultCache<C>
+{
+    async fn contains(&self, task_request_id: &[u8]) -> DataAccessResult<bool> {
+        Ok(self.signature_result_caches.contains_key(task_request_id))
     }
 
-    fn get(&self, task_request_id: &[u8]) -> Option<&BLSResultCache<T>> {
-        self.signature_result_caches.get(task_request_id)
+    async fn get(&self, task_request_id: &[u8]) -> DataAccessResult<BLSResultCache<C>> {
+        self.signature_result_caches
+            .get(task_request_id)
+            .cloned()
+            .ok_or_else(|| BLSTaskError::CommitterCacheNotExisted.into())
     }
 }
 
+#[async_trait]
 impl SignatureResultCacheUpdater<RandomnessResultCache>
     for InMemorySignatureResultCache<RandomnessResultCache>
 {
-    fn add(
+    async fn add(
         &mut self,
         group_index: usize,
         task: RandomnessTask,
@@ -627,21 +646,28 @@ impl SignatureResultCacheUpdater<RandomnessResultCache>
             randomness_task: task,
             message,
             threshold,
-            partial_signatures: HashMap::new(),
+            partial_signatures: BTreeMap::new(),
         };
+
+        if self
+            .signature_result_caches
+            .contains_key(&signature_result_cache.randomness_task.request_id)
+        {
+            return Ok(false);
+        }
 
         self.signature_result_caches.insert(
             signature_result_cache.randomness_task.request_id.clone(),
             BLSResultCache {
                 result_cache: signature_result_cache,
-                state: false,
+                state: BLSResultCacheState::NotCommitted,
             },
         );
 
         Ok(true)
     }
 
-    fn add_partial_signature(
+    async fn add_partial_signature(
         &mut self,
         task_request_id: Vec<u8>,
         member_address: Address,
@@ -652,6 +678,14 @@ impl SignatureResultCacheUpdater<RandomnessResultCache>
             .get_mut(&task_request_id)
             .ok_or(BLSTaskError::CommitterCacheNotExisted)?;
 
+        if signature_result_cache
+            .result_cache
+            .partial_signatures
+            .contains_key(&member_address)
+        {
+            return Ok(false);
+        }
+
         signature_result_cache
             .result_cache
             .partial_signatures
@@ -660,24 +694,41 @@ impl SignatureResultCacheUpdater<RandomnessResultCache>
         Ok(true)
     }
 
-    fn get_ready_to_commit_signatures(
+    async fn get_ready_to_commit_signatures(
         &mut self,
         current_block_height: usize,
-    ) -> Vec<RandomnessResultCache> {
-        self.signature_result_caches
+    ) -> DataAccessResult<Vec<RandomnessResultCache>> {
+        let ready_to_commit_signatures = self
+            .signature_result_caches
             .values_mut()
             .filter(|v| {
                 (current_block_height
                     >= v.result_cache.randomness_task.assignment_block_height
                         + v.result_cache.randomness_task.request_confirmations as usize)
-                    && !v.state
+                    && v.state == BLSResultCacheState::NotCommitted
                     && v.result_cache.partial_signatures.len() >= v.result_cache.threshold
             })
             .map(|v| {
-                // TODO add management of signature_result_caches to persistence layer
-                v.state = true;
+                v.state = BLSResultCacheState::Committing;
                 v.result_cache.clone()
             })
-            .collect::<Vec<_>>()
+            .collect::<Vec<_>>();
+
+        Ok(ready_to_commit_signatures)
+    }
+
+    async fn update_commit_result(
+        &mut self,
+        task_request_id: &[u8],
+        status: BLSResultCacheState,
+    ) -> DataAccessResult<()> {
+        let signature_result_cache = self
+            .signature_result_caches
+            .get_mut(task_request_id)
+            .ok_or(BLSTaskError::CommitterCacheNotExisted)?;
+
+        signature_result_cache.state = status;
+
+        Ok(())
     }
 }

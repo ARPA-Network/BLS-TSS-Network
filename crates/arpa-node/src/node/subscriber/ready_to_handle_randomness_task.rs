@@ -164,7 +164,8 @@ impl<
                     .randomness_signature_cache
                     .read()
                     .await
-                    .contains(&task.request_id);
+                    .contains(&task.request_id)
+                    .await?;
                 if !contained_res {
                     let task = self
                         .randomness_tasks_cache
@@ -173,12 +174,11 @@ impl<
                         .get(&task.request_id)
                         .await?;
 
-                    self.randomness_signature_cache.write().await.add(
-                        current_group_index,
-                        task,
-                        actual_seed.to_vec(),
-                        threshold,
-                    )?;
+                    self.randomness_signature_cache
+                        .write()
+                        .await
+                        .add(current_group_index, task, actual_seed.to_vec(), threshold)
+                        .await?;
                 }
 
                 self.randomness_signature_cache
@@ -188,7 +188,8 @@ impl<
                         task.request_id.clone(),
                         self.id_address,
                         partial_signature.clone(),
-                    )?;
+                    )
+                    .await?;
             }
 
             let committers = self.prepare_committer_clients().await?;

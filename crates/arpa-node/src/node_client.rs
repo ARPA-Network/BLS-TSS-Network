@@ -6,11 +6,12 @@ use arpa_node_core::log::encoder::JsonEncoder;
 use arpa_node_core::GeneralChainIdentity;
 use arpa_node_core::{build_wallet_from_config, RandomnessTask};
 use arpa_node_core::{format_now_date, Config};
+use arpa_node_dal::cache::RandomnessResultCache;
 use arpa_node_dal::{NodeInfoFetcher, NodeInfoUpdater};
-use arpa_node_sqlite_db::BLSTasksDBClient;
 use arpa_node_sqlite_db::GroupInfoDBClient;
 use arpa_node_sqlite_db::NodeInfoDBClient;
 use arpa_node_sqlite_db::SqliteDB;
+use arpa_node_sqlite_db::{BLSTasksDBClient, SignatureResultDBClient};
 use ethers::signers::Signer;
 use log::{info, LevelFilter};
 use log4rs::append::console::ConsoleAppender;
@@ -76,15 +77,15 @@ fn init_logger(node_id: &str, context_logging: bool, log_file_path: &str, rollin
         .build(
             format!(
                 "{}/node.log",
-                if log_file_path.ends_with("/") {
-                    &log_file_path[..log_file_path.len() - 1]
+                if let Some(path_without_slash) = log_file_path.strip_suffix('/') {
+                    path_without_slash
                 } else {
                     log_file_path
                 }
             ),
             Box::new(CompoundPolicy::new(
                 Box::new(SizeTrigger::new(rolling_file_size)),
-                Box::new(DeleteRoller::default()),
+                Box::new(DeleteRoller::new()),
             )),
         )
         .unwrap();
@@ -97,7 +98,7 @@ fn init_logger(node_id: &str, context_logging: bool, log_file_path: &str, rollin
             format!("{}/node_err.log", log_file_path),
             Box::new(CompoundPolicy::new(
                 Box::new(SizeTrigger::new(rolling_file_size)),
-                Box::new(DeleteRoller::default()),
+                Box::new(DeleteRoller::new()),
             )),
         )
         .unwrap();
@@ -188,6 +189,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
             let randomness_tasks_cache = db.get_bls_tasks_client::<RandomnessTask>();
 
+            let randomness_result_cache = db.get_randomness_result_client().await?;
+
             let main_chain_identity = GeneralChainIdentity::new(
                 config.chain_id,
                 wallet,
@@ -211,7 +214,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             let main_chain = GeneralMainChain::<
                 NodeInfoDBClient<BN254>,
                 GroupInfoDBClient<BN254>,
-                BLSTasksDBClient<RandomnessTask, BN254>,
+                BLSTasksDBClient<RandomnessTask>,
+                SignatureResultDBClient<RandomnessResultCache>,
                 GeneralChainIdentity,
                 BN254,
             >::new(
@@ -220,6 +224,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 node_cache,
                 group_cache,
                 randomness_tasks_cache,
+                randomness_result_cache,
                 config.time_limits.unwrap(),
                 config.listeners.clone(),
             );
@@ -278,6 +283,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
             let randomness_tasks_cache = db.get_bls_tasks_client::<RandomnessTask>();
 
+            let randomness_result_cache = db.get_randomness_result_client().await?;
+
             let main_chain_identity = GeneralChainIdentity::new(
                 config.chain_id,
                 wallet,
@@ -301,7 +308,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             let main_chain = GeneralMainChain::<
                 NodeInfoDBClient<BN254>,
                 GroupInfoDBClient<BN254>,
-                BLSTasksDBClient<RandomnessTask, BN254>,
+                BLSTasksDBClient<RandomnessTask>,
+                SignatureResultDBClient<RandomnessResultCache>,
                 GeneralChainIdentity,
                 BN254,
             >::new(
@@ -310,6 +318,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 node_cache,
                 group_cache,
                 randomness_tasks_cache,
+                randomness_result_cache,
                 config.time_limits.unwrap(),
                 config.listeners.clone(),
             );

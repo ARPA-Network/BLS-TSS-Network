@@ -1,9 +1,10 @@
 use crate::ExponentialBackoffRetryDescriptor;
 
 use super::ChainIdentity;
-use ethers_core::types::Address;
+use async_trait::async_trait;
+use ethers_core::types::{Address, U256};
 use ethers_middleware::{NonceManagerMiddleware, SignerMiddleware};
-use ethers_providers::{Http, Provider};
+use ethers_providers::{Http, Middleware, Provider, ProviderError};
 use ethers_signers::{LocalWallet, Signer};
 use std::{sync::Arc, time::Duration};
 
@@ -57,6 +58,7 @@ impl GeneralChainIdentity {
     }
 }
 
+#[async_trait]
 impl ChainIdentity for GeneralChainIdentity {
     fn get_chain_id(&self) -> usize {
         self.chain_id
@@ -88,5 +90,9 @@ impl ChainIdentity for GeneralChainIdentity {
 
     fn get_contract_view_retry_descriptor(&self) -> ExponentialBackoffRetryDescriptor {
         self.contract_view_retry_descriptor
+    }
+
+    async fn get_current_gas_price(&self) -> Result<U256, ProviderError> {
+        self.provider.get_gas_price().await
     }
 }

@@ -26,8 +26,8 @@ use arpa_node_core::{
     DEFAULT_COMMIT_PARTIAL_SIGNATURE_RETRY_USE_JITTER, DEFAULT_LISTENER_INTERVAL_MILLIS,
 };
 use arpa_node_dal::{
-    error::DataAccessResult, BLSTasksFetcher, BLSTasksUpdater, ContextInfoUpdater,
-    GroupInfoFetcher, GroupInfoUpdater, NodeInfoFetcher, NodeInfoUpdater,
+    cache::RandomnessResultCache, error::DataAccessResult, BLSTasksFetcher, BLSTasksUpdater,
+    ContextInfoUpdater, GroupInfoFetcher, GroupInfoUpdater, NodeInfoFetcher, NodeInfoUpdater,
     SignatureResultCacheFetcher, SignatureResultCacheUpdater,
 };
 use ethers::types::Address;
@@ -35,16 +35,16 @@ use threshold_bls::{group::PairingCurve, poly::Eval, sig::Share};
 
 pub mod server;
 
-pub struct NodeInfo<C: PairingCurve> {
+pub struct NodeInfo<PC: PairingCurve> {
     pub id_address: Address,
     pub node_rpc_endpoint: String,
-    pub dkg_private_key: C::Scalar,
-    pub dkg_public_key: C::G2,
+    pub dkg_private_key: PC::Scalar,
+    pub dkg_public_key: PC::G2,
 }
 
-pub struct GroupInfo<C: PairingCurve> {
-    pub share: Option<Share<C::Scalar>>,
-    pub group: Group<C>,
+pub struct GroupInfo<PC: PairingCurve> {
+    pub share: Option<Share<PC::Scalar>>,
+    pub group: Group<PC>,
     pub dkg_status: DKGStatus,
     pub self_index: usize,
     pub dkg_start_block_height: usize,
@@ -67,17 +67,17 @@ pub trait ComponentService {
 
     async fn shutdown_listener(&self, task_type: ListenerType) -> SchedulerResult<()>;
 }
-pub trait DBService<C: PairingCurve> {
-    async fn get_node_info(&self) -> DataAccessResult<NodeInfo<C>>;
+pub trait DBService<PC: PairingCurve> {
+    async fn get_node_info(&self) -> DataAccessResult<NodeInfo<PC>>;
 
-    async fn get_group_info(&self) -> DataAccessResult<GroupInfo<C>>;
+    async fn get_group_info(&self) -> DataAccessResult<GroupInfo<PC>>;
 }
 
 pub trait DKGService {
     async fn post_process_dkg(&self) -> NodeResult<()>;
 }
 
-pub trait BLSRandomnessService<C: PairingCurve> {
+pub trait BLSRandomnessService<PC: PairingCurve> {
     async fn partial_sign(
         &self,
         randomness_task_request_id: Vec<u8>,
@@ -88,11 +88,11 @@ pub trait BLSRandomnessService<C: PairingCurve> {
     fn aggregate_partial_sigs(&self, threshold: usize, partial_sigs: &[Vec<u8>])
         -> Result<Vec<u8>>;
 
-    fn verify_sig(&self, public: &C::G2, msg: &[u8], sig: &[u8]) -> Result<()>;
+    fn verify_sig(&self, public: &PC::G2, msg: &[u8], sig: &[u8]) -> Result<()>;
 
     fn verify_partial_sigs(
         &self,
-        publics: &[C::G2],
+        publics: &[PC::G2],
         msg: &[u8],
         partial_sigs: &[&[u8]],
     ) -> Result<()>;
@@ -115,16 +115,16 @@ pub trait BLSRandomnessService<C: PairingCurve> {
 }
 
 impl<
-        N: NodeInfoFetcher<C>
-            + NodeInfoUpdater<C>
+        N: NodeInfoFetcher<PC>
+            + NodeInfoUpdater<PC>
             + ContextInfoUpdater
             + std::fmt::Debug
             + Clone
             + Sync
             + Send
             + 'static,
-        G: GroupInfoFetcher<C>
-            + GroupInfoUpdater<C>
+        G: GroupInfoFetcher<PC>
+            + GroupInfoUpdater<PC>
             + ContextInfoUpdater
             + std::fmt::Debug
             + Clone
@@ -138,8 +138,15 @@ impl<
             + Sync
             + Send
             + 'static,
+        C: SignatureResultCacheFetcher<RandomnessResultCache>
+            + SignatureResultCacheUpdater<RandomnessResultCache>
+            + std::fmt::Debug
+            + Clone
+            + Sync
+            + Send
+            + 'static,
         I: ChainIdentity
-            + ControllerClientBuilder<C>
+            + ControllerClientBuilder<PC>
             + CoordinatorClientBuilder
             + AdapterClientBuilder
             + ChainProviderBuilder
@@ -148,8 +155,8 @@ impl<
             + Sync
             + Send
             + 'static,
-        C: PairingCurve + std::fmt::Debug + Clone + Sync + Send + 'static,
-    > NodeService for GeneralContext<N, G, T, I, C>
+        PC: PairingCurve + std::fmt::Debug + Clone + Sync + Send + 'static,
+    > NodeService for GeneralContext<N, G, T, C, I, PC>
 {
     async fn node_register(&self) -> NodeResult<()> {
         let client = self
@@ -189,16 +196,16 @@ impl<
 }
 
 impl<
-        N: NodeInfoFetcher<C>
-            + NodeInfoUpdater<C>
+        N: NodeInfoFetcher<PC>
+            + NodeInfoUpdater<PC>
             + ContextInfoUpdater
             + std::fmt::Debug
             + Clone
             + Sync
             + Send
             + 'static,
-        G: GroupInfoFetcher<C>
-            + GroupInfoUpdater<C>
+        G: GroupInfoFetcher<PC>
+            + GroupInfoUpdater<PC>
             + ContextInfoUpdater
             + std::fmt::Debug
             + Clone
@@ -212,8 +219,15 @@ impl<
             + Sync
             + Send
             + 'static,
+        C: SignatureResultCacheFetcher<RandomnessResultCache>
+            + SignatureResultCacheUpdater<RandomnessResultCache>
+            + std::fmt::Debug
+            + Clone
+            + Sync
+            + Send
+            + 'static,
         I: ChainIdentity
-            + ControllerClientBuilder<C>
+            + ControllerClientBuilder<PC>
             + CoordinatorClientBuilder
             + AdapterClientBuilder
             + ChainProviderBuilder
@@ -222,8 +236,8 @@ impl<
             + Sync
             + Send
             + 'static,
-        C: PairingCurve + std::fmt::Debug + Clone + Sync + Send + 'static,
-    > ComponentService for GeneralContext<N, G, T, I, C>
+        PC: PairingCurve + std::fmt::Debug + Clone + Sync + Send + 'static,
+    > ComponentService for GeneralContext<N, G, T, C, I, PC>
 {
     async fn list_fixed_tasks(&self) -> SchedulerResult<Vec<TaskType>> {
         Ok(self
@@ -256,16 +270,16 @@ impl<
 }
 
 impl<
-        N: NodeInfoFetcher<C>
-            + NodeInfoUpdater<C>
+        N: NodeInfoFetcher<PC>
+            + NodeInfoUpdater<PC>
             + ContextInfoUpdater
             + std::fmt::Debug
             + Clone
             + Sync
             + Send
             + 'static,
-        G: GroupInfoFetcher<C>
-            + GroupInfoUpdater<C>
+        G: GroupInfoFetcher<PC>
+            + GroupInfoUpdater<PC>
             + ContextInfoUpdater
             + std::fmt::Debug
             + Clone
@@ -279,8 +293,15 @@ impl<
             + Sync
             + Send
             + 'static,
+        C: SignatureResultCacheFetcher<RandomnessResultCache>
+            + SignatureResultCacheUpdater<RandomnessResultCache>
+            + std::fmt::Debug
+            + Clone
+            + Sync
+            + Send
+            + 'static,
         I: ChainIdentity
-            + ControllerClientBuilder<C>
+            + ControllerClientBuilder<PC>
             + CoordinatorClientBuilder
             + AdapterClientBuilder
             + ChainProviderBuilder
@@ -289,10 +310,10 @@ impl<
             + Sync
             + Send
             + 'static,
-        C: PairingCurve + std::fmt::Debug + Clone + Sync + Send + 'static,
-    > DBService<C> for GeneralContext<N, G, T, I, C>
+        PC: PairingCurve + std::fmt::Debug + Clone + Sync + Send + 'static,
+    > DBService<PC> for GeneralContext<N, G, T, C, I, PC>
 {
-    async fn get_node_info(&self) -> DataAccessResult<NodeInfo<C>> {
+    async fn get_node_info(&self) -> DataAccessResult<NodeInfo<PC>> {
         let id_address = self
             .get_main_chain()
             .get_node_cache()
@@ -329,7 +350,7 @@ impl<
         })
     }
 
-    async fn get_group_info(&self) -> DataAccessResult<GroupInfo<C>> {
+    async fn get_group_info(&self) -> DataAccessResult<GroupInfo<PC>> {
         let share = self
             .get_main_chain()
             .get_group_cache()
@@ -376,16 +397,16 @@ impl<
 }
 
 impl<
-        N: NodeInfoFetcher<C>
-            + NodeInfoUpdater<C>
+        N: NodeInfoFetcher<PC>
+            + NodeInfoUpdater<PC>
             + ContextInfoUpdater
             + std::fmt::Debug
             + Clone
             + Sync
             + Send
             + 'static,
-        G: GroupInfoFetcher<C>
-            + GroupInfoUpdater<C>
+        G: GroupInfoFetcher<PC>
+            + GroupInfoUpdater<PC>
             + ContextInfoUpdater
             + std::fmt::Debug
             + Clone
@@ -399,8 +420,15 @@ impl<
             + Sync
             + Send
             + 'static,
+        C: SignatureResultCacheFetcher<RandomnessResultCache>
+            + SignatureResultCacheUpdater<RandomnessResultCache>
+            + std::fmt::Debug
+            + Clone
+            + Sync
+            + Send
+            + 'static,
         I: ChainIdentity
-            + ControllerClientBuilder<C>
+            + ControllerClientBuilder<PC>
             + CoordinatorClientBuilder
             + AdapterClientBuilder
             + ChainProviderBuilder
@@ -409,8 +437,8 @@ impl<
             + Sync
             + Send
             + 'static,
-        C: PairingCurve + std::fmt::Debug + Clone + Sync + Send + 'static,
-    > DKGService for GeneralContext<N, G, T, I, C>
+        PC: PairingCurve + std::fmt::Debug + Clone + Sync + Send + 'static,
+    > DKGService for GeneralContext<N, G, T, C, I, PC>
 {
     async fn post_process_dkg(&self) -> NodeResult<()> {
         let client = self
@@ -441,16 +469,16 @@ impl<
 }
 
 impl<
-        N: NodeInfoFetcher<C>
-            + NodeInfoUpdater<C>
+        N: NodeInfoFetcher<PC>
+            + NodeInfoUpdater<PC>
             + ContextInfoUpdater
             + std::fmt::Debug
             + Clone
             + Sync
             + Send
             + 'static,
-        G: GroupInfoFetcher<C>
-            + GroupInfoUpdater<C>
+        G: GroupInfoFetcher<PC>
+            + GroupInfoUpdater<PC>
             + ContextInfoUpdater
             + std::fmt::Debug
             + Clone
@@ -464,8 +492,15 @@ impl<
             + Sync
             + Send
             + 'static,
+        C: SignatureResultCacheFetcher<RandomnessResultCache>
+            + SignatureResultCacheUpdater<RandomnessResultCache>
+            + std::fmt::Debug
+            + Clone
+            + Sync
+            + Send
+            + 'static,
         I: ChainIdentity
-            + ControllerClientBuilder<C>
+            + ControllerClientBuilder<PC>
             + CoordinatorClientBuilder
             + AdapterClientBuilder
             + ChainProviderBuilder
@@ -474,8 +509,8 @@ impl<
             + Sync
             + Send
             + 'static,
-        C: PairingCurve + std::fmt::Debug + Clone + Sync + Send + 'static,
-    > BLSRandomnessService<C> for GeneralContext<N, G, T, I, C>
+        PC: PairingCurve + std::fmt::Debug + Clone + Sync + Send + 'static,
+    > BLSRandomnessService<PC> for GeneralContext<N, G, T, C, I, PC>
 {
     async fn partial_sign(
         &self,
@@ -490,7 +525,7 @@ impl<
             .await
             .get_id_address()?;
 
-        let partial_signature = SimpleBLSCore::<C>::partial_sign(
+        let partial_signature = SimpleBLSCore::<PC>::partial_sign(
             self.get_main_chain()
                 .get_group_cache()
                 .read()
@@ -511,7 +546,8 @@ impl<
                 .get_randomness_result_cache()
                 .read()
                 .await
-                .contains(&randomness_task_request_id);
+                .contains(&randomness_task_request_id)
+                .await?;
 
             if !contained_res {
                 let group_index = self
@@ -533,7 +569,8 @@ impl<
                     .get_randomness_result_cache()
                     .write()
                     .await
-                    .add(group_index, task, msg.to_vec(), threshold)?;
+                    .add(group_index, task, msg.to_vec(), threshold)
+                    .await?;
             }
 
             self.get_main_chain()
@@ -544,7 +581,8 @@ impl<
                     randomness_task_request_id.clone(),
                     id_address,
                     partial_signature.clone(),
-                )?;
+                )
+                .await?;
         }
 
         Ok(partial_signature)
@@ -555,20 +593,20 @@ impl<
         threshold: usize,
         partial_sigs: &[Vec<u8>],
     ) -> Result<Vec<u8>> {
-        SimpleBLSCore::<C>::aggregate(threshold, partial_sigs)
+        SimpleBLSCore::<PC>::aggregate(threshold, partial_sigs)
     }
 
-    fn verify_sig(&self, public: &C::G2, msg: &[u8], sig: &[u8]) -> Result<()> {
-        SimpleBLSCore::<C>::verify(public, msg, sig)
+    fn verify_sig(&self, public: &PC::G2, msg: &[u8], sig: &[u8]) -> Result<()> {
+        SimpleBLSCore::<PC>::verify(public, msg, sig)
     }
 
     fn verify_partial_sigs(
         &self,
-        publics: &[C::G2],
+        publics: &[PC::G2],
         msg: &[u8],
         partial_sigs: &[&[u8]],
     ) -> Result<()> {
-        SimpleBLSCore::<C>::verify_partial_sigs(publics, msg, partial_sigs)
+        SimpleBLSCore::<PC>::verify_partial_sigs(publics, msg, partial_sigs)
     }
 
     async fn send_partial_sig(

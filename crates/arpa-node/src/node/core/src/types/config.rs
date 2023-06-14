@@ -96,8 +96,8 @@ pub struct LoggerDescriptor {
     pub rolling_file_size: u64,
 }
 
-impl LoggerDescriptor {
-    pub fn default() -> Self {
+impl Default for LoggerDescriptor {
+    fn default() -> Self {
         Self {
             node_id: "running".to_string(),
             context_logging: false,

@@ -24,10 +24,11 @@ use arpa_node_core::{
     address_to_string, ChainIdentity, Group as ModelGroup, ListenerType, Member as ModelMember,
     RandomnessTask, SchedulerError,
 };
+use arpa_node_dal::cache::RandomnessResultCache;
 use arpa_node_dal::error::DataAccessError;
 use arpa_node_dal::{
     BLSTasksFetcher, BLSTasksUpdater, ContextInfoUpdater, GroupInfoFetcher, GroupInfoUpdater,
-    NodeInfoFetcher, NodeInfoUpdater,
+    NodeInfoFetcher, NodeInfoUpdater, SignatureResultCacheFetcher, SignatureResultCacheUpdater,
 };
 use arpa_node_log::debug;
 use hyper::http::HeaderValue;
@@ -47,51 +48,55 @@ use uuid::Uuid;
 
 use super::{BLSRandomnessService, DBService, DKGService, GroupInfo, NodeInfo, NodeService};
 
-type NodeContext<N, G, T, I, C> = Arc<RwLock<GeneralContext<N, G, T, I, C>>>;
+type NodeContext<N, G, T, C, I, PC> = Arc<RwLock<GeneralContext<N, G, T, C, I, PC>>>;
 
 pub(crate) struct NodeManagementServiceServer<
-    N: NodeInfoFetcher<C> + NodeInfoUpdater<C> + ContextInfoUpdater,
-    G: GroupInfoFetcher<C> + GroupInfoUpdater<C> + ContextInfoUpdater,
+    N: NodeInfoFetcher<PC> + NodeInfoUpdater<PC> + ContextInfoUpdater,
+    G: GroupInfoFetcher<PC> + GroupInfoUpdater<PC> + ContextInfoUpdater,
     T: BLSTasksFetcher<RandomnessTask> + BLSTasksUpdater<RandomnessTask>,
+    C: SignatureResultCacheFetcher<RandomnessResultCache>
+        + SignatureResultCacheUpdater<RandomnessResultCache>,
     I: ChainIdentity
-        + ControllerClientBuilder<C>
+        + ControllerClientBuilder<PC>
         + CoordinatorClientBuilder
         + AdapterClientBuilder
         + ChainProviderBuilder,
-    C: PairingCurve,
+    PC: PairingCurve,
 > {
-    context: NodeContext<N, G, T, I, C>,
+    context: NodeContext<N, G, T, C, I, PC>,
 }
 
 impl<
-        N: NodeInfoFetcher<C> + NodeInfoUpdater<C> + ContextInfoUpdater,
-        G: GroupInfoFetcher<C> + GroupInfoUpdater<C> + ContextInfoUpdater,
+        N: NodeInfoFetcher<PC> + NodeInfoUpdater<PC> + ContextInfoUpdater,
+        G: GroupInfoFetcher<PC> + GroupInfoUpdater<PC> + ContextInfoUpdater,
         T: BLSTasksFetcher<RandomnessTask> + BLSTasksUpdater<RandomnessTask>,
+        C: SignatureResultCacheFetcher<RandomnessResultCache>
+            + SignatureResultCacheUpdater<RandomnessResultCache>,
         I: ChainIdentity
-            + ControllerClientBuilder<C>
+            + ControllerClientBuilder<PC>
             + CoordinatorClientBuilder
             + AdapterClientBuilder
             + ChainProviderBuilder,
-        C: PairingCurve,
-    > NodeManagementServiceServer<N, G, T, I, C>
+        PC: PairingCurve,
+    > NodeManagementServiceServer<N, G, T, C, I, PC>
 {
-    pub fn new(context: NodeContext<N, G, T, I, C>) -> Self {
+    pub fn new(context: NodeContext<N, G, T, C, I, PC>) -> Self {
         NodeManagementServiceServer { context }
     }
 }
 
 #[tonic::async_trait]
 impl<
-        N: NodeInfoFetcher<C>
-            + NodeInfoUpdater<C>
+        N: NodeInfoFetcher<PC>
+            + NodeInfoUpdater<PC>
             + ContextInfoUpdater
             + std::fmt::Debug
             + Clone
             + Sync
             + Send
             + 'static,
-        G: GroupInfoFetcher<C>
-            + GroupInfoUpdater<C>
+        G: GroupInfoFetcher<PC>
+            + GroupInfoUpdater<PC>
             + ContextInfoUpdater
             + std::fmt::Debug
             + Clone
@@ -105,8 +110,15 @@ impl<
             + Sync
             + Send
             + 'static,
+        C: SignatureResultCacheFetcher<RandomnessResultCache>
+            + SignatureResultCacheUpdater<RandomnessResultCache>
+            + std::fmt::Debug
+            + Clone
+            + Sync
+            + Send
+            + 'static,
         I: ChainIdentity
-            + ControllerClientBuilder<C>
+            + ControllerClientBuilder<PC>
             + CoordinatorClientBuilder
             + AdapterClientBuilder
             + ChainProviderBuilder
@@ -115,8 +127,8 @@ impl<
             + Sync
             + Send
             + 'static,
-        C: PairingCurve + std::fmt::Debug + Clone + Sync + Send + 'static,
-    > ManagementService for NodeManagementServiceServer<N, G, T, I, C>
+        PC: PairingCurve + std::fmt::Debug + Clone + Sync + Send + 'static,
+    > ManagementService for NodeManagementServiceServer<N, G, T, C, I, PC>
 {
     async fn list_fixed_tasks(
         &self,
@@ -388,8 +400,8 @@ impl<
     }
 }
 
-impl<C: PairingCurve> From<NodeInfo<C>> for GetNodeInfoReply {
-    fn from(n: NodeInfo<C>) -> Self {
+impl<PC: PairingCurve> From<NodeInfo<PC>> for GetNodeInfoReply {
+    fn from(n: NodeInfo<PC>) -> Self {
         GetNodeInfoReply {
             id_address: address_to_string(n.id_address),
             node_rpc_endpoint: n.node_rpc_endpoint,
@@ -399,8 +411,8 @@ impl<C: PairingCurve> From<NodeInfo<C>> for GetNodeInfoReply {
     }
 }
 
-impl<C: PairingCurve> From<GroupInfo<C>> for GetGroupInfoReply {
-    fn from(g: GroupInfo<C>) -> Self {
+impl<PC: PairingCurve> From<GroupInfo<PC>> for GetGroupInfoReply {
+    fn from(g: GroupInfo<PC>) -> Self {
         let share = if let Some(s) = g.share {
             bincode::serialize(&s).unwrap()
         } else {
@@ -416,8 +428,8 @@ impl<C: PairingCurve> From<GroupInfo<C>> for GetGroupInfoReply {
     }
 }
 
-impl<C: PairingCurve> From<ModelGroup<C>> for Group {
-    fn from(g: ModelGroup<C>) -> Self {
+impl<PC: PairingCurve> From<ModelGroup<PC>> for Group {
+    fn from(g: ModelGroup<PC>) -> Self {
         let public_key = if let Some(k) = g.public_key {
             bincode::serialize(&k).unwrap()
         } else {
@@ -445,8 +457,8 @@ impl<C: PairingCurve> From<ModelGroup<C>> for Group {
     }
 }
 
-impl<C: PairingCurve> From<ModelMember<C>> for Member {
-    fn from(member: ModelMember<C>) -> Self {
+impl<PC: PairingCurve> From<ModelMember<PC>> for Member {
+    fn from(member: ModelMember<PC>) -> Self {
         let partial_public_key = if let Some(k) = member.partial_public_key {
             bincode::serialize(&k).unwrap()
         } else {
@@ -463,16 +475,16 @@ impl<C: PairingCurve> From<ModelMember<C>> for Member {
 }
 
 pub async fn start_management_server<
-    N: NodeInfoFetcher<C>
-        + NodeInfoUpdater<C>
+    N: NodeInfoFetcher<PC>
+        + NodeInfoUpdater<PC>
         + ContextInfoUpdater
         + std::fmt::Debug
         + Clone
         + Sync
         + Send
         + 'static,
-    G: GroupInfoFetcher<C>
-        + GroupInfoUpdater<C>
+    G: GroupInfoFetcher<PC>
+        + GroupInfoUpdater<PC>
         + ContextInfoUpdater
         + std::fmt::Debug
         + Clone
@@ -486,8 +498,15 @@ pub async fn start_management_server<
         + Sync
         + Send
         + 'static,
+    C: SignatureResultCacheFetcher<RandomnessResultCache>
+        + SignatureResultCacheUpdater<RandomnessResultCache>
+        + std::fmt::Debug
+        + Clone
+        + Sync
+        + Send
+        + 'static,
     I: ChainIdentity
-        + ControllerClientBuilder<C>
+        + ControllerClientBuilder<PC>
         + CoordinatorClientBuilder
         + AdapterClientBuilder
         + ChainProviderBuilder
@@ -496,10 +515,10 @@ pub async fn start_management_server<
         + Sync
         + Send
         + 'static,
-    C: PairingCurve + std::fmt::Debug + Clone + Sync + Send + 'static,
+    PC: PairingCurve + std::fmt::Debug + Clone + Sync + Send + 'static,
 >(
     endpoint: String,
-    context: NodeContext<N, G, T, I, C>,
+    context: NodeContext<N, G, T, C, I, PC>,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let addr = endpoint.parse()?;
 
@@ -524,53 +543,65 @@ pub async fn start_management_server<
 
 #[derive(Debug, Clone)]
 struct LogLayer<
-    N: NodeInfoFetcher<C> + NodeInfoUpdater<C> + ContextInfoUpdater + Clone,
-    G: GroupInfoFetcher<C> + GroupInfoUpdater<C> + ContextInfoUpdater + Clone,
+    N: NodeInfoFetcher<PC> + NodeInfoUpdater<PC> + ContextInfoUpdater + Clone,
+    G: GroupInfoFetcher<PC> + GroupInfoUpdater<PC> + ContextInfoUpdater + Clone,
     T: BLSTasksFetcher<RandomnessTask> + BLSTasksUpdater<RandomnessTask> + Clone,
+    C: SignatureResultCacheFetcher<RandomnessResultCache>
+        + SignatureResultCacheUpdater<RandomnessResultCache>
+        + std::fmt::Debug
+        + Clone,
     I: ChainIdentity
-        + ControllerClientBuilder<C>
+        + ControllerClientBuilder<PC>
         + CoordinatorClientBuilder
         + AdapterClientBuilder
         + ChainProviderBuilder
         + Clone,
-    C: PairingCurve,
+    PC: PairingCurve,
 > {
-    context: NodeContext<N, G, T, I, C>,
+    context: NodeContext<N, G, T, C, I, PC>,
 }
 
 impl<
-        N: NodeInfoFetcher<C> + NodeInfoUpdater<C> + ContextInfoUpdater + Clone,
-        G: GroupInfoFetcher<C> + GroupInfoUpdater<C> + ContextInfoUpdater + Clone,
+        N: NodeInfoFetcher<PC> + NodeInfoUpdater<PC> + ContextInfoUpdater + Clone,
+        G: GroupInfoFetcher<PC> + GroupInfoUpdater<PC> + ContextInfoUpdater + Clone,
         T: BLSTasksFetcher<RandomnessTask> + BLSTasksUpdater<RandomnessTask> + Clone,
+        C: SignatureResultCacheFetcher<RandomnessResultCache>
+            + SignatureResultCacheUpdater<RandomnessResultCache>
+            + std::fmt::Debug
+            + Clone,
         I: ChainIdentity
-            + ControllerClientBuilder<C>
+            + ControllerClientBuilder<PC>
             + CoordinatorClientBuilder
             + AdapterClientBuilder
             + ChainProviderBuilder
             + Clone,
-        C: PairingCurve,
-    > LogLayer<N, G, T, I, C>
+        PC: PairingCurve,
+    > LogLayer<N, G, T, C, I, PC>
 {
-    pub fn new(context: NodeContext<N, G, T, I, C>) -> Self {
+    pub fn new(context: NodeContext<N, G, T, C, I, PC>) -> Self {
         LogLayer { context }
     }
 }
 
 impl<
         S,
-        N: NodeInfoFetcher<C> + NodeInfoUpdater<C> + ContextInfoUpdater + Clone,
-        G: GroupInfoFetcher<C> + GroupInfoUpdater<C> + ContextInfoUpdater + Clone,
+        N: NodeInfoFetcher<PC> + NodeInfoUpdater<PC> + ContextInfoUpdater + Clone,
+        G: GroupInfoFetcher<PC> + GroupInfoUpdater<PC> + ContextInfoUpdater + Clone,
         T: BLSTasksFetcher<RandomnessTask> + BLSTasksUpdater<RandomnessTask> + Clone,
+        C: SignatureResultCacheFetcher<RandomnessResultCache>
+            + SignatureResultCacheUpdater<RandomnessResultCache>
+            + std::fmt::Debug
+            + Clone,
         I: ChainIdentity
-            + ControllerClientBuilder<C>
+            + ControllerClientBuilder<PC>
             + CoordinatorClientBuilder
             + AdapterClientBuilder
             + ChainProviderBuilder
             + Clone,
-        C: PairingCurve,
-    > Layer<S> for LogLayer<N, G, T, I, C>
+        PC: PairingCurve,
+    > Layer<S> for LogLayer<N, G, T, C, I, PC>
 {
-    type Service = LogService<S, N, G, T, I, C>;
+    type Service = LogService<S, N, G, T, C, I, PC>;
 
     fn layer(&self, service: S) -> Self::Service {
         LogService {
@@ -583,33 +614,37 @@ impl<
 #[derive(Debug, Clone)]
 struct LogService<
     S,
-    N: NodeInfoFetcher<C> + NodeInfoUpdater<C> + ContextInfoUpdater + Clone,
-    G: GroupInfoFetcher<C> + GroupInfoUpdater<C> + ContextInfoUpdater + Clone,
+    N: NodeInfoFetcher<PC> + NodeInfoUpdater<PC> + ContextInfoUpdater + Clone,
+    G: GroupInfoFetcher<PC> + GroupInfoUpdater<PC> + ContextInfoUpdater + Clone,
     T: BLSTasksFetcher<RandomnessTask> + BLSTasksUpdater<RandomnessTask> + Clone,
+    C: SignatureResultCacheFetcher<RandomnessResultCache>
+        + SignatureResultCacheUpdater<RandomnessResultCache>
+        + std::fmt::Debug
+        + Clone,
     I: ChainIdentity
-        + ControllerClientBuilder<C>
+        + ControllerClientBuilder<PC>
         + CoordinatorClientBuilder
         + AdapterClientBuilder
         + ChainProviderBuilder
         + Clone,
-    C: PairingCurve,
+    PC: PairingCurve,
 > {
     inner: S,
-    context: NodeContext<N, G, T, I, C>,
+    context: NodeContext<N, G, T, C, I, PC>,
 }
 
 impl<
         S,
-        N: NodeInfoFetcher<C>
-            + NodeInfoUpdater<C>
+        N: NodeInfoFetcher<PC>
+            + NodeInfoUpdater<PC>
             + ContextInfoUpdater
             + std::fmt::Debug
             + Clone
             + Sync
             + Send
             + 'static,
-        G: GroupInfoFetcher<C>
-            + GroupInfoUpdater<C>
+        G: GroupInfoFetcher<PC>
+            + GroupInfoUpdater<PC>
             + ContextInfoUpdater
             + std::fmt::Debug
             + Clone
@@ -623,8 +658,15 @@ impl<
             + Sync
             + Send
             + 'static,
+        C: SignatureResultCacheFetcher<RandomnessResultCache>
+            + SignatureResultCacheUpdater<RandomnessResultCache>
+            + std::fmt::Debug
+            + Clone
+            + Sync
+            + Send
+            + 'static,
         I: ChainIdentity
-            + ControllerClientBuilder<C>
+            + ControllerClientBuilder<PC>
             + CoordinatorClientBuilder
             + AdapterClientBuilder
             + ChainProviderBuilder
@@ -633,8 +675,8 @@ impl<
             + Sync
             + Send
             + 'static,
-        C: PairingCurve + std::fmt::Debug + Clone + Sync + Send + 'static,
-    > Service<hyper::Request<Body>> for LogService<S, N, G, T, I, C>
+        PC: PairingCurve + std::fmt::Debug + Clone + Sync + Send + 'static,
+    > Service<hyper::Request<Body>> for LogService<S, N, G, T, C, I, PC>
 where
     S: Service<hyper::Request<Body>, Response = hyper::Response<BoxBody>> + Clone + Send + 'static,
     S::Future: Send + 'static,

@@ -1,5 +1,6 @@
-use ethers_core::types::Address;
-use ethers_providers::{Http, Provider};
+use async_trait::async_trait;
+use ethers_core::types::{Address, U256};
+use ethers_providers::{Http, Provider, ProviderError};
 use std::sync::Arc;
 
 mod types;
@@ -7,6 +8,7 @@ pub use types::*;
 
 use crate::ExponentialBackoffRetryDescriptor;
 
+#[async_trait]
 pub trait ChainIdentity {
     fn get_chain_id(&self) -> usize;
 
@@ -23,4 +25,6 @@ pub trait ChainIdentity {
     fn get_contract_transaction_retry_descriptor(&self) -> ExponentialBackoffRetryDescriptor;
 
     fn get_contract_view_retry_descriptor(&self) -> ExponentialBackoffRetryDescriptor;
+
+    async fn get_current_gas_price(&self) -> Result<U256, ProviderError>;
 }

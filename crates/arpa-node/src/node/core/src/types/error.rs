@@ -11,6 +11,9 @@ pub enum BLSTaskError {
     #[error("there is no signature cache yet")]
     CommitterCacheNotExisted,
 
+    #[error("already committed partial signature")]
+    AlreadyCommittedPartialSignature,
+
     #[error(transparent)]
     TaskMsgError(#[from] FromUtf8Error),
 }

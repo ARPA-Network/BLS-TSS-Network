@@ -126,16 +126,52 @@ pub trait BLSTasksUpdater<T: Task> {
     ) -> DataAccessResult<Vec<T>>;
 }
 
+#[async_trait]
 pub trait SignatureResultCacheFetcher<T: ResultCache> {
-    fn contains(&self, task_request_id: &[u8]) -> bool;
+    async fn contains(&self, task_request_id: &[u8]) -> DataAccessResult<bool>;
 
-    fn get(&self, task_request_id: &[u8]) -> Option<&BLSResultCache<T>>;
+    async fn get(&self, task_request_id: &[u8]) -> DataAccessResult<BLSResultCache<T>>;
 }
 
-pub trait SignatureResultCacheUpdater<T: ResultCache> {
-    fn get_ready_to_commit_signatures(&mut self, current_block_height: usize) -> Vec<T>;
+#[derive(Debug, PartialEq, Clone, Copy)]
+pub enum BLSResultCacheState {
+    NotCommitted,
+    Committing,
+    Committed,
+    CommittedByOthers,
+}
 
-    fn add(
+impl BLSResultCacheState {
+    pub fn to_i32(&self) -> i32 {
+        match self {
+            BLSResultCacheState::NotCommitted => 0,
+            BLSResultCacheState::Committing => 1,
+            BLSResultCacheState::Committed => 2,
+            BLSResultCacheState::CommittedByOthers => 3,
+        }
+    }
+}
+
+impl From<i32> for BLSResultCacheState {
+    fn from(b: i32) -> Self {
+        match b {
+            0 => BLSResultCacheState::NotCommitted,
+            1 => BLSResultCacheState::Committing,
+            2 => BLSResultCacheState::Committed,
+            3 => BLSResultCacheState::CommittedByOthers,
+            _ => panic!("Invalid BLSResultCacheState"),
+        }
+    }
+}
+
+#[async_trait]
+pub trait SignatureResultCacheUpdater<T: ResultCache> {
+    async fn get_ready_to_commit_signatures(
+        &mut self,
+        current_block_height: usize,
+    ) -> DataAccessResult<Vec<T>>;
+
+    async fn add(
         &mut self,
         group_index: usize,
         task: T::Task,
@@ -143,15 +179,21 @@ pub trait SignatureResultCacheUpdater<T: ResultCache> {
         threshold: usize,
     ) -> DataAccessResult<bool>;
 
-    fn add_partial_signature(
+    async fn add_partial_signature(
         &mut self,
         task_request_id: Vec<u8>,
         member_address: Address,
         partial_signature: Vec<u8>,
     ) -> DataAccessResult<bool>;
+
+    async fn update_commit_result(
+        &mut self,
+        task_request_id: &[u8],
+        status: BLSResultCacheState,
+    ) -> DataAccessResult<()>;
 }
 
-pub trait ResultCache: Task {
+pub trait ResultCache: Task + Clone {
     type Task: Debug;
     type M;
 }

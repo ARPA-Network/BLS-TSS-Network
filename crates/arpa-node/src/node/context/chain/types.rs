@@ -26,11 +26,13 @@ use arpa_node_core::{
     SchedulerResult, TaskType, TimeLimitDescriptor,
 };
 use arpa_node_dal::{
-    cache::{InMemoryBlockInfoCache, InMemorySignatureResultCache, RandomnessResultCache},
-    ContextInfoUpdater, NodeInfoUpdater,
+    cache::{InMemoryBlockInfoCache, RandomnessResultCache},
+    ContextInfoUpdater, NodeInfoUpdater, SignatureResultCacheFetcher, SignatureResultCacheUpdater,
     {BLSTasksFetcher, BLSTasksUpdater, GroupInfoFetcher, GroupInfoUpdater, NodeInfoFetcher},
 };
-use arpa_node_sqlite_db::{BLSTasksDBClient, GroupInfoDBClient, NodeInfoDBClient};
+use arpa_node_sqlite_db::{
+    BLSTasksDBClient, GroupInfoDBClient, NodeInfoDBClient, SignatureResultDBClient,
+};
 use async_trait::async_trait;
 use log::error;
 use std::{marker::PhantomData, sync::Arc};
@@ -44,6 +46,8 @@ pub struct GeneralMainChain<
     N: NodeInfoFetcher<PC> + NodeInfoUpdater<PC> + ContextInfoUpdater,
     G: GroupInfoFetcher<PC> + GroupInfoUpdater<PC> + ContextInfoUpdater,
     T: BLSTasksFetcher<RandomnessTask> + BLSTasksUpdater<RandomnessTask>,
+    C: SignatureResultCacheFetcher<RandomnessResultCache>
+        + SignatureResultCacheUpdater<RandomnessResultCache>,
     I: ChainIdentity + ControllerClientBuilder<PC> + CoordinatorClientBuilder + AdapterClientBuilder,
     PC: PairingCurve,
 > {
@@ -54,8 +58,7 @@ pub struct GeneralMainChain<
     group_cache: Arc<RwLock<G>>,
     block_cache: Arc<RwLock<InMemoryBlockInfoCache>>,
     randomness_tasks_cache: Arc<RwLock<T>>,
-    committer_randomness_result_cache:
-        Arc<RwLock<InMemorySignatureResultCache<RandomnessResultCache>>>,
+    committer_randomness_result_cache: Arc<RwLock<C>>,
     c: PhantomData<PC>,
     time_limits: TimeLimitDescriptor,
     listener_descriptors: Option<Vec<ListenerDescriptor>>,
@@ -65,17 +68,20 @@ impl<PC: PairingCurve + Send + Sync + 'static>
     GeneralMainChain<
         NodeInfoDBClient<PC>,
         GroupInfoDBClient<PC>,
-        BLSTasksDBClient<RandomnessTask, PC>,
+        BLSTasksDBClient<RandomnessTask>,
+        SignatureResultDBClient<RandomnessResultCache>,
         GeneralChainIdentity,
         PC,
     >
 {
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         description: String,
         chain_identity: GeneralChainIdentity,
         node_cache: NodeInfoDBClient<PC>,
         group_cache: GroupInfoDBClient<PC>,
-        randomness_tasks_cache: BLSTasksDBClient<RandomnessTask, PC>,
+        randomness_tasks_cache: BLSTasksDBClient<RandomnessTask>,
+        randomness_result_cache: SignatureResultDBClient<RandomnessResultCache>,
         time_limits: TimeLimitDescriptor,
         listener_descriptors: Option<Vec<ListenerDescriptor>>,
     ) -> Self {
@@ -85,9 +91,7 @@ impl<PC: PairingCurve + Send + Sync + 'static>
             chain_identity: Arc::new(RwLock::new(chain_identity)),
             block_cache: Arc::new(RwLock::new(InMemoryBlockInfoCache::new())),
             randomness_tasks_cache: Arc::new(RwLock::new(randomness_tasks_cache)),
-            committer_randomness_result_cache: Arc::new(RwLock::new(
-                InMemorySignatureResultCache::<RandomnessResultCache>::new(),
-            )),
+            committer_randomness_result_cache: Arc::new(RwLock::new(randomness_result_cache)),
             node_cache: Arc::new(RwLock::new(node_cache)),
             group_cache: Arc::new(RwLock::new(group_cache)),
             c: PhantomData,
@@ -122,6 +126,13 @@ impl<
             + Sync
             + Send
             + 'static,
+        C: SignatureResultCacheFetcher<RandomnessResultCache>
+            + SignatureResultCacheUpdater<RandomnessResultCache>
+            + std::fmt::Debug
+            + Clone
+            + Sync
+            + Send
+            + 'static,
         I: ChainIdentity
             + ControllerClientBuilder<PC>
             + CoordinatorClientBuilder
@@ -133,15 +144,15 @@ impl<
             + Send
             + 'static,
         PC: PairingCurve + std::fmt::Debug + Clone + Sync + Send + 'static,
-    > Chain for GeneralMainChain<N, G, T, I, PC>
+    > Chain for GeneralMainChain<N, G, T, C, I, PC>
 {
     type BlockInfoCache = InMemoryBlockInfoCache;
 
     type RandomnessTasksQueue = T;
 
-    type RandomnessResultCaches = InMemorySignatureResultCache<RandomnessResultCache>;
+    type RandomnessResultCaches = C;
 
-    type Context = GeneralContext<N, G, T, I, PC>;
+    type Context = GeneralContext<N, G, T, C, I, PC>;
 
     type ChainIdentity = I;
 
@@ -300,7 +311,7 @@ impl<
 
     async fn init_listeners(
         &self,
-        context: &GeneralContext<N, G, T, I, PC>,
+        context: &GeneralContext<N, G, T, C, I, PC>,
     ) -> SchedulerResult<()> {
         match &self.listener_descriptors {
             Some(listeners) => {
@@ -325,7 +336,7 @@ impl<
         Ok(())
     }
 
-    async fn init_subscribers(&self, context: &GeneralContext<N, G, T, I, PC>) {
+    async fn init_subscribers(&self, context: &GeneralContext<N, G, T, C, I, PC>) {
         self.init_block_subscribers(context).await;
 
         self.init_dkg_subscribers(context).await;
@@ -359,6 +370,13 @@ impl<
             + Sync
             + Send
             + 'static,
+        C: SignatureResultCacheFetcher<RandomnessResultCache>
+            + SignatureResultCacheUpdater<RandomnessResultCache>
+            + std::fmt::Debug
+            + Clone
+            + Sync
+            + Send
+            + 'static,
         I: ChainIdentity
             + ControllerClientBuilder<PC>
             + CoordinatorClientBuilder
@@ -370,7 +388,7 @@ impl<
             + Send
             + 'static,
         PC: PairingCurve + std::fmt::Debug + Clone + Sync + Send + 'static,
-    > MainChain for GeneralMainChain<N, G, T, I, PC>
+    > MainChain for GeneralMainChain<N, G, T, C, I, PC>
 {
     type NodeInfoCache = N;
 
@@ -496,29 +514,26 @@ impl<
     async fn init_randomness_subscribers(&self, context: &Self::Context) {
         let id_address = self.get_node_cache().read().await.get_id_address().unwrap();
 
-        let s_ready_to_handle_randomness_task = ReadyToHandleRandomnessTaskSubscriber::<
-            G,
-            T,
-            InMemorySignatureResultCache<RandomnessResultCache>,
-            PC,
-        >::new(
-            self.id(),
-            id_address,
-            self.get_group_cache(),
-            self.get_randomness_tasks_cache(),
-            self.get_randomness_result_cache(),
-            context.get_event_queue(),
-            context.get_dynamic_task_handler(),
-            self.time_limits.commit_partial_signature_retry_descriptor,
-        );
+        let s_ready_to_handle_randomness_task =
+            ReadyToHandleRandomnessTaskSubscriber::<G, T, C, PC>::new(
+                self.id(),
+                id_address,
+                self.get_group_cache(),
+                self.get_randomness_tasks_cache(),
+                self.get_randomness_result_cache(),
+                context.get_event_queue(),
+                context.get_dynamic_task_handler(),
+                self.time_limits.commit_partial_signature_retry_descriptor,
+            );
 
         s_ready_to_handle_randomness_task.subscribe().await;
 
         let s_randomness_signature_aggregation =
-            RandomnessSignatureAggregationSubscriber::<I, PC>::new(
+            RandomnessSignatureAggregationSubscriber::<I, C, PC>::new(
                 self.id(),
                 id_address,
                 self.get_chain_identity(),
+                self.get_randomness_result_cache(),
                 context.get_event_queue(),
                 context.get_dynamic_task_handler(),
             );
@@ -551,6 +566,13 @@ impl<
             + Sync
             + Send
             + 'static,
+        C: SignatureResultCacheFetcher<RandomnessResultCache>
+            + SignatureResultCacheUpdater<RandomnessResultCache>
+            + std::fmt::Debug
+            + Clone
+            + Sync
+            + Send
+            + 'static,
         I: ChainIdentity
             + ControllerClientBuilder<PC>
             + CoordinatorClientBuilder
@@ -562,7 +584,7 @@ impl<
             + Send
             + 'static,
         PC: PairingCurve + std::fmt::Debug + Clone + Sync + Send + 'static,
-    > ChainFetcher<GeneralMainChain<N, G, T, I, PC>> for GeneralMainChain<N, G, T, I, PC>
+    > ChainFetcher<GeneralMainChain<N, G, T, C, I, PC>> for GeneralMainChain<N, G, T, C, I, PC>
 {
     fn id(&self) -> usize {
         self.id
@@ -574,25 +596,25 @@ impl<
 
     fn get_chain_identity(
         &self,
-    ) -> Arc<RwLock<<GeneralMainChain<N, G, T, I, PC> as Chain>::ChainIdentity>> {
+    ) -> Arc<RwLock<<GeneralMainChain<N, G, T, C, I, PC> as Chain>::ChainIdentity>> {
         self.chain_identity.clone()
     }
 
     fn get_block_cache(
         &self,
-    ) -> Arc<RwLock<<GeneralMainChain<N, G, T, I, PC> as Chain>::BlockInfoCache>> {
+    ) -> Arc<RwLock<<GeneralMainChain<N, G, T, C, I, PC> as Chain>::BlockInfoCache>> {
         self.block_cache.clone()
     }
 
     fn get_randomness_tasks_cache(
         &self,
-    ) -> Arc<RwLock<<GeneralMainChain<N, G, T, I, PC> as Chain>::RandomnessTasksQueue>> {
+    ) -> Arc<RwLock<<GeneralMainChain<N, G, T, C, I, PC> as Chain>::RandomnessTasksQueue>> {
         self.randomness_tasks_cache.clone()
     }
 
     fn get_randomness_result_cache(
         &self,
-    ) -> Arc<RwLock<<GeneralMainChain<N, G, T, I, PC> as Chain>::RandomnessResultCaches>> {
+    ) -> Arc<RwLock<<GeneralMainChain<N, G, T, C, I, PC> as Chain>::RandomnessResultCaches>> {
         self.committer_randomness_result_cache.clone()
     }
 }
@@ -621,6 +643,13 @@ impl<
             + Sync
             + Send
             + 'static,
+        C: SignatureResultCacheFetcher<RandomnessResultCache>
+            + SignatureResultCacheUpdater<RandomnessResultCache>
+            + std::fmt::Debug
+            + Clone
+            + Sync
+            + Send
+            + 'static,
         I: ChainIdentity
             + ControllerClientBuilder<PC>
             + CoordinatorClientBuilder
@@ -632,17 +661,18 @@ impl<
             + Send
             + 'static,
         PC: PairingCurve + std::fmt::Debug + Clone + Sync + Send + 'static,
-    > MainChainFetcher<GeneralMainChain<N, G, T, I, PC>> for GeneralMainChain<N, G, T, I, PC>
+    > MainChainFetcher<GeneralMainChain<N, G, T, C, I, PC>>
+    for GeneralMainChain<N, G, T, C, I, PC>
 {
     fn get_node_cache(
         &self,
-    ) -> Arc<RwLock<<GeneralMainChain<N, G, T, I, PC> as MainChain>::NodeInfoCache>> {
+    ) -> Arc<RwLock<<GeneralMainChain<N, G, T, C, I, PC> as MainChain>::NodeInfoCache>> {
         self.node_cache.clone()
     }
 
     fn get_group_cache(
         &self,
-    ) -> Arc<RwLock<<GeneralMainChain<N, G, T, I, PC> as MainChain>::GroupInfoCache>> {
+    ) -> Arc<RwLock<<GeneralMainChain<N, G, T, C, I, PC> as MainChain>::GroupInfoCache>> {
         self.group_cache.clone()
     }
 }
