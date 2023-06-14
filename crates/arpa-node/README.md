@@ -99,7 +99,8 @@ Configuration items in [`conf/config.yml`](conf/config.yml) are listed here:
   - node_id: Set a node id for logging.
   - context_logging: Set whether to log context of current node info and group info. Since it will increase log size, it is recommended to set it to false in production.
   - log_file_path: Set log file path.
-  - rolling_file_size: Log file will be deleted when it reaches this size.
+  - rolling_file_size: Log file will be deleted when it reaches this size limit. The following units are supported (case insensitive):
+    "b", "kb", "kib", "mb", "mib", "gb", "gib", "tb", "tib". The unit defaults to bytes if not specified.
 
 - account: Config node identity in the network. There are three available account types.
 
@@ -210,6 +211,11 @@ Configuration items in [`conf/config.yml`](conf/config.yml) are listed here:
     - The polling of RandomnessSignatureAggregation is triggered by the node itself, so the interval_millis can be set relatively small.
 
 # Local Test
+
+```bash
+# unit tests
+cargo test --all -- --test-threads=1 --nocapture
+```
 
 ## start the local testnet by anvil:
 
