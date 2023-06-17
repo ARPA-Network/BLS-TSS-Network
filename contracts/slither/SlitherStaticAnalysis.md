@@ -47,13 +47,6 @@ slither --json slither_output.json . # Output json
   --exclude-medium          Exclude medium impact analyses
   --exclude-high            Exclude high impact analyses
 
-
-# Print inheritance graph
-slither . --print inheritance-graph
-xdot inheritance-graph.dot # Open graph in xdot
-dot -Tpng inheritance-graph.dot -o inheritance-graph.png # Generate png
-```
-
 ## CLIther usage
 
 CLIther is a CLI tool for analyzing slither output.
