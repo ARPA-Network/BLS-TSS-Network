@@ -6,15 +6,11 @@ tags:
 
 # Slither Static Analysis
 
-Monday, October 10, 2022
-
 ## Links
 
 [Foundry Slither](https://book.getfoundry.sh/config/static-analyzers)
 
 [Slither Git Repo](https://github.com/crytic/slither)
-
-[official git](https://github.com/crytic/slither)
 
 [trail of bits blogpost](https://blog.trailofbits.com/2018/10/19/slither-a-solidity-static-analysis-framework/)
 
@@ -24,19 +20,20 @@ Monday, October 10, 2022
 
 ```bash
 
-# use poetry here, learn it. 
-
+# activate venv and install requirements
 cd contracts/tools
-python3 -m venv .venv
-. .venv/bin/activate
-pip install -r requirements.txt
+python3 -m venv .venv # create venv
+. .venv/bin/activate # activate venv
+pip install -r requirements.txt # install requirements
 ```
 
 ## Slither Usage
 
 ```bash
 # Running slither
+
 cd contracts
+. .venv/bin/activate # activate venv
 slither . # Run slither against all contracts
 slither . --print human-summary # Print summary of findings
 slither . --print contract-summary # Print summary of findings per contract
@@ -56,10 +53,6 @@ slither . --print inheritance-graph
 xdot inheritance-graph.dot # Open graph in xdot
 dot -Tpng inheritance-graph.dot -o inheritance-graph.png # Generate png
 ```
-
-## Findings
-
-Analysis of high findings [here](./findings.md)
 
 ## CLIther usage
 
