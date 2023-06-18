@@ -42,9 +42,7 @@ forge coverage --report lcov
 
 ## Slither Statica Analysis
 
-Static analysis has been conducted on our smart contracts to ensure that they are secure and free of bugs.
-In addition, we offer a tool to help analyze slitehr output. 
-Instructions can be found here: [SlitherStaticAnalysis.md](./slither/SlitherStaticAnalysis.md)
+Static analysis has been conducted on our smart contracts to ensure that they are secure and free of bugs. In addition, we offer a tool to help analyze slitehr output. Details can be found here: [SlitherStaticAnalysis.md](./slither/SlitherStaticAnalysis.md)
 
 ---
 
