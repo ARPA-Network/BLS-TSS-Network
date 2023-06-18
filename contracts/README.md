@@ -36,9 +36,13 @@ forge coverage --report lcov
 
 ## Scenario Testing Notes
 
-[DKGScenarioTests.md](./DKGScenarioTests.md): DKG Scenarios
+[DKGScenarioTests.md](./docs/DKGScenarioTests.md): DKG Scenarios
 
-[ExtendedScenarioTests.md](./ExtendedScenarioTests.md): Rebalancing and Grouping Scenarios
+[ExtendedScenarioTests.md](./docs/ExtendedScenarioTests.md): Rebalancing and Grouping Scenarios
+
+## Slither Statica Analysis
+
+Static analysis has been conducted on our smart contracts to ensure that they are secure and free of bugs. In addition, we offer a tool to help analyze slitehr output. Details can be found here: [SlitherStaticAnalysis.md](./slither/SlitherStaticAnalysis.md)
 
 ---
 
@@ -89,3 +93,4 @@ cast send [contract_deployment_address] [function_signature] [function_input_par
 cast rpc [rpc_method_name] [rpc_method_input_params]
 cast receipt [transaction_hash]
 ```
+
