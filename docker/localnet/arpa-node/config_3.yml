@@ -1,0 +1,67 @@
+node_committer_rpc_endpoint: "0.0.0.0:50061"
+node_advertised_committer_rpc_endpoint: "XXX" # updated by update_config.sh
+node_management_rpc_endpoint: "0.0.0.0:50091"
+
+node_management_rpc_token: "for_test"
+
+provider_endpoint: "http://anvil-chain:8545" # docker-network container name
+
+chain_id: 31337
+
+controller_address: "0xdc64a140aa3e981100a9beca4e685f962f0cf6c9"
+
+adapter_address: "0xa513e6e4b8f2a923d98304ec87f64353c4d5c853"
+
+data_path: "./data3.sqlite"
+
+account:
+  private_key: "a267530f49f8280200edf313ee7af6b827f2a8bce2897751d06a843f644967b1"
+
+listeners:
+  - l_type: Block
+    interval_millis: 0
+    use_jitter: true
+  - l_type: NewRandomnessTask
+    interval_millis: 0
+    use_jitter: true
+  - l_type: PreGrouping
+    interval_millis: 0
+    use_jitter: true
+  - l_type: PostCommitGrouping
+    interval_millis: 1000
+    use_jitter: true
+  - l_type: PostGrouping
+    interval_millis: 1000
+    use_jitter: true
+  - l_type: ReadyToHandleRandomnessTask
+    interval_millis: 1000
+    use_jitter: true
+  - l_type: RandomnessSignatureAggregation
+    interval_millis: 2000
+    use_jitter: false
+
+time_limits:
+  dkg_timeout_duration: 40
+  randomness_task_exclusive_window: 10
+  listener_interval_millis: 1000
+  dkg_wait_for_phase_interval_millis: 1000
+  provider_polling_interval_millis: 1000
+  contract_transaction_retry_descriptor:
+    base: 2
+    factor: 1000
+    max_attempts: 3
+    use_jitter: true
+  contract_view_retry_descriptor:
+    base: 2
+    factor: 500
+    max_attempts: 5
+    use_jitter: true
+  commit_partial_signature_retry_descriptor:
+    base: 2
+    factor: 1000
+    max_attempts: 5
+    use_jitter: false
+
+context_logging: false
+
+node_id: 3
