@@ -4,6 +4,7 @@ node_management_rpc_endpoint: "0.0.0.0:50091"
 
 node_management_rpc_token: "for_test"
 
+# Note: this value gets replaced by env variable specified in docker run command
 provider_endpoint: "http://0.0.0.0:8545" # would use alchemy or infura here
 
 chain_id: 31337

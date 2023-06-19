@@ -68,6 +68,10 @@ docker image ls # list images
 
 ```bash
 
+##############
+## LOCALNET ##
+##############
+
 # create network
 docker network create randcast_network 
 
@@ -111,17 +115,10 @@ cast call 0x712516e61C8B383dF4A63CFe83d7701Bce54B03e "lastRandomnessResult()(uin
 
 ## Mainnet Node Operatoration (publishing ports externally on host)
 
-You will need to edit the following locations:
-
-./docker/mainnet/arpa-node/config_X.yml
-  node_committer_rpc_endpoint: "0.0.0.0:50061"
-  node_advertised_committer_rpc_endpoint: "0.0.0.0:50061" # published port on host. See readme
-  node_management_rpc_endpoint: "0.0.0.0:50091"
-
-
-provider_endpoint: "http://0.0.0.0:8545" # would use alchemy or infura here
-
 ```bash
+#############
+## MAINNET ##
+#############
 
 # build images
 cd BLS-TSS-Network
@@ -132,16 +129,18 @@ docker build -t arpa-node ./docker/mainnet/arpa-node
 
 # Start anvil chain
 docker run -d --name anvil-chain -p 8545:8545 anvil-chain:latest
-# 0.0.0.0:8545 should be accessible from outside 
+
+# set ETH RPC ENDPOINT (IP:PORT) and NODE_IP (IP ONLY)
+export RPC_ENDPOINT="1.1.1.1:8545"
+export NODE_IP="1.2.3.4"
 
 # Run contract init (ensure .env configured correctly)
-docker run -d --name contract-init -v ./contracts/.env:/usr/src/app/external/.env contract-init:latest
+docker run -d --name contract-init -v ./contracts/.env:/usr/src/app/external/.env -e RPC_ENDPOINT=$RPC_ENDPOINT contract-init:latest
 
 # Run 3 arpa nodes (ensure config files are correct)
-docker run -d --name node1 -p 50061:50061 -p 50091:50091 -v ./docker/mainnet/arpa-node/config_1.yml:/usr/src/app/external/config.yml arpa-node:latest
-docker run -d --name node2 -p 50062:50061 -p 50092:50091 -v ./docker/mainnet/arpa-node/config_2.yml:/usr/src/app/external/config.yml arpa-node:latest
-docker run -d --name node3 -p 50063:50061 -p 50093:50091 -v ./docker/mainnet/arpa-node/config_3.yml:/usr/src/app/external/config.yml arpa-node:latest
-# 0.0.0.0 : 50061, 50062, 50063 are the exposed rpc ports
+docker run -d --name node1 -p 50061:50061 -p 50091:50091 -v ./docker/mainnet/arpa-node/config_1.yml:/usr/src/app/external/config.yml -e RPC_ENDPOINT=$RPC_ENDPOINT -e NODE_ENDPOINT=${NODE_IP}:50091 arpa-node:latest
+docker run -d --name node2 -p 50061:50061 -p 50092:50091 -v ./docker/mainnet/arpa-node/config_2.yml:/usr/src/app/external/config.yml -e RPC_ENDPOINT=$RPC_ENDPOINT -e NODE_ENDPOINT=${NODE_IP}:50092 arpa-node:latest
+docker run -d --name node3 -p 50061:50061 -p 50093:50091 -v ./docker/mainnet/arpa-node/config_3.yml:/usr/src/app/external/config.yml -e RPC_ENDPOINT=$RPC_ENDPOINT -e NODE_ENDPOINT=${NODE_IP}:50093 arpa-node:latest
 
 # check if nodes grouped succesfully 
 # (exec into node1 container)
@@ -154,12 +153,37 @@ forge script /usr/src/app/script/GetRandomNumberLocalTest.s.sol:GetRandomNumberL
 
 # check the randomness result recorded by the adapter and the user contract respectively
 export ETH_RPC_URL=http://anvil-chain:8545
+export ETH_RPC_URL=$RPC_ENDPOINT
 
 cast call 0xa513e6e4b8f2a923d98304ec87f64353c4d5c853 "getLastRandomness()(uint256)"
 
 cast call 0x712516e61C8B383dF4A63CFe83d7701Bce54B03e "lastRandomnessResult()(uint256)"
 
 # the above two outputs of uint256 type should be identical
+```
+
+## Publish images to docker hub
+
+[publish your own image](https://docs.docker.com/get-started/publish-your-own-image/)
+
+```bash
+# build images
+cd BLS-TSS-Network
+docker build -t anvil-chain ./docker/mainnet/anvil-chain
+docker build -t contract-init -f ./docker/mainnet/contract-init/Dockerfile .
+docker build -t arpa-node ./docker/mainnet/arpa-node
+
+# tag images
+docker tag anvil-chain:latest wrinkledeth/anvil-chain:latest
+docker tag contract-init:latest wrinkledeth/contract-init:latest
+docker tag arpa-node:latest wrinkledeth/arpa-node:latest
+
+# go into docker desktop and push images to repo
+
+# pull images from repo
+docker pull wrinkledeth/anvil-chain:latest
+docker pull wrinkledeth/contract-init:latest
+docker pull wrinkledeth/arpa-node:latest
 ```
 
 ## Todo
@@ -190,7 +214,7 @@ curl -L https://foundry.paradigm.xyz | bash && \
     /home/ec2-user/.foundry/bin/foundryup
 source /home/ec2-user/.bashrc
 
-git clone -b dockerIntegration https://github.com/wrinkledeth/BLS-TSS-Network.git
+git clone -b dockerAutomation https://github.com/wrinkledeth/BLS-TSS-Network.git
 cd BLS-TSS-Network/contracts
 forge test
 cd ..
@@ -211,4 +235,8 @@ sudo yum -y install docker
 sudo service docker start
 sudo usermod -a -G docker ec2-user
 sudo chmod 666 /var/run/docker.sock
+sudo systemctl enable docker.service # enable docker on boot
+sudo systemctl start docker.service # start docker
+
+docker ps
 ```

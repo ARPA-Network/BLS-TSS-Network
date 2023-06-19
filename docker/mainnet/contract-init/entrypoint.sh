@@ -1,7 +1,8 @@
 #!/bin/bash
-/root/.foundry/bin/forge script script/ControllerLocalTest.s.sol:ControllerLocalTestScript --fork-url http://0.0.0.0:8545 --broadcast
-/root/.foundry/bin/forge script script/StakeNodeLocalTest.s.sol:StakeNodeLocalTestScript --fork-url http://0.0.0.0:8545 --broadcast -g 150
-tail -f /dev/null
 
-## use cmd here so that anvil ip can be passed in
-## start uploading images to docker hub
+# use the value of the `RPC_ENDPOINT` environment variable if it's provided; otherwise, it will use the default value `http://0.0.0.0:8545`.
+RPC_ENDPOINT=${RPC_ENDPOINT:-http://0.0.0.0:8545}
+
+/root/.foundry/bin/forge script script/ControllerLocalTest.s.sol:ControllerLocalTestScript --fork-url $RPC_ENDPOINT --broadcast
+/root/.foundry/bin/forge script script/StakeNodeLocalTest.s.sol:StakeNodeLocalTestScript --fork-url $RPC_ENDPOINT --broadcast -g 150
+tail -f /dev/null
