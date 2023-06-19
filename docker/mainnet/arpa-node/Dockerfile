@@ -11,6 +11,8 @@ WORKDIR /usr/src/app
 RUN apt-get update && \
     apt-get install -y protobuf-compiler libprotobuf-dev pkg-config libssh-dev build-essential supervisor neovim git net-tools netcat
 
+ENV CARGO_NET_GIT_FETCH_WITH_CLI=true
+
 # Clone and build Randcast Node Client
 RUN git clone https://github.com/ARPA-Network/BLS-TSS-Network.git && \
     cd BLS-TSS-Network && \
