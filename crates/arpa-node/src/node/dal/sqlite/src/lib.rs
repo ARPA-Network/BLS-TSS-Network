@@ -101,7 +101,8 @@ impl SqliteDB {
             connection: Arc::new(connection),
         };
 
-        db.integrity_check().await?;
+        db.integrity_check().await.map_err(|e| 
+            format!("Node identity is different from the database, please check the (account)cipher key. Original error: {:?}", e.to_string()))?;
 
         Migrator::up(&*db.connection, None).await?;
 
@@ -277,24 +278,27 @@ impl<C: PairingCurve> std::fmt::Debug for NodeInfoDBClient<C> {
 }
 
 impl<C: PairingCurve> NodeInfoDBClient<C> {
-    pub async fn refresh_current_node_info(&mut self) -> DBResult<()> {
+    pub async fn refresh_current_node_info(&mut self) -> DBResult<bool> {
         let conn = &self.db_client.connection;
-        let node_info = NodeQuery::find_current_node_info(conn).await?.unwrap();
+        match NodeQuery::find_current_node_info(conn).await?{
+            Some(node_info) => {
+                let node_info_cache = InMemoryNodeInfoCache::rebuild(
+                    node_info.id_address.parse().unwrap(),
+                    node_info.node_rpc_endpoint.clone(),
+                    bincode::deserialize(&node_info.dkg_private_key).unwrap(),
+                    bincode::deserialize(&node_info.dkg_public_key).unwrap(),
+                );
+        
+                node_info_cache.refresh_context_entry();
+        
+                self.node_info_cache = Some(node_info_cache);
+        
+                self.node_info_cache_model = Some(node_info);
 
-        let node_info_cache = InMemoryNodeInfoCache::rebuild(
-            node_info.id_address.parse().unwrap(),
-            node_info.node_rpc_endpoint.clone(),
-            bincode::deserialize(&node_info.dkg_private_key).unwrap(),
-            bincode::deserialize(&node_info.dkg_public_key).unwrap(),
-        );
-
-        node_info_cache.refresh_context_entry();
-
-        self.node_info_cache = Some(node_info_cache);
-
-        self.node_info_cache_model = Some(node_info);
-
-        Ok(())
+                Ok(true)
+            }
+            None => Ok(false),
+        }
     }
 
     pub async fn save_node_info(
@@ -371,48 +375,52 @@ impl<C: PairingCurve> std::fmt::Debug for GroupInfoDBClient<C> {
 }
 
 impl<C: PairingCurve> GroupInfoDBClient<C> {
-    pub async fn refresh_current_group_info(&mut self) -> DBResult<()> {
+    pub async fn refresh_current_group_info(&mut self) -> DBResult<bool> {
         let conn = &self.db_client.connection;
-        let group_info = GroupQuery::find_current_group_info(conn)
-            .await?
-            .ok_or(GroupError::NoGroupTask)?;
 
-        let group = Group {
-            index: group_info.index as usize,
-            epoch: group_info.epoch as usize,
-            size: group_info.size as usize,
-            threshold: group_info.threshold as usize,
-            state: group_info.state == 1,
-            public_key: group_info
-                .public_key
-                .as_ref()
-                .map(|bytes| bincode::deserialize(bytes).unwrap()),
-            members: serde_json::from_str(&group_info.members).unwrap(),
-            committers: group_info
-                .committers
-                .as_ref()
-                .map_or(vec![], |str| serde_json::from_str(str).unwrap()),
-            c: PhantomData,
-        };
+        match GroupQuery::find_current_group_info(conn)
+        .await?{
+            Some(group_info) => {
+                let group = Group {
+                    index: group_info.index as usize,
+                    epoch: group_info.epoch as usize,
+                    size: group_info.size as usize,
+                    threshold: group_info.threshold as usize,
+                    state: group_info.state == 1,
+                    public_key: group_info
+                        .public_key
+                        .as_ref()
+                        .map(|bytes| bincode::deserialize(bytes).unwrap()),
+                    members: serde_json::from_str(&group_info.members).unwrap(),
+                    committers: group_info
+                        .committers
+                        .as_ref()
+                        .map_or(vec![], |str| serde_json::from_str(str).unwrap()),
+                    c: PhantomData,
+                };
+        
+                let group_info_cache = InMemoryGroupInfoCache::rebuild(
+                    group_info
+                        .share
+                        .as_ref()
+                        .map(|bytes| bincode::deserialize(bytes).unwrap()),
+                    group,
+                    (group_info.dkg_status as usize).into(),
+                    group_info.self_member_index as usize,
+                    group_info.dkg_start_block_height as usize,
+                );
+        
+                group_info_cache.refresh_context_entry();
+        
+                self.group_info_cache = Some(group_info_cache);
+        
+                self.group_info_cache_model = Some(group_info);
 
-        let group_info_cache = InMemoryGroupInfoCache::rebuild(
-            group_info
-                .share
-                .as_ref()
-                .map(|bytes| bincode::deserialize(bytes).unwrap()),
-            group,
-            (group_info.dkg_status as usize).into(),
-            group_info.self_member_index as usize,
-            group_info.dkg_start_block_height as usize,
-        );
+                Ok(true)
+            }
+            None => Ok(false),
+        }
 
-        group_info_cache.refresh_context_entry();
-
-        self.group_info_cache = Some(group_info_cache);
-
-        self.group_info_cache_model = Some(group_info);
-
-        Ok(())
     }
 
     fn only_has_group_task(&self) -> DBResult<()> {
@@ -1184,7 +1192,6 @@ impl SignatureResultCacheUpdater<RandomnessResultCache>
 #[cfg(test)]
 pub mod sqlite_tests {
     use crate::test_helper;
-    use crate::DBError;
     use crate::SqliteDB;
     use arpa_node_core::DKGStatus;
     use arpa_node_core::DKGTask;
@@ -1192,7 +1199,6 @@ pub mod sqlite_tests {
     use arpa_node_core::RandomnessTask;
     use arpa_node_core::DEFAULT_RANDOMNESS_TASK_EXCLUSIVE_WINDOW;
     use arpa_node_core::PLACEHOLDER_ADDRESS;
-    use arpa_node_dal::error::GroupError;
     use arpa_node_dal::BLSTasksFetcher;
     use arpa_node_dal::BLSTasksUpdater;
     use arpa_node_dal::GroupInfoFetcher;
@@ -1360,11 +1366,10 @@ pub mod sqlite_tests {
 
         let mut db = db.get_group_info_client::<PairingCurve>();
 
-        if let Err(e) = db.refresh_current_group_info().await {
-            let ee: DBError = GroupError::NoGroupTask.into();
-            assert_eq!(ee, e);
+        if let Ok(res) = db.refresh_current_group_info().await {
+            assert_eq!(res, false);
         } else {
-            panic!("there should not be a result");
+            panic!("should not fail");
         }
 
         teardown();
