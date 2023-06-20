@@ -41,7 +41,6 @@ npm install -g aws-cdk
 cdk --version # check version
 
 # activate venv and install requirements.
-cd ec2_cdk
 python3 -m venv .venv 
 source .venv/bin/activate
 pip install -r requirements.txt
@@ -125,6 +124,8 @@ cast call 0x712516e61C8B383dF4A63CFe83d7701Bce54B03e "lastRandomnessResult()(uin
 ```
 
 ## Useful Commands
+
+```bash
 
 The node-test ec2 comes with a dockerized version of foundry. You can run foundry commands using it like this:
 [docs](https://book.getfoundry.sh/tutorials/foundry-docker)
