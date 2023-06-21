@@ -32,6 +32,12 @@ To print help, use `-- -h`:
 cargo run --bin node-client -- -h
 ```
 
+To specify a config file, use `-- -c <config_file>`:
+
+```bash
+cargo run --bin node-client -- -c conf/config.yml
+```
+
 ### New-run Mode
 
 Before the first time to run the node, make sure the address of the node has been added to eligible operators list in the staking contract with sufficient stake, then use `new-run` mode:
@@ -60,6 +66,18 @@ To print help, use `-- -h`:
 
 ```bash
 cargo run --bin node-shell -- -h
+```
+
+To specify a config file, use `-- -c <config_file>`:
+
+```bash
+cargo run --bin node-shell -- -c conf/config.yml
+```
+
+To set the history file path, use `-- -H <history_file>`:
+
+```bash
+cargo run --bin node-shell -- -H node-shell.history
 ```
 
 ### REPL Commands

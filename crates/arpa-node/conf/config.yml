@@ -4,9 +4,9 @@ node_management_rpc_endpoint: "[::1]:50099"
 
 node_management_rpc_token: "change_me"
 
-provider_endpoint: "localhost:8545"
+provider_endpoint: "http://127.0.0.1:8545"
 
-chain_id: 0
+chain_id: 31337
 
 # These two are contract addresses deployed by anvil default account in local test example
 controller_address: "0xdc64a140aa3e981100a9beca4e685f962f0cf6c9"

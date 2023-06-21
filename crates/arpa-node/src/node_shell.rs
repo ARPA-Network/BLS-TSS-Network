@@ -43,13 +43,13 @@ pub struct Opt {
         short = "c",
         long,
         parse(from_os_str),
-        default_value = "conf/shell_config.yml"
+        default_value = "conf/config.yml"
     )]
     config_path: PathBuf,
 
     /// Set the history file path
     #[structopt(
-        short = "h",
+        short = "H",
         long,
         parse(from_os_str),
         default_value = "node-shell.history"
