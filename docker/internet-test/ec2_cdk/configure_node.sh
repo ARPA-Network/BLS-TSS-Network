@@ -23,7 +23,7 @@ docker tag ghcr.io/foundry-rs/foundry:latest foundry:latest
 #docker run foundry "cast block --rpc-url $RPC_URL latest"
 
 # clone repo
-git clone -b dockerAutomation https://github.com/wrinkledeth/BLS-TSS-Network.git
+git clone https://github.com/ARPA-Network/BLS-TSS-Network
 cd /tmp/BLS-TSS-Network/contracts
 
 # pull container-init and arpa-node images
