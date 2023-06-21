@@ -13,6 +13,7 @@ use arpa_node_contract_client::{
     coordinator::CoordinatorClientBuilder, provider::ChainProviderBuilder,
 };
 use arpa_node_core::{BLSTaskError, BLSTaskType, ChainIdentity, RandomnessTask};
+use arpa_node_dal::cache::RandomnessResultCache;
 use arpa_node_dal::{
     BLSTasksFetcher, BLSTasksUpdater, ContextInfoUpdater, GroupInfoFetcher, GroupInfoUpdater,
     NodeInfoFetcher, NodeInfoUpdater, SignatureResultCacheFetcher, SignatureResultCacheUpdater,
@@ -24,12 +25,14 @@ use threshold_bls::group::PairingCurve;
 use tokio::sync::RwLock;
 use tonic::{transport::Server, Request, Response, Status};
 
-type NodeContext<N, G, T, I, PC> = Arc<RwLock<GeneralContext<N, G, T, I, PC>>>;
+type NodeContext<N, G, T, C, I, PC> = Arc<RwLock<GeneralContext<N, G, T, C, I, PC>>>;
 
 pub(crate) struct BLSCommitterServiceServer<
     N: NodeInfoFetcher<PC> + NodeInfoUpdater<PC> + ContextInfoUpdater,
     G: GroupInfoFetcher<PC> + GroupInfoUpdater<PC> + ContextInfoUpdater,
     T: BLSTasksFetcher<RandomnessTask> + BLSTasksUpdater<RandomnessTask>,
+    C: SignatureResultCacheFetcher<RandomnessResultCache>
+        + SignatureResultCacheUpdater<RandomnessResultCache>,
     I: ChainIdentity
         + ControllerClientBuilder<PC>
         + CoordinatorClientBuilder
@@ -39,7 +42,7 @@ pub(crate) struct BLSCommitterServiceServer<
 > {
     id_address: Address,
     group_cache: Arc<RwLock<G>>,
-    context: NodeContext<N, G, T, I, PC>,
+    context: NodeContext<N, G, T, C, I, PC>,
     c: PhantomData<PC>,
 }
 
@@ -47,18 +50,20 @@ impl<
         N: NodeInfoFetcher<PC> + NodeInfoUpdater<PC> + ContextInfoUpdater,
         G: GroupInfoFetcher<PC> + GroupInfoUpdater<PC> + ContextInfoUpdater,
         T: BLSTasksFetcher<RandomnessTask> + BLSTasksUpdater<RandomnessTask>,
+        C: SignatureResultCacheFetcher<RandomnessResultCache>
+            + SignatureResultCacheUpdater<RandomnessResultCache>,
         I: ChainIdentity
             + ControllerClientBuilder<PC>
             + CoordinatorClientBuilder
             + AdapterClientBuilder
             + ChainProviderBuilder,
         PC: PairingCurve,
-    > BLSCommitterServiceServer<N, G, T, I, PC>
+    > BLSCommitterServiceServer<N, G, T, C, I, PC>
 {
     pub fn new(
         id_address: Address,
         group_cache: Arc<RwLock<G>>,
-        context: NodeContext<N, G, T, I, PC>,
+        context: NodeContext<N, G, T, C, I, PC>,
     ) -> Self {
         BLSCommitterServiceServer {
             id_address,
@@ -94,6 +99,13 @@ impl<
             + Sync
             + Send
             + 'static,
+        C: SignatureResultCacheFetcher<RandomnessResultCache>
+            + SignatureResultCacheUpdater<RandomnessResultCache>
+            + std::fmt::Debug
+            + Clone
+            + Sync
+            + Send
+            + 'static,
         I: ChainIdentity
             + ControllerClientBuilder<PC>
             + CoordinatorClientBuilder
@@ -105,7 +117,7 @@ impl<
             + Send
             + 'static,
         PC: PairingCurve + std::fmt::Debug + Clone + Sync + Send + 'static,
-    > CommitterService for BLSCommitterServiceServer<N, G, T, I, PC>
+    > CommitterService for BLSCommitterServiceServer<N, G, T, C, I, PC>
 {
     async fn commit_partial_signature(
         &self,
@@ -149,6 +161,8 @@ impl<
                         .read()
                         .await
                         .contains(&req.request_id)
+                        .await
+                        .map_err(|e| Status::internal(e.to_string()))?
                     {
                         return Err(Status::invalid_argument(
                             BLSTaskError::CommitterCacheNotExisted.to_string(),
@@ -161,6 +175,7 @@ impl<
                         .read()
                         .await
                         .get(&req.request_id)
+                        .await
                         .unwrap()
                         .result_cache
                         .message
@@ -172,7 +187,7 @@ impl<
                         ));
                     }
 
-                    randomness_result_cache
+                    if !randomness_result_cache
                         .write()
                         .await
                         .add_partial_signature(
@@ -180,9 +195,13 @@ impl<
                             req_id_address,
                             req.partial_signature,
                         )
-                        .map_err(|_| {
-                            Status::internal(BLSTaskError::CommitterCacheNotExisted.to_string())
-                        })?;
+                        .await
+                        .map_err(|e| Status::internal(e.to_string()))?
+                    {
+                        return Err(Status::invalid_argument(
+                            BLSTaskError::AlreadyCommittedPartialSignature.to_string(),
+                        ));
+                    }
                 }
 
                 _ => {
@@ -224,6 +243,13 @@ pub async fn start_committer_server_with_shutdown<
         + Sync
         + Send
         + 'static,
+    C: SignatureResultCacheFetcher<RandomnessResultCache>
+        + SignatureResultCacheUpdater<RandomnessResultCache>
+        + std::fmt::Debug
+        + Clone
+        + Sync
+        + Send
+        + 'static,
     I: ChainIdentity
         + ControllerClientBuilder<PC>
         + CoordinatorClientBuilder
@@ -237,7 +263,7 @@ pub async fn start_committer_server_with_shutdown<
     PC: PairingCurve + std::fmt::Debug + Clone + Sync + Send + 'static,
 >(
     endpoint: String,
-    context: NodeContext<N, G, T, I, PC>,
+    context: NodeContext<N, G, T, C, I, PC>,
     shutdown_signal: F,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let addr = endpoint.parse()?;
@@ -287,6 +313,13 @@ pub async fn start_committer_server<
         + Sync
         + Send
         + 'static,
+    C: SignatureResultCacheFetcher<RandomnessResultCache>
+        + SignatureResultCacheUpdater<RandomnessResultCache>
+        + std::fmt::Debug
+        + Clone
+        + Sync
+        + Send
+        + 'static,
     I: ChainIdentity
         + ControllerClientBuilder<PC>
         + CoordinatorClientBuilder
@@ -300,7 +333,7 @@ pub async fn start_committer_server<
     PC: PairingCurve + std::fmt::Debug + Clone + Sync + Send + 'static,
 >(
     endpoint: String,
-    context: NodeContext<N, G, T, I, PC>,
+    context: NodeContext<N, G, T, C, I, PC>,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let addr = endpoint.parse()?;
 

@@ -4,4 +4,5 @@ pub mod prelude;
 
 pub mod group_info;
 pub mod node_info;
+pub mod randomness_result;
 pub mod randomness_task;

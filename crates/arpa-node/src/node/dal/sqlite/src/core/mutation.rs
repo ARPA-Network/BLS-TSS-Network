@@ -1,5 +1,9 @@
+use std::collections::BTreeMap;
+
 use arpa_node_core::{format_now_date, DKGStatus};
-use entity::{group_info, node_info, randomness_task};
+use arpa_node_dal::BLSResultCacheState;
+use entity::{group_info, node_info, randomness_result, randomness_task};
+use ethers_core::types::Address;
 use sea_orm::{ActiveModelTrait, DbBackend, DbConn, DbErr, FromQueryResult, Set, Statement};
 
 pub struct NodeMutation;
@@ -187,5 +191,68 @@ impl RandomnessTaskMutation {
                 vec![group_index.into(),assignment_block_height.into()],
             ))
             .all(db).await
+    }
+}
+
+pub struct RandomnessResultMutation;
+
+impl RandomnessResultMutation {
+    pub async fn add(
+        db: &DbConn,
+        request_id: Vec<u8>,
+        group_index: i32,
+        message: Vec<u8>,
+        threshold: i32,
+    ) -> Result<randomness_result::ActiveModel, DbErr> {
+        randomness_result::ActiveModel {
+            request_id: Set(request_id),
+            group_index: Set(group_index),
+            message: Set(message),
+            threshold: Set(threshold),
+            partial_signatures: Set(
+                serde_json::to_string(&BTreeMap::<Address, Vec<u8>>::new()).unwrap()
+            ),
+            create_at: Set(format_now_date()),
+            update_at: Set(format_now_date()),
+            state: Set(BLSResultCacheState::NotCommitted.to_i32()),
+            ..Default::default()
+        }
+        .save(db)
+        .await
+    }
+
+    pub async fn add_partial_signature(
+        db: &DbConn,
+        model: randomness_result::Model,
+        member_address: Address,
+        partial_signature: Vec<u8>,
+    ) -> Result<randomness_result::Model, DbErr> {
+        let mut partial_signatures: BTreeMap<Address, Vec<u8>> =
+            serde_json::from_str(&model.partial_signatures).unwrap();
+
+        partial_signatures.insert(member_address, partial_signature);
+
+        let mut randomness_result: randomness_result::ActiveModel = model.into();
+
+        randomness_result.partial_signatures =
+            Set(serde_json::to_string(&partial_signatures).unwrap());
+
+        randomness_result.update_at = Set(format_now_date());
+
+        randomness_result.update(db).await
+    }
+
+    pub async fn update_commit_result(
+        db: &DbConn,
+        model: randomness_result::Model,
+        status: i32,
+    ) -> Result<randomness_result::Model, DbErr> {
+        let mut randomness_result: randomness_result::ActiveModel = model.into();
+
+        randomness_result.state = Set(status);
+
+        randomness_result.update_at = Set(format_now_date());
+
+        randomness_result.update(db).await
     }
 }

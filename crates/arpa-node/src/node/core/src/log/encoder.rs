@@ -48,13 +48,17 @@ lazy_static! {
 /// An `Encode`r which writes a JSON object.
 #[derive(Clone, Debug, Default)]
 pub struct JsonEncoder {
+    node_id: String,
     show_context: bool,
 }
 
 impl JsonEncoder {
     /// Returns a new `JsonEncoder` with a default configuration.
-    pub fn new() -> Self {
-        JsonEncoder::default()
+    pub fn new(node_id: String) -> Self {
+        JsonEncoder {
+            node_id,
+            show_context: false,
+        }
     }
 
     pub fn context_logging(mut self, show_context: bool) -> Self {
@@ -92,6 +96,7 @@ impl JsonEncoder {
             target: record.target(),
             thread: thread.name(),
             thread_id: thread_id::get(),
+            node_id: &self.node_id,
             mdc: Mdc,
             node_info: &node_info,
             group_info: &group_info,
@@ -124,6 +129,7 @@ struct Message<'a> {
     target: &'a str,
     thread: Option<&'a str>,
     thread_id: usize,
+    node_id: &'a str,
     mdc: Mdc,
     node_info: &'a str,
     group_info: &'a str,
@@ -176,9 +182,10 @@ mod test {
         let line = 100;
         let message = "message";
         let thread = "log::encoder::test::default";
+        let node_id = "test";
         log_mdc::insert("foo", "bar");
 
-        let encoder = JsonEncoder::new();
+        let encoder = JsonEncoder::new(node_id.to_string());
 
         let mut buf = vec![];
         encoder
@@ -199,7 +206,7 @@ mod test {
         let expected = format!(
             "{{\"time\":\"{}\",\"message\":\"{}\",\"module_path\":\"{}\",\
              \"file\":\"{}\",\"line\":{},\"level\":\"{}\",\"target\":\"{}\",\
-             \"thread\":\"{}\",\"thread_id\":{},\"mdc\":{{\"foo\":\"bar\"}},\
+             \"thread\":\"{}\",\"thread_id\":{},\"node_id\":\"{}\",\"mdc\":{{\"foo\":\"bar\"}},\
              \"node_info\":\"\",\"group_info\":\"\"}}",
             time.to_rfc3339(),
             message,
@@ -210,6 +217,7 @@ mod test {
             target,
             thread,
             thread_id::get(),
+            node_id
         );
         assert_eq!(expected, String::from_utf8(buf).unwrap().trim());
     }

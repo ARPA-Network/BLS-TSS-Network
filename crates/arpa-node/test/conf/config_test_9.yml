@@ -14,6 +14,12 @@ adapter_address: "0xa513e6e4b8f2a923d98304ec87f64353c4d5c853"
 
 data_path: "./data9.sqlite"
 
+logger:
+  node_id: 9
+  context_logging: false
+  log_file_path: log/9/
+  rolling_file_size: 10 gb
+
 account:
   private_key: "de9be858da4a475276426320d5e9262ecfc3ba460bfac56360bfa6c4c28b4ee0"
 
@@ -61,7 +67,3 @@ time_limits:
     factor: 1000
     max_attempts: 5
     use_jitter: false
-
-context_logging: false
-
-node_id: 9

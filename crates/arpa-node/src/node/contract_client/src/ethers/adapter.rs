@@ -137,8 +137,7 @@ impl AdapterTransactions for AdapterClient {
                     + FULFILL_RANDOMNESS_GAS_EXCEPT_CALLBACK
                     + extra_verification_gas
                     + extra_add_reward_gas,
-            )
-            .gas_price(task.callback_max_gas_price),
+            ),
             self.contract_transaction_retry_descriptor,
             false,
         )

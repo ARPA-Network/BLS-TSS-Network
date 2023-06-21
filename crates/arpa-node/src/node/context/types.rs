@@ -19,8 +19,9 @@ use arpa_node_core::{
     DEFAULT_DYNAMIC_TASK_CLEANER_INTERVAL_MILLIS,
 };
 use arpa_node_dal::{
-    BLSTasksFetcher, BLSTasksUpdater, ContextInfoUpdater, GroupInfoFetcher, GroupInfoUpdater,
-    NodeInfoFetcher, NodeInfoUpdater,
+    cache::RandomnessResultCache, BLSTasksFetcher, BLSTasksUpdater, ContextInfoUpdater,
+    GroupInfoFetcher, GroupInfoUpdater, NodeInfoFetcher, NodeInfoUpdater,
+    SignatureResultCacheFetcher, SignatureResultCacheUpdater,
 };
 use async_trait::async_trait;
 use log::error;
@@ -30,13 +31,15 @@ use tokio::sync::RwLock;
 
 #[derive(Debug)]
 pub struct GeneralContext<
-    N: NodeInfoFetcher<C> + NodeInfoUpdater<C> + ContextInfoUpdater,
-    G: GroupInfoFetcher<C> + GroupInfoUpdater<C> + ContextInfoUpdater,
+    N: NodeInfoFetcher<PC> + NodeInfoUpdater<PC> + ContextInfoUpdater,
+    G: GroupInfoFetcher<PC> + GroupInfoUpdater<PC> + ContextInfoUpdater,
     T: BLSTasksFetcher<RandomnessTask> + BLSTasksUpdater<RandomnessTask>,
-    I: ChainIdentity + ControllerClientBuilder<C> + CoordinatorClientBuilder + AdapterClientBuilder,
-    C: PairingCurve,
+    C: SignatureResultCacheFetcher<RandomnessResultCache>
+        + SignatureResultCacheUpdater<RandomnessResultCache>,
+    I: ChainIdentity + ControllerClientBuilder<PC> + CoordinatorClientBuilder + AdapterClientBuilder,
+    PC: PairingCurve,
 > {
-    main_chain: GeneralMainChain<N, G, T, I, C>,
+    main_chain: GeneralMainChain<N, G, T, C, I, PC>,
     eq: Arc<RwLock<EventQueue>>,
     ts: Arc<RwLock<SimpleDynamicTaskScheduler>>,
     f_ts: Arc<RwLock<SimpleFixedTaskScheduler>>,
@@ -44,21 +47,26 @@ pub struct GeneralContext<
 }
 
 impl<
-        N: NodeInfoFetcher<C> + NodeInfoUpdater<C> + ContextInfoUpdater + Sync + Send + 'static,
-        G: GroupInfoFetcher<C> + GroupInfoUpdater<C> + ContextInfoUpdater + Sync + Send + 'static,
+        N: NodeInfoFetcher<PC> + NodeInfoUpdater<PC> + ContextInfoUpdater + Sync + Send + 'static,
+        G: GroupInfoFetcher<PC> + GroupInfoUpdater<PC> + ContextInfoUpdater + Sync + Send + 'static,
         T: BLSTasksFetcher<RandomnessTask> + BLSTasksUpdater<RandomnessTask> + Sync + Send + 'static,
+        C: SignatureResultCacheFetcher<RandomnessResultCache>
+            + SignatureResultCacheUpdater<RandomnessResultCache>
+            + Sync
+            + Send
+            + 'static,
         I: ChainIdentity
-            + ControllerClientBuilder<C>
+            + ControllerClientBuilder<PC>
             + CoordinatorClientBuilder
             + AdapterClientBuilder
             + ChainProviderBuilder
             + Sync
             + Send
             + 'static,
-        C: PairingCurve,
-    > GeneralContext<N, G, T, I, C>
+        PC: PairingCurve,
+    > GeneralContext<N, G, T, C, I, PC>
 {
-    pub fn new(main_chain: GeneralMainChain<N, G, T, I, C>, config: Config) -> Self {
+    pub fn new(main_chain: GeneralMainChain<N, G, T, C, I, PC>, config: Config) -> Self {
         GeneralContext {
             main_chain,
             eq: Arc::new(RwLock::new(EventQueue::new())),
@@ -70,16 +78,16 @@ impl<
 }
 
 impl<
-        N: NodeInfoFetcher<C>
-            + NodeInfoUpdater<C>
+        N: NodeInfoFetcher<PC>
+            + NodeInfoUpdater<PC>
             + ContextInfoUpdater
             + std::fmt::Debug
             + Clone
             + Sync
             + Send
             + 'static,
-        G: GroupInfoFetcher<C>
-            + GroupInfoUpdater<C>
+        G: GroupInfoFetcher<PC>
+            + GroupInfoUpdater<PC>
             + ContextInfoUpdater
             + std::fmt::Debug
             + Clone
@@ -93,8 +101,15 @@ impl<
             + Sync
             + Send
             + 'static,
+        C: SignatureResultCacheFetcher<RandomnessResultCache>
+            + SignatureResultCacheUpdater<RandomnessResultCache>
+            + std::fmt::Debug
+            + Clone
+            + Sync
+            + Send
+            + 'static,
         I: ChainIdentity
-            + ControllerClientBuilder<C>
+            + ControllerClientBuilder<PC>
             + CoordinatorClientBuilder
             + AdapterClientBuilder
             + ChainProviderBuilder
@@ -103,10 +118,10 @@ impl<
             + Sync
             + Send
             + 'static,
-        C: PairingCurve + std::fmt::Debug + Clone + Sync + Send + 'static,
-    > Context for GeneralContext<N, G, T, I, C>
+        PC: PairingCurve + std::fmt::Debug + Clone + Sync + Send + 'static,
+    > Context for GeneralContext<N, G, T, C, I, PC>
 {
-    type MainChain = GeneralMainChain<N, G, T, I, C>;
+    type MainChain = GeneralMainChain<N, G, T, C, I, PC>;
 
     async fn deploy(self) -> SchedulerResult<ContextHandle> {
         self.get_main_chain().init_components(&self).await?;
@@ -134,16 +149,16 @@ impl<
 }
 
 impl<
-        N: NodeInfoFetcher<C>
-            + NodeInfoUpdater<C>
+        N: NodeInfoFetcher<PC>
+            + NodeInfoUpdater<PC>
             + ContextInfoUpdater
             + std::fmt::Debug
             + Clone
             + Sync
             + Send
             + 'static,
-        G: GroupInfoFetcher<C>
-            + GroupInfoUpdater<C>
+        G: GroupInfoFetcher<PC>
+            + GroupInfoUpdater<PC>
             + ContextInfoUpdater
             + std::fmt::Debug
             + Clone
@@ -157,8 +172,15 @@ impl<
             + Sync
             + Send
             + 'static,
+        C: SignatureResultCacheFetcher<RandomnessResultCache>
+            + SignatureResultCacheUpdater<RandomnessResultCache>
+            + std::fmt::Debug
+            + Clone
+            + Sync
+            + Send
+            + 'static,
         I: ChainIdentity
-            + ControllerClientBuilder<C>
+            + ControllerClientBuilder<PC>
             + CoordinatorClientBuilder
             + AdapterClientBuilder
             + ChainProviderBuilder
@@ -167,10 +189,10 @@ impl<
             + Sync
             + Send
             + 'static,
-        C: PairingCurve + std::fmt::Debug + Clone + Sync + Send + 'static,
-    > ContextFetcher<GeneralContext<N, G, T, I, C>> for GeneralContext<N, G, T, I, C>
+        PC: PairingCurve + std::fmt::Debug + Clone + Sync + Send + 'static,
+    > ContextFetcher<GeneralContext<N, G, T, C, I, PC>> for GeneralContext<N, G, T, C, I, PC>
 {
-    fn get_main_chain(&self) -> &<GeneralContext<N, G, T, I, C> as Context>::MainChain {
+    fn get_main_chain(&self) -> &<GeneralContext<N, G, T, C, I, PC> as Context>::MainChain {
         &self.main_chain
     }
 
@@ -218,16 +240,16 @@ impl TaskWaiter for ContextHandle {
 }
 
 impl<
-        N: NodeInfoFetcher<C>
-            + NodeInfoUpdater<C>
+        N: NodeInfoFetcher<PC>
+            + NodeInfoUpdater<PC>
             + ContextInfoUpdater
             + std::fmt::Debug
             + Clone
             + Sync
             + Send
             + 'static,
-        G: GroupInfoFetcher<C>
-            + GroupInfoUpdater<C>
+        G: GroupInfoFetcher<PC>
+            + GroupInfoUpdater<PC>
             + ContextInfoUpdater
             + std::fmt::Debug
             + Clone
@@ -241,8 +263,15 @@ impl<
             + Sync
             + Send
             + 'static,
+        C: SignatureResultCacheFetcher<RandomnessResultCache>
+            + SignatureResultCacheUpdater<RandomnessResultCache>
+            + std::fmt::Debug
+            + Clone
+            + Sync
+            + Send
+            + 'static,
         I: ChainIdentity
-            + ControllerClientBuilder<C>
+            + ControllerClientBuilder<PC>
             + CoordinatorClientBuilder
             + AdapterClientBuilder
             + ChainProviderBuilder
@@ -251,13 +280,13 @@ impl<
             + Sync
             + Send
             + 'static,
-        C: PairingCurve + std::fmt::Debug + Clone + Sync + Send + 'static,
-    > CommitterServerStarter<GeneralContext<N, G, T, I, C>> for SimpleFixedTaskScheduler
+        PC: PairingCurve + std::fmt::Debug + Clone + Sync + Send + 'static,
+    > CommitterServerStarter<GeneralContext<N, G, T, C, I, PC>> for SimpleFixedTaskScheduler
 {
     fn start_committer_server(
         &mut self,
         rpc_endpoint: String,
-        context: Arc<RwLock<GeneralContext<N, G, T, I, C>>>,
+        context: Arc<RwLock<GeneralContext<N, G, T, C, I, PC>>>,
     ) -> SchedulerResult<()> {
         self.add_task(TaskType::RpcServer(RpcServerType::Committer), async move {
             if let Err(e) = committer_server::start_committer_server(rpc_endpoint, context).await {
@@ -268,16 +297,16 @@ impl<
 }
 
 impl<
-        N: NodeInfoFetcher<C>
-            + NodeInfoUpdater<C>
+        N: NodeInfoFetcher<PC>
+            + NodeInfoUpdater<PC>
             + ContextInfoUpdater
             + std::fmt::Debug
             + Clone
             + Sync
             + Send
             + 'static,
-        G: GroupInfoFetcher<C>
-            + GroupInfoUpdater<C>
+        G: GroupInfoFetcher<PC>
+            + GroupInfoUpdater<PC>
             + ContextInfoUpdater
             + std::fmt::Debug
             + Clone
@@ -291,8 +320,15 @@ impl<
             + Sync
             + Send
             + 'static,
+        C: SignatureResultCacheFetcher<RandomnessResultCache>
+            + SignatureResultCacheUpdater<RandomnessResultCache>
+            + std::fmt::Debug
+            + Clone
+            + Sync
+            + Send
+            + 'static,
         I: ChainIdentity
-            + ControllerClientBuilder<C>
+            + ControllerClientBuilder<PC>
             + CoordinatorClientBuilder
             + AdapterClientBuilder
             + ChainProviderBuilder
@@ -301,13 +337,13 @@ impl<
             + Sync
             + Send
             + 'static,
-        C: PairingCurve + std::fmt::Debug + Clone + Sync + Send + 'static,
-    > ManagementServerStarter<GeneralContext<N, G, T, I, C>> for SimpleFixedTaskScheduler
+        PC: PairingCurve + std::fmt::Debug + Clone + Sync + Send + 'static,
+    > ManagementServerStarter<GeneralContext<N, G, T, C, I, PC>> for SimpleFixedTaskScheduler
 {
     fn start_management_server(
         &mut self,
         rpc_endpoint: String,
-        context: Arc<RwLock<GeneralContext<N, G, T, I, C>>>,
+        context: Arc<RwLock<GeneralContext<N, G, T, C, I, PC>>>,
     ) -> SchedulerResult<()> {
         self.add_task(TaskType::RpcServer(RpcServerType::Management), async move {
             if let Err(e) = management_server::start_management_server(rpc_endpoint, context).await

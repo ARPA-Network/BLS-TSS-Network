@@ -8,7 +8,9 @@ use crate::node::{
 };
 use arpa_node_contract_client::adapter::{AdapterClientBuilder, AdapterTransactions, AdapterViews};
 use arpa_node_core::{ChainIdentity, PartialSignature, RandomnessTask, SubscriberType, TaskType};
-use arpa_node_dal::cache::RandomnessResultCache;
+use arpa_node_dal::{
+    cache::RandomnessResultCache, BLSResultCacheState, SignatureResultCacheUpdater,
+};
 use async_trait::async_trait;
 use ethers::types::Address;
 use log::{debug, error, info};
@@ -19,23 +21,29 @@ use tokio::sync::RwLock;
 #[derive(Debug)]
 pub struct RandomnessSignatureAggregationSubscriber<
     I: ChainIdentity + AdapterClientBuilder,
-    C: PairingCurve,
+    C: SignatureResultCacheUpdater<RandomnessResultCache>,
+    PC: PairingCurve,
 > {
     pub chain_id: usize,
     id_address: Address,
     chain_identity: Arc<RwLock<I>>,
+    randomness_signature_cache: Arc<RwLock<C>>,
     eq: Arc<RwLock<EventQueue>>,
     ts: Arc<RwLock<SimpleDynamicTaskScheduler>>,
-    c: PhantomData<C>,
+    c: PhantomData<PC>,
 }
 
-impl<I: ChainIdentity + AdapterClientBuilder, C: PairingCurve>
-    RandomnessSignatureAggregationSubscriber<I, C>
+impl<
+        I: ChainIdentity + AdapterClientBuilder,
+        C: SignatureResultCacheUpdater<RandomnessResultCache>,
+        PC: PairingCurve,
+    > RandomnessSignatureAggregationSubscriber<I, C, PC>
 {
     pub fn new(
         chain_id: usize,
         id_address: Address,
         chain_identity: Arc<RwLock<I>>,
+        randomness_signature_cache: Arc<RwLock<C>>,
         eq: Arc<RwLock<EventQueue>>,
         ts: Arc<RwLock<SimpleDynamicTaskScheduler>>,
     ) -> Self {
@@ -43,6 +51,7 @@ impl<I: ChainIdentity + AdapterClientBuilder, C: PairingCurve>
             chain_id,
             id_address,
             chain_identity,
+            randomness_signature_cache,
             eq,
             ts,
             c: PhantomData,
@@ -61,14 +70,20 @@ pub trait FulfillRandomnessHandler {
     ) -> NodeResult<()>;
 }
 
-pub struct GeneralFulfillRandomnessHandler<I: ChainIdentity + AdapterClientBuilder> {
+pub struct GeneralFulfillRandomnessHandler<
+    I: ChainIdentity + AdapterClientBuilder,
+    C: SignatureResultCacheUpdater<RandomnessResultCache>,
+> {
     id_address: Address,
     chain_identity: Arc<RwLock<I>>,
+    randomness_signature_cache: Arc<RwLock<C>>,
 }
 
 #[async_trait]
-impl<I: ChainIdentity + AdapterClientBuilder + Sync + Send> FulfillRandomnessHandler
-    for GeneralFulfillRandomnessHandler<I>
+impl<
+        I: ChainIdentity + AdapterClientBuilder + Sync + Send,
+        C: SignatureResultCacheUpdater<RandomnessResultCache> + Sync + Send,
+    > FulfillRandomnessHandler for GeneralFulfillRandomnessHandler<I, C>
 {
     async fn handle(
         &self,
@@ -86,6 +101,29 @@ impl<I: ChainIdentity + AdapterClientBuilder + Sync + Send> FulfillRandomnessHan
         let randomness_task_request_id = randomness_task.request_id.clone();
 
         if client.is_task_pending(&randomness_task_request_id).await? {
+            let wei_per_gas = self
+                .chain_identity
+                .read()
+                .await
+                .get_current_gas_price()
+                .await?;
+
+            if wei_per_gas > randomness_task.callback_max_gas_price {
+                self.randomness_signature_cache
+                    .write()
+                    .await
+                    .update_commit_result(
+                        &randomness_task_request_id,
+                        BLSResultCacheState::NotCommitted,
+                    )
+                    .await?;
+
+                info!("cancel fulfilling randomness as gas price is too high! task request id: {}, current_gas_price:{:?}, max_gas_price: {:?}",
+                    format!("{:?}",hex::encode(randomness_task_request_id)), wei_per_gas, randomness_task.callback_max_gas_price);
+
+                return Ok(());
+            }
+
             match client
                 .fulfill_randomness(
                     group_index,
@@ -96,13 +134,39 @@ impl<I: ChainIdentity + AdapterClientBuilder + Sync + Send> FulfillRandomnessHan
                 .await
             {
                 Ok(tx_hash) => {
+                    self.randomness_signature_cache
+                        .write()
+                        .await
+                        .update_commit_result(
+                            &randomness_task_request_id,
+                            BLSResultCacheState::Committed,
+                        )
+                        .await?;
+
                     info!("fulfill randomness successfully! tx_hash:{:?}, task request id: {}, group_index: {}, signature: {}",
                     tx_hash, format!("{:?}",hex::encode(randomness_task_request_id)), group_index, hex::encode(signature));
                 }
                 Err(e) => {
+                    self.randomness_signature_cache
+                        .write()
+                        .await
+                        .update_commit_result(
+                            &randomness_task_request_id,
+                            BLSResultCacheState::NotCommitted,
+                        )
+                        .await?;
                     error!("{:?}", e);
                 }
             }
+        } else {
+            self.randomness_signature_cache
+                .write()
+                .await
+                .update_commit_result(
+                    &randomness_task_request_id,
+                    BLSResultCacheState::CommittedByOthers,
+                )
+                .await?;
         }
 
         Ok(())
@@ -112,8 +176,13 @@ impl<I: ChainIdentity + AdapterClientBuilder + Sync + Send> FulfillRandomnessHan
 #[async_trait]
 impl<
         I: ChainIdentity + AdapterClientBuilder + std::fmt::Debug + Sync + Send + 'static,
-        C: PairingCurve + std::fmt::Debug + Sync + Send + 'static,
-    > Subscriber for RandomnessSignatureAggregationSubscriber<I, C>
+        C: SignatureResultCacheUpdater<RandomnessResultCache>
+            + std::fmt::Debug
+            + Sync
+            + Send
+            + 'static,
+        PC: PairingCurve + std::fmt::Debug + Sync + Send + 'static,
+    > Subscriber for RandomnessSignatureAggregationSubscriber<I, C, PC>
 {
     async fn notify(&self, topic: Topic, payload: &(dyn DebuggableEvent)) -> NodeResult<()> {
         debug!("{:?}", topic);
@@ -140,7 +209,7 @@ impl<
                 .cloned()
                 .collect::<Vec<Vec<u8>>>();
 
-            let signature = SimpleBLSCore::<C>::aggregate(threshold, &partials)?;
+            let signature = SimpleBLSCore::<PC>::aggregate(threshold, &partials)?;
 
             let partial_signatures = partial_signatures
                 .iter()
@@ -158,12 +227,15 @@ impl<
 
             let chain_identity = self.chain_identity.clone();
 
+            let randomness_signature_cache = self.randomness_signature_cache.clone();
+
             self.ts.write().await.add_task(
                 TaskType::Subscriber(SubscriberType::RandomnessSignatureAggregation),
                 async move {
                     let handler = GeneralFulfillRandomnessHandler {
                         id_address,
                         chain_identity,
+                        randomness_signature_cache,
                     };
 
                     if let Err(e) = handler
@@ -199,7 +271,12 @@ impl<
 
 impl<
         I: ChainIdentity + AdapterClientBuilder + std::fmt::Debug + Sync + Send + 'static,
-        C: PairingCurve + std::fmt::Debug + Sync + Send + 'static,
-    > DebuggableSubscriber for RandomnessSignatureAggregationSubscriber<I, C>
+        C: SignatureResultCacheUpdater<RandomnessResultCache>
+            + std::fmt::Debug
+            + Sync
+            + Send
+            + 'static,
+        PC: PairingCurve + std::fmt::Debug + Sync + Send + 'static,
+    > DebuggableSubscriber for RandomnessSignatureAggregationSubscriber<I, C, PC>
 {
 }
