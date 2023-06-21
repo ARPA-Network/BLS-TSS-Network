@@ -1,6 +1,6 @@
 #!/bin/sh
 # Set hostname
-HOSTNAME=node-test
+HOSTNAME=node-ec2
 echo "Setting the hostname to $HOSTNAME"
 hostnamectl set-hostname $HOSTNAME
 echo "127.0.0.1 $HOSTNAME" >> /etc/hosts
@@ -27,9 +27,10 @@ git clone -b dockerAutomation https://github.com/wrinkledeth/BLS-TSS-Network.git
 cd /tmp/BLS-TSS-Network/contracts
 
 # pull container-init and arpa-node images
-docker pull wrinkledeth/anvil-chain:latest
+# docker pull wrinkledeth/anvil-chain:latest
+# docker pull wrinkledeth/arpa-node:latest
 docker pull wrinkledeth/contract-init:latest
-docker pull wrinkledeth/arpa-node:latest
+docker pull wrinkledeth/arpa-node-prod:latest
 
 # create complete file
 touch /tmp/complete

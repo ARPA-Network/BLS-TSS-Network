@@ -1,19 +1,13 @@
 
-# Create EC2 Instance in new VPC with Systems Manager enabled
+# Mainnet Node Operation (CDK + Docker)
 
-This example includes:
+This is the instruction for node operators on mainnet.
 
-- Own VPC with public subnet (following AWS Defaults for new accounts)
-- Based on latest Amazon Linux 2
-- System Manager replaces SSH (Remote session available trough the AWS Console or the AWS CLI.)
-- Userdata executed from script in S3 (configure_anvil.sh, configure_node.sh)
+We offer CDK scripts for deploying an AWS EC2 instance along with all neccesary resources and dependencies(VPC, Firewall rules, login metod etc..) to host your ARPA node containers,
 
-## Useful commands
+If you do not with to use CDK, you can also use the dockerfiles and scripts in this folder to deploy your node containers on your infrastructure.
 
-- `cdk bootstrap`   initialize assets before deploy
-- `cdk synth`       emits the synthesized CloudFormation template
-- `cdk deploy`      deploy this stack to your default AWS account/region
-- `aws ssm start-session --target i-xxxxxxxxx` remote session for shell access
+NOTE: It may be useful to test out the CDK scripts and instructions in [internet-test](../internet-test/README.md) first to get a feel for the process.
 
 ## Install AWS CLI and AWS Session Manager plugin
 
@@ -25,7 +19,7 @@ This example includes:
 # Configure aws-cli
 aws configure # configure aws cli (us-east-2, json, none, none)
 
-# Verify session manager plugin
+# Verify session manager plugin install
 session-manager-plugin
 ```
 
@@ -49,65 +43,27 @@ pip install -r requirements.txt
 # Deploying
 cdk bootstrap # initialize assets before deploy
 cdk synth # emits the synthesized CloudFormation template
-cdk deploy # deploy this stack to your default AWS account/region
 
-# destory
-cdk destroy # destroy this stack to your default AWS account/region
+cdk deploy # deploy this stack to your default AWS account/region
 ```
 
-## Sample workflow
+Sample Stack Outputs after "cdk deploy"
+
+```bash
+Node ec2: 18.224.44.15
+aws ssm start-session --target i-0da73558ad639280b
+```
+
+## Node EC2 Instructions
+
+You will need to configure a config.yaml file for each node container. For details on how to configure this file, please see the [node-client readme](../../crates/arpa-node/README.md)
 
 ```bash
 
-# Stack Outputs
-Anvil ec2: 18.218.143.46
-aws ssm start-session --target i-0b01c70aaed481b37
-
-Node ec2: 3.15.228.9
-aws ssm start-session --target i-091e4058778037871
-
-Env variables for contract deployment:
-export ETH_RPC_URL="http://18.218.143.46:8545"
-export NODE_RPC_IP="3.15.228.9"
-            
-
------------------
-
-################
-# ssh anvil-test
-
-The anvil container should start automatically. If not, consider the following options. 
-
-# monitor anvil 
-watch "docker logs anvil-chain | tail -n 20"
-
-# pull and run anvil image
-docker pull wrinkledeth/anvil-chain:latest
-docker run -d --name anvil-chain -p 8545:8545 wrinkledeth/anvil-chain:latest
-watch "docker logs anvil-chain | tail -n 20"
-
-# run anvil without docker
-anvil --host 0.0.0.0 --block-time 1 --prune-history
-
------------------
-################
-# ssh node-test
-
-# prep env
-export ETH_RPC_URL="http://18.218.143.46:8545"
-export NODE_RPC_IP="3.15.228.9"
-cd /tmp
-git clone -b dockerAutomation https://github.com/wrinkledeth/BLS-TSS-Network.git
-
-# run container-init
-docker run -d --name contract-init -v /tmp/BLS-TSS-Network/contracts/.env:/usr/src/app/external/.env -e ETH_RPC_URL=$ETH_RPC_URL wrinkledeth/contract-init:latest
-# monitor logs
-watch "docker logs contract-init | tail -n 20" 
-
-# run arpa-nodes
-docker run -d --name node1 -p 50061:50061 -p 50091:50091 -v /tmp/BLS-TSS-Network/docker/mainnet/arpa-node/config_1.yml:/usr/src/app/external/config.yml -e ETH_RPC_URL=$ETH_RPC_URL -e NODE_RPC_URL=${NODE_RPC_IP}:50061 wrinkledeth/arpa-node:latest
-docker run -d --name node2 -p 50062:50061 -p 50092:50091 -v /tmp/BLS-TSS-Network/docker/mainnet/arpa-node/config_2.yml:/usr/src/app/external/config.yml -e ETH_RPC_URL=$ETH_RPC_URL -e NODE_RPC_URL=${NODE_RPC_IP}:50062 wrinkledeth/arpa-node:latest
-docker run -d --name node3 -p 50063:50061 -p 50093:50091 -v /tmp/BLS-TSS-Network/docker/mainnet/arpa-node/config_3.yml:/usr/src/app/external/config.yml -e ETH_RPC_URL=$ETH_RPC_URL -e NODE_RPC_URL=${NODE_RPC_IP}:50063 wrinkledeth/arpa-node:latest
+# run arpa node containers
+docker run -d --name node1 -p 50061:50061 -p 50091:50091 -v /tmp/BLS-TSS-Network/docker/mainnet/arpa-node/config_1.yml:/usr/src/app/external/config.yml wrinkledeth/arpa-node:latest
+docker run -d --name node2 -p 50062:50061 -p 50092:50091 -v /tmp/BLS-TSS-Network/docker/mainnet/arpa-node/config_2.yml:/usr/src/app/external/config.yml wrinkledeth/arpa-node:latest
+docker run -d --name node3 -p 50063:50061 -p 50093:50091 -v /tmp/BLS-TSS-Network/docker/mainnet/arpa-node/config_3.yml:/usr/src/app/external/config.yml wrinkledeth/arpa-node:latest
 
 # check if nodes grouped succesfully
 docker exec -it node1 /bin/bash       
@@ -117,11 +73,14 @@ cat /var/log/randcast_node_client.log
 # deploy user contract / check if randomness worked.
 docker exec -it contract-init /bin/bash
 forge script /usr/src/app/script/GetRandomNumberLocalTest.s.sol:GetRandomNumberLocalTestScript --fork-url $ETH_RPC_URL --broadcast
-cast call 0xa513e6e4b8f2a923d98304ec87f64353c4d5c853 "getLastRandomness()(uint256)"
-cast call 0x712516e61C8B383dF4A63CFe83d7701Bce54B03e "lastRandomnessResult()(uint256)"
+cast call 0xa513e6e4b8f2a923d98304ec87f64353c4d5c853 "getLastRandomness()(uint256)" # should not show 0
+cast call 0x712516e61C8B383dF4A63CFe83d7701Bce54B03e "lastRandomnessResult()(uint256)" # should match above
+```
 
------------------
+## Teardown
 
+```bash
+cdk destroy
 ```
 
 ## Useful Commands
@@ -130,10 +89,22 @@ The node-test ec2 comes with a dockerized version of foundry. You can run foundr
 [docs](https://book.getfoundry.sh/tutorials/foundry-docker)
 
 ```bash
-# run cast using foundry docker image
+# run cast using foundry docker image (included in node-test ec2)
 docker run foundry "cast block --rpc-url $RPC_URL latest"
 
 # Cleanup Docker images
 docker kill $(docker ps -q)
 docker rm $(docker ps -a -q)
+
+# if you need to pull images from docker hub
+docker pull wrinkledeth/anvil-chain:latest
+docker pull wrinkledeth/contract-init:latest
+docker pull wrinkledeth/arpa-node:latest
+
+# if you need to manually build images
+cd BLS-TSS-Network
+docker build -t anvil-chain ./docker/localnet/anvil-chain
+docker build -t contract-init -f ./docker/localnet/contract-init/Dockerfile .
+docker build -t arpa-node ./docker/localnet/arpa-node
+
 ```
