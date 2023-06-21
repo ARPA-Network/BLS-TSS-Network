@@ -1,50 +1,89 @@
 - [Arpa Node](#arpa-node)
-- [Node-client bin](#node-client-bin)
+- [Node Client](#node-client)
+  - [Usage](#usage)
+    - [New-run Mode](#new-run-mode)
+    - [Re-run Mode](#re-run-mode)
+- [ARPA Node CLI](#arpa-node-cli)
+  - [Usage](#usage-1)
+    - [REPL Commands](#repl-commands)
 - [Management grpc server](#management-grpc-server)
-- [Node-account-client bin(WIP)](#node-account-client-binwip)
-- [Node-cmd-client bin(WIP)](#node-cmd-client-binwip)
 - [Dependencies](#dependencies)
 - [Troubleshooting](#troubleshooting)
 - [Node Config](#node-config)
 - [Local Test](#local-test)
-  - [start the local testnet by anvil:](#start-the-local-testnet-by-anvil)
-  - [deploy the controller and the adapter contract:](#deploy-the-controller-and-the-adapter-contract)
-    - [add operators, start the staking pool and stake for a user and some nodes:](#add-operators-start-the-staking-pool-and-stake-for-a-user-and-some-nodes)
-  - [run 3 nodes to make a group:](#run-3-nodes-to-make-a-group)
-  - [deploy the user contract(`GetRandomNumberExample`) and request a randomness:](#deploy-the-user-contractgetrandomnumberexample-and-request-a-randomness)
-  - [the nodes should sign the randomness and one of the committers in the group will fulfill the result, check the results by cast:](#the-nodes-should-sign-the-randomness-and-one-of-the-committers-in-the-group-will-fulfill-the-result-check-the-results-by-cast)
 
 # Arpa Node
 
-This crate provides a node side on-chain implementation to the provided DKG and Threshold-BLS based randomness service(Randcast).
+This crate provides a node implementation to the DKG and Threshold-BLS based on-chain randomness service(Randcast).
 
-The Arpa Node consists of an event queue, two types of task schedulers and a set of listeners and subscribers. Events are passed within components and drive them to work. All the components and data access layer(with sqlite) are wrapped in a context, which holds and shares all the information needed for the client bin and grpc servers to expose services.
+The Arpa Node consists of an event queue, two types of task schedulers and a set of listeners and subscribers. Components are event-driving. All the components and data access layer(with sqlite) are wrapped in a context, which holds and shares all the information needed to expose services.
 
-Note that task schedulers manage components and sub-handlers from listeners, subscribers and grpc servers as different task types, instead of DKG or BLS tasks the network publishes.
+Note that task schedulers manage fixed-handlers and sub-handlers created by listeners, subscribers and grpc servers as different task types, which differ from DKG or BLS tasks the network publishes.
 
-# Node-client bin
+# Node Client
 
-Node-client is a long-running client to run the ARPA node.
+Node Client is a long-running program to run the ARPA node.
 
-With structopt, now it is more explicit and self-explanatory:
+## Usage
+
+To print help, use `-- -h`:
 
 ```bash
 cargo run --bin node-client -- -h
 ```
 
+### New-run Mode
+
+Before the first time to run the node, make sure the address of the node has been added to eligible operators list in the staking contract with sufficient stake, then use `new-run` mode:
+
+```bash
+cargo run --bin node-client -- -m new-run
+```
+
+This will generate a DKG keypair, persist node info to a local database and register the node to the ARPA Network.
+
+### Re-run Mode
+
+Once the database is initialized, always use `re-run` mode to start the node again:
+
+```bash
+cargo run --bin node-client -- -m re-run
+```
+
+# ARPA Node CLI
+
+ARPA Node CLI is a fast and verbose REPL for the operator of a ARPA node. The same node config file as Node Client will be used. As a supplement to Node Client, it provides a set of commands to inspect the node status and interact with the on-chain contracts, e.g. register node to the network when error occurs in the node-client `new-run` mode.
+
+## Usage
+
+To print help, use `-- -h`:
+
+```bash
+cargo run --bin node-shell -- -h
+```
+
+### REPL Commands
+
+```text
+Commands:
+  show      Show information of the config file and node database
+  call      Get views from on-chain contracts
+  history   Show command history
+  send      *** Be careful this will change on-chain state and cost gas ***
+                Send trxs to on-chain contracts
+  generate  Generate node identity(wallet) corresponding to ARPA node format
+  inspect   Connect to the node client and inspect the node status
+  help      Print this message or the help of the given subcommand(s)
+
+Options:
+  -h, --help  Print help
+```
+
 # Management grpc server
 
-Management grpc server supports getting states and interacting with a running node. It can be used for scenario tests or DevOps.
+Management grpc server supports inspecting states and interacting with a running node.
 
 Please see [`management.proto`](proto/management.proto) for detailed apis.
-
-# Node-account-client bin(WIP)
-
-Node-account-client is a practical tool to generate keystore corresponding to ARPA node format.
-
-# Node-cmd-client bin(WIP)
-
-Node-cmd-client is a practical tool to interact with on-chain contracts for ARPA node owner or administrator.
 
 # Dependencies
 
@@ -116,10 +155,12 @@ Configuration items in [`conf/config.yml`](conf/config.yml) are listed here:
     ```
     hdwallet:
         mnemonic: env
-        path(Optional): "m/44'/60'/0'/0"
-        index: 1
-        passphrase(Optional): "custom_password"
+        path: "m/44'/60'/0'/0"
+        index: 0
+        passphrase: "custom_password"
     ```
+
+    Path and passphrase are optional.
 
     To protect secrets, several items can be set with literal `env` as placeholder. Their env keys are:
 
@@ -217,14 +258,14 @@ Configuration items in [`conf/config.yml`](conf/config.yml) are listed here:
 cargo test --all -- --test-threads=1 --nocapture
 ```
 
-## start the local testnet by anvil:
+Start the local testnet by anvil:
 
 ```bash
 # produces a new block every 1 second
 anvil --block-time 1
 ```
 
-## deploy the controller and the adapter contract:
+Deploy the controller and the adapter contract:
 
 ```bash
 cd contracts
@@ -234,7 +275,7 @@ cd contracts
 forge script script/ControllerLocalTest.s.sol:ControllerLocalTestScript --fork-url http://localhost:8545 --broadcast
 ```
 
-### add operators, start the staking pool and stake for a user and some nodes:
+Add operators, start the staking pool and stake for a user and some nodes:
 
 ```bash
 # nodes addresses are generated from index 10 by mnemonic "test test test test test test test test test test test junk"(anvil default)
@@ -242,7 +283,7 @@ forge script script/ControllerLocalTest.s.sol:ControllerLocalTestScript --fork-u
 forge script script/StakeNodeLocalTest.s.sol:StakeNodeLocalTestScript --fork-url http://localhost:8545 --broadcast -g 150
 ```
 
-## run 3 nodes to make a group:
+Run 3 nodes to make a group:
 
 ```bash
 cd crates/arpa-node
@@ -251,7 +292,7 @@ cargo run --bin node-client -- -m new-run -c test/conf/config_test_2.yml
 cargo run --bin node-client -- -m new-run -c test/conf/config_test_3.yml
 ```
 
-## deploy the user contract([`GetRandomNumberExample`](../../contracts/src/user/examples/GetRandomNumberExample.sol)) and request a randomness:
+Deploy the user contract([`GetRandomNumberExample`](../../contracts/src/user/examples/GetRandomNumberExample.sol)) and request a randomness:
 
 ```bash
 cd contracts
@@ -259,7 +300,7 @@ cd contracts
 forge script script/GetRandomNumberLocalTest.s.sol:GetRandomNumberLocalTestScript --fork-url http://localhost:8545 --broadcast
 ```
 
-## the nodes should sign the randomness and one of the committers in the group will fulfill the result, check the results by cast:
+The nodes should sign the randomness and one of the committers in the group will fulfill the result, check the results by `cast`:
 
 ```bash
 # check the randomness result recorded by the adapter and the user contract respectively
