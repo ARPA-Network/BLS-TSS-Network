@@ -20,9 +20,9 @@ pub trait ServiceClient<C> {
 
 #[async_trait]
 pub trait TransactionCaller {
-    async fn call_contract_transaction(
+    async fn call_contract_transaction<D: Detokenize + std::fmt::Debug + Send + Sync + 'static>(
         info: &str,
-        call: ContractCall<WalletSigner, ()>,
+        call: ContractCall<WalletSigner, D>,
         contract_transaction_retry_descriptor: ExponentialBackoffRetryDescriptor,
         retry_on_transaction_fail: bool,
     ) -> ContractClientResult<H256> {
