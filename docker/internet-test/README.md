@@ -1,5 +1,5 @@
 
-# Inetner Enabled Testnet using CDK (AWS EC2 + docker)
+# Internet Enabled Testnet using CDK (AWS EC2 + docker)
 
 This folder contains everything needed to deploy a fully functional testnet onling using two AWS EC2 instances.
 
