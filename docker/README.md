@@ -1,4 +1,4 @@
-# Randcast DevOps Scripting (Docker / CDK IAC)
+# Randcast DevOps Scripting (Dockerfiles and CDK AWS Infrastructure Scripts)
 
 ## Overview
 
