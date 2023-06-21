@@ -101,7 +101,7 @@ impl SqliteDB {
             connection: Arc::new(connection),
         };
 
-        db.integrity_check().await.map_err(|e| 
+        db.integrity_check().await.map_err(|e|
             format!("Node identity is different from the database, please check the (account)cipher key. Original error: {:?}", e.to_string()))?;
 
         Migrator::up(&*db.connection, None).await?;
@@ -280,7 +280,7 @@ impl<C: PairingCurve> std::fmt::Debug for NodeInfoDBClient<C> {
 impl<C: PairingCurve> NodeInfoDBClient<C> {
     pub async fn refresh_current_node_info(&mut self) -> DBResult<bool> {
         let conn = &self.db_client.connection;
-        match NodeQuery::find_current_node_info(conn).await?{
+        match NodeQuery::find_current_node_info(conn).await? {
             Some(node_info) => {
                 let node_info_cache = InMemoryNodeInfoCache::rebuild(
                     node_info.id_address.parse().unwrap(),
@@ -288,11 +288,11 @@ impl<C: PairingCurve> NodeInfoDBClient<C> {
                     bincode::deserialize(&node_info.dkg_private_key).unwrap(),
                     bincode::deserialize(&node_info.dkg_public_key).unwrap(),
                 );
-        
+
                 node_info_cache.refresh_context_entry();
-        
+
                 self.node_info_cache = Some(node_info_cache);
-        
+
                 self.node_info_cache_model = Some(node_info);
 
                 Ok(true)
@@ -378,8 +378,7 @@ impl<C: PairingCurve> GroupInfoDBClient<C> {
     pub async fn refresh_current_group_info(&mut self) -> DBResult<bool> {
         let conn = &self.db_client.connection;
 
-        match GroupQuery::find_current_group_info(conn)
-        .await?{
+        match GroupQuery::find_current_group_info(conn).await? {
             Some(group_info) => {
                 let group = Group {
                     index: group_info.index as usize,
@@ -398,7 +397,7 @@ impl<C: PairingCurve> GroupInfoDBClient<C> {
                         .map_or(vec![], |str| serde_json::from_str(str).unwrap()),
                     c: PhantomData,
                 };
-        
+
                 let group_info_cache = InMemoryGroupInfoCache::rebuild(
                     group_info
                         .share
@@ -409,18 +408,17 @@ impl<C: PairingCurve> GroupInfoDBClient<C> {
                     group_info.self_member_index as usize,
                     group_info.dkg_start_block_height as usize,
                 );
-        
+
                 group_info_cache.refresh_context_entry();
-        
+
                 self.group_info_cache = Some(group_info_cache);
-        
+
                 self.group_info_cache_model = Some(group_info);
 
                 Ok(true)
             }
             None => Ok(false),
         }
-
     }
 
     fn only_has_group_task(&self) -> DBResult<()> {
