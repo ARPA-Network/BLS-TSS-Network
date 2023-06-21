@@ -19,7 +19,9 @@ For the internet-test and mainnet folders, We have also included CDK scripts for
 ## Images offerred
 
 ARPA/anvil-dev
-ARPA/contract-deployment-dev
-ARPA/node-dev
-ARPA/node-prod (edited)
 
+ARPA/contract-deployment-dev
+
+ARPA/node-dev
+
+ARPA/node-prod 
