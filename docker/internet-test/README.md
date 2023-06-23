@@ -123,7 +123,6 @@ docker logs -f contract-init
 
 Once the contract-init container has finished deploying the contracts, you can start the node containers.
 
-]
 
 ```bash
 

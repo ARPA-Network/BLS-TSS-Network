@@ -54,7 +54,7 @@ Node ec2: 18.224.44.15
 aws ssm start-session --target i-0da73558ad639280b
 ```
 
-## Node EC2 Instructions**
+## Node EC2 Instructions
 
 You will need to configure a config.yaml file for each node container. For details on how to configure this file, please see the [node-client readme](../../crates/arpa-node/README.md)
 
