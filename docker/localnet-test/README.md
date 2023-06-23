@@ -21,18 +21,6 @@ docker run foundry "cast block --rpc-url $RPC_URL latest"
 # Cleanup Docker images
 docker kill $(docker ps -q)
 docker rm $(docker ps -a -q)
-
-# if you need to pull images from docker hub
-docker pull wrinkledeth/anvil-chain:latest
-docker pull wrinkledeth/contract-init:latest
-docker pull wrinkledeth/arpa-node:latest
-
-# if you need to manually build images
-cd BLS-TSS-Network
-docker build -t anvil-chain ./docker/localnet/anvil-chain
-docker build -t contract-init -f ./docker/localnet/contract-init/Dockerfile .
-docker build -t arpa-node ./docker/localnet/arpa-node
-
 ```
 
 ## Sample Workflow
@@ -54,7 +42,7 @@ docker build -t arpa-node ./docker/localnet-test/arpa-node
 docker run -d --network randcast_network --name anvil-chain anvil-chain:latest
 
 # Run contract init (ensure .env configured correctly)
-docker run -d --network randcast_network --name contract-init -v ./contracts/.env_example:/usr/src/app/external/.env contract-init:latest 
+docker run -d --network randcast_network --name contract-init -v ./contracts/.env.example:/usr/src/app/external/.env contract-init:latest 
 # Wait for all contracts to deploy (check docker logs)
 
 # Run 3 arpa nodes (ensure config files are correct)

@@ -54,11 +54,13 @@ Node ec2: 18.224.44.15
 aws ssm start-session --target i-0da73558ad639280b
 ```
 
-## Node EC2 Instructions
+## Node EC2 **Instructions**
 
 You will need to configure a config.yaml file for each node container. For details on how to configure this file, please see the [node-client readme](../../crates/arpa-node/README.md)
 
 ```bash
+
+docker run -d --name node1 -p 50061:50061 -p 50091:50091 -v /Users/zen/dev/pr/BLS-TSS-Network/docker/mainnet/arpa-node/config_1.yml:/usr/src/app/external/config.yml arpa-node
 
 # run arpa node containers
 docker run -d --name node1 -p 50061:50061 -p 50091:50091 -v /tmp/BLS-TSS-Network/docker/mainnet/arpa-node/config_1.yml:/usr/src/app/external/config.yml wrinkledeth/arpa-node:latest
@@ -103,8 +105,10 @@ docker pull wrinkledeth/arpa-node:latest
 
 # if you need to manually build images
 cd BLS-TSS-Network
-docker build -t anvil-chain ./docker/localnet/anvil-chain
-docker build -t contract-init -f ./docker/localnet/contract-init/Dockerfile .
-docker build -t arpa-node ./docker/localnet/arpa-node
+docker build -t arpa-node ./docker/mainnet/arpa-node
+docker build -t contract-init ./docker/mainnet/contract-init
+docker build -t anvil-chain ./docker/mainnet/anvil-chain
+
+docker run -d --name node1 -p 50061:50061 -p 50091:50091 -v /Users/zen/dev/pr/BLS-TSS-Network/docker/mainnet/arpa-node/config_1.yml:/usr/src/app/external/config.yml arpa-node
 
 ```

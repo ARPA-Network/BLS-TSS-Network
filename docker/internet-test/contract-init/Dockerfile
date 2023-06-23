@@ -7,7 +7,7 @@ WORKDIR /usr/src/app
 COPY ../../contracts .
 
 # Copy entrypoint.sh script and make it executable
-COPY ./docker/mainnet/contract-init/entrypoint.sh /usr/src/app/
+COPY ./docker/internet-test/contract-init/entrypoint.sh /usr/src/app/
 RUN chmod +x /usr/src/app/entrypoint.sh
 
 # Install dependencies

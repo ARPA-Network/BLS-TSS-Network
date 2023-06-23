@@ -4,24 +4,52 @@
 
 This folder contains the dockerfiles, scripts, and config files for facilitating streamlined randcast deployments (both for testing and production use on mainnet).
 
+
+
 ## Folder Structure
 
 Scripts are split into the following sections:
 
-[localnet-test](./localnet-test/README.md): deploy testnet locally using docker network
+[localnet-test](./localnet-test/README.md): deploy testnet locally using docker network. This is the easiest way to get started with randcast and is recommended for testing purposes.
 
-[internet-test](./internet-test/README.md): deploy testnet online using AWS EC2 + docker
+- The dockerfiles provided in this folder most be built locally and are not hosted on dockerhub.
 
-[mainnet](./mainnet/README.md): for node operators to deploy their nodes on mainnet (AWS EC2 + docker)
+[internet-test](./internet-test/README.md): deploy testnet online using AWS EC2 + docker. This gives a more practical example of how nodes are deployed on mainnet.
 
-For the internet-test and mainnet folders, We have also included CDK scripts for deploying AWS EC2 instances along with the neccesary networking and IAM configurations to host your node containers.
+- The dockerfiles provided in this folder have been built and hosted on dockerhub and can be pulled directly from there.
+- EC2 CDK scripts provided for deploying a full fledged test network (Anvil EC2 hosting anvil container + NODE EC2 for running contract-init and  node containers)
 
-## Images offerred
+[mainnet](./mainnet/README.md): Sample deployment CDK script for randcast on mainnet.
 
-ARPA/anvil-dev
+## Docker Images Offered [ARPA Dockerhub](https://hub.docker.com/u/arpachainio)
 
-ARPA/contract-deployment-dev
+[arpachainio/anvil-test:latest](https://hub.docker.com/r/arpachainio/anvil-test/tags): Spin up an anvil test chain
 
-ARPA/node-dev
+[arpachainio/contracts-test:latest](https://hub.docker.com/r/arpachainio/contracts-test/tags): Deploy randcast contracts to anvil test chain
 
-ARPA/node-prod 
+[arpachainio/node:latest](https://hub.docker.com/r/arpachainio/node/tags): Deploy arpa node that interfaces with the deployed contracts to generate randomness
+
+## Manual Build Instructions
+
+```bash
+# manually build images
+cd BLS-TSS-Network
+docker build -t anvil-chain ./docker/internet-test/anvil-chain
+docker build -t contract-init -f ./docker/internet-test/contract-init/Dockerfile .
+docker build -t arpa-node ./docker/internet-test/arpa-node
+
+# tag imges for docker hub
+docker tag anvil-chain arpachainio/anvil-test:latest
+docker tag contract-init arpachainio/contracts-test:latest
+docker tag arpa-node arpachainio/node:latest
+
+# push images to docker hub
+docker push arpachainio/anvil-test:latest
+docker push arpachainio/contracts-test:latest
+docker push arpachainio/node:latest
+
+# pull images
+docker pull arpachainio/anvil-test:latest
+docker pull arpachainio/contracts-test:latest
+docker pull arpachainio/node:latest
+```

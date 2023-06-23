@@ -16,8 +16,8 @@ sudo systemctl start docker.service # start docker
 docker ps
 
 # pull and run anvil
-docker pull wrinkledeth/anvil-chain:latest
-docker run -d --name anvil-chain -p 8545:8545 wrinkledeth/anvil-chain:latest
+docker pull arpachainio/anvil-test:latest
+docker run -d --name anvil-chain -p 8545:8545 arpachainio/anvil-test:latest
 
 # create complete file
 touch /tmp/complete

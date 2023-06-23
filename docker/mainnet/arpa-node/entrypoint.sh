@@ -1,6 +1,6 @@
 #!/bin/sh
 
-# Copy the config file to a new location
+# Copy the config file out of the volume mount
 cp /usr/src/app/external/config.yml /usr/src/app/config.yml
 
 echo "Starting supervisord job with the following command:"
