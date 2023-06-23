@@ -5,7 +5,6 @@
 This folder contains the dockerfiles, scripts, and config files for facilitating streamlined randcast deployments (both for testing and production use on mainnet).
 
 
-
 ## Folder Structure
 
 Scripts are split into the following sections:
@@ -20,6 +19,9 @@ Scripts are split into the following sections:
 - EC2 CDK scripts provided for deploying a full fledged test network (Anvil EC2 hosting anvil container + NODE EC2 for running contract-init and  node containers)
 
 [mainnet](./mainnet/README.md): Sample deployment CDK script for randcast on mainnet.
+
+- Uses same node docker image as internet-test.
+- CDK script creates EC2 instance for hosting node containers only.
 
 ## Docker Images Offered [ARPA Dockerhub](https://hub.docker.com/u/arpachainio)
 
