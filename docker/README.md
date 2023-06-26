@@ -1,9 +1,8 @@
-# Randcast DevOps Scripting (Dockerfiles and CDK AWS Infrastructure Scripts)
+# Randcast DevOps IAC
 
 ## Overview
 
-This folder contains the dockerfiles, scripts, and config files for facilitating streamlined randcast deployments (both for testing and production use on mainnet).
-
+This folder contains dockerfiles, cdk scripts, and config files for facilitating streamlined randcast deployments (both for testing and production use on mainnet).
 
 ## Folder Structure
 
