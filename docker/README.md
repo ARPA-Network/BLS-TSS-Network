@@ -22,7 +22,9 @@ Scripts are split into the following sections:
 - Uses same node docker image as internet-test.
 - CDK script creates EC2 instance for hosting node containers only.
 
-## Docker Images Offered [ARPA Dockerhub](https://hub.docker.com/u/arpachainio)
+## Docker Images
+
+[ARPA Dockerhub](https://hub.docker.com/u/arpachainio)
 
 [arpachainio/anvil-test:latest](https://hub.docker.com/r/arpachainio/anvil-test/tags): Spin up an anvil test chain
 
