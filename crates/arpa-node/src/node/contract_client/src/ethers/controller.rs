@@ -169,7 +169,6 @@ impl<C: PairingCurve> ControllerViews<C> for ControllerClient {
             id_public_key: n.dkg_public_key.to_vec(),
             state: n.state,
             pending_until_block: n.pending_until_block.as_usize(),
-            staking: U256::zero(),
         })
     }
 

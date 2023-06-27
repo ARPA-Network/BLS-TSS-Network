@@ -9,8 +9,8 @@ name = "node-client"
 path = "src/node_client.rs"
 
 [[bin]]
-name = "node-account-client"
-path = "src/node_account_client.rs"
+name = "node-shell"
+path = "src/node_shell.rs"
 
 [dependencies]
 arpa-node-log = { path = "./src/node/log" }
@@ -19,7 +19,9 @@ arpa-node-dal = { path = "./src/node/dal" }
 arpa-node-sqlite-db = { path = "./src/node/dal/sqlite" }
 arpa-node-contract-client = { path = "./src/node/contract_client" }
 dkg-core = { path = "../dkg-core" }
-threshold-bls = { path = "../threshold-bls", default-features = false, features = ["bn254"] }
+threshold-bls = { path = "../threshold-bls", default-features = false, features = [
+    "bn254",
+] }
 
 gumdrop = "0.7.0"
 rand = "0.8"
@@ -45,10 +47,10 @@ log-mdc = "0.1.0"
 chrono = "0.4"
 structopt = "0.3"
 ethers = { version = "1.0.2", features = ["abigen"] }
-rand_chacha = "0.3.1"
 uuid = { version = "1.2.2", features = ["v4", "fast-rng", "macro-diagnostics"] }
 tower = "0.4"
 hyper = "0.14"
+reedline-repl-rs = { version = "^1.0", features = ["async"] }
 
 [build-dependencies]
 tonic-build = "0.8"

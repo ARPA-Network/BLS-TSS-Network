@@ -1,11 +1,12 @@
+use arpa_node::load_config;
 use arpa_node::node::context::chain::types::GeneralMainChain;
 use arpa_node::node::context::types::GeneralContext;
 use arpa_node::node::context::{Context, TaskWaiter};
 use arpa_node_contract_client::controller::{ControllerClientBuilder, ControllerTransactions};
+use arpa_node_core::format_now_date;
 use arpa_node_core::log::encoder::JsonEncoder;
 use arpa_node_core::GeneralChainIdentity;
 use arpa_node_core::{build_wallet_from_config, RandomnessTask};
-use arpa_node_core::{format_now_date, Config};
 use arpa_node_dal::cache::RandomnessResultCache;
 use arpa_node_dal::{NodeInfoFetcher, NodeInfoUpdater};
 use arpa_node_sqlite_db::GroupInfoDBClient;
@@ -22,7 +23,7 @@ use log4rs::append::rolling_file::RollingFileAppender;
 use log4rs::config::{Appender, Root};
 use log4rs::filter::threshold::ThresholdFilter;
 use log4rs::Config as LogConfig;
-use std::fs::{self, read_to_string};
+use std::fs::{self};
 use std::path::PathBuf;
 use structopt::StructOpt;
 use threshold_bls::curve::bn254::PairingCurve as BN254;
@@ -47,20 +48,6 @@ pub struct Opt {
         default_value = "conf/config.yml"
     )]
     config_path: PathBuf,
-}
-
-fn load_config(config_path: PathBuf) -> Config {
-    let config_str = &read_to_string(config_path).unwrap_or_else(|e| {
-        panic!(
-            "Error loading configuration file: {:?}, please check the configuration!",
-            e
-        )
-    });
-
-    let config: Config =
-        serde_yaml::from_str(config_str).expect("Error loading configuration file");
-
-    config.initialize()
 }
 
 fn init_logger(node_id: &str, context_logging: bool, log_file_path: &str, rolling_file_size: u64) {
@@ -256,9 +243,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
             let mut node_cache = db.get_node_info_client();
 
-            node_cache.refresh_current_node_info().await.expect(
-                "It seems there is no existing node record. Please execute in new-run mode.",
-            );
+            if let Ok(false) = node_cache.refresh_current_node_info().await {
+                panic!(
+                    "It seems there is no existing node record. Please execute in new-run mode."
+                );
+            }
 
             assert_eq!(node_cache.get_id_address()?, id_address,"Node identity is different from the database, please check or execute in new-run mode.");
 
@@ -277,9 +266,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
             let mut group_cache = db.get_group_info_client();
 
-            group_cache.refresh_current_group_info().await.expect(
-                "It seems there is no existing group record. Please execute in new-run mode.",
-            );
+            group_cache.refresh_current_group_info().await?;
 
             let randomness_tasks_cache = db.get_bls_tasks_client::<RandomnessTask>();
 

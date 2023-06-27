@@ -42,6 +42,9 @@ pub enum NodeError {
     #[error("There is already this chain id in the context. Please check config.yml")]
     RepeatedChainId,
 
+    #[error("can't connect to the rpc server, please check the endpoint. Original error: {0}")]
+    RpcNotAvailableError(tonic::transport::Error),
+
     #[error(transparent)]
     DataAccessError(#[from] DataAccessError),
 

@@ -35,6 +35,8 @@ use threshold_bls::{group::PairingCurve, poly::Eval, sig::Share};
 
 pub mod server;
 
+pub mod client;
+
 pub struct NodeInfo<PC: PairingCurve> {
     pub id_address: Address,
     pub node_rpc_endpoint: String,
@@ -48,6 +50,10 @@ pub struct GroupInfo<PC: PairingCurve> {
     pub dkg_status: DKGStatus,
     pub self_index: usize,
     pub dkg_start_block_height: usize,
+}
+
+pub trait ServiceClient<C> {
+    async fn prepare_service_client(&self) -> NodeResult<C>;
 }
 
 pub trait NodeService {
