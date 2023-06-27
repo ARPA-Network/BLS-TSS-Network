@@ -13,11 +13,11 @@ name = "node-shell"
 path = "src/node_shell.rs"
 
 [dependencies]
-arpa-node-log = { path = "./src/node/log" }
-arpa-node-core = { path = "./src/node/core" }
-arpa-node-dal = { path = "./src/node/dal" }
-arpa-node-sqlite-db = { path = "./src/node/dal/sqlite" }
-arpa-node-contract-client = { path = "./src/node/contract_client" }
+arpa-log = { path = "../log" }
+arpa-core = { path = "../core" }
+arpa-dal = { path = "../dal" }
+arpa-sqlite-db = { path = "../dal/sqlite" }
+arpa-contract-client = { path = "../contract-client" }
 dkg-core = { path = "../dkg-core" }
 threshold-bls = { path = "../threshold-bls", default-features = false, features = [
     "bn254",

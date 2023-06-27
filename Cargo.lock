@@ -246,15 +246,108 @@ dependencies = [
 ]
 
 [[package]]
+name = "arpa-contract-client"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "arpa-core",
+ "async-trait",
+ "bincode",
+ "dkg-core",
+ "ethers",
+ "ethers-contract-abigen",
+ "log",
+ "prost",
+ "prost-build",
+ "rustc-hex",
+ "serde",
+ "thiserror",
+ "threshold-bls",
+ "tokio 1.20.1",
+ "tokio-retry",
+ "tonic",
+ "tonic-build",
+]
+
+[[package]]
+name = "arpa-core"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "bincode",
+ "chrono",
+ "ethers-core",
+ "ethers-middleware",
+ "ethers-providers",
+ "ethers-signers",
+ "lazy_static",
+ "log",
+ "log-mdc",
+ "log4rs",
+ "parking_lot 0.12.0",
+ "serde",
+ "serde_json",
+ "serde_yaml",
+ "thiserror",
+ "thread-id",
+ "threshold-bls",
+]
+
+[[package]]
+name = "arpa-dal"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "arpa-core",
+ "async-trait",
+ "bincode",
+ "dkg-core",
+ "ethers-core",
+ "log",
+ "log-mdc",
+ "serde",
+ "serde_json",
+ "thiserror",
+ "threshold-bls",
+ "tokio 1.20.1",
+]
+
+[[package]]
+name = "arpa-log"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "arpa-log-impl",
+ "async-trait",
+ "log",
+ "log-mdc",
+ "once_cell",
+ "parking_lot 0.12.0",
+ "serde",
+ "serde_json",
+ "tokio 1.20.1",
+]
+
+[[package]]
+name = "arpa-log-impl"
+version = "0.1.0"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn",
+]
+
+[[package]]
 name = "arpa-node"
 version = "0.0.1"
 dependencies = [
  "anyhow",
- "arpa-node-contract-client",
- "arpa-node-core",
- "arpa-node-dal",
- "arpa-node-log",
- "arpa-node-sqlite-db",
+ "arpa-contract-client",
+ "arpa-core",
+ "arpa-dal",
+ "arpa-log",
+ "arpa-sqlite-db",
  "async-trait",
  "bincode",
  "chrono",
@@ -289,105 +382,12 @@ dependencies = [
 ]
 
 [[package]]
-name = "arpa-node-contract-client"
+name = "arpa-sqlite-db"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "arpa-node-core",
- "async-trait",
- "bincode",
- "dkg-core",
- "ethers",
- "ethers-contract-abigen",
- "log",
- "prost",
- "prost-build",
- "rustc-hex",
- "serde",
- "thiserror",
- "threshold-bls",
- "tokio 1.20.1",
- "tokio-retry",
- "tonic",
- "tonic-build",
-]
-
-[[package]]
-name = "arpa-node-core"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "async-trait",
- "bincode",
- "chrono",
- "ethers-core",
- "ethers-middleware",
- "ethers-providers",
- "ethers-signers",
- "lazy_static",
- "log",
- "log-mdc",
- "log4rs",
- "parking_lot 0.12.0",
- "serde",
- "serde_json",
- "serde_yaml",
- "thiserror",
- "thread-id",
- "threshold-bls",
-]
-
-[[package]]
-name = "arpa-node-dal"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "arpa-node-core",
- "async-trait",
- "bincode",
- "dkg-core",
- "ethers-core",
- "log",
- "log-mdc",
- "serde",
- "serde_json",
- "thiserror",
- "threshold-bls",
- "tokio 1.20.1",
-]
-
-[[package]]
-name = "arpa-node-log"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "arpa-node-log-impl",
- "async-trait",
- "log",
- "log-mdc",
- "once_cell",
- "parking_lot 0.12.0",
- "serde",
- "serde_json",
- "tokio 1.20.1",
-]
-
-[[package]]
-name = "arpa-node-log-impl"
-version = "0.1.0"
-dependencies = [
- "proc-macro2",
- "quote",
- "syn",
-]
-
-[[package]]
-name = "arpa-node-sqlite-db"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "arpa-node-core",
- "arpa-node-dal",
+ "arpa-core",
+ "arpa-dal",
  "async-trait",
  "bincode",
  "chrono",
@@ -403,6 +403,25 @@ dependencies = [
  "serde_json",
  "thiserror",
  "threshold-bls",
+ "tokio 1.20.1",
+]
+
+[[package]]
+name = "arpa-user-cli"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "arpa-contract-client",
+ "arpa-core",
+ "bincode",
+ "ethers",
+ "hex",
+ "rand 0.8.5",
+ "reedline-repl-rs",
+ "serde",
+ "serde_yaml",
+ "structopt",
+ "thiserror",
  "tokio 1.20.1",
 ]
 

@@ -1,22 +1,21 @@
-use arpa_node::load_config;
-use arpa_node::node::management::client::GeneralManagementClient;
-use arpa_node_contract_client::adapter::{AdapterClientBuilder, AdapterViews};
-use arpa_node_contract_client::contract_stub::adapter::Adapter as AdapterContract;
-use arpa_node_contract_client::contract_stub::controller::Controller as ControllerContract;
-use arpa_node_contract_client::contract_stub::ierc20::IERC20 as ArpaContract;
-use arpa_node_contract_client::contract_stub::staking::Staking as StakingContract;
-use arpa_node_contract_client::controller::{
+use arpa_contract_client::adapter::{AdapterClientBuilder, AdapterViews};
+use arpa_contract_client::contract_stub::adapter::Adapter as AdapterContract;
+use arpa_contract_client::contract_stub::controller::Controller as ControllerContract;
+use arpa_contract_client::contract_stub::ierc20::IERC20 as ArpaContract;
+use arpa_contract_client::contract_stub::staking::Staking as StakingContract;
+use arpa_contract_client::controller::{
     ControllerClientBuilder, ControllerTransactions, ControllerViews,
 };
-use arpa_node_contract_client::ethers::adapter::AdapterClient;
-use arpa_node_contract_client::ethers::controller::ControllerClient;
-use arpa_node_contract_client::{ServiceClient, TransactionCaller, ViewCaller};
-use arpa_node_core::{
+use arpa_contract_client::ethers::adapter::AdapterClient;
+use arpa_contract_client::ethers::controller::ControllerClient;
+use arpa_contract_client::{ServiceClient, TransactionCaller, ViewCaller};
+use arpa_core::{
     address_to_string, build_wallet_from_config, pad_to_bytes32, ChainIdentity, Config,
     GeneralChainIdentity, WalletSigner,
 };
-use arpa_node_dal::NodeInfoFetcher;
-use arpa_node_sqlite_db::SqliteDB;
+use arpa_dal::NodeInfoFetcher;
+use arpa_node::management::client::GeneralManagementClient;
+use arpa_sqlite_db::SqliteDB;
 use ethers::prelude::k256::ecdsa::SigningKey;
 use ethers::providers::Middleware;
 use ethers::signers::coins_bip39::English;
@@ -1207,7 +1206,7 @@ fn read_file_line_by_line(filepath: PathBuf) -> anyhow::Result<String> {
 async fn main() -> anyhow::Result<()> {
     let opt = Opt::from_args();
 
-    let config = load_config(opt.config_path);
+    let config = Config::load(opt.config_path);
 
     let wallet = build_wallet_from_config(&config.account)?;
 
@@ -1382,7 +1381,7 @@ async fn main() -> anyhow::Result<()> {
                     Command::new("unstake").visible_alias("u").about("Unstake(then freeze) arpa from staking contract and claim delegation rewards instantly after exit")
                         .arg(Arg::new("amount").required(true).help("amount of arpa to unstake"))
                 ).subcommand(
-                    Command::new("claim-frozen-principal").visible_alias("c").about("Claim frozen principal from staking after unstake")
+                    Command::new("claim-frozen-principal").visible_alias("cfp").about("Claim frozen principal from staking after unstake")
                 ).subcommand(
                     Command::new("register").visible_alias("r").about("Register node to Randcast network")
                 ).subcommand(
@@ -1396,7 +1395,7 @@ async fn main() -> anyhow::Result<()> {
                     Command::new("withdraw").visible_alias("w")
                     .arg(Arg::new("recipient").required(true).help("path to keystore file"))
                     .about("Withdraw node reward to any address"))
-                .about("*** Be careful this will change on-chain state and cost gas ***\nSend trxs to on-chain contracts"),
+                .about("*** Be careful this will change on-chain state and cost gas as well as block time***\nSend trxs to on-chain contracts"),
             |args, context| Box::pin(send(args, context)),
         ).with_command(
             Command::new("generate")

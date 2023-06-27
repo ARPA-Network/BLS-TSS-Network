@@ -1,18 +1,17 @@
-use arpa_node::load_config;
-use arpa_node::node::context::chain::types::GeneralMainChain;
-use arpa_node::node::context::types::GeneralContext;
-use arpa_node::node::context::{Context, TaskWaiter};
-use arpa_node_contract_client::controller::{ControllerClientBuilder, ControllerTransactions};
-use arpa_node_core::format_now_date;
-use arpa_node_core::log::encoder::JsonEncoder;
-use arpa_node_core::GeneralChainIdentity;
-use arpa_node_core::{build_wallet_from_config, RandomnessTask};
-use arpa_node_dal::cache::RandomnessResultCache;
-use arpa_node_dal::{NodeInfoFetcher, NodeInfoUpdater};
-use arpa_node_sqlite_db::GroupInfoDBClient;
-use arpa_node_sqlite_db::NodeInfoDBClient;
-use arpa_node_sqlite_db::SqliteDB;
-use arpa_node_sqlite_db::{BLSTasksDBClient, SignatureResultDBClient};
+use arpa_contract_client::controller::{ControllerClientBuilder, ControllerTransactions};
+use arpa_core::log::encoder::JsonEncoder;
+use arpa_core::GeneralChainIdentity;
+use arpa_core::{build_wallet_from_config, RandomnessTask};
+use arpa_core::{format_now_date, Config};
+use arpa_dal::cache::RandomnessResultCache;
+use arpa_dal::{NodeInfoFetcher, NodeInfoUpdater};
+use arpa_node::context::chain::types::GeneralMainChain;
+use arpa_node::context::types::GeneralContext;
+use arpa_node::context::{Context, TaskWaiter};
+use arpa_sqlite_db::GroupInfoDBClient;
+use arpa_sqlite_db::NodeInfoDBClient;
+use arpa_sqlite_db::SqliteDB;
+use arpa_sqlite_db::{BLSTasksDBClient, SignatureResultDBClient};
 use ethers::signers::Signer;
 use log::{info, LevelFilter};
 use log4rs::append::console::ConsoleAppender;
@@ -48,6 +47,10 @@ pub struct Opt {
         default_value = "conf/config.yml"
     )]
     config_path: PathBuf,
+
+    /// Force to run new run mode. If data.sqlite exists, it will be renamed to bak_YYYYMMDD_data.sqlite
+    #[structopt(short = "f", long)]
+    force_new_run: bool,
 }
 
 fn init_logger(node_id: &str, context_logging: bool, log_file_path: &str, rolling_file_size: u64) {
@@ -115,7 +118,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let opt = Opt::from_args();
     println!("{:#?}", opt);
 
-    let config = load_config(opt.config_path);
+    let config = Config::load(opt.config_path);
 
     init_logger(
         &config.logger.as_ref().unwrap().node_id,
@@ -135,15 +138,19 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             let id_address = wallet.address();
 
             if data_path.exists() {
-                fs::rename(
-                    data_path.clone(),
-                    data_path.parent().unwrap().join(format!(
-                        "bak_{}_{}",
-                        format_now_date(),
-                        data_path.file_name().unwrap().to_str().unwrap(),
-                    )),
-                )?;
-                info!("Existing data file found. Renamed to the directory of data_path.",);
+                if opt.force_new_run {
+                    fs::rename(
+                        data_path.clone(),
+                        data_path.parent().unwrap().join(format!(
+                            "bak_{}_{}",
+                            format_now_date(),
+                            data_path.file_name().unwrap().to_str().unwrap(),
+                        )),
+                    )?;
+                    info!("Existing data file found. Renamed to the directory of data_path.",);
+                } else {
+                    panic!("Existing data file found. Please use -f to force new run.");
+                }
             }
 
             let db = SqliteDB::build(

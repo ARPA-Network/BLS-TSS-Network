@@ -1,9 +1,15 @@
 [workspace]
 
-members = [ 
-    "crates/dkg-core", 
+members = [
+    "crates/dkg-core",
     "crates/arpa-node",
-    "crates/threshold-bls"
+    "crates/threshold-bls",
+    "crates/log",
+    "crates/core",
+    "crates/dal",
+    "crates/dal/sqlite",
+    "crates/contract-client",
+    "crates/user-cli",
 ]
 
 [profile.release]
