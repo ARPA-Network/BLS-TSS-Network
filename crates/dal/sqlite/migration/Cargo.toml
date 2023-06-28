@@ -11,13 +11,13 @@ path = "src/lib.rs"
 [dependencies]
 entity = { path = "../entity" }
 async-std = { version = "^1", features = ["attributes", "tokio1"] }
-libsqlite3-sys = { version = "0.24.2",  default-features = false, features = [
+libsqlite3-sys = { version = "0.24.2", default-features = false, features = [
       "pkg-config",
       "vcpkg",
-      "bundled-sqlcipher" ,
-      "unlock_notify"
-]}
-  
+      "bundled-sqlcipher",
+      "unlock_notify",
+] }
+
 [dependencies.sea-orm-migration]
 version = "^0.11.0"
-features = ["sqlx-sqlite", "runtime-tokio-native-tls"]
+features = ["sqlx-sqlite", "runtime-tokio-rustls"]
