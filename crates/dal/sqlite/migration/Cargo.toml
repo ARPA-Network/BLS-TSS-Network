@@ -14,7 +14,7 @@ async-std = { version = "^1", features = ["attributes", "tokio1"] }
 libsqlite3-sys = { version = "0.24.2", default-features = false, features = [
       "pkg-config",
       "vcpkg",
-      "bundled-sqlcipher",
+      "bundled-sqlcipher-vendored-openssl",
       "unlock_notify",
 ] }
 
