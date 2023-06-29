@@ -1,8 +1,6 @@
 - [Arpa Node](#arpa-node)
 - [Node Client](#node-client)
   - [Usage](#usage)
-    - [New-run Mode](#new-run-mode)
-    - [Re-run Mode](#re-run-mode)
 - [ARPA Node CLI](#arpa-node-cli)
   - [Usage](#usage-1)
     - [REPL Commands](#repl-commands)
@@ -24,7 +22,13 @@ Note that task schedulers manage fixed-handlers and sub-handlers created by list
 
 Node Client is a long-running program to run the ARPA node.
 
+If the data path in the config file doesn't exist, as the first time to run the node, the client will generate a DKG keypair(served as the identity during a grouping process), then register the node address with dkg public key to the ARPA Network on-chain. In early access, make sure the address of the node has been added to eligible operators list in the Staking contract with sufficient stake in advance.
+
 ## Usage
+
+```bash
+cargo run --bin node-client
+```
 
 To print help, use `-- -h`:
 
@@ -38,27 +42,9 @@ To specify a config file, use `-- -c <config_file>`:
 cargo run --bin node-client -- -c conf/config.yml
 ```
 
-### New-run Mode
-
-Before the first time to run the node, make sure the address of the node has been added to eligible operators list in the staking contract with sufficient stake, then use `new-run` mode:
-
-```bash
-cargo run --bin node-client -- -m new-run
-```
-
-This will generate a DKG keypair, persist node info to a local database and register the node to the ARPA Network.
-
-### Re-run Mode
-
-Once the database is initialized, always use `re-run` mode to start the node again:
-
-```bash
-cargo run --bin node-client -- -m re-run
-```
-
 # ARPA Node CLI
 
-ARPA Node CLI is a fast and verbose REPL for the operator of a ARPA node. The same node config file as Node Client will be used. As a supplement to Node Client, it provides a set of commands to inspect the node status and interact with the on-chain contracts, e.g. register node to the network when error occurs in the node-client `new-run` mode.
+ARPA Node CLI is a fast and verbose REPL for the operator of a ARPA node. The same node config file as Node Client will be used. As a supplement to Node Client, it provides a set of commands to inspect the node status and interact with the on-chain contracts, e.g. register node to the network manually when error occurs in the node client.
 
 ## Usage
 
@@ -127,7 +113,7 @@ Configuration items in [`conf/config.yml`](conf/config.yml) are listed here:
 
 - node_committer_rpc_endpoint: Endpoint that this node will use to create server socket to expose committer grpc services. Once this get changed, the node MUST re-activate itself to the controller so that the controller can update the endpoint by re-grouping. (example: "0.0.0.0:50060")
 
-- node_advertised_committer_rpc_endpoint: Endpoint that other members in the group will use to connect to this node. If this setting is not set, then value of node_committer_rpc_endpoint will be used here and published to other nodes. (example: "10.0.0.1:50060")
+- node_advertised_committer_rpc_endpoint: Endpoint that other members in the group will use to connect to this node. If this setting is not set, then value of node_committer_rpc_endpoint will be used here and published to other nodes. Note: This setting is updated every time the node starts, but it will not be broadcasted to other nodes until next re-grouping. (example: "10.0.0.1:50060")
 
 - node_management_rpc_endpoint: Config endpoint to expose management grpc services. (example: "0.0.0.0:50099")
 
@@ -155,7 +141,7 @@ Configuration items in [`conf/config.yml`](conf/config.yml) are listed here:
 
   - node_id: Set a node id for logging.
   - context_logging: Set whether to log context of current node info and group info. Since it will increase log size, it is recommended to set it to false in production.
-  - log_file_path: Set log file path.
+  - log_file_path: Set log file path. The `node-client` will create a `node.log` as well as a `node_err.log` under `log_file_path`, then log to them with info level and error level respectively.
   - rolling_file_size: Log file will be deleted when it reaches this size limit. The following units are supported (case insensitive):
     "b", "kb", "kib", "mb", "mib", "gb", "gib", "tb", "tib". The unit defaults to bytes if not specified.
 
@@ -283,7 +269,7 @@ Start the local testnet by anvil:
 anvil --block-time 1
 ```
 
-Deploy the controller and the adapter contract:
+Deploy the Controller and the Adapter contract:
 
 ```bash
 cd contracts
@@ -293,7 +279,7 @@ cd contracts
 forge script script/ControllerLocalTest.s.sol:ControllerLocalTestScript --fork-url http://localhost:8545 --broadcast
 ```
 
-Add operators, start the staking pool and stake for a user and some nodes:
+Add operators, start the Staking pool and stake for a user and some nodes:
 
 ```bash
 # nodes addresses are generated from index 10 by mnemonic "test test test test test test test test test test test junk"(anvil default)
@@ -305,9 +291,9 @@ Run 3 nodes to make a group:
 
 ```bash
 cd crates/arpa-node
-cargo run --bin node-client -- -m new-run -c test/conf/config_test_1.yml
-cargo run --bin node-client -- -m new-run -c test/conf/config_test_2.yml
-cargo run --bin node-client -- -m new-run -c test/conf/config_test_3.yml
+cargo run --bin node-client -- -c test/conf/config_test_1.yml
+cargo run --bin node-client -- -c test/conf/config_test_2.yml
+cargo run --bin node-client -- -c test/conf/config_test_3.yml
 ```
 
 Deploy the user contract([`GetRandomNumberExample`](../../contracts/src/user/examples/GetRandomNumberExample.sol)) and request a randomness:
