@@ -53,9 +53,6 @@ pub enum GroupError {
 
 #[derive(Debug, Error, PartialEq)]
 pub enum NodeInfoError {
-    #[error("there is no node record yet, please run node with new-run mode")]
-    NoNodeRecord,
-
     #[error("there is no rpc endpoint yet")]
     NoRpcEndpoint,
 

@@ -61,8 +61,6 @@ pub type DBResult<A> = Result<A, DBError>;
 
 #[derive(Debug, Error, PartialEq)]
 pub enum DBError {
-    #[error("there is no node record yet, please run node with new-run mode")]
-    NoNodeRecord,
     #[error(transparent)]
     DbError(#[from] DbErr),
     #[error(transparent)]
