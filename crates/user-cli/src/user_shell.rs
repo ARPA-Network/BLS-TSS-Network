@@ -3,20 +3,28 @@ use arpa_contract_client::contract_stub::ierc20::IERC20 as ArpaContract;
 use arpa_contract_client::contract_stub::staking::Staking as StakingContract;
 use arpa_contract_client::ethers::adapter::AdapterClient;
 use arpa_contract_client::{TransactionCaller, ViewCaller};
+use arpa_core::u256_to_vec;
+use arpa_core::RandomnessRequestType;
 use arpa_core::{address_to_string, pad_to_bytes32, WalletSigner};
 use arpa_user_cli::config::{build_wallet_from_config, Config};
 use ethers::prelude::{NonceManagerMiddleware, SignerMiddleware};
 use ethers::providers::{Http, Middleware, Provider};
 use ethers::signers::Signer;
-use ethers::types::{Address, BlockId, BlockNumber, U256};
-use reedline_repl_rs::clap::{Arg, ArgMatches, Command};
+use ethers::types::{Address, BlockId, BlockNumber, H256, U256, U64};
+use ethers::utils::Anvil;
+use reedline_repl_rs::clap::{value_parser, Arg, ArgAction, ArgMatches, Command};
 use reedline_repl_rs::Repl;
+use std::collections::BTreeMap;
 use std::fs::File;
 use std::io::{BufRead, BufReader};
 use std::path::PathBuf;
 use std::sync::Arc;
 use structopt::StructOpt;
 
+pub const SIMPLE_ADAPTER_CODE: &str = "0x6080604052348015600f57600080fd5b506004361060325760003560e01c806376a911bc146037578063a39402d7146066575b600080fd5b60486042366004607e565b50600090565b60405167ffffffffffffffff90911681526020015b60405180910390f35b6071604236600460b9565b604051908152602001605d565b600060208284031215608f57600080fd5b813573ffffffffffffffffffffffffffffffffffffffff8116811460b257600080fd5b9392505050565b60006020828403121560ca57600080fd5b813567ffffffffffffffff81111560e057600080fd5b820160e0818503121560b257600080fdfea264697066735822122060db0656f5a3a02d609b3fb8d9ae455165807d775077e751b503136af39395c464736f6c63430008120033";
+pub const RANDOMNESS_REWARD_GAS: u32 = 9000;
+pub const DEFAULT_MINIMUM_THRESHOLD: u32 = 3;
+pub const GAS_EXCEPT_CALLBACK: u32 = 550000 + RANDOMNESS_REWARD_GAS * DEFAULT_MINIMUM_THRESHOLD;
 pub const MAX_HISTORY_CAPACITY: usize = 1000;
 pub const DEFAULT_PROMPT: &str = "ARPA User CLI";
 
@@ -56,6 +64,69 @@ struct Context {
 }
 
 #[derive(Debug)]
+pub struct Block {
+    /// Hash of the block
+    pub hash: Option<H256>,
+    /// Hash of the parent
+    pub parent_hash: H256,
+    /// Hash of the uncles
+    pub uncles_hash: H256,
+    /// Miner/author's address. None if pending.
+    pub author: Option<Address>,
+    /// State root hash
+    pub state_root: H256,
+    /// Transactions root hash
+    pub transactions_root: H256,
+    /// Transactions receipts root hash
+    pub receipts_root: H256,
+    /// Block number. None if pending.
+    pub number: Option<U64>,
+    /// Gas Used
+    pub gas_used: U256,
+    /// Gas Limit
+    pub gas_limit: U256,
+    /// Timestamp
+    pub timestamp: U256,
+    /// Size in bytes
+    pub size: Option<U256>,
+}
+
+impl<TX> From<ethers::types::Block<TX>> for Block {
+    fn from(block: ethers::types::Block<TX>) -> Self {
+        Self {
+            hash: block.hash,
+            parent_hash: block.parent_hash,
+            uncles_hash: block.uncles_hash,
+            author: block.author,
+            state_root: block.state_root,
+            transactions_root: block.transactions_root,
+            receipts_root: block.receipts_root,
+            number: block.number,
+            gas_used: block.gas_used,
+            gas_limit: block.gas_limit,
+            timestamp: block.timestamp,
+            size: block.size,
+        }
+    }
+}
+
+#[derive(Debug)]
+pub struct RandomnessRequest {
+    pub request_id: String,
+    pub sub_id: u64,
+    pub group_index: u32,
+    pub request_type: RandomnessRequestType,
+    pub params: ethers::core::types::Bytes,
+    pub sender: ethers::core::types::Address,
+    pub seed: ethers::core::types::U256,
+    pub request_confirmations: u16,
+    pub callback_gas_limit: u32,
+    pub callback_max_gas_price: ethers::core::types::U256,
+    pub estimated_payment: ethers::core::types::U256,
+    pub fulfillment_result: Option<RandomnessRequestResult>,
+}
+
+#[derive(Debug)]
 pub struct RandomnessRequestResult {
     pub request_id: String,
     pub group_index: u32,
@@ -65,6 +136,13 @@ pub struct RandomnessRequestResult {
     pub payment: ethers::core::types::U256,
     pub flat_fee: ethers::core::types::U256,
     pub success: bool,
+}
+
+#[derive(Debug)]
+pub struct Consumer {
+    pub address: Address,
+    pub added_block: u64,
+    pub nonce: u64,
 }
 
 pub struct StakingClient;
@@ -235,14 +313,171 @@ async fn send(args: ArgMatches, context: &mut Context) -> anyhow::Result<Option<
                 Some(trx_hash)
             )))
         }
+        Some(("create-subscription", _sub_matches)) => {
+            let adapter_contract =
+                AdapterContract::new(context.config.adapter_address(), context.signer.clone());
 
-        // let controller_contract = Controller::new(self.controller_address, self.signer.clone());
+            let trx_hash = AdapterClient::call_contract_transaction(
+                "create_subscription",
+                adapter_contract.create_subscription(),
+                context.config.contract_transaction_retry_descriptor,
+                true,
+            )
+            .await?;
+
+            Ok(Some(format!(
+                "Create subscription successfully, transaction hash: {:?}",
+                Some(trx_hash)
+            )))
+        }
+        Some(("add-consumer", sub_matches)) => {
+            let sub_id = sub_matches.get_one::<u64>("sub-id").unwrap();
+            let consumer = sub_matches.get_one::<String>("consumer").unwrap();
+
+            let adapter_contract =
+                AdapterContract::new(context.config.adapter_address(), context.signer.clone());
+
+            let trx_hash = AdapterClient::call_contract_transaction(
+                "add_consumer",
+                adapter_contract.add_consumer(*sub_id, consumer.parse().unwrap()),
+                context.config.contract_transaction_retry_descriptor,
+                true,
+            )
+            .await?;
+
+            Ok(Some(format!(
+                "Add consumer successfully, transaction hash: {:?}",
+                Some(trx_hash)
+            )))
+        }
+        Some(("fund-subscription", sub_matches)) => {
+            let sub_id = sub_matches.get_one::<u64>("sub-id").unwrap();
+            let amount = sub_matches.get_one::<String>("amount").unwrap();
+            let amount = U256::from_dec_str(amount).unwrap();
+
+            let adapter_contract =
+                AdapterContract::new(context.config.adapter_address(), context.signer.clone());
+
+            let trx_hash = AdapterClient::call_contract_transaction(
+                "fund_subscription",
+                adapter_contract.fund_subscription(*sub_id).value(amount),
+                context.config.contract_transaction_retry_descriptor,
+                true,
+            )
+            .await?;
+
+            Ok(Some(format!(
+                "Fund subscription successfully, transaction hash: {:?}",
+                Some(trx_hash)
+            )))
+        }
+        Some(("set-referral", sub_matches)) => {
+            let sub_id = sub_matches.get_one::<u64>("sub-id").unwrap();
+            let referral_sub_id = sub_matches.get_one::<u64>("referral-sub-id").unwrap();
+
+            let adapter_contract =
+                AdapterContract::new(context.config.adapter_address(), context.signer.clone());
+
+            let trx_hash = AdapterClient::call_contract_transaction(
+                "set_referral",
+                adapter_contract.set_referral(*sub_id, *referral_sub_id),
+                context.config.contract_transaction_retry_descriptor,
+                true,
+            )
+            .await?;
+
+            Ok(Some(format!(
+                "Set referral successfully, transaction hash: {:?}",
+                Some(trx_hash)
+            )))
+        }
+        Some(("cancel-subscription", sub_matches)) => {
+            let sub_id = sub_matches.get_one::<u64>("sub-id").unwrap();
+            let recipient = sub_matches.get_one::<String>("recipient").unwrap();
+
+            let adapter_contract =
+                AdapterContract::new(context.config.adapter_address(), context.signer.clone());
+
+            let trx_hash = AdapterClient::call_contract_transaction(
+                "cancel_subscription",
+                adapter_contract.cancel_subscription(*sub_id, recipient.parse().unwrap()),
+                context.config.contract_transaction_retry_descriptor,
+                true,
+            )
+            .await?;
+
+            Ok(Some(format!(
+                "Cancel subscription successfully, transaction hash: {:?}",
+                Some(trx_hash)
+            )))
+        }
+        Some(("remove-consumer", sub_matches)) => {
+            let sub_id = sub_matches.get_one::<u64>("sub-id").unwrap();
+            let consumer = sub_matches.get_one::<String>("consumer").unwrap();
+
+            let adapter_contract =
+                AdapterContract::new(context.config.adapter_address(), context.signer.clone());
+
+            let trx_hash = AdapterClient::call_contract_transaction(
+                "remove_consumer",
+                adapter_contract.remove_consumer(*sub_id, consumer.parse().unwrap()),
+                context.config.contract_transaction_retry_descriptor,
+                true,
+            )
+            .await?;
+
+            Ok(Some(format!(
+                "Remove consumer successfully, transaction hash: {:?}",
+                Some(trx_hash)
+            )))
+        }
+
         _ => panic!("Unknown subcommand {:?}", args.subcommand_name()),
     }
 }
 
 async fn call(args: ArgMatches, context: &mut Context) -> anyhow::Result<Option<String>> {
     match args.subcommand() {
+        Some(("block", sub_matches)) => {
+            let block_number = sub_matches.get_one::<String>("block-number").unwrap();
+            match block_number.as_str() {
+                "latest" => {
+                    let block: Option<Block> = context
+                        .provider
+                        .get_block(BlockNumber::Latest)
+                        .await?
+                        .map(|block| block.into());
+                    return Ok(Some(format!("block: {:#?}", block)));
+                }
+                "earliest" => {
+                    let block: Option<Block> = context
+                        .provider
+                        .get_block(BlockNumber::Earliest)
+                        .await?
+                        .map(|block| block.into());
+                    return Ok(Some(format!("block: {:#?}", block)));
+                }
+                "pending" => {
+                    let block: Option<Block> = context
+                        .provider
+                        .get_block(BlockNumber::Pending)
+                        .await?
+                        .map(|block| block.into());
+                    return Ok(Some(format!("block: {:#?}", block)));
+                }
+                _ => {
+                    if let Ok(block_number) = block_number.parse::<u64>() {
+                        let block: Option<Block> = context
+                            .provider
+                            .get_block(BlockNumber::Number(block_number.into()))
+                            .await?
+                            .map(|block| block.into());
+                        return Ok(Some(format!("block: {:#?}", block)));
+                    }
+                }
+            }
+            panic!("Unknown block number {:?}", block_number);
+        }
         Some(("trx-receipt", sub_matches)) => {
             let trx_hash = sub_matches.get_one::<String>("trx-hash").unwrap();
 
@@ -290,37 +525,109 @@ async fn call(args: ArgMatches, context: &mut Context) -> anyhow::Result<Option<
     }
 }
 
+fn call_cast(rpc_url: &str, args: &[&str]) -> String {
+    let mut cmd = std::process::Command::new("cast");
+    cmd.stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::inherit());
+
+    cmd.args(args);
+    cmd.arg("--rpc-url");
+    cmd.arg(rpc_url);
+    let mut child = cmd.spawn().expect("couldnt start cast");
+
+    let stdout = child
+        .stdout
+        .take()
+        .expect("Unable to get stdout for cast child process");
+
+    let mut reader = BufReader::new(stdout);
+    let mut line = String::new();
+    reader
+        .read_line(&mut line)
+        .expect("Failed to read line from cast process");
+    line
+}
+
 async fn randcast(args: ArgMatches, context: &mut Context) -> anyhow::Result<Option<String>> {
     match args.subcommand() {
-        Some(("fulfillments", _sub_matches)) => {
+        Some(("estimate-callback-gas", sub_matches)) => {
+            let consumer = sub_matches.get_one::<String>("consumer").unwrap();
+            let request_sender = sub_matches.get_one::<String>("request-sender").unwrap();
+            let request_signature = sub_matches.get_one::<String>("request-signature").unwrap();
+            let request_params = sub_matches.get_one::<String>("request-params").unwrap();
+
+            let existed_callback_gas_limit_args =
+                vec!["call", consumer, "callbackGasLimit()(uint32)"];
+            let existed_callback_gas_limit = call_cast(
+                &context.config.provider_endpoint,
+                &existed_callback_gas_limit_args,
+            );
+            if existed_callback_gas_limit.trim_end_matches('\n') != "0" {
+                return Ok(Some("callbackGasLimit is already set".to_string()));
+            }
+
+            let anvil = Anvil::new()
+                .chain_id(context.config.chain_id as u64)
+                .fork(&context.config.provider_endpoint)
+                .port(8544u16)
+                .spawn();
+
+            let impersonate_account_args = vec!["rpc", "anvil_impersonateAccount", request_sender];
+            call_cast(&anvil.endpoint(), &impersonate_account_args);
+
+            // replace adapter code to make sure the request randomness success
+            let adapter_address = address_to_string(context.config.adapter_address());
+            let set_code_args = vec![
+                "rpc",
+                "anvil_setCode",
+                &adapter_address,
+                SIMPLE_ADAPTER_CODE,
+            ];
+            call_cast(&anvil.endpoint(), &set_code_args);
+
+            let request_randomness_args = vec![
+                "send",
+                consumer,
+                request_signature,
+                request_params,
+                "--from",
+                request_sender,
+                "--unlocked",
+            ];
+            call_cast(&anvil.endpoint(), &request_randomness_args);
+
+            let callback_gas_limit_args = vec!["call", consumer, "callbackGasLimit()(uint32)"];
+            let callback_gas_limit_res = call_cast(&anvil.endpoint(), &callback_gas_limit_args);
+
+            Ok(Some(format!(
+                "callback_gas_limit_res: {}",
+                callback_gas_limit_res.trim_end_matches('\n')
+            )))
+        }
+        Some(("estimate-payment-amount", sub_matches)) => {
+            let callback_gas_limit = sub_matches.get_one::<u32>("callback-gas-limit").unwrap();
+
+            let gas_price = context.provider.get_gas_price().await?;
+
             let adapter_contract =
                 AdapterContract::new(context.config.adapter_address(), context.signer.clone());
 
-            let filter = adapter_contract
-                .randomness_request_result_filter()
-                // .topic3(context.signer.address())
-                .from_block(context.adapter_deployed_block_height)
-                .to_block(BlockNumber::Latest);
+            let payment_amount_in_eth = AdapterClient::call_contract_view(
+                "estimate_payment_amount",
+                adapter_contract.estimate_payment_amount_in_eth(
+                    *callback_gas_limit,
+                    GAS_EXCEPT_CALLBACK,
+                    0,
+                    gas_price * 3,
+                ),
+                context.config.contract_view_retry_descriptor,
+            )
+            .await?;
 
-            let logs = filter.query().await?;
-
-            let logs = logs
-                .iter()
-                .map(|log| RandomnessRequestResult {
-                    request_id: hex::encode(log.request_id),
-                    group_index: log.group_index,
-                    committer: log.committer,
-                    participant_members: log.participant_members.clone(),
-                    randommness: log.randommness,
-                    payment: log.payment,
-                    flat_fee: log.flat_fee,
-                    success: log.success,
-                })
-                .collect::<Vec<_>>();
-
-            println!("{} fulfillment(s) found!", logs.iter().len());
-
-            Ok(Some(format!("log: {:#?}", logs)))
+            Ok(Some(format!(
+                "payment_amount_in_eth_wei: {:#?} in 3 times of current gas price: 3 * {:#?}",
+                payment_amount_in_eth, gas_price
+            )))
         }
         Some(("adapter-config", _sub_matches)) => {
             let adapter_contract =
@@ -353,14 +660,329 @@ async fn randcast(args: ArgMatches, context: &mut Context) -> anyhow::Result<Opt
                 committer_reward_per_signature,
             )))
         }
+        Some(("flat-fee-config", _sub_matches)) => {
+            let adapter_contract =
+                AdapterContract::new(context.config.adapter_address(), context.signer.clone());
 
-        // getLastAssignedGroupIndex
+            let (
+                fulfillment_flat_fee_link_ppm_tier1,
+                fulfillment_flat_fee_link_ppm_tier2,
+                fulfillment_flat_fee_link_ppm_tier3,
+                fulfillment_flat_fee_link_ppm_tier4,
+                fulfillment_flat_fee_link_ppm_tier5,
+                reqs_for_tier2,
+                reqs_for_tier3,
+                reqs_for_tier4,
+                reqs_for_tier5,
+                flat_fee_promotion_global_percentage,
+                is_flat_fee_promotion_enabled_permanently,
+                flat_fee_promotion_start_timestamp,
+                flat_fee_promotion_end_timestamp,
+            ) = AdapterClient::call_contract_view_without_log(
+                adapter_contract.get_flat_fee_config(),
+                context.config.contract_view_retry_descriptor,
+            )
+            .await?;
+
+            Ok(Some(format!(
+                "fulfillment_flat_fee_link_ppm_tier1: {:#?}, fulfillment_flat_fee_link_ppm_tier2: {:#?}, fulfillment_flat_fee_link_ppm_tier3: {:#?}, fulfillment_flat_fee_link_ppm_tier4: {:#?}, fulfillment_flat_fee_link_ppm_tier5: {:#?}, \
+                reqs_for_tier2: {:#?}, reqs_for_tier3: {:#?}, reqs_for_tier4: {:#?}, reqs_for_tier5: {:#?}, flat_fee_promotion_global_percentage: {:#?}, is_flat_fee_promotion_enabled_permanently: {:#?}, flat_fee_promotion_start_timestamp: {:#?}, flat_fee_promotion_end_timestamp: {:#?}",
+                fulfillment_flat_fee_link_ppm_tier1,
+                fulfillment_flat_fee_link_ppm_tier2,
+                fulfillment_flat_fee_link_ppm_tier3,
+                fulfillment_flat_fee_link_ppm_tier4,
+                fulfillment_flat_fee_link_ppm_tier5,
+                reqs_for_tier2,
+                reqs_for_tier3,
+                reqs_for_tier4,
+                reqs_for_tier5,
+                flat_fee_promotion_global_percentage,
+                is_flat_fee_promotion_enabled_permanently,
+                flat_fee_promotion_start_timestamp,
+                flat_fee_promotion_end_timestamp,
+            )))
+        }
+        Some(("referral-config", _sub_matches)) => {
+            let adapter_contract =
+                AdapterContract::new(context.config.adapter_address(), context.signer.clone());
+
+            let (
+                is_referral_enabled,
+                free_request_count_for_referrer,
+                free_request_count_for_referee,
+            ) = AdapterClient::call_contract_view(
+                "referral_config",
+                adapter_contract.get_referral_config(),
+                context.config.contract_view_retry_descriptor,
+            )
+            .await?;
+
+            Ok(Some(format!(
+                "is_referral_enabled: {:#?}, free_request_count_for_referrer: {:#?}, free_request_count_for_referee: {:#?}",
+                is_referral_enabled,
+                free_request_count_for_referrer,
+                free_request_count_for_referee,
+            )))
+        }
+        Some(("fee-tier", sub_matches)) => {
+            let req_count = sub_matches.get_one::<u64>("req-count").unwrap();
+            let adapter_contract =
+                AdapterContract::new(context.config.adapter_address(), context.signer.clone());
+
+            let fee_ppm = AdapterClient::call_contract_view(
+                "fee_tier",
+                adapter_contract.get_fee_tier(*req_count),
+                context.config.contract_view_retry_descriptor,
+            )
+            .await?;
+
+            Ok(Some(format!("fee_ppm: {:#?}", fee_ppm)))
+        }
+        Some(("subscription", sub_matches)) => {
+            let sub_id = sub_matches.get_one::<u64>("sub-id").unwrap();
+            let adapter_contract =
+                AdapterContract::new(context.config.adapter_address(), context.signer.clone());
+
+            let (
+                owner,
+                consumers,
+                balance,
+                inflight_cost,
+                req_count,
+                free_request_count,
+                referral_sub_id,
+                req_count_in_current_period,
+                last_request_timestamp,
+            ) = AdapterClient::call_contract_view(
+                "get_subscription",
+                adapter_contract.get_subscription(*sub_id),
+                context.config.contract_view_retry_descriptor,
+            )
+            .await?;
+
+            Ok(Some(format!(
+                "owner: {:#?}, consumers: {:#?}, balance: {:#?}, inflight_cost: {:#?}, req_count: {:#?}, free_request_count: {:#?}, referral_sub_id: {:#?}, req_count_in_current_period: {:#?}, last_request_timestamp: {:#?}",
+                owner,
+                consumers,
+                balance,
+                inflight_cost,
+                req_count,
+                free_request_count,
+                referral_sub_id,
+                req_count_in_current_period,
+                last_request_timestamp,
+            )))
+        }
+        Some(("my-subscriptions", _sub_matches)) => {
+            let adapter_contract =
+                AdapterContract::new(context.config.adapter_address(), context.signer.clone());
+
+            let created_filter = adapter_contract
+                .subscription_created_filter()
+                .topic2(context.signer.address())
+                .from_block(context.adapter_deployed_block_height)
+                .to_block(BlockNumber::Latest);
+
+            let created_logs = created_filter.query().await?;
+
+            let canceled_filter = adapter_contract
+                .subscription_canceled_filter()
+                .topic2(context.signer.address())
+                .from_block(context.adapter_deployed_block_height)
+                .to_block(BlockNumber::Latest);
+
+            let canceled_logs = canceled_filter.query().await?;
+
+            // get existed subscriptions by filtering out canceled subscriptions from created subscriptions
+            let existed_subscriptions: Vec<u64> = created_logs
+                .into_iter()
+                .filter(|created_log| {
+                    !canceled_logs
+                        .iter()
+                        .any(|canceled_log| canceled_log.sub_id == created_log.sub_id)
+                })
+                .map(|created_log| created_log.sub_id)
+                .collect();
+
+            Ok(Some(format!(
+                "my subscriptions: {:#?}",
+                existed_subscriptions
+            )))
+        }
+        Some(("consumers", sub_matches)) => {
+            let sub_id = sub_matches.get_one::<u64>("sub-id").unwrap();
+            let adapter_contract =
+                AdapterContract::new(context.config.adapter_address(), context.signer.clone());
+
+            let (
+                _owner,
+                consumer_addresses,
+                _balance,
+                _inflight_cost,
+                _req_count,
+                _free_request_count,
+                _referral_sub_id,
+                _req_count_in_current_period,
+                _last_request_timestamp,
+            ) = AdapterClient::call_contract_view(
+                "get_subscription",
+                adapter_contract.get_subscription(*sub_id),
+                context.config.contract_view_retry_descriptor,
+            )
+            .await?;
+
+            let mut consumers: BTreeMap<Address, Consumer> = consumer_addresses
+                .into_iter()
+                .map(|consumer_address: Address| {
+                    (
+                        consumer_address,
+                        Consumer {
+                            address: consumer_address,
+                            added_block: 0,
+                            nonce: 1,
+                        },
+                    )
+                })
+                .collect();
+
+            let consumer_added_filter = adapter_contract
+                .subscription_consumer_added_filter()
+                .topic1(H256::from(
+                    pad_to_bytes32(&u256_to_vec(&U256::from(*sub_id))).unwrap(),
+                ))
+                .from_block(context.adapter_deployed_block_height)
+                .to_block(BlockNumber::Latest);
+
+            for (log, meta) in consumer_added_filter.query_with_meta().await? {
+                let consumer = consumers.get_mut(&log.consumer).unwrap();
+                consumer.added_block = meta.block_number.as_u64();
+            }
+
+            let filter = adapter_contract
+                .randomness_request_filter()
+                .topic2(H256::from(
+                    pad_to_bytes32(&u256_to_vec(&U256::from(*sub_id))).unwrap(),
+                ))
+                .from_block(context.adapter_deployed_block_height)
+                .to_block(BlockNumber::Latest);
+
+            let logs = filter.query().await?;
+
+            for log in logs {
+                let consumer = consumers.get_mut(&log.sender).unwrap();
+
+                consumer.nonce += 1;
+            }
+
+            Ok(Some(format!("consumers: {:#?}", consumers)))
+        }
+        Some(("requests", sub_matches)) => {
+            let sub_id = sub_matches.get_one::<u64>("sub-id").unwrap();
+            let consumer = sub_matches.get_one::<String>("consumer");
+            let is_pending = sub_matches.get_flag("pending");
+            let is_success = sub_matches.get_flag("success");
+            let is_failed = sub_matches.get_flag("failed");
+
+            let adapter_contract =
+                AdapterContract::new(context.config.adapter_address(), context.signer.clone());
+
+            let filter = adapter_contract
+                .randomness_request_filter()
+                .topic2(H256::from(
+                    pad_to_bytes32(&u256_to_vec(&U256::from(*sub_id))).unwrap(),
+                ))
+                .from_block(context.adapter_deployed_block_height)
+                .to_block(BlockNumber::Latest);
+
+            let logs = filter.query().await?;
+
+            let mut results = logs
+                .iter()
+                .map(|log| RandomnessRequest {
+                    request_id: hex::encode(log.request_id),
+                    sub_id: log.sub_id,
+                    group_index: log.group_index,
+                    seed: log.seed,
+                    sender: log.sender,
+                    request_type: log.request_type.into(),
+                    params: log.params.clone(),
+                    request_confirmations: log.request_confirmations,
+                    callback_gas_limit: log.callback_gas_limit,
+                    callback_max_gas_price: log.callback_max_gas_price,
+                    estimated_payment: log.estimated_payment,
+                    fulfillment_result: None,
+                })
+                .collect::<Vec<_>>();
+
+            if let Some(consumer) = consumer {
+                results = results
+                    .into_iter()
+                    .filter(|r| r.sender == consumer.parse().unwrap())
+                    .collect::<Vec<_>>();
+            }
+
+            for result in results.iter_mut() {
+                let fulfillment_filter = adapter_contract
+                    .randomness_request_result_filter()
+                    .topic1(H256::from(
+                        pad_to_bytes32(&hex::decode(&result.request_id)?).unwrap(),
+                    ))
+                    .from_block(context.adapter_deployed_block_height)
+                    .to_block(BlockNumber::Latest);
+
+                let fulfillments = fulfillment_filter.query().await?;
+                fulfillments.iter().for_each(|fulfillment| {
+                    result.fulfillment_result = Some(RandomnessRequestResult {
+                        request_id: hex::encode(fulfillment.request_id),
+                        group_index: fulfillment.group_index,
+                        committer: fulfillment.committer,
+                        participant_members: fulfillment.participant_members.clone(),
+                        randommness: fulfillment.randommness,
+                        payment: fulfillment.payment,
+                        flat_fee: fulfillment.flat_fee,
+                        success: fulfillment.success,
+                    });
+                });
+            }
+
+            // filter results if fulfillment_result is_pending, is_success, or is_failed
+            if is_pending {
+                results = results
+                    .into_iter()
+                    .filter(|r| r.fulfillment_result.is_none())
+                    .collect::<Vec<_>>();
+            } else if is_success {
+                results = results
+                    .into_iter()
+                    .filter(|r| {
+                        r.fulfillment_result
+                            .as_ref()
+                            .map(|fr| fr.success)
+                            .unwrap_or(false)
+                    })
+                    .collect::<Vec<_>>();
+            } else if is_failed {
+                results = results
+                    .into_iter()
+                    .filter(|r| {
+                        r.fulfillment_result
+                            .as_ref()
+                            .map(|fr| !fr.success)
+                            .unwrap_or(false)
+                    })
+                    .collect::<Vec<_>>();
+            }
+
+            println!("{} request(s) found!", results.iter().len());
+
+            Ok(Some(format!("requests: {:#?}", results)))
+        }
         Some(("last-assigned-group-index", _sub_matches)) => {
             let adapter_contract =
                 AdapterContract::new(context.config.adapter_address(), context.signer.clone());
 
             let last_assigned_group_index = AdapterClient::call_contract_view(
-                "last_assigned_group_index",
+                "get_last_assigned_group_index",
                 adapter_contract.get_last_assigned_group_index(),
                 context.config.contract_view_retry_descriptor,
             )
@@ -371,13 +993,12 @@ async fn randcast(args: ArgMatches, context: &mut Context) -> anyhow::Result<Opt
                 last_assigned_group_index
             )))
         }
-        // getRandomnessCount
         Some(("randomness-count", _sub_matches)) => {
             let adapter_contract =
                 AdapterContract::new(context.config.adapter_address(), context.signer.clone());
 
             let randomness_count = AdapterClient::call_contract_view(
-                "randomness_count",
+                "get_randomness_count",
                 adapter_contract.get_randomness_count(),
                 context.config.contract_view_retry_descriptor,
             )
@@ -770,6 +1391,9 @@ async fn main() -> anyhow::Result<()> {
         .with_command_async(
             Command::new("call")
                 .subcommand(
+                    Command::new("block").visible_alias("b").about("Get block information")
+                        .arg(Arg::new("block-number").required(true).help("block number in latest/ earliest/ pending/ decimal number"))
+                ).subcommand(
                     Command::new("trx-receipt").visible_alias("tr").about("Get transaction receipt")
                         .arg(Arg::new("trx-hash").required(true).help("transaction hash in hex format"))
                 ).subcommand(
@@ -783,6 +1407,32 @@ async fn main() -> anyhow::Result<()> {
         ).with_command_async(
             Command::new("randcast")
                 .subcommand(
+                    Command::new("subscription").visible_alias("s").about("Get subscription by subscription id")
+                        .arg(Arg::new("sub-id").required(true).value_parser(value_parser!(u64)).help("subscription id in decimal"))
+                ).subcommand(
+                    Command::new("my-subscriptions").visible_alias("mss").about("Get my subscriptions")
+                ).subcommand(
+                    Command::new("consumers").visible_alias("cs").about("Get consumer contracts by subscription id")
+                        .arg(Arg::new("sub-id").required(true).value_parser(value_parser!(u64)).help("subscription id in decimal"))
+                ).subcommand(
+                    Command::new("requests").visible_alias("rs").about("Get requests by subscription id, filter by consumer address, pending/ success/ failed")
+                        .arg(Arg::new("sub-id").required(true).value_parser(value_parser!(u64)).help("subscription id in decimal"))
+                        .arg(Arg::new("consumer").required(false).help("sent by consumer address in hex format"))
+                        .arg(Arg::new("pending").long("pending").required(false).action(ArgAction::SetTrue).help("only pending requests"))
+                        .arg(Arg::new("success").long("success").required(false).action(ArgAction::SetTrue).help("only success requests"))
+                        .arg(Arg::new("failed").long("failed").required(false).action(ArgAction::SetTrue).help("only failed requests, which means the callback function in consumer contract reverts due to business logic or gas limit"))
+                ).subcommand(
+                    Command::new("estimate-callback-gas").visible_alias("ecg")
+                        .about("Estimate callback gas for any consumer contract extends GeneralRandcastConsumerBase before the first request. \
+                                This also can be used as a dry run for the first request. An error will be returned if callback in the consumer contract reverts.")
+                        .arg(Arg::new("consumer").required(true).help("address of your customized consumer contract in hex format"))
+                        .arg(Arg::new("request-sender").required(true).help("sender address to request randomness(don't have to be function in consumer contract) in hex format"))
+                        .arg(Arg::new("request-signature").required(true).help("function signature of request randomness with a pair of quotation marks"))
+                        .arg(Arg::new("request-params").required(true).help("request params split by space"))
+                ).subcommand(
+                    Command::new("estimate-payment-amount").visible_alias("epa").about("Estimate the amount of gas used for a fulfillment of randomness in 3 times of current gas price, for calculating how much eth is needed for subscription funding")
+                        .arg(Arg::new("callback-gas-limit").required(true).value_parser(value_parser!(u32)).help("callback gas limit by calling estimate-callback-gas"))
+                ).subcommand(
                     Command::new("last-randomness").visible_alias("lr").about("Get last randomness")
                 ).subcommand(
                     Command::new("pending-request-commitment").visible_alias("prc")
@@ -791,6 +1441,14 @@ async fn main() -> anyhow::Result<()> {
                 ).subcommand(
                     Command::new("adapter-config").visible_alias("ac").about("Get adapter config")
                 ).subcommand(
+                    Command::new("flat-fee-config").visible_alias("ffc").about("Get flat fee info about \
+                    fee tiers, if global flat fee promotion is enabled and flat fee promotion global percentage and duration")
+                ).subcommand(
+                    Command::new("referral-config").visible_alias("rcfg").about("Get info about if referral activity is enabled and free request count for referrer and referee")
+                ).subcommand(
+                    Command::new("fee-tier").visible_alias("ft").about("Get fee tier based on the request count")
+                        .arg(Arg::new("req-count").required(true).value_parser(value_parser!(u64)).help("request count in decimal"))
+                ).subcommand(
                     Command::new("last-assigned-group-index").visible_alias("lagi").about("Get last assigned group index in randomness generation")
                 ).subcommand(
                     Command::new("randomness-count").visible_alias("rc").about("Get randomness count")
@@ -798,7 +1456,7 @@ async fn main() -> anyhow::Result<()> {
                     Command::new("cumulative-data").visible_alias("cd")
                     .about("Get cumulative data(FlatFee, CommitterReward and PartialSignatureReward) of randomness generation")
                 )
-                .about("Get views from adapter contract"),
+                .about("Get views and events from adapter contract"),
             |args, context| Box::pin(randcast(args, context)),
         ).with_command_async(
             Command::new("stake")
@@ -859,7 +1517,7 @@ async fn main() -> anyhow::Result<()> {
                     Command::new("frozen-principal").visible_alias("fp")
                         .about("Get frozen principal and unfreeze time")
                 )
-                .about("Get views from staking contract"),
+                .about("Get views and events from staking contract"),
             |args, context| Box::pin(stake(args, context)),
         ).with_command_async(
             Command::new("send")
@@ -879,6 +1537,34 @@ async fn main() -> anyhow::Result<()> {
                     Command::new("claim").visible_alias("c").about("Claim rewards as well as frozen principal(if any) from staking")
                 ).subcommand(
                     Command::new("claim-reward").visible_alias("cr").about("Claim rewards from staking")
+                ).subcommand(
+                    Command::new("create-subscription").visible_alias("cs")
+                        .about("Create a new subscription as owner")
+                ).subcommand(
+                    Command::new("add-consumer").visible_alias("ac")
+                        .arg(Arg::new("sub-id").required(true).value_parser(value_parser!(u64)).help("subscription id in decimal format"))
+                        .arg(Arg::new("consumer").required(true).help("consumer address in hex format"))
+                        .about("Add consumer contract to subscription")
+                ).subcommand(
+                    Command::new("fund-subscription").visible_alias("fs")
+                        .arg(Arg::new("sub-id").required(true).value_parser(value_parser!(u64)).help("subscription id in decimal format"))
+                        .arg(Arg::new("amount").required(true).help("amount of ETH(wei) to fund"))
+                        .about("Fund subscription with ETH")
+                ).subcommand(
+                    Command::new("set-referral").visible_alias("sr")
+                        .arg(Arg::new("sub-id").required(true).value_parser(value_parser!(u64)).help("subscription id in decimal format"))
+                        .arg(Arg::new("referral-sub-id").required(true).value_parser(value_parser!(u64)).help("referral subscription id in decimal format"))
+                        .about("Set referral subscription id for your subscription to get referral rewards")
+                ).subcommand(
+                    Command::new("cancel-subscription").visible_alias("ccs")
+                        .arg(Arg::new("sub-id").required(true).value_parser(value_parser!(u64)).help("subscription id in decimal format"))
+                        .arg(Arg::new("to").required(true).help("address to send ETH left"))
+                        .about("Cancel subscription and redeem ETH left to receiver address")
+                ).subcommand(
+                    Command::new("remove-consumer").visible_alias("rc")
+                        .arg(Arg::new("sub-id").required(true).value_parser(value_parser!(u64)).help("subscription id in decimal format"))
+                        .arg(Arg::new("consumer").required(true).help("consumer contract address in hex format"))
+                        .about("Remove consumer contract from subscription")
                 )
                 .about("*** Be careful this will change on-chain state and cost gas as well as block time***\nSend trxs to on-chain contracts"),
             |args, context| Box::pin(send(args, context)),

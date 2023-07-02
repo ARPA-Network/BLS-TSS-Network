@@ -111,6 +111,34 @@ pub trait ViewCaller {
 
         Ok(res)
     }
+
+    async fn call_contract_view_without_log<D: Detokenize + Send + Sync + 'static>(
+        call: ContractCall<WalletSigner, D>,
+        contract_view_retry_descriptor: ExponentialBackoffRetryDescriptor,
+    ) -> ContractClientResult<D> {
+        let retry_strategy = ExponentialBackoff::from_millis(contract_view_retry_descriptor.base)
+            .factor(contract_view_retry_descriptor.factor)
+            .map(|e| {
+                if contract_view_retry_descriptor.use_jitter {
+                    jitter(e)
+                } else {
+                    e
+                }
+            })
+            .take(contract_view_retry_descriptor.max_attempts);
+
+        let res = Retry::spawn(retry_strategy, || async {
+            let result = call.call().await.map_err(|e| {
+                let e: ContractClientError = e.into();
+                e
+            })?;
+
+            Result::<D, ContractClientError>::Ok(result)
+        })
+        .await?;
+
+        Ok(res)
+    }
 }
 
 pub mod controller {

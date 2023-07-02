@@ -21,7 +21,7 @@ use ethers::providers::Middleware;
 use ethers::signers::coins_bip39::English;
 use ethers::signers::Signer;
 use ethers::signers::{LocalWallet, MnemonicBuilder};
-use ethers::types::{Address, BlockId, BlockNumber, U256};
+use ethers::types::{Address, BlockId, BlockNumber, H256, U256, U64};
 use reedline_repl_rs::clap::{self, Arg, ArgAction, ArgMatches, Command};
 use reedline_repl_rs::Repl;
 use std::fs::File;
@@ -82,6 +82,53 @@ pub struct RandomnessRequestResult {
     pub payment: ethers::core::types::U256,
     pub flat_fee: ethers::core::types::U256,
     pub success: bool,
+}
+
+#[derive(Debug)]
+pub struct Block {
+    /// Hash of the block
+    pub hash: Option<H256>,
+    /// Hash of the parent
+    pub parent_hash: H256,
+    /// Hash of the uncles
+    pub uncles_hash: H256,
+    /// Miner/author's address. None if pending.
+    pub author: Option<Address>,
+    /// State root hash
+    pub state_root: H256,
+    /// Transactions root hash
+    pub transactions_root: H256,
+    /// Transactions receipts root hash
+    pub receipts_root: H256,
+    /// Block number. None if pending.
+    pub number: Option<U64>,
+    /// Gas Used
+    pub gas_used: U256,
+    /// Gas Limit
+    pub gas_limit: U256,
+    /// Timestamp
+    pub timestamp: U256,
+    /// Size in bytes
+    pub size: Option<U256>,
+}
+
+impl<TX> From<ethers::types::Block<TX>> for Block {
+    fn from(block: ethers::types::Block<TX>) -> Self {
+        Self {
+            hash: block.hash,
+            parent_hash: block.parent_hash,
+            uncles_hash: block.uncles_hash,
+            author: block.author,
+            state_root: block.state_root,
+            transactions_root: block.transactions_root,
+            receipts_root: block.receipts_root,
+            number: block.number,
+            gas_used: block.gas_used,
+            gas_limit: block.gas_limit,
+            timestamp: block.timestamp,
+            size: block.size,
+        }
+    }
 }
 
 pub struct StakingClient;
@@ -459,7 +506,6 @@ async fn send(args: ArgMatches, context: &mut Context) -> anyhow::Result<Option<
             )))
         }
 
-        // let controller_contract = Controller::new(self.controller_address, self.signer.clone());
         _ => panic!("Unknown subcommand {:?}", args.subcommand_name()),
     }
 }
@@ -1006,6 +1052,50 @@ async fn call(args: ArgMatches, context: &mut Context) -> anyhow::Result<Option<
 
             Ok(Some(format!("randomness_count: {:#?}", randomness_count)))
         }
+        Some(("block", sub_matches)) => {
+            let block_number = sub_matches.get_one::<String>("block-number").unwrap();
+            match block_number.as_str() {
+                "latest" => {
+                    let block: Option<Block> = context
+                        .main_chain_identity
+                        .get_provider()
+                        .get_block(BlockNumber::Latest)
+                        .await?
+                        .map(|block| block.into());
+                    return Ok(Some(format!("block: {:#?}", block)));
+                }
+                "earliest" => {
+                    let block: Option<Block> = context
+                        .main_chain_identity
+                        .get_provider()
+                        .get_block(BlockNumber::Earliest)
+                        .await?
+                        .map(|block| block.into());
+                    return Ok(Some(format!("block: {:#?}", block)));
+                }
+                "pending" => {
+                    let block: Option<Block> = context
+                        .main_chain_identity
+                        .get_provider()
+                        .get_block(BlockNumber::Pending)
+                        .await?
+                        .map(|block| block.into());
+                    return Ok(Some(format!("block: {:#?}", block)));
+                }
+                _ => {
+                    if let Ok(block_number) = block_number.parse::<u64>() {
+                        let block: Option<Block> = context
+                            .main_chain_identity
+                            .get_provider()
+                            .get_block(BlockNumber::Number(block_number.into()))
+                            .await?
+                            .map(|block| block.into());
+                        return Ok(Some(format!("block: {:#?}", block)));
+                    }
+                }
+            }
+            panic!("Unknown block number {:?}", block_number);
+        }
         // trx-receipt
         Some(("trx-receipt", sub_matches)) => {
             let trx_hash = sub_matches.get_one::<String>("trx-hash").unwrap();
@@ -1285,6 +1375,9 @@ async fn main() -> anyhow::Result<()> {
         .with_command_async(
             Command::new("call")
                 .subcommand(
+                    Command::new("block").visible_alias("b").about("Get block information")
+                        .arg(Arg::new("block-number").required(true).help("block number in latest/ earliest/ pending/ decimal number"))
+                ).subcommand(
                     Command::new("trx-receipt").visible_alias("tr").about("Get transaction receipt")
                         .arg(Arg::new("trx-hash").required(true).help("transaction hash in hex format"))
                 ).subcommand(
