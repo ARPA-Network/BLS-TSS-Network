@@ -2,8 +2,9 @@
 Util functions for the Arpa test environment.
 """
 import os
+import signal
+from datetime import datetime, timezone
 from dotenv import load_dotenv
-
 
 def make_list(*args):
     """
@@ -17,8 +18,8 @@ def check_group_status(group):
     Check all particialPubKeys are not empty.
     group: group to check.
     """
-    memberList = group[4]
-    for member in memberList:
+    member_list = group[4]
+    for member in member_list:
         if len(member[1]) == 0:
             return False
     return True
@@ -28,7 +29,8 @@ def has_equal_value(value, *args):
     Check if any of the arguments after the first one have the same value as the first argument.
     :param value: The first value to compare against.
     :param args: The rest of the values to check.
-    :return: True if any of the values after the first have the same value as the value, False otherwise.
+    :return: True if any of the values after the first have the same value as the value,
+        False otherwise.
     """
     return any(str(arg).upper() == str(value).upper() for arg in args)
 
@@ -48,7 +50,7 @@ def set_value_to_env(name, value):
     os.environ[name] = value
     value = os.environ.get(name)
     print("Set value to env: ", name, value)
-    os.system("source tests/scenarios/.env")
+    os.system("cp tests/scenarios/.env contracts/.env")
 
 def list_should_contain(address_list, value):
     """
@@ -76,3 +78,34 @@ def get_account_index_from_list(address, account_list):
         if str(account.address).upper() == str(address).upper():
             return index + 1
     return -1
+
+def kill_process_by_name(name):
+    """
+    Kill a process by its name.
+    """
+    if os.name == 'nt': # For Windows
+        os.system(f"taskkill /f /im {name}.exe")
+    else: # For Linux
+        result = os.popen(f"pgrep {name}").read()
+        if len(result) != 0:
+            os.kill(int(result), signal.SIGTERM)
+    print(f"{name} process was killed successfully!")
+
+def approximately_equal(val_x, val_y, tolerance = 1000000000):
+    """
+    Check if two numbers are approximately equal.
+    """
+    return abs(val_x - val_y) <= tolerance
+
+def convert_timestamp(time_str):
+    """
+    Strip time string.
+    """
+    rdt_obj = datetime.strptime(time_str, "%a %b %d %H:%M:%S %Y")
+
+    # Set the time zone to GMT 00:00
+    gmt_timezone = timezone.utc
+    rdt_obj = rdt_obj.replace(tzinfo=gmt_timezone)
+
+    unix_timestamp = rdt_obj.timestamp()
+    return int(unix_timestamp)

@@ -17,11 +17,12 @@ Resource            common.resource
 ${PROXY_CONTRACT_DEPLOYER_KEY}           0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80
 ${PROXY_CONTRACT_ADDRESS}
 ${PROXY_OUTPUT}                          contracts/out/
+${CONTRACT_PATH}                         contracts/
 ${PROXY_CONTRACT}
 ${CONTROLLER_CONTRACT}
 ${STAKE_CONTRACT}
 ${ADAPTER_CONTRACT}
-${USER_CONTRACT_ADDRESS}
+${USER_CONTRACT_ADDRESS}                 NULL
 ${USER_CONTRACT}
 # Test value:
 ${MODIFIRD_PUB_KEY}                      0x137bde2a3eca9e26d5023c8a31c7db75db47b4d1776efc144bc9cfa36403125510292172c806e0d9dd29958c8b359ea9c693179c505558cc95ca8ce6a690eb800652ce1fadb1895c06e5f28e871d8e3797f749941108195d2106a782464a09ed23ece01e5c6512317cd413fbecc36032ab7ba45f62704e9808ec2b6a2dd03d8c
@@ -33,7 +34,7 @@ Set Enviorment And Deploy Contract
     [Documentation]    Set enviorment and deploy proxy contract
     Clear Log
     Setup Chain Environment
-    ${result} =    Run    cd contracts/;forge build -o out/ --revert-strings debug
+    ${result} =    Run    cd contracts/;forge build -o out/
     ${result} =    Exec Script    ControllerLocalTestProxy.s.sol:ControllerLocalTestProxyScript
     #${result} =    Exec Script    ControllerLocalTest.s.sol:ControllerLocalTestScript
     ${result} =    Exec Script    StakeOperatorLocalTest.s.sol:StakeOperatorLocalTestScript
@@ -55,7 +56,7 @@ Bound Contract ABI
     Set Global Variable    $CONTROLLER_CONTRACT   ${controller_contract}
     ${stake_address} =    Get Value From Env    STAKING_ADDRESS
     ${stake_address} =    To Checksum Address    ${stake_address}
-    ${stake_contract} =    Get Contract    ${PROXY_OUTPUT}IStaking.sol/IStaking.json    ${stake_address}
+    ${stake_contract} =    Get Contract    ${PROXY_OUTPUT}Staking.sol/Staking.json    ${stake_address}
     Set Global Variable    $STAKE_CONTRACT   ${stake_contract}
     ${adapter_address} =    Get Value From Env    ADAPTER_ADDRESS
     ${adapter_address} =    To Checksum Address    ${adapter_address}
@@ -65,7 +66,7 @@ Bound Contract ABI
 Deploy User Contract And Request Randomness
     [Documentation]    Deploy the user contract
     ${request_id} =    Set Variable    
-    IF  ${USER_CONTRACT_ADDRESS == ''}
+    IF  ${USER_CONTRACT_ADDRESS == 'NULL'}
         ${contract_output} =    Exec Script    GetRandomNumberLocalTest.s.sol:GetRandomNumberLocalTestScript
         ${contract_address} =    Get Contract Address From File    contracts/broadcast/GetRandomNumberLocalTest.s.sol/31337/run-latest.json
         Set Global Variable    $USER_CONTRACT_ADDRESS    ${contract_address[0]}  
@@ -141,7 +142,7 @@ Get Node
     [Documentation]    Get node info by node address
     [Arguments]    ${node}
     ${node} =    To Checksum Address    ${node}
-    ${result} =    Contract Function Call    ${CONTROLLER_CONTRACT}    getNode    ${node}
+    ${result} =        ${CONTROLLER_CONTRACT}    getNode    ${node}
     Log    Node info: ${result}
     RETURN    ${result}
 
@@ -252,8 +253,60 @@ Get Reward
     ${result} =    Contract Function Call    ${CONTROLLER_CONTRACT}    getRewards    ${address}
     RETURN    ${result}
 
-Get Node Staking
+Get Stake
     [Documentation]    Gets the Staking amount of a given node
     [Arguments]    ${address}
+    ${address} =    To Checksum Address    ${address}
     ${result} =    Contract Function Call    ${STAKE_CONTRACT}    getStake    ${address}
     RETURN    ${result}
+
+Get Subscription
+    [Documentation]    Gets the Subscription info of an subId
+    [Arguments]    ${subId}
+    ${subId} =    Convert To Integer    ${subId}
+    ${result} =    Contract Function Call    ${ADAPTER_CONTRACT}    getSubscription    ${subId}
+    RETURN    ${result}
+
+Get Total Stake Amount
+    [Documentation]    Gets total stake amount
+    ${result} =    Contract Function Call    ${STAKE_CONTRACT}    getTotalStakedAmount
+    RETURN    ${result}
+
+Get Reward Rate
+    [Documentation]    Gets reward rate
+    ${result} =    Contract Function Call    ${STAKE_CONTRACT}    getRewardRate
+    RETURN    ${result}
+
+Get Base Reward
+    [Documentation]    Gets base reward
+    [Arguments]    ${address}
+    ${address} =    To Checksum Address    ${address}
+    ${result} =    Contract Function Call    ${STAKE_CONTRACT}    getBaseReward    ${address}
+    RETURN    ${result}
+
+Get Frozen Principal
+    [Documentation]    Gets frozen principal
+    [Arguments]    ${address}
+    ${address} =    To Checksum Address    ${address}
+    ${result} =    Contract Function Call    ${STAKE_CONTRACT}    getFrozenPrincipal    ${address}
+    RETURN    ${result}
+
+Start Stake
+    [Documentation]    Start stake
+    ${total_amount} =    Get Value From Env    REWARD_AMOUNT
+    ${total_amount} =    Convert To Integer    ${total_amount}
+    ${stake_address} =    Get Value From Env    STAKING_ADDRESS
+    ${key} =    Get Value From Env    ADMIN_PRIVATE_KEY
+    ${result} =    Run    cast send ${stake_address} "start(uint256 amount, uint256 rewardDuration)" ${total_amount} 2592000 --private-key=${key}
+
+Get Community Stake Count
+    [Documentation]    Gets community stake count
+    ${result} =    Contract Function Call    ${STAKE_CONTRACT}    getTotalCommunityStakedAmount
+    RETURN    ${result}
+
+Claim Reward
+    [Documentation]    Claim reward
+    [Arguments]    ${index}
+    ${address} =    Get Value From Env    STAKING_ADDRESS
+    ${key} =    Get Private Key By Index    ${index}
+    ${result} =    Run    cast send ${address} "claimReward()" --private-key=${key}

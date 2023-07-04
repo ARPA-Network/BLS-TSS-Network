@@ -19,6 +19,7 @@ contract StakeOperatorLocalTestScript is Script {
     string internal _mnemonic = vm.envString("STAKING_NODES_MNEMONIC");
     uint32 internal _stakingNodesIndexOffset = uint32(vm.envUint("STAKING_NODES_INDEX_OFFSET"));
     uint32 internal _stakingNodesIndexLength = 10;
+    bool internal _isStakeUser = vm.envBool("IS_STAKE_USER");
 
     Staking internal _staking;
     Arpa internal _arpa;
@@ -47,12 +48,15 @@ contract StakeOperatorLocalTestScript is Script {
         vm.broadcast(_deployerPrivateKey);
         _arpa.approve(address(_staking), _rewardAmount);
 
-        vm.broadcast(_deployerPrivateKey);
-        _staking.start(_rewardAmount, 30 days);
 
         // let a user stake to accumulate some rewards
-        vm.rememberKey(_userPrivateKey);
-        _stake(vm.addr(_userPrivateKey));
+        if (_isStakeUser) {
+            vm.broadcast(_deployerPrivateKey);
+            _staking.start(_rewardAmount, 30 days);
+            vm.rememberKey(_userPrivateKey);
+            _stake(vm.addr(_userPrivateKey));
+        }
+
     }
 
     function _stake(address sender) internal {

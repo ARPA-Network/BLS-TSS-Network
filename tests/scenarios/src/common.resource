@@ -17,6 +17,7 @@ ${ARPA_HOLDER_ADDRESS}                  0xf977814e90da44bfa03b6295a0616a897441ac
 ${ARPA_CONTRACT_ADDRESS}                0xBA50933C268F567BDC86E1aC131BE072C6B0b71a                
 ${NUM_ACCOUNTS}                         40
 ${BALANCE}                              1000
+${ENV_PATH}                             tests/scenarios/.env
 
 # Ethereum RPC client, Cast CLI command and arguments:
 ${LOCAL_ETHEREUM_CHAIN_PROCESS_HANDLE}
@@ -25,6 +26,7 @@ ${BLOCK_TIME}                           0
 *** Keywords ***
 Setup Chain Environment
     [Documentation]    Sets up the scenario testing encironment
+    Source Environment Variables
     Start Local Ethereum Chain
     Local Ethereum Chain Should Be Up And Running
     Get Latest Block Number Should Work
@@ -41,7 +43,7 @@ Teardown Scenario Testing Environment
     Kill Previous Node    ${list_len}
     Set Global Variable    $NODE_PROCESS_LIST    ${EMPTY_LIST}
     Set Global Variable    $BLOCK_TIME    0
-    Set Global Variable    $USER_CONTRACT_ADDRESS
+    Set Global Variable    $USER_CONTRACT_ADDRESS    NULL
     
 
 Process Completes Successfully
@@ -55,14 +57,17 @@ Process Completes Successfully
 Start Local Ethereum Chain
     [Documentation]    Starts a local Ethereum blockchain child process in the background with Anvil CLI
     ...    then saves the process handle to a suite-wide variable for later termination in the suite teardown
+    Kill Process By Name    anvil
     IF  ${BLOCK_TIME} == 0
         ${anvil_process_handle} =    Start Process    anvil
         ...    --accounts    ${NUM_ACCOUNTS}
+        ...    --gas-price    1000000000
         ...    stdout=${LOG_PATH}/anvil-chain.log
     ELSE
         ${anvil_process_handle} =    Start Process    anvil
         ...    --block-time    ${BLOCK_TIME}
         ...    --accounts    ${NUM_ACCOUNTS}
+        ...    --gas-price    1000000000
         ...    stdout=${LOG_PATH}/anvil-chain.log
     END
 
@@ -89,6 +94,18 @@ Get Latest Block Number
     ${result} =    Run Process    cast    block-number
     Process Completes Successfully    ${result}
     RETURN    ${result.stdout}
+
+Get Timestamp
+    [Documentation]    Gets current block timestamp
+    ${result} =    Run Process    cast    age
+    Process Completes Successfully    ${result}
+    RETURN    ${result.stdout}
+
+Set Timestamp Interval
+    [Documentation]    Sets next block timestamp interval
+    [Arguments]    ${interval}
+    ${result} =    Run Process    cast    rpc    anvil_setBlockTimestampInterval    ${interval}
+    Process Completes Successfully    ${result}
 
 Mine Blocks
     [Documentation]    Mines n number of blocks
@@ -120,7 +137,9 @@ Get ARPA Balance
     Process Completes Successfully    ${result}
     RETURN    ${result.stdout}
 
-# Sanity check section for local Ethereum chain and helper functions:
+Get Private Key By Index
+    [Arguments]    ${node_index}
+    RETURN    ${NODE_ACCOUNT_LIST[${node_index} - 1].key}
 
 Local Ethereum Chain Should Be Up And Running
     [Documentation]    Sanity check
@@ -160,3 +179,8 @@ Wait Block Number Increase
         Sleep    1s
     END
     Should Be Equal    ${original_block_number} + ${number}    ${block_number}
+
+Source Environment Variables
+    [Documentation]    Source environment variables
+    ${result} =    Run    source ${ENV_PATH}
+    ${result} =    Run    cp ${ENV_PATH} ${CONTRACT_PATH}.env

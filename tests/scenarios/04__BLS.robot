@@ -169,23 +169,36 @@ Corner Case2
     Sleep    10s
     Clear Log
     ${task_type} =    Convert To Integer    6
-    ${group0} =    Get Group    1
-    ${nodes} =    Set Variable    ${group0[5]}
-    ${node_index} =    Get Index By Address    ${nodes[0]}
-    Shutdown Listener    ${node_index}    ${task_type}
-    ${node_index} =    Get Index By Address    ${nodes[1]}
-    Shutdown Listener    ${node_index}    ${task_type}
-    ${node_index} =    Get Index By Address    ${nodes[2]}
-    Shutdown Listener    ${node_index}    ${task_type}
+    ${group1} =    Get Group    1
+    ${group1_nodes} =    Set Variable    ${group1[5]}
+    ${group1_index_0} =    Get Index By Address    ${group1_nodes[0]}
+    Shutdown Listener    ${group1_index_0}    ${task_type}
+    ${group1_index_1} =    Get Index By Address    ${group1_nodes[1]}
+    Shutdown Listener    ${group1_index_1}    ${task_type}
+    ${group1_index_2} =    Get Index By Address    ${group1_nodes[2]}
+    Shutdown Listener    ${group1_index_2}    ${task_type}
 
-    ${request_id} =    Deploy User Contract And Request Randomness
+    ${group0} =    Get Group    0
+    ${one_node_in_group0} =    Set Variable    ${group0[5][0]}
+    ${node_index} =    Get Index By Address    ${one_node_in_group0}
+
     ${cur_block} =    Get Latest Block Number
-    Sleep    60s
+    ${request_id} =    Deploy User Contract And Request Randomness
+    Get Keyword From Log    ${node_index}    send partial signature to committer
+
+    Start Listener    ${group1_index_0}    ${task_type}
+    Start Listener    ${group1_index_1}    ${task_type}
+    Start Listener    ${group1_index_2}    ${task_type}
+    
+    Sleep    10s
+    ${events} =    Get Events    ${ADAPTER_CONTRACT}    RandomnessRequestResult    ${cur_block}
+    ${result} =    Events Values Should Be    ${events}    groupIndex    1
+    Teardown Scenario Testing Environment
 
 *** Test Cases ***
 
 Run BLS Test Cases
-    #Repeat Keyword    1    BLS Happy Path1
-    #Repeat Keyword    1    BLS Happy Path2
-    #Repeat Keyword    1    Corner Case1
+    Repeat Keyword    1    BLS Happy Path1
+    Repeat Keyword    1    BLS Happy Path2
+    Repeat Keyword    1    Corner Case1
     Repeat Keyword    1    Corner Case2

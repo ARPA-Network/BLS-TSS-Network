@@ -135,9 +135,6 @@ Get Address By Index
     [Arguments]    ${node_index}
     RETURN    ${NODE_ACCOUNT_LIST[${node_index} - 1].address}
 
-Get Private Key By Index
-    [Arguments]    ${node_index}
-    RETURN    ${NODE_ACCOUNT_LIST[${node_index} - 1].key}
 
 Add ARPA
     [Documentation]    Test Add ARPA
@@ -162,6 +159,14 @@ Stake ARPA
     ${result} =    Run    cast send ${stake_contract_address} "stake(uint256 amount)" ${amount} --private-key=${key}
     RETURN    ${result}
 
+Unstake ARPA
+    [Documentation]    Test Unstake
+    [Arguments]    ${node_index}    ${amount}
+    ${key} =    Get Private Key By Index    ${node_index}
+    ${stake_contract_address} =    Get Value From Env    STAKING_ADDRESS
+    ${result} =    Run    cast send ${stake_contract_address} "unstake(uint256 amount)" ${amount} --private-key=${key}
+    RETURN    ${result}
+    
 Stake And Run Node
     [Arguments]    ${node_index}
     ${address} =    Get Address By Index    ${node_index}

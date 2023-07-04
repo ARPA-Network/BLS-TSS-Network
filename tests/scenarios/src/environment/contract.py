@@ -65,7 +65,7 @@ def exec_script(script_name):
     """
     os.chdir("contracts")
     cmd = ("forge script script/" + script_name
-        + " --fork-url http://localhost:8545 --optimize --broadcast")
+        + " --fork-url http://localhost:8545 --broadcast --slow")
     os.system(cmd)
     os.chdir("..")
 
@@ -138,3 +138,9 @@ def events_values_should_be(events, key, value):
         if str(event['args'][key]) != str(value):
             return False
     return True
+
+def clac_reward(amount, reward_ratio, ):
+    """
+    Calculate the reward amount.
+    """
+    return amount * reward_ratio / 100
