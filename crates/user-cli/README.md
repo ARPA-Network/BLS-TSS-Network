@@ -8,7 +8,7 @@
 
 # Overview
 
-ARPA User CLI is a utilitarian REPL tool to make it easier to interact with smart contracts on ARPA network.
+The ARPA User CLI is a REPL tool that makes it easier to interact with smart contracts on the ARPA network.
 
 It consists of:
 

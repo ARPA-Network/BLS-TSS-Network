@@ -25,7 +25,7 @@ It consists of:
 
 # ARPA Node Client
 
-ARPA Node Client is a long-running program to run the ARPA node.
+The ARPA Node Client is a long-running program to run the ARPA node.
 
 If the data path in the config file doesn't exist, as the first time to run the node, the client will generate a DKG keypair(served as the identity during a grouping process), then register the node address with dkg public key to the ARPA Network on-chain. In early access, make sure the address of the node has been added to eligible operators list in the Staking contract with sufficient stake in advance.
 
@@ -49,7 +49,7 @@ cargo run --bin node-client -- -c conf/config.yml
 
 # ARPA Node CLI
 
-ARPA Node CLI is a fast and verbose REPL for the operator of a ARPA node. The same node config file as ARPA Node Client will be used. As a supplement to ARPA Node Client, it provides a set of commands to inspect the node status and interact with the on-chain contracts, e.g. register node to the network manually when error occurs in the node client.
+The ARPA Node CLI is a fast and verbose REPL for the operator of a ARPA node. The same node config file as ARPA Node Client will be used. As a supplement to ARPA Node Client, it provides a set of commands to inspect the node status and interact with the on-chain contracts, e.g. register node to the network manually when error occurs in the node client.
 
 ## Usage
 
@@ -197,7 +197,7 @@ Options:
 
 # Management grpc server
 
-Management grpc server supports inspecting states and interacting with a running node.
+This server supports inspecting states and interacting with a running node.
 
 Please see [`management.proto`](proto/management.proto) for detailed apis.
 
