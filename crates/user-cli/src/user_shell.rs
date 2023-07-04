@@ -16,7 +16,7 @@ use reedline_repl_rs::clap::{value_parser, Arg, ArgAction, ArgMatches, Command};
 use reedline_repl_rs::Repl;
 use std::collections::BTreeMap;
 use std::fs::File;
-use std::io::{BufRead, BufReader};
+use std::io::{BufRead, BufReader, Read};
 use std::path::PathBuf;
 use std::sync::Arc;
 use structopt::StructOpt;
@@ -174,7 +174,7 @@ async fn send(args: ArgMatches, context: &mut Context) -> anyhow::Result<Option<
 
             Ok(Some(format!(
                 "Approve arpa for staking successfully, transaction hash: {:?}",
-                Some(trx_hash)
+                trx_hash
             )))
         }
         Some(("stake", sub_matches)) => {
@@ -225,7 +225,7 @@ async fn send(args: ArgMatches, context: &mut Context) -> anyhow::Result<Option<
 
             Ok(Some(format!(
                 "Stake arpa successfully, transaction hash: {:?}",
-                Some(trx_hash)
+                trx_hash
             )))
         }
         Some(("unstake", sub_matches)) => {
@@ -259,7 +259,7 @@ async fn send(args: ArgMatches, context: &mut Context) -> anyhow::Result<Option<
 
             Ok(Some(format!(
                 "Unstake arpa successfully, transaction hash: {:?}",
-                Some(trx_hash)
+                trx_hash
             )))
         }
         Some(("claim", _sub_matches)) => {
@@ -276,7 +276,7 @@ async fn send(args: ArgMatches, context: &mut Context) -> anyhow::Result<Option<
 
             Ok(Some(format!(
                 "Claim successfully, transaction hash: {:?}",
-                Some(trx_hash)
+                trx_hash
             )))
         }
         Some(("claim-reward", _sub_matches)) => {
@@ -293,7 +293,7 @@ async fn send(args: ArgMatches, context: &mut Context) -> anyhow::Result<Option<
 
             Ok(Some(format!(
                 "Claim reward successfully, transaction hash: {:?}",
-                Some(trx_hash)
+                trx_hash
             )))
         }
         Some(("claim-frozen-principal", _sub_matches)) => {
@@ -310,7 +310,7 @@ async fn send(args: ArgMatches, context: &mut Context) -> anyhow::Result<Option<
 
             Ok(Some(format!(
                 "Claim frozen principal successfully, transaction hash: {:?}",
-                Some(trx_hash)
+                trx_hash
             )))
         }
         Some(("create-subscription", _sub_matches)) => {
@@ -327,7 +327,7 @@ async fn send(args: ArgMatches, context: &mut Context) -> anyhow::Result<Option<
 
             Ok(Some(format!(
                 "Create subscription successfully, transaction hash: {:?}",
-                Some(trx_hash)
+                trx_hash
             )))
         }
         Some(("add-consumer", sub_matches)) => {
@@ -347,7 +347,7 @@ async fn send(args: ArgMatches, context: &mut Context) -> anyhow::Result<Option<
 
             Ok(Some(format!(
                 "Add consumer successfully, transaction hash: {:?}",
-                Some(trx_hash)
+                trx_hash
             )))
         }
         Some(("fund-subscription", sub_matches)) => {
@@ -368,7 +368,7 @@ async fn send(args: ArgMatches, context: &mut Context) -> anyhow::Result<Option<
 
             Ok(Some(format!(
                 "Fund subscription successfully, transaction hash: {:?}",
-                Some(trx_hash)
+                trx_hash
             )))
         }
         Some(("set-referral", sub_matches)) => {
@@ -388,7 +388,7 @@ async fn send(args: ArgMatches, context: &mut Context) -> anyhow::Result<Option<
 
             Ok(Some(format!(
                 "Set referral successfully, transaction hash: {:?}",
-                Some(trx_hash)
+                trx_hash
             )))
         }
         Some(("cancel-subscription", sub_matches)) => {
@@ -408,7 +408,7 @@ async fn send(args: ArgMatches, context: &mut Context) -> anyhow::Result<Option<
 
             Ok(Some(format!(
                 "Cancel subscription successfully, transaction hash: {:?}",
-                Some(trx_hash)
+                trx_hash
             )))
         }
         Some(("remove-consumer", sub_matches)) => {
@@ -428,7 +428,38 @@ async fn send(args: ArgMatches, context: &mut Context) -> anyhow::Result<Option<
 
             Ok(Some(format!(
                 "Remove consumer successfully, transaction hash: {:?}",
-                Some(trx_hash)
+                trx_hash
+            )))
+        }
+        Some(("set-callback-gas-config", sub_matches)) => {
+            let consumer = sub_matches.get_one::<String>("consumer").unwrap();
+            let consumer_owner_private_key = sub_matches
+                .get_one::<String>("consumer-owner-private-key")
+                .unwrap();
+            let callback_gas_limit = sub_matches.get_one::<String>("callback-gas-limit").unwrap();
+            let callback_max_gas_fee = sub_matches
+                .get_one::<String>("callback-max-gas-fee")
+                .unwrap();
+
+            let set_callback_gas_config_args = vec![
+                "send",
+                consumer,
+                "setCallbackGasConfig(uint32,uint256)",
+                callback_gas_limit,
+                callback_max_gas_fee,
+                "--private-key",
+                consumer_owner_private_key,
+            ];
+            let cast_res = call_cast(
+                &context.config.provider_endpoint,
+                &set_callback_gas_config_args,
+            );
+            let trx_hash = &cast_res[cast_res.find("transactionHash").unwrap()
+                + "transactionHash         ".len()
+                ..cast_res.find("\ntransactionIndex").unwrap()];
+            Ok(Some(format!(
+                "Set callback gas config successfully, transaction hash: {}",
+                trx_hash
             )))
         }
 
@@ -438,6 +469,11 @@ async fn send(args: ArgMatches, context: &mut Context) -> anyhow::Result<Option<
 
 async fn call(args: ArgMatches, context: &mut Context) -> anyhow::Result<Option<String>> {
     match args.subcommand() {
+        Some(("current-gas-price", _sub_matches)) => {
+            let gas_price = context.provider.get_gas_price().await?;
+
+            Ok(Some(format!("current gas price: {:#?}", gas_price)))
+        }
         Some(("block", sub_matches)) => {
             let block_number = sub_matches.get_one::<String>("block-number").unwrap();
             match block_number.as_str() {
@@ -543,13 +579,47 @@ fn call_cast(rpc_url: &str, args: &[&str]) -> String {
     let mut reader = BufReader::new(stdout);
     let mut line = String::new();
     reader
-        .read_line(&mut line)
+        .read_to_string(&mut line)
         .expect("Failed to read line from cast process");
-    line
+    line.trim_end_matches('\n').to_string()
 }
 
 async fn randcast(args: ArgMatches, context: &mut Context) -> anyhow::Result<Option<String>> {
     match args.subcommand() {
+        Some(("nonce", sub_matches)) => {
+            let consumer = sub_matches.get_one::<String>("consumer").unwrap();
+
+            let nonce_args = vec!["call", consumer, "nonce()(uint256)"];
+            let nonce_res = call_cast(&context.config.provider_endpoint, &nonce_args);
+
+            Ok(Some(format!("consumer_nonce: {}", nonce_res)))
+        }
+        Some(("callback-gas-limit", sub_matches)) => {
+            let consumer = sub_matches.get_one::<String>("consumer").unwrap();
+
+            let callback_gas_limit_args = vec!["call", consumer, "callbackGasLimit()(uint32)"];
+            let callback_gas_limit_res =
+                call_cast(&context.config.provider_endpoint, &callback_gas_limit_args);
+
+            Ok(Some(format!(
+                "callback_gas_limit: {}",
+                callback_gas_limit_res
+            )))
+        }
+        Some(("callback-max-gas-fee", sub_matches)) => {
+            let consumer = sub_matches.get_one::<String>("consumer").unwrap();
+
+            let callback_max_gas_fee_args = vec!["call", consumer, "callbackMaxGasFee()(uint256)"];
+            let callback_max_gas_fee_res = call_cast(
+                &context.config.provider_endpoint,
+                &callback_max_gas_fee_args,
+            );
+
+            Ok(Some(format!(
+                "callback_max_gas_fee: {}",
+                callback_max_gas_fee_res
+            )))
+        }
         Some(("estimate-callback-gas", sub_matches)) => {
             let consumer = sub_matches.get_one::<String>("consumer").unwrap();
             let request_sender = sub_matches.get_one::<String>("request-sender").unwrap();
@@ -562,15 +632,37 @@ async fn randcast(args: ArgMatches, context: &mut Context) -> anyhow::Result<Opt
                 &context.config.provider_endpoint,
                 &existed_callback_gas_limit_args,
             );
-            if existed_callback_gas_limit.trim_end_matches('\n') != "0" {
-                return Ok(Some("callbackGasLimit is already set".to_string()));
-            }
 
             let anvil = Anvil::new()
                 .chain_id(context.config.chain_id as u64)
                 .fork(&context.config.provider_endpoint)
                 .port(8544u16)
                 .spawn();
+
+            if existed_callback_gas_limit != "0" {
+                println!(
+                    "callbackGasLimit is already set: {}",
+                    existed_callback_gas_limit
+                );
+
+                let get_owner_args = vec!["call", consumer, "owner()(address)"];
+                let owner = call_cast(&anvil.endpoint(), &get_owner_args);
+
+                let impersonate_account_args = vec!["rpc", "anvil_impersonateAccount", &owner];
+                call_cast(&anvil.endpoint(), &impersonate_account_args);
+
+                let reset_callback_gas_args = vec![
+                    "send",
+                    consumer,
+                    "setCallbackGasConfig(uint32,uint256)",
+                    "0",
+                    "0",
+                    "--from",
+                    &owner,
+                    "--unlocked",
+                ];
+                call_cast(&anvil.endpoint(), &reset_callback_gas_args);
+            }
 
             let impersonate_account_args = vec!["rpc", "anvil_impersonateAccount", request_sender];
             call_cast(&anvil.endpoint(), &impersonate_account_args);
@@ -600,8 +692,8 @@ async fn randcast(args: ArgMatches, context: &mut Context) -> anyhow::Result<Opt
             let callback_gas_limit_res = call_cast(&anvil.endpoint(), &callback_gas_limit_args);
 
             Ok(Some(format!(
-                "callback_gas_limit_res: {}",
-                callback_gas_limit_res.trim_end_matches('\n')
+                "estimate-callback-gas_limit_res: {}",
+                callback_gas_limit_res
             )))
         }
         Some(("estimate-payment-amount", sub_matches)) => {
@@ -1394,6 +1486,8 @@ async fn main() -> anyhow::Result<()> {
                     Command::new("block").visible_alias("b").about("Get block information")
                         .arg(Arg::new("block-number").required(true).help("block number in latest/ earliest/ pending/ decimal number"))
                 ).subcommand(
+                    Command::new("current-gas-price").visible_alias("cgp").about("Get current gas price")
+                ).subcommand(
                     Command::new("trx-receipt").visible_alias("tr").about("Get transaction receipt")
                         .arg(Arg::new("trx-hash").required(true).help("transaction hash in hex format"))
                 ).subcommand(
@@ -1423,15 +1517,27 @@ async fn main() -> anyhow::Result<()> {
                         .arg(Arg::new("failed").long("failed").required(false).action(ArgAction::SetTrue).help("only failed requests, which means the callback function in consumer contract reverts due to business logic or gas limit"))
                 ).subcommand(
                     Command::new("estimate-callback-gas").visible_alias("ecg")
-                        .about("Estimate callback gas for any consumer contract extends GeneralRandcastConsumerBase before the first request. \
-                                This also can be used as a dry run for the first request. An error will be returned if callback in the consumer contract reverts.")
+                        .about("Estimate callback gas for any consumer contract extends GeneralRandcastConsumerBase under the current circumstances. \
+                                This can be used before the first request to estimate how much eth is needed for subscription funding, \
+                                or at any time to compare gas cost with the estimated one to adjust the callback gas config in the consumer contract. \
+                                This also can be used as a dry run to see if the callback function in consumer contract reverts due to business logic or gas limit. \
+                                An error will be returned if callback in the consumer contract reverts.")
                         .arg(Arg::new("consumer").required(true).help("address of your customized consumer contract in hex format"))
-                        .arg(Arg::new("request-sender").required(true).help("sender address to request randomness(don't have to be function in consumer contract) in hex format"))
+                        .arg(Arg::new("request-sender").required(true).help("sender address(depending on your business logic, don't have to be the owner of the consumer contract) to request randomness(don't have to be the function in consumer contract) in hex format"))
                         .arg(Arg::new("request-signature").required(true).help("function signature of request randomness with a pair of quotation marks"))
                         .arg(Arg::new("request-params").required(true).help("request params split by space"))
                 ).subcommand(
                     Command::new("estimate-payment-amount").visible_alias("epa").about("Estimate the amount of gas used for a fulfillment of randomness in 3 times of current gas price, for calculating how much eth is needed for subscription funding")
                         .arg(Arg::new("callback-gas-limit").required(true).value_parser(value_parser!(u32)).help("callback gas limit by calling estimate-callback-gas"))
+                ).subcommand(
+                    Command::new("callback-gas-limit").visible_alias("cgl").about("Get callback gas limit of consumer contract")
+                        .arg(Arg::new("consumer").required(true).help("consumer address in hex format"))
+                ).subcommand(
+                    Command::new("callback-max-gas-fee").visible_alias("cmgf").about("Get callback max gas fee of consumer contract. 0 means auto-estimating CallbackMaxGasFee as 3 times tx.gasprice of the request call, also user can set it manually by calling set-callback-gas-config")
+                        .arg(Arg::new("consumer").required(true).help("consumer address in hex format"))
+                ).subcommand(
+                    Command::new("nonce").visible_alias("n").about("Get nonce(counting from 1, as there was no request) of consumer contract")
+                        .arg(Arg::new("consumer").required(true).help("consumer address in hex format"))
                 ).subcommand(
                     Command::new("last-randomness").visible_alias("lr").about("Get last randomness")
                 ).subcommand(
@@ -1565,6 +1671,13 @@ async fn main() -> anyhow::Result<()> {
                         .arg(Arg::new("sub-id").required(true).value_parser(value_parser!(u64)).help("subscription id in decimal format"))
                         .arg(Arg::new("consumer").required(true).help("consumer contract address in hex format"))
                         .about("Remove consumer contract from subscription")
+                ).subcommand(
+                    Command::new("set-callback-gas-config").visible_alias("scgc")
+                        .arg(Arg::new("consumer").required(true).help("consumer contract address in hex format"))
+                        .arg(Arg::new("consumer-owner-private-key").required(true).help("consumer contract owner private key in hex format"))
+                        .arg(Arg::new("callback-gas-limit").required(true).help("callback gas limit"))
+                        .arg(Arg::new("callback-max-gas-fee").required(true).help("callback max gas fee"))
+                        .about("Set callback gas config for consumer contract")
                 )
                 .about("*** Be careful this will change on-chain state and cost gas as well as block time***\nSend trxs to on-chain contracts"),
             |args, context| Box::pin(send(args, context)),

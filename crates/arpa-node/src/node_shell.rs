@@ -166,7 +166,7 @@ async fn send(args: ArgMatches, context: &mut Context) -> anyhow::Result<Option<
 
             Ok(Some(format!(
                 "Approve arpa for staking successfully, transaction hash: {:?}",
-                Some(trx_hash)
+                trx_hash
             )))
         }
         Some(("stake", sub_matches)) => {
@@ -253,7 +253,7 @@ async fn send(args: ArgMatches, context: &mut Context) -> anyhow::Result<Option<
 
             Ok(Some(format!(
                 "Stake arpa successfully, transaction hash: {:?}",
-                Some(trx_hash)
+                trx_hash
             )))
         }
         Some(("unstake", sub_matches)) => {
@@ -297,7 +297,7 @@ async fn send(args: ArgMatches, context: &mut Context) -> anyhow::Result<Option<
 
             Ok(Some(format!(
                 "Unstake arpa successfully, transaction hash: {:?}",
-                Some(trx_hash)
+                trx_hash
             )))
         }
         Some(("claim-frozen-principal", _sub_matches)) => {
@@ -320,7 +320,7 @@ async fn send(args: ArgMatches, context: &mut Context) -> anyhow::Result<Option<
 
             Ok(Some(format!(
                 "Claim frozen principal successfully, transaction hash: {:?}",
-                Some(trx_hash)
+                trx_hash
             )))
         }
         Some(("register", _sub_matches)) => {
@@ -347,7 +347,7 @@ async fn send(args: ArgMatches, context: &mut Context) -> anyhow::Result<Option<
 
             Ok(Some(format!(
                 "Register node successfully, transaction hash: {:?}",
-                Some(trx_hash.to_string())
+                trx_hash
             )))
         }
         Some(("activate", _sub_matches)) => {
@@ -384,7 +384,7 @@ async fn send(args: ArgMatches, context: &mut Context) -> anyhow::Result<Option<
 
             Ok(Some(format!(
                 "Activate node successfully, transaction hash: {:?}",
-                Some(trx_hash)
+                trx_hash
             )))
         }
         Some(("quit", _sub_matches)) => {
@@ -417,7 +417,7 @@ async fn send(args: ArgMatches, context: &mut Context) -> anyhow::Result<Option<
 
             Ok(Some(format!(
                 "Quit node successfully, transaction hash: {:?}",
-                Some(trx_hash)
+                trx_hash
             )))
         }
         Some(("change-dkg-public-key", _sub_matches)) => {
@@ -461,7 +461,7 @@ async fn send(args: ArgMatches, context: &mut Context) -> anyhow::Result<Option<
 
             Ok(Some(format!(
                 "Change dkg public key of the node successfully, transaction hash: {:?}",
-                Some(trx_hash)
+                trx_hash
             )))
         }
         Some(("withdraw", sub_matches)) => {
@@ -502,7 +502,7 @@ async fn send(args: ArgMatches, context: &mut Context) -> anyhow::Result<Option<
 
             Ok(Some(format!(
                 "Withdraw node balance successfully, transaction hash: {:?}",
-                Some(trx_hash)
+                trx_hash
             )))
         }
 
@@ -1096,6 +1096,16 @@ async fn call(args: ArgMatches, context: &mut Context) -> anyhow::Result<Option<
             }
             panic!("Unknown block number {:?}", block_number);
         }
+        // current-gas-price
+        Some(("current-gas-price", _sub_matches)) => {
+            let gas_price = context
+                .main_chain_identity
+                .get_provider()
+                .get_gas_price()
+                .await?;
+
+            Ok(Some(format!("current gas price: {:#?}", gas_price)))
+        }
         // trx-receipt
         Some(("trx-receipt", sub_matches)) => {
             let trx_hash = sub_matches.get_one::<String>("trx-hash").unwrap();
@@ -1378,6 +1388,8 @@ async fn main() -> anyhow::Result<()> {
                     Command::new("block").visible_alias("b").about("Get block information")
                         .arg(Arg::new("block-number").required(true).help("block number in latest/ earliest/ pending/ decimal number"))
                 ).subcommand(
+                    Command::new("current-gas-price").visible_alias("cgp").about("Get current gas price")
+                ).subcommand(
                     Command::new("trx-receipt").visible_alias("tr").about("Get transaction receipt")
                         .arg(Arg::new("trx-hash").required(true).help("transaction hash in hex format"))
                 ).subcommand(
@@ -1459,7 +1471,7 @@ async fn main() -> anyhow::Result<()> {
                     Command::new("frozen-principal").visible_alias("fp")
                         .about("Get frozen principal and unfreeze time")
                 )
-                .about("Get views from on-chain contracts"),
+                .about("Get views and events from on-chain contracts"),
             |args, context| Box::pin(call(args, context)),
         ).with_command_async(
             Command::new("send")

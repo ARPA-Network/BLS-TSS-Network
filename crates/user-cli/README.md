@@ -1,10 +1,12 @@
-- [ARPA User CLI](#arpa-user-cli)
+- [Overview](#overview)
 - [Dependencies](#dependencies)
 - [Usage](#usage)
 - [REPL Commands](#repl-commands)
   - [SubCommands](#subcommands)
 
-# ARPA User CLI
+<h1 align="center">ARPA User CLI</h1>
+
+# Overview
 
 ARPA User CLI is a utilitarian REPL tool to make it easier to interact with smart contracts on ARPA network.
 
@@ -76,11 +78,12 @@ Get information from blockchain
 Usage: call [COMMAND]
 
 Commands:
-  block            Get block information [aliases: b]
-  trx-receipt      Get transaction receipt [aliases: tr]
-  balance-of-eth   Get balance of eth [aliases: boe]
-  balance-of-arpa  Get balance of arpa [aliases: boa]
-  help             Print this message or the help of the given subcommand(s)
+  block              Get block information [aliases: b]
+  current-gas-price  Get current gas price [aliases: cgp]
+  trx-receipt        Get transaction receipt [aliases: tr]
+  balance-of-eth     Get balance of eth [aliases: boe]
+  balance-of-arpa    Get balance of arpa [aliases: boa]
+  help               Print this message or the help of the given subcommand(s)
 
 Options:
   -h, --help  Print help
@@ -105,6 +108,7 @@ Commands:
   set-referral             Set referral subscription id for your subscription to get referral rewards [aliases: sr]
   cancel-subscription      Cancel subscription and redeem ETH left to receiver address [aliases: ccs]
   remove-consumer          Remove consumer contract from subscription [aliases: rc]
+  set-callback-gas-config  Set callback gas config for consumer contract [aliases: scgc]
   help                     Print this message or the help of the given subcommand(s)
 
 Options:
@@ -123,6 +127,9 @@ Commands:
   requests                    Get requests by subscription id, filter by consumer address, pending/ success/ failed [aliases: rs]
   estimate-callback-gas       Estimate callback gas for any consumer contract extends GeneralRandcastConsumerBase before the first request. This also can be used as a dry run for the first request. An error will be returned if callback in the consumer contract reverts. [aliases: ecg]
   estimate-payment-amount     Estimate the amount of gas used for a fulfillment of randomness in 3 times of current gas price, for calculating how much eth is needed for subscription funding [aliases: epa]
+  callback-gas-limit          Get callback gas limit of consumer contract [aliases: cgl]
+  callback-max-gas-fee        Get callback max gas fee of consumer contract. 0 means auto-estimating CallbackMaxGasFee as 3 times tx.gasprice of the request call, also user can set it manually by calling set-callback-gas-config [aliases: cmgf]
+  nonce                       Get nonce(counting from 1, as there was no request) of consumer contract [aliases: n]
   last-randomness             Get last randomness [aliases: lr]
   pending-request-commitment  Get pending commitment by request id [aliases: prc]
   adapter-config              Get adapter config [aliases: ac]
