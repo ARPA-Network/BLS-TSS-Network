@@ -16,6 +16,7 @@ use ethers::utils::Anvil;
 use reedline_repl_rs::clap::{value_parser, Arg, ArgAction, ArgMatches, Command};
 use reedline_repl_rs::Repl;
 use std::collections::BTreeMap;
+use std::env;
 use std::fs::File;
 use std::io::{BufRead, BufReader, Read};
 use std::path::PathBuf;
@@ -443,6 +444,12 @@ async fn send(args: ArgMatches, context: &mut Context) -> anyhow::Result<Option<
                 .get_one::<String>("callback-max-gas-fee")
                 .unwrap();
 
+            let consumer_owner_private_key = if consumer_owner_private_key.starts_with('$') {
+                env::var(consumer_owner_private_key.trim_start_matches('$'))?
+            } else {
+                consumer_owner_private_key.to_owned()
+            };
+
             let set_callback_gas_config_args = vec![
                 "send",
                 consumer,
@@ -450,7 +457,7 @@ async fn send(args: ArgMatches, context: &mut Context) -> anyhow::Result<Option<
                 callback_gas_limit,
                 callback_max_gas_fee,
                 "--private-key",
-                consumer_owner_private_key,
+                &consumer_owner_private_key,
             ];
             let cast_res = call_cast(
                 &context.config.provider_endpoint,
@@ -1683,7 +1690,7 @@ async fn main() -> anyhow::Result<()> {
                 ).subcommand(
                     Command::new("set-callback-gas-config").visible_alias("scgc")
                         .arg(Arg::new("consumer").required(true).help("consumer contract address in hex format"))
-                        .arg(Arg::new("consumer-owner-private-key").required(true).help("consumer contract owner private key in hex format"))
+                        .arg(Arg::new("consumer-owner-private-key").required(true).help("consumer contract owner private key in plain hex format, or a env var starts with $"))
                         .arg(Arg::new("callback-gas-limit").required(true).help("callback gas limit"))
                         .arg(Arg::new("callback-max-gas-fee").required(true).help("callback max gas fee"))
                         .about("Set callback gas config for consumer contract")
