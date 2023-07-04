@@ -7,10 +7,11 @@ use arpa_core::u256_to_vec;
 use arpa_core::RandomnessRequestType;
 use arpa_core::{address_to_string, pad_to_bytes32, WalletSigner};
 use arpa_user_cli::config::{build_wallet_from_config, Config};
+use ethers::abi::AbiEncode;
 use ethers::prelude::{NonceManagerMiddleware, SignerMiddleware};
 use ethers::providers::{Http, Middleware, Provider};
 use ethers::signers::Signer;
-use ethers::types::{Address, BlockId, BlockNumber, H256, U256, U64};
+use ethers::types::{Address, BlockId, BlockNumber, Topic, H256, U256, U64};
 use ethers::utils::Anvil;
 use reedline_repl_rs::clap::{value_parser, Arg, ArgAction, ArgMatches, Command};
 use reedline_repl_rs::Repl;
@@ -18,6 +19,7 @@ use std::collections::BTreeMap;
 use std::fs::File;
 use std::io::{BufRead, BufReader, Read};
 use std::path::PathBuf;
+use std::str::FromStr;
 use std::sync::Arc;
 use structopt::StructOpt;
 
@@ -49,8 +51,8 @@ pub struct Opt {
     )]
     history_file_path: PathBuf,
 
-    /// Set the block height when adapter contract deployed
-    #[structopt(short = "d", long, default_value = "3632525")]
+    /// Set the block height when adapter contract deployed to accelerate the query of events
+    #[structopt(short = "d", long, default_value = "0")]
     adapter_deployed_block_height: u64,
 }
 
@@ -877,9 +879,16 @@ async fn randcast(args: ArgMatches, context: &mut Context) -> anyhow::Result<Opt
 
             let created_logs = created_filter.query().await?;
 
+            let created_subids = created_logs
+                .iter()
+                .map(|created_log| {
+                    H256::from_str(&U256::from(created_log.sub_id).encode_hex()).map(Some)
+                })
+                .collect::<Result<Vec<_>, _>>()?;
+
             let canceled_filter = adapter_contract
                 .subscription_canceled_filter()
-                .topic2(context.signer.address())
+                .topic1(Topic::Array(created_subids))
                 .from_block(context.adapter_deployed_block_height)
                 .to_block(BlockNumber::Latest);
 
@@ -1664,7 +1673,7 @@ async fn main() -> anyhow::Result<()> {
                 ).subcommand(
                     Command::new("cancel-subscription").visible_alias("ccs")
                         .arg(Arg::new("sub-id").required(true).value_parser(value_parser!(u64)).help("subscription id in decimal format"))
-                        .arg(Arg::new("to").required(true).help("address to send ETH left"))
+                        .arg(Arg::new("recipient").required(true).help("address to send ETH left"))
                         .about("Cancel subscription and redeem ETH left to receiver address")
                 ).subcommand(
                     Command::new("remove-consumer").visible_alias("rc")

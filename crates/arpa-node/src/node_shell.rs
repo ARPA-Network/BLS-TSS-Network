@@ -55,8 +55,8 @@ pub struct Opt {
     )]
     history_file_path: PathBuf,
 
-    /// Set the block height when adapter contract deployed
-    #[structopt(short = "d", long, default_value = "3632525")]
+    /// Set the block height when adapter contract deployed to accelerate the query of events
+    #[structopt(short = "d", long, default_value = "0")]
     adapter_deployed_block_height: u64,
 }
 

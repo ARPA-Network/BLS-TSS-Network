@@ -100,8 +100,8 @@ pub struct HDWallet {
 pub fn build_wallet_from_config(account: &Account) -> Result<Wallet<SigningKey>, ConfigError> {
     if account.hdwallet.is_some() {
         let mut hd = account.hdwallet.clone().unwrap();
-        if hd.mnemonic.eq("env") {
-            hd.mnemonic = env::var("ARPA_NODE_HD_ACCOUNT_MNEMONIC")?;
+        if hd.mnemonic.starts_with('$') {
+            hd.mnemonic = env::var(hd.mnemonic.trim_start_matches('$'))?;
         }
         let mut wallet = MnemonicBuilder::<English>::default().phrase(&*hd.mnemonic);
 
@@ -114,8 +114,8 @@ pub fn build_wallet_from_config(account: &Account) -> Result<Wallet<SigningKey>,
         return Ok(wallet.index(hd.index).unwrap().build()?);
     } else if account.keystore.is_some() {
         let mut keystore = account.keystore.clone().unwrap();
-        if keystore.password.eq("env") {
-            keystore.password = env::var("ARPA_NODE_ACCOUNT_KEYSTORE_PASSWORD")?;
+        if keystore.password.starts_with('$') {
+            keystore.password = env::var(keystore.password.trim_start_matches('$'))?;
         }
         return Ok(LocalWallet::decrypt_keystore(
             &keystore.path,
@@ -123,8 +123,8 @@ pub fn build_wallet_from_config(account: &Account) -> Result<Wallet<SigningKey>,
         )?);
     } else if account.private_key.is_some() {
         let mut private_key = account.private_key.clone().unwrap();
-        if private_key.eq("env") {
-            private_key = env::var("ARPA_NODE_ACCOUNT_PRIVATE_KEY")?;
+        if private_key.starts_with('$') {
+            private_key = env::var(private_key.trim_start_matches('$'))?;
         }
         return Ok(private_key.parse::<Wallet<SigningKey>>()?);
     }

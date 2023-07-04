@@ -1,6 +1,7 @@
 - [Overview](#overview)
 - [Dependencies](#dependencies)
 - [Usage](#usage)
+- [Config](#config)
 - [REPL Commands](#repl-commands)
   - [SubCommands](#subcommands)
 
@@ -37,6 +38,85 @@ To set the history file path, use `-- -H <history_file>`:
 
 ```bash
 cargo run --bin user-shell -- -H user-shell.history
+```
+
+# Config
+
+Configuration items in [`conf/user_config.yml`](conf/user_config.yml) are listed here:
+
+- provider_endpoint: Config endpoint to interact with chain provider. (example: "http://127.0.0.1:8545")
+
+- chain_id: Config chain id of the network. (example: 31337)
+
+- adapter_address: Config on-chain arpa network Adapter contract address. (example: "0xa513e6e4b8f2a923d98304ec87f64353c4d5c853")
+
+- staking_address: Config on-chain arpa network Staking contract address. (example: "0xcf7ed3acca5a467e9e704c703e8d87f634fb0fc9")
+
+- arpa_address: Config on-chain ARPA token contract address. (example: "0x9fe46736679d2d9a65f0992f2272de9f3c7fa6e0")
+
+```
+Contract addresses on ETH Mainnet and Sepolia Testnet can be found [here](https://docs.arpanetwork.io/).
+```
+
+- account: Config the identity of the subscriptions you owned. There are three available account types.
+
+  - example(not recommended): private_key: "4c0883a69102937d6231471b5dbb6204fe5129617082792ae468d01a3f362318"
+  - example:
+    ```
+    keystore:
+        password: env
+        path: test.keystore
+    ```
+  - example:
+
+    ```
+    hdwallet:
+        mnemonic: env
+        path: "m/44'/60'/0'/0"
+        index: 0
+        passphrase: "custom_password"
+    ```
+
+    Path and passphrase are optional.
+
+    To protect secrets, several items can be set with environment variables starting with `$`:
+
+  - example:
+    - $ARPA_ACCOUNT_PRIVATE_KEY (account, private_key)
+    - $ARPA_ACCOUNT_KEYSTORE_PASSWORD (account, keystore, password)
+    - $ARPA_HD_ACCOUNT_MNEMONIC (account, hdwallet, mnemonic)
+
+- contract_transaction_retry_descriptor(Optional): Config retry strategy for contract transactions. All the time limits are in milliseconds.
+
+  - example:
+
+    ```
+      contract_transaction_retry_descriptor:
+        base: 2
+        factor: 1000
+        max_attempts: 3
+        use_jitter: true
+    ```
+
+- contract_view_retry_descriptor(Optional): Config retry strategy for contract views. All the time limits are in milliseconds.
+
+  - example:
+
+    ```
+      contract_view_retry_descriptor:
+        base: 2
+        factor: 500
+        max_attempts: 5
+        use_jitter: true
+    ```
+
+```
+We use exponential backoff to retry when an interaction fails. The interval will be an exponent of base multiplied by factor every time. The interval will be reset when the interaction succeeds.
+
+A jitter is added to the interval to avoid the situation that all the tasks are polling at the same time. It will multiply a random number between 0.5 and 1.0 to the interval.
+
+contract_transaction_retry_descriptor: (interval sequence without jitter: 2s, 4s, 8s)
+contract_view_retry_descriptor: (interval sequence without jitter: 1s, 2s, 4s, 8s, 16s)
 ```
 
 # REPL Commands
