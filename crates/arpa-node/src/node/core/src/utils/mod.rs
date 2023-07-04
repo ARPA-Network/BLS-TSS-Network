@@ -16,6 +16,20 @@ pub fn u256_to_vec(x: &U256) -> Vec<u8> {
     x_bytes
 }
 
+pub fn pad_to_bytes32(s: &[u8]) -> Option<[u8; 32]> {
+    let s_len = s.len();
+
+    if s_len > 32 {
+        return None;
+    }
+
+    let mut result: [u8; 32] = Default::default();
+
+    result[..s_len].clone_from_slice(s);
+
+    Some(result)
+}
+
 #[cfg(test)]
 pub mod util_tests {
 

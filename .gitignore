@@ -37,3 +37,5 @@ contracts/test/Test.t.sol
 *.sqlite
 passwd
 *.pyc
+
+*.history

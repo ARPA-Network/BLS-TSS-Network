@@ -87,7 +87,8 @@ impl<
                 .randomness_signature_cache
                 .write()
                 .await
-                .get_ready_to_commit_signatures(current_block_height);
+                .get_ready_to_commit_signatures(current_block_height)
+                .await?;
 
             if !ready_signatures.is_empty() {
                 self.publish(ReadyToFulfillRandomnessTask {

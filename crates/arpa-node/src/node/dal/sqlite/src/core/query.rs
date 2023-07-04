@@ -1,8 +1,8 @@
 use entity::{
     group_info,
     node_info::{self, Entity as NodeInfo},
-    prelude::{GroupInfo, RandomnessTask},
-    randomness_task,
+    prelude::{GroupInfo, RandomnessResult, RandomnessTask},
+    randomness_result, randomness_task,
 };
 use sea_orm::{ColumnTrait, DbConn, DbErr, EntityTrait, QueryFilter, QueryOrder};
 
@@ -38,6 +38,30 @@ impl RandomnessTaskQuery {
         RandomnessTask::find()
             .filter(randomness_task::Column::RequestId.eq(request_id))
             .one(db)
+            .await
+    }
+}
+
+pub struct RandomnessResultQuery;
+
+impl RandomnessResultQuery {
+    pub async fn select_by_request_id(
+        db: &DbConn,
+        request_id: &[u8],
+    ) -> Result<Option<randomness_result::Model>, DbErr> {
+        RandomnessResult::find()
+            .filter(randomness_result::Column::RequestId.eq(request_id))
+            .one(db)
+            .await
+    }
+
+    pub async fn select_by_state(
+        db: &DbConn,
+        state: i32,
+    ) -> Result<Vec<randomness_result::Model>, DbErr> {
+        RandomnessResult::find()
+            .filter(randomness_result::Column::State.eq(state))
+            .all(db)
             .await
     }
 }

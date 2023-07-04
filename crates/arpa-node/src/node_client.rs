@@ -1,24 +1,29 @@
+use arpa_node::load_config;
 use arpa_node::node::context::chain::types::GeneralMainChain;
 use arpa_node::node::context::types::GeneralContext;
 use arpa_node::node::context::{Context, TaskWaiter};
 use arpa_node_contract_client::controller::{ControllerClientBuilder, ControllerTransactions};
+use arpa_node_core::format_now_date;
 use arpa_node_core::log::encoder::JsonEncoder;
 use arpa_node_core::GeneralChainIdentity;
 use arpa_node_core::{build_wallet_from_config, RandomnessTask};
-use arpa_node_core::{format_now_date, Config};
+use arpa_node_dal::cache::RandomnessResultCache;
 use arpa_node_dal::{NodeInfoFetcher, NodeInfoUpdater};
-use arpa_node_sqlite_db::BLSTasksDBClient;
 use arpa_node_sqlite_db::GroupInfoDBClient;
 use arpa_node_sqlite_db::NodeInfoDBClient;
 use arpa_node_sqlite_db::SqliteDB;
+use arpa_node_sqlite_db::{BLSTasksDBClient, SignatureResultDBClient};
 use ethers::signers::Signer;
 use log::{info, LevelFilter};
 use log4rs::append::console::ConsoleAppender;
-use log4rs::append::file::FileAppender;
+use log4rs::append::rolling_file::policy::compound::roll::delete::DeleteRoller;
+use log4rs::append::rolling_file::policy::compound::trigger::size::SizeTrigger;
+use log4rs::append::rolling_file::policy::compound::CompoundPolicy;
+use log4rs::append::rolling_file::RollingFileAppender;
 use log4rs::config::{Appender, Root};
 use log4rs::filter::threshold::ThresholdFilter;
 use log4rs::Config as LogConfig;
-use std::fs::{self, read_to_string};
+use std::fs::{self};
 use std::path::PathBuf;
 use structopt::StructOpt;
 use threshold_bls::curve::bn254::PairingCurve as BN254;
@@ -45,48 +50,53 @@ pub struct Opt {
     config_path: PathBuf,
 }
 
-fn load_config(config_path: PathBuf) -> Config {
-    let config_str = &read_to_string(config_path).unwrap_or_else(|e| {
-        panic!(
-            "Error loading configuration file: {:?}, please check the configuration!",
-            e
-        )
-    });
-
-    let config: Config =
-        serde_yaml::from_str(config_str).expect("Error loading configuration file");
-
-    config.initialize()
-}
-
-fn init_log(node_id: &str, context_logging: bool) {
+fn init_logger(node_id: &str, context_logging: bool, log_file_path: &str, rolling_file_size: u64) {
     let stdout = ConsoleAppender::builder()
         .encoder(Box::new(
-            JsonEncoder::default().context_logging(context_logging),
+            JsonEncoder::new(node_id.to_string()).context_logging(context_logging),
         ))
         .build();
 
-    let file = FileAppender::builder()
+    let rolling_file = RollingFileAppender::builder()
         .encoder(Box::new(
-            JsonEncoder::default().context_logging(context_logging),
+            JsonEncoder::new(node_id.to_string()).context_logging(context_logging),
         ))
-        .build(format!("log/{}/node.log", node_id))
+        .build(
+            format!(
+                "{}/node.log",
+                if let Some(path_without_slash) = log_file_path.strip_suffix('/') {
+                    path_without_slash
+                } else {
+                    log_file_path
+                }
+            ),
+            Box::new(CompoundPolicy::new(
+                Box::new(SizeTrigger::new(rolling_file_size)),
+                Box::new(DeleteRoller::new()),
+            )),
+        )
         .unwrap();
 
-    let err_file = FileAppender::builder()
+    let rolling_err_file = RollingFileAppender::builder()
         .encoder(Box::new(
-            JsonEncoder::default().context_logging(context_logging),
+            JsonEncoder::new(node_id.to_string()).context_logging(context_logging),
         ))
-        .build(format!("log/{}/node_err.log", node_id))
+        .build(
+            format!("{}/node_err.log", log_file_path),
+            Box::new(CompoundPolicy::new(
+                Box::new(SizeTrigger::new(rolling_file_size)),
+                Box::new(DeleteRoller::new()),
+            )),
+        )
         .unwrap();
 
     let log_config = LogConfig::builder()
         .appender(Appender::builder().build("stdout", Box::new(stdout)))
-        .appender(Appender::builder().build("file", Box::new(file)))
+        .appender(Appender::builder().build("file", Box::new(rolling_file)))
         .appender(
             Appender::builder()
                 .filter(Box::new(ThresholdFilter::new(LevelFilter::Error)))
-                .build("err_file", Box::new(err_file)),
+                .build("err_file", Box::new(rolling_err_file)),
         )
         .build(
             Root::builder()
@@ -107,7 +117,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let config = load_config(opt.config_path);
 
-    init_log(config.node_id.as_ref().unwrap(), config.context_logging);
+    init_logger(
+        &config.logger.as_ref().unwrap().node_id,
+        config.logger.as_ref().unwrap().context_logging,
+        &config.logger.as_ref().unwrap().log_file_path,
+        config.logger.as_ref().unwrap().rolling_file_size,
+    );
 
     info!("{:?}", config);
 
@@ -161,6 +176,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
             let randomness_tasks_cache = db.get_bls_tasks_client::<RandomnessTask>();
 
+            let randomness_result_cache = db.get_randomness_result_client().await?;
+
             let main_chain_identity = GeneralChainIdentity::new(
                 config.chain_id,
                 wallet,
@@ -184,7 +201,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             let main_chain = GeneralMainChain::<
                 NodeInfoDBClient<BN254>,
                 GroupInfoDBClient<BN254>,
-                BLSTasksDBClient<RandomnessTask, BN254>,
+                BLSTasksDBClient<RandomnessTask>,
+                SignatureResultDBClient<RandomnessResultCache>,
                 GeneralChainIdentity,
                 BN254,
             >::new(
@@ -193,6 +211,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 node_cache,
                 group_cache,
                 randomness_tasks_cache,
+                randomness_result_cache,
                 config.time_limits.unwrap(),
                 config.listeners.clone(),
             );
@@ -224,9 +243,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
             let mut node_cache = db.get_node_info_client();
 
-            node_cache.refresh_current_node_info().await.expect(
-                "It seems there is no existing node record. Please execute in new-run mode.",
-            );
+            if let Ok(false) = node_cache.refresh_current_node_info().await {
+                panic!(
+                    "It seems there is no existing node record. Please execute in new-run mode."
+                );
+            }
 
             assert_eq!(node_cache.get_id_address()?, id_address,"Node identity is different from the database, please check or execute in new-run mode.");
 
@@ -245,11 +266,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
             let mut group_cache = db.get_group_info_client();
 
-            group_cache.refresh_current_group_info().await.expect(
-                "It seems there is no existing group record. Please execute in new-run mode.",
-            );
+            group_cache.refresh_current_group_info().await?;
 
             let randomness_tasks_cache = db.get_bls_tasks_client::<RandomnessTask>();
+
+            let randomness_result_cache = db.get_randomness_result_client().await?;
 
             let main_chain_identity = GeneralChainIdentity::new(
                 config.chain_id,
@@ -274,7 +295,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             let main_chain = GeneralMainChain::<
                 NodeInfoDBClient<BN254>,
                 GroupInfoDBClient<BN254>,
-                BLSTasksDBClient<RandomnessTask, BN254>,
+                BLSTasksDBClient<RandomnessTask>,
+                SignatureResultDBClient<RandomnessResultCache>,
                 GeneralChainIdentity,
                 BN254,
             >::new(
@@ -283,6 +305,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 node_cache,
                 group_cache,
                 randomness_tasks_cache,
+                randomness_result_cache,
                 config.time_limits.unwrap(),
                 config.listeners.clone(),
             );

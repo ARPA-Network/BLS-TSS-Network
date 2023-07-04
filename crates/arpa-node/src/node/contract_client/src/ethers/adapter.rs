@@ -9,9 +9,9 @@ use crate::{
     ServiceClient, TransactionCaller, ViewCaller,
 };
 use arpa_node_core::{
-    ChainIdentity, ExponentialBackoffRetryDescriptor, GeneralChainIdentity, PartialSignature,
-    RandomnessRequestType, RandomnessTask, WalletSigner, DEFAULT_MINIMUM_THRESHOLD,
-    FULFILL_RANDOMNESS_GAS_EXCEPT_CALLBACK, RANDOMNESS_REWARD_GAS,
+    pad_to_bytes32, ChainIdentity, ExponentialBackoffRetryDescriptor, GeneralChainIdentity,
+    PartialSignature, RandomnessRequestType, RandomnessTask, WalletSigner,
+    DEFAULT_MINIMUM_THRESHOLD, FULFILL_RANDOMNESS_GAS_EXCEPT_CALLBACK, RANDOMNESS_REWARD_GAS,
     VERIFICATION_GAS_OVER_MINIMUM_THRESHOLD,
 };
 use async_trait::async_trait;
@@ -137,8 +137,7 @@ impl AdapterTransactions for AdapterClient {
                     + FULFILL_RANDOMNESS_GAS_EXCEPT_CALLBACK
                     + extra_verification_gas
                     + extra_add_reward_gas,
-            )
-            .gas_price(task.callback_max_gas_price),
+            ),
             self.contract_transaction_retry_descriptor,
             false,
         )
@@ -235,18 +234,4 @@ impl AdapterLogs for AdapterClient {
         }
         Err(ContractClientError::FetchingRandomnessTaskError)
     }
-}
-
-fn pad_to_bytes32(s: &[u8]) -> Option<[u8; 32]> {
-    let s_len = s.len();
-
-    if s_len > 32 {
-        return None;
-    }
-
-    let mut result: [u8; 32] = Default::default();
-
-    result[..s_len].clone_from_slice(s);
-
-    Some(result)
 }
