@@ -246,11 +246,11 @@ Request Randomness
     ${result} =    Run   forge script script/GetRandomNumberLocalTest.s.sol:GetRandomNumberLocalTestScript --fork-url http://localhost:8545 --broadcast
     Log    Request randomness: ${result}
 
-Get Reward
-    [Documentation]    Get reward
+Get Delegation Reward
+    [Documentation]    Get delegation reward
     [Arguments]    ${address}
     ${address} =    To Checksum Address    ${address}
-    ${result} =    Contract Function Call    ${CONTROLLER_CONTRACT}    getRewards    ${address}
+    ${result} =    Contract Function Call    ${STAKE_CONTRACT}    getDelegationReward    ${address}
     RETURN    ${result}
 
 Get Stake
@@ -310,3 +310,17 @@ Claim Reward
     ${address} =    Get Value From Env    STAKING_ADDRESS
     ${key} =    Get Private Key By Index    ${index}
     ${result} =    Run    cast send ${address} "claimReward()" --private-key=${key}
+
+Claim
+    [Documentation]    Claim
+    [Arguments]    ${index}
+    ${address} =    Get Value From Env    STAKING_ADDRESS
+    ${key} =    Get Private Key By Index    ${index}
+    ${result} =    Run    cast send ${address} "claim()" --private-key=${key}
+
+Claim Frozen Principal
+    [Documentation]    Claim frozen principal
+    [Arguments]    ${index}
+    ${address} =    Get Value From Env    STAKING_ADDRESS
+    ${key} =    Get Private Key By Index    ${index}
+    ${result} =    Run    cast send ${address} "claimFrozenPrincipal()" --private-key=${key}

@@ -156,7 +156,7 @@ Stake ARPA
     [Arguments]    ${node_index}    ${amount}
     ${key} =    Get Private Key By Index    ${node_index}
     ${stake_contract_address} =    Get Value From Env    STAKING_ADDRESS
-    ${result} =    Run    cast send ${stake_contract_address} "stake(uint256 amount)" ${amount} --private-key=${key}
+    ${result} =    Run    cast send ${stake_contract_address} "stake(uint256 amount)" ${amount} --private-key=${key} --gas-limit=1000000
     RETURN    ${result}
 
 Unstake ARPA
@@ -164,7 +164,7 @@ Unstake ARPA
     [Arguments]    ${node_index}    ${amount}
     ${key} =    Get Private Key By Index    ${node_index}
     ${stake_contract_address} =    Get Value From Env    STAKING_ADDRESS
-    ${result} =    Run    cast send ${stake_contract_address} "unstake(uint256 amount)" ${amount} --private-key=${key}
+    ${result} =    Run    cast send ${stake_contract_address} "unstake(uint256 amount)" ${amount} --private-key=${key} --gas-limit=1000000
     RETURN    ${result}
     
 Stake And Run Node

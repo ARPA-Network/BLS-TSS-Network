@@ -94,11 +94,3 @@ def get_err_log_from_chain():
             if line.upper().find('ERROR') != -1:
                 return line
     return None
-
-# def convert():
-#     integer_list = [119, 57, 29, 190, 58, 172, 214, 5, 86, 169, 123, 18, 108, 95, 93, 200, 242, 170, 43, 115, 0, 90, 142, 126, 227, 123, 19, 135, 215, 37, 144, 169]
-#     byte_object = bytes(integer_list)
-
-#     print(byte_object)
-
-# convert()
