@@ -634,6 +634,7 @@ async fn randcast(args: ArgMatches, context: &mut Context) -> anyhow::Result<Opt
             let request_sender = sub_matches.get_one::<String>("request-sender").unwrap();
             let request_signature = sub_matches.get_one::<String>("request-signature").unwrap();
             let request_params = sub_matches.get_one::<String>("request-params").unwrap();
+            let request_contract = sub_matches.get_one::<String>("request-contract");
 
             let existed_callback_gas_limit_args =
                 vec!["call", consumer, "callbackGasLimit()(uint32)"];
@@ -686,9 +687,14 @@ async fn randcast(args: ArgMatches, context: &mut Context) -> anyhow::Result<Opt
             ];
             call_cast(&anvil.endpoint(), &set_code_args);
 
+            let request_contract = match request_contract {
+                Some(contract) => contract,
+                None => consumer,
+            };
+
             let request_randomness_args = vec![
                 "send",
-                consumer,
+                request_contract,
                 request_signature,
                 request_params,
                 "--from",
@@ -1542,6 +1548,7 @@ async fn main() -> anyhow::Result<()> {
                         .arg(Arg::new("request-sender").required(true).help("sender address(depending on your business logic, don't have to be the owner of the consumer contract) to request randomness(don't have to be the function in consumer contract) in hex format"))
                         .arg(Arg::new("request-signature").required(true).help("function signature of request randomness with a pair of quotation marks"))
                         .arg(Arg::new("request-params").required(true).help("request params split by space"))
+                        .arg(Arg::new("request-contract").required(false).help("request contract address in hex format, if not set, will use the consumer contract address"))
                 ).subcommand(
                     Command::new("estimate-payment-amount").visible_alias("epa").about("Estimate the amount of gas used for a fulfillment of randomness in 3 times of current gas price, for calculating how much eth is needed for subscription funding")
                         .arg(Arg::new("callback-gas-limit").required(true).value_parser(value_parser!(u32)).help("callback gas limit by calling estimate-callback-gas"))

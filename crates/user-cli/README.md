@@ -205,7 +205,7 @@ Commands:
   my-subscriptions            Get my subscriptions [aliases: mss]
   consumers                   Get consumer contracts by subscription id [aliases: cs]
   requests                    Get requests by subscription id, filter by consumer address, pending/ success/ failed [aliases: rs]
-  estimate-callback-gas       Estimate callback gas for any consumer contract extends GeneralRandcastConsumerBase before the first request. This also can be used as a dry run for the first request. An error will be returned if callback in the consumer contract reverts. [aliases: ecg]
+  estimate-callback-gas       Estimate callback gas for any consumer contract extends GeneralRandcastConsumerBase under the current circumstances. This can be used before the first request to estimate how much eth is needed for subscription funding, or at any time to compare gas cost with the estimated one to adjust the callback gas config in the consumer contract. This also can be used as a dry run to see if the callback function in consumer contract reverts due to business logic or gas limit. An error will be returned if callback in the consumer contract reverts. [aliases: ecg]
   estimate-payment-amount     Estimate the amount of gas used for a fulfillment of randomness in 3 times of current gas price, for calculating how much eth is needed for subscription funding [aliases: epa]
   callback-gas-limit          Get callback gas limit of consumer contract [aliases: cgl]
   callback-max-gas-fee        Get callback max gas fee of consumer contract. 0 means auto-estimating CallbackMaxGasFee as 3 times tx.gasprice of the request call, also user can set it manually by calling set-callback-gas-config [aliases: cmgf]
