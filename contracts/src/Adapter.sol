@@ -10,12 +10,11 @@ import {IAdapterOwner} from "./interfaces/IAdapterOwner.sol";
 import {IController} from "./interfaces/IController.sol";
 import {IBasicRandcastConsumerBase} from "./interfaces/IBasicRandcastConsumerBase.sol";
 import {RequestIdBase} from "./utils/RequestIdBase.sol";
-import {RandomnessHandler} from "./utils/RandomnessHandler.sol";
 import {BLS} from "./libraries/BLS.sol";
 // solhint-disable-next-line no-global-import
 import "./utils/Utils.sol" as Utils;
 
-contract Adapter is UUPSUpgradeable, IAdapter, IAdapterOwner, RequestIdBase, RandomnessHandler, OwnableUpgradeable {
+contract Adapter is UUPSUpgradeable, IAdapter, IAdapterOwner, RequestIdBase, OwnableUpgradeable {
     using SafeERC20 for IERC20;
     using Address for address;
 
@@ -736,7 +735,7 @@ contract Adapter is UUPSUpgradeable, IAdapter, IAdapterOwner, RequestIdBase, Ran
             resp = abi.encodeWithSelector(b.rawFulfillRandomWords.selector, requestId, randomWords);
         } else if (requestDetail.requestType == RequestType.Shuffling) {
             uint32 upper = abi.decode(requestDetail.params, (uint32));
-            uint256[] memory shuffledArray = _shuffle(upper, randomness);
+            uint256[] memory shuffledArray = Utils.shuffle(upper, randomness);
             resp = abi.encodeWithSelector(b.rawFulfillShuffledArray.selector, requestId, shuffledArray);
         }
 
