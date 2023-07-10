@@ -14,7 +14,7 @@ ENV CARGO_NET_GIT_FETCH_WITH_CLI=true
 # Clone and build Randcast Node Client
 RUN git clone https://github.com/ARPA-Network/BLS-TSS-Network.git && \
     cd BLS-TSS-Network && \
-    cargo build
+    cargo build --release
 
 ##########################################################
 # Final stage
@@ -31,7 +31,9 @@ EXPOSE 50091
 RUN mkdir -p /usr/src/app/external
 
 # Copy the built binary from the builder stage
-COPY --from=builder /usr/src/app/BLS-TSS-Network/target/debug/node-client /usr/src/app/node-client
+# COPY --from=builder /usr/src/app/BLS-TSS-Network/target/debug/node-client /usr/src/app/node-client
+COPY --from=builder /usr/src/app/BLS-TSS-Network/target/release/node-client /usr/src/app/node-client
+
 
 # Copy supervisord configuration file
 COPY supervisord.conf /etc/supervisor/conf.d/supervisord.conf
