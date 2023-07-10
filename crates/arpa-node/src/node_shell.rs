@@ -1,28 +1,27 @@
-use arpa_node::load_config;
-use arpa_node::node::management::client::GeneralManagementClient;
-use arpa_node_contract_client::adapter::{AdapterClientBuilder, AdapterViews};
-use arpa_node_contract_client::contract_stub::adapter::Adapter as AdapterContract;
-use arpa_node_contract_client::contract_stub::controller::Controller as ControllerContract;
-use arpa_node_contract_client::contract_stub::ierc20::IERC20 as ArpaContract;
-use arpa_node_contract_client::contract_stub::staking::Staking as StakingContract;
-use arpa_node_contract_client::controller::{
+use arpa_contract_client::adapter::{AdapterClientBuilder, AdapterViews};
+use arpa_contract_client::contract_stub::adapter::Adapter as AdapterContract;
+use arpa_contract_client::contract_stub::controller::Controller as ControllerContract;
+use arpa_contract_client::contract_stub::ierc20::IERC20 as ArpaContract;
+use arpa_contract_client::contract_stub::staking::Staking as StakingContract;
+use arpa_contract_client::controller::{
     ControllerClientBuilder, ControllerTransactions, ControllerViews,
 };
-use arpa_node_contract_client::ethers::adapter::AdapterClient;
-use arpa_node_contract_client::ethers::controller::ControllerClient;
-use arpa_node_contract_client::{ServiceClient, TransactionCaller, ViewCaller};
-use arpa_node_core::{
+use arpa_contract_client::ethers::adapter::AdapterClient;
+use arpa_contract_client::ethers::controller::ControllerClient;
+use arpa_contract_client::{ServiceClient, TransactionCaller, ViewCaller};
+use arpa_core::{
     address_to_string, build_wallet_from_config, pad_to_bytes32, ChainIdentity, Config,
     GeneralChainIdentity, WalletSigner,
 };
-use arpa_node_dal::NodeInfoFetcher;
-use arpa_node_sqlite_db::SqliteDB;
+use arpa_dal::NodeInfoFetcher;
+use arpa_node::management::client::GeneralManagementClient;
+use arpa_sqlite_db::SqliteDB;
 use ethers::prelude::k256::ecdsa::SigningKey;
 use ethers::providers::Middleware;
 use ethers::signers::coins_bip39::English;
 use ethers::signers::Signer;
 use ethers::signers::{LocalWallet, MnemonicBuilder};
-use ethers::types::{Address, BlockId, BlockNumber, U256};
+use ethers::types::{Address, BlockId, BlockNumber, H256, U256, U64};
 use reedline_repl_rs::clap::{self, Arg, ArgAction, ArgMatches, Command};
 use reedline_repl_rs::Repl;
 use std::fs::File;
@@ -56,8 +55,8 @@ pub struct Opt {
     )]
     history_file_path: PathBuf,
 
-    /// Set the block height when adapter contract deployed
-    #[structopt(short = "d", long, default_value = "3632525")]
+    /// Set the block height when adapter contract deployed to accelerate the query of events
+    #[structopt(short = "d", long, default_value = "0")]
     adapter_deployed_block_height: u64,
 }
 
@@ -83,6 +82,53 @@ pub struct RandomnessRequestResult {
     pub payment: ethers::core::types::U256,
     pub flat_fee: ethers::core::types::U256,
     pub success: bool,
+}
+
+#[derive(Debug)]
+pub struct Block {
+    /// Hash of the block
+    pub hash: Option<H256>,
+    /// Hash of the parent
+    pub parent_hash: H256,
+    /// Hash of the uncles
+    pub uncles_hash: H256,
+    /// Miner/author's address. None if pending.
+    pub author: Option<Address>,
+    /// State root hash
+    pub state_root: H256,
+    /// Transactions root hash
+    pub transactions_root: H256,
+    /// Transactions receipts root hash
+    pub receipts_root: H256,
+    /// Block number. None if pending.
+    pub number: Option<U64>,
+    /// Gas Used
+    pub gas_used: U256,
+    /// Gas Limit
+    pub gas_limit: U256,
+    /// Timestamp
+    pub timestamp: U256,
+    /// Size in bytes
+    pub size: Option<U256>,
+}
+
+impl<TX> From<ethers::types::Block<TX>> for Block {
+    fn from(block: ethers::types::Block<TX>) -> Self {
+        Self {
+            hash: block.hash,
+            parent_hash: block.parent_hash,
+            uncles_hash: block.uncles_hash,
+            author: block.author,
+            state_root: block.state_root,
+            transactions_root: block.transactions_root,
+            receipts_root: block.receipts_root,
+            number: block.number,
+            gas_used: block.gas_used,
+            gas_limit: block.gas_limit,
+            timestamp: block.timestamp,
+            size: block.size,
+        }
+    }
 }
 
 pub struct StakingClient;
@@ -120,7 +166,7 @@ async fn send(args: ArgMatches, context: &mut Context) -> anyhow::Result<Option<
 
             Ok(Some(format!(
                 "Approve arpa for staking successfully, transaction hash: {:?}",
-                Some(trx_hash)
+                trx_hash
             )))
         }
         Some(("stake", sub_matches)) => {
@@ -207,7 +253,7 @@ async fn send(args: ArgMatches, context: &mut Context) -> anyhow::Result<Option<
 
             Ok(Some(format!(
                 "Stake arpa successfully, transaction hash: {:?}",
-                Some(trx_hash)
+                trx_hash
             )))
         }
         Some(("unstake", sub_matches)) => {
@@ -251,7 +297,7 @@ async fn send(args: ArgMatches, context: &mut Context) -> anyhow::Result<Option<
 
             Ok(Some(format!(
                 "Unstake arpa successfully, transaction hash: {:?}",
-                Some(trx_hash)
+                trx_hash
             )))
         }
         Some(("claim-frozen-principal", _sub_matches)) => {
@@ -274,7 +320,7 @@ async fn send(args: ArgMatches, context: &mut Context) -> anyhow::Result<Option<
 
             Ok(Some(format!(
                 "Claim frozen principal successfully, transaction hash: {:?}",
-                Some(trx_hash)
+                trx_hash
             )))
         }
         Some(("register", _sub_matches)) => {
@@ -301,7 +347,7 @@ async fn send(args: ArgMatches, context: &mut Context) -> anyhow::Result<Option<
 
             Ok(Some(format!(
                 "Register node successfully, transaction hash: {:?}",
-                Some(trx_hash.to_string())
+                trx_hash
             )))
         }
         Some(("activate", _sub_matches)) => {
@@ -338,7 +384,7 @@ async fn send(args: ArgMatches, context: &mut Context) -> anyhow::Result<Option<
 
             Ok(Some(format!(
                 "Activate node successfully, transaction hash: {:?}",
-                Some(trx_hash)
+                trx_hash
             )))
         }
         Some(("quit", _sub_matches)) => {
@@ -371,7 +417,7 @@ async fn send(args: ArgMatches, context: &mut Context) -> anyhow::Result<Option<
 
             Ok(Some(format!(
                 "Quit node successfully, transaction hash: {:?}",
-                Some(trx_hash)
+                trx_hash
             )))
         }
         Some(("change-dkg-public-key", _sub_matches)) => {
@@ -415,7 +461,7 @@ async fn send(args: ArgMatches, context: &mut Context) -> anyhow::Result<Option<
 
             Ok(Some(format!(
                 "Change dkg public key of the node successfully, transaction hash: {:?}",
-                Some(trx_hash)
+                trx_hash
             )))
         }
         Some(("withdraw", sub_matches)) => {
@@ -456,11 +502,10 @@ async fn send(args: ArgMatches, context: &mut Context) -> anyhow::Result<Option<
 
             Ok(Some(format!(
                 "Withdraw node balance successfully, transaction hash: {:?}",
-                Some(trx_hash)
+                trx_hash
             )))
         }
 
-        // let controller_contract = Controller::new(self.controller_address, self.signer.clone());
         _ => panic!("Unknown subcommand {:?}", args.subcommand_name()),
     }
 }
@@ -1007,6 +1052,60 @@ async fn call(args: ArgMatches, context: &mut Context) -> anyhow::Result<Option<
 
             Ok(Some(format!("randomness_count: {:#?}", randomness_count)))
         }
+        Some(("block", sub_matches)) => {
+            let block_number = sub_matches.get_one::<String>("block-number").unwrap();
+            match block_number.as_str() {
+                "latest" => {
+                    let block: Option<Block> = context
+                        .main_chain_identity
+                        .get_provider()
+                        .get_block(BlockNumber::Latest)
+                        .await?
+                        .map(|block| block.into());
+                    return Ok(Some(format!("block: {:#?}", block)));
+                }
+                "earliest" => {
+                    let block: Option<Block> = context
+                        .main_chain_identity
+                        .get_provider()
+                        .get_block(BlockNumber::Earliest)
+                        .await?
+                        .map(|block| block.into());
+                    return Ok(Some(format!("block: {:#?}", block)));
+                }
+                "pending" => {
+                    let block: Option<Block> = context
+                        .main_chain_identity
+                        .get_provider()
+                        .get_block(BlockNumber::Pending)
+                        .await?
+                        .map(|block| block.into());
+                    return Ok(Some(format!("block: {:#?}", block)));
+                }
+                _ => {
+                    if let Ok(block_number) = block_number.parse::<u64>() {
+                        let block: Option<Block> = context
+                            .main_chain_identity
+                            .get_provider()
+                            .get_block(BlockNumber::Number(block_number.into()))
+                            .await?
+                            .map(|block| block.into());
+                        return Ok(Some(format!("block: {:#?}", block)));
+                    }
+                }
+            }
+            panic!("Unknown block number {:?}", block_number);
+        }
+        // current-gas-price
+        Some(("current-gas-price", _sub_matches)) => {
+            let gas_price = context
+                .main_chain_identity
+                .get_provider()
+                .get_gas_price()
+                .await?;
+
+            Ok(Some(format!("current gas price: {:#?}", gas_price)))
+        }
         // trx-receipt
         Some(("trx-receipt", sub_matches)) => {
             let trx_hash = sub_matches.get_one::<String>("trx-hash").unwrap();
@@ -1207,7 +1306,7 @@ fn read_file_line_by_line(filepath: PathBuf) -> anyhow::Result<String> {
 async fn main() -> anyhow::Result<()> {
     let opt = Opt::from_args();
 
-    let config = load_config(opt.config_path);
+    let config = Config::load(opt.config_path);
 
     let wallet = build_wallet_from_config(&config.account)?;
 
@@ -1286,6 +1385,11 @@ async fn main() -> anyhow::Result<()> {
         .with_command_async(
             Command::new("call")
                 .subcommand(
+                    Command::new("block").visible_alias("b").about("Get block information")
+                        .arg(Arg::new("block-number").required(true).help("block number in latest/ earliest/ pending/ decimal number"))
+                ).subcommand(
+                    Command::new("current-gas-price").visible_alias("cgp").about("Get current gas price")
+                ).subcommand(
                     Command::new("trx-receipt").visible_alias("tr").about("Get transaction receipt")
                         .arg(Arg::new("trx-hash").required(true).help("transaction hash in hex format"))
                 ).subcommand(
@@ -1367,7 +1471,7 @@ async fn main() -> anyhow::Result<()> {
                     Command::new("frozen-principal").visible_alias("fp")
                         .about("Get frozen principal and unfreeze time")
                 )
-                .about("Get views from on-chain contracts"),
+                .about("Get views and events from on-chain contracts"),
             |args, context| Box::pin(call(args, context)),
         ).with_command_async(
             Command::new("send")
@@ -1382,7 +1486,7 @@ async fn main() -> anyhow::Result<()> {
                     Command::new("unstake").visible_alias("u").about("Unstake(then freeze) arpa from staking contract and claim delegation rewards instantly after exit")
                         .arg(Arg::new("amount").required(true).help("amount of arpa to unstake"))
                 ).subcommand(
-                    Command::new("claim-frozen-principal").visible_alias("c").about("Claim frozen principal from staking after unstake")
+                    Command::new("claim-frozen-principal").visible_alias("cfp").about("Claim frozen principal from staking after unstake")
                 ).subcommand(
                     Command::new("register").visible_alias("r").about("Register node to Randcast network")
                 ).subcommand(
@@ -1396,7 +1500,7 @@ async fn main() -> anyhow::Result<()> {
                     Command::new("withdraw").visible_alias("w")
                     .arg(Arg::new("recipient").required(true).help("path to keystore file"))
                     .about("Withdraw node reward to any address"))
-                .about("*** Be careful this will change on-chain state and cost gas ***\nSend trxs to on-chain contracts"),
+                .about("*** Be careful this will change on-chain state and cost gas as well as block time***\nSend trxs to on-chain contracts"),
             |args, context| Box::pin(send(args, context)),
         ).with_command(
             Command::new("generate")
