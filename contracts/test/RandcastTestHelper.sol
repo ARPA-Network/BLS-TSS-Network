@@ -150,10 +150,22 @@ abstract contract RandcastTestHelper is Test {
     bytes internal _partialPublicKey31 =
         hex"1bea29bd8ff674254af4cacfa0635d83a6a657245a3787dd1b02eeb48acc5bde0f45180089d1a063f6bfa4f5fe24432d850b09ed8f543fe80e518927a85faab81677681fd9599e3b40812ba667cbdfb1a8280c0a3d70ef818dd7357723c0bb0328a31c3ca59c2ebafd27082e191ea2b90cbecf91fe5996a4de6930870ec6ef2e";
 
+    // these partial public keys need to be used with the _publicKey2
+    bytes internal _partialPublicKey32 =
+        hex"04176fea04a0758aa541640a6eeff1b9f52d322c2867568931e2092bd3d4118a06cec1d87be45ce6177949ad9d699370cbdcf7dd69d0c8cdbaed9f00f105579616886d476cb9df509d7319bef196223fac77715f31e0de727e10a4f99ae969c3242578a04ed1deb1804af039e1fb585502782bd0ba0a50348455955b8fb508b8";
+    bytes internal _partialPublicKey33 =
+        hex"281388b3c7cd9ed5588d777051f6a231095020ea716a40c460ff5d03d0d5cdff2c72607d516525c322503099158c75c81548d988608c1ab03292c0c69b54a143051639cf603176c9df8fd2558ab9de51578d4bab09f001b2a2b137319030e8101acd2a498da6e776836d7d44a6ae3a219353057defece33ab2ab1a9649f7e444";
+    bytes internal _partialPublicKey34 =
+        hex"0094e033b0773240e6d5ab7af0407419acc86c8e0dcb7a6720af4562f17afb3f28b20023f5e4ec49036b936aa2802d636e66b90b5170a48219ba4f063b08ef4007bed3a2bad209ab64397424a0e701dc0cec71bbb83d73be9c2350e61b070c122d1ea747ecc38037549060430484437b3602c81782a37490e0ffa288ce8b01d4";
+    bytes internal _partialPublicKey35 = 
+        hex"1d31723fc68e7c376e64b28b0415761506a050fd3a115126ff292813229f898a0e0ec2adabac519aabee9ba27450ae4e7906bf5f574392fa8fddac5877e05ae32e1f87668856c7e8c54543f346b4b2f076b46a926bab402030ef1726ee12b9b528e077bfca1b848f46baaeb0aa6bd5a64b21ab24c878963c835eec27d84cdd10";
+    bytes internal _partialPublicKey36 =
+        hex"0235ad0427fb46e2179a4c291e12b545b8c458ba17bebee61a28ad1d528ad8ea0984641ad590df219fe0725c73a6e0dbcd935d57ba0514d5475f3604eeb84d422f6579578f15d03a7dc9d2bffa1d5df87aed0ce8be0b39f5e3ad9bc2513b253511479bfd963e3a095c8d869fb78bb6996135e080dc16f334d68b7a945279c85c";
     // Group Public Key
     bytes internal _publicKey =
         hex"137bde2a3eca9e26d5023c8a31c7db75db47b4d1776efc144bc9cfa36403125510292172c806e0d9dd29958c8b359ea9c693179c505558cc95ca8ce6a690eb800652ce1fadb1895c06e5f28e871d8e3797f749941108195d2106a782464a09ed23ece01e5c6512317cd413fbecc36032ab7ba45f62704e9808ec2b6a2dd03d8c";
-
+    bytes internal _publicKey2 =
+        hex"00c82daa75f4d096e2f93842239b5c2f986310646db13e18f534d5b1b618b302206f8688c24fa9f1737d45ec46c3ea9cf19a4cbb256917c13247452e2ad34c62251372dc4f9a520138e82a33cce5219b7d56e153214a0b3d105f937ea5bd071b097b664af2c4bbd2b55aed8e6d65e44cb8e45c8b8da1d6ba17123d4da4e9c948";
     // Partial Signatures
     // msg: "de7c516e867a427226866fa41566ad0eb0ff69f54e4408babd2f59c54238fa860000000000000000000000000000000000000000000000000000000000000001"
     uint256 internal _partialG1I1 = 0xa7b0bf678df3ba00d8d25f952d80634635a2ae2bd1e8b480fc2cf7c3d264f5d9;
@@ -276,8 +288,43 @@ abstract contract RandcastTestHelper is Test {
     uint256[] internal _sig13 =
         [_signature13, _partialG13I1, _partialG13I2, _partialG13I3, _partialG13I4, _partialG13I5];
 
+    // msg: "de7c516e867a427226866fa41566ad0eb0ff69f54e4408babd2f59c54238fa860000000000000000000000000000000000000000000000000000000000000001"
+    uint256 internal _partialG14I1 = 0x115434e212664743f877ec7022540aef3ab79c9529f7b393a20f8ce965d76d0e;
+    uint256 internal _partialG14I2 = 0xaedec74bd5a4b3da3b4827dadf08d34a0297ec3cae490906821e2bdf712ccede;
+    uint256 internal _partialG14I3 = 0x26c296bc0cb21f2fb0d7008cbfeeb5227c8d180baeddbf8cd007a13b194651c4;
+    uint256 internal _partialG14I4 = 0x29a2bf30775117663bea6d046a538949a4a635421db7d13d4770b4cf26f3a8a4;
+    uint256 internal _partialG14I5 = 0x2a4b305eb38b7798b367a632777aa0812091ceccebc5d78c97093354eba2ff21;
+    uint256 internal _signature14 = 0xa72e2d910e07234d5289a1269ade1fb4c09a0ffb36a7edbd9c92cb2e4a186dc3;
+    uint256[] internal _sig14 = [_signature14, _partialG14I1, _partialG14I2, _partialG14I3, _partialG14I4, _partialG14I5];
+
+    // msg: "912879b65da7afad27afb740fed587019e3aac62a0731fcdb33a38a5e04a9dbc0000000000000000000000000000000000000000000000000000000000000001"
+    uint256 internal _partialG15I1 = 0x879be5e468499b06d697efaad7d3e30793d93aa5e41ee34de6f4463dbe578ee6;
+    uint256 internal _partialG15I2 = 0x2129d16085f8c29dbc4a06059ce4454619a1a55e1a671f2a5b623d57456d425f;
+    uint256 internal _partialG15I3 = 0x0300871171a7854cc9e97da279c5448ec8791918c0752fc6a0e63963e5568c0b;
+    uint256 internal _partialG15I4 = 0x9b6fbfa3d3cd46ebfd948c222a2c68735990e189a3dfa3c8d4706a16f3db4300;
+    uint256 internal _partialG15I5 = 0x041e193585d6a486e5bc87e909c1ab6c5e957f5922569f3a39ff587ed4b61411;
+    uint256 internal _signature15 = 0x040e2e8179145546736d30316d497a03c16a8e8dfa097012ffc281f09542c944;
+    uint256[] internal _sig15 = [_signature15, _partialG15I1, _partialG15I2, _partialG15I3, _partialG15I4, _partialG15I5];
+
+    // msg: "34fa9bc41a34b4a1fb4dc01764f8f0cc61f6fc90284a603c49e393c2202135520000000000000000000000000000000000000000000000000000000000000001"
+    uint256 internal _partialG16I1 = 0x12e4c8f3a557d1ef6be084777b0eb5385014f5e098c60c5dfa7a47e2f0884106;
+    uint256 internal _partialG16I2 = 0x296fdc158dbfe9286c1a7504a19d0e5bee83f2f3e8274debc3144bb27e6d3d1c;
+    uint256 internal _partialG16I3 = 0x2c0119c6f28a210292600c391fef5277625ba45fa9ce7202475e346af2aecb08;
+    uint256 internal _partialG16I4 = 0x04ace050f93502dd43ac2e5d258328b6458846a9cc6e72ebf6d79df05a6f49af;
+    uint256 internal _partialG16I5 = 0x87e3e2fc9ff992f3a84d63b92a8e3a22100ee4f0b697c998152363994f3e7092;
+    uint256 internal _signature16 = 0x8faa7ae70c5c7b1030e2440e3ab9da66f389d8a4c35e1a20b89c512d02bc22e4;
+    uint256[] internal _sig16 = [_signature16, _partialG16I1, _partialG16I2, _partialG16I3, _partialG16I4, _partialG16I5];
+
+    // msg: "2c319becd0b8a59d0aeedca4c6406c7f05b719af55e546b2ab4871406c1870c70000000000000000000000000000000000000000000000000000000000000001"
+    uint256 internal _partialG17I1 = 0x10d51f845e96666b3acc3659145b22453722a810504c726b76b1ce86d510b435;
+    uint256 internal _partialG17I2 = 0x870c7730723fb74b8e6223764e3e7c6a8dfbafd4856dfa3573bf982f6ee08911;
+    uint256 internal _partialG17I3 = 0xa64f655b1e4d54d2791920557cc6355b30192614d6fe8ef1b79348bd9593a4ab;
+    uint256 internal _partialG17I4 = 0xa88b79c078a3a2b2bf5d6657a72c07f52734af90ba25bdf1525f48874693ce79;
+    uint256 internal _partialG17I5 = 0x1150f087b0fd0c95d5293599902fe53b9f2d46d96692ae37c6714749bf3354e5;
+    uint256 internal _signature17 = 0x96c5b366ddd3624e8292d628f462d31c772301362ba6aa3aa1de4e0d2041b5fd;
+    uint256[] internal _sig17 = [_signature17, _partialG17I1, _partialG17I2, _partialG17I3, _partialG17I4, _partialG17I5];
     uint256[][] internal _sig =
-        [_sig1, _sig2, _sig3, _sig4, _sig5, _sig6, _sig7, _sig8, _sig9, _sig10, _sig11, _sig12, _sig13];
+        [_sig1, _sig2, _sig3, _sig4, _sig5, _sig6, _sig7, _sig8, _sig9, _sig10, _sig11, _sig12, _sig13, _sig14, _sig15, _sig16, _sig17];
 
     // Node DKG Communication Public Keys
 
@@ -427,67 +474,50 @@ abstract contract RandcastTestHelper is Test {
         _staking.stake(_operatorStakeAmount);
     }
 
-    function prepareAnAvailableGroup() public returns (uint256 threshold, uint256 size) {
-        // deal nodes
-        vm.deal(_node1, 1 * 10 ** 18);
-        vm.deal(_node2, 1 * 10 ** 18);
-        vm.deal(_node3, 1 * 10 ** 18);
-        vm.deal(_node4, 1 * 10 ** 18);
-        vm.deal(_node5, 1 * 10 ** 18);
-
-        // Register Node 1
-        vm.prank(_node1);
-        _controller.nodeRegister(_dkgPubkey1);
-
-        // Register Node 2
-        vm.prank(_node2);
-        _controller.nodeRegister(_dkgPubkey2);
-
-        // Register Node 3
-        vm.prank(_node3);
-        _controller.nodeRegister(_dkgPubkey3);
-
-        // Register Node 4
-        vm.prank(_node4);
-        _controller.nodeRegister(_dkgPubkey4);
-
-        // Register Node 5
-        vm.prank(_node5);
-        _controller.nodeRegister(_dkgPubkey5);
-
-        uint256 groupIndex = 0;
+    function prepareAnAvailableGroupByKeys (address[] memory nodes, bytes[] memory dkgPartialPubKeys, bytes[] memory pubKeys, bytes memory groupPublicKey, uint256 groupIndex) internal {
         uint256 groupEpoch = 3;
-
-        threshold = 3;
-        size = 5;
-
         address[] memory disqualifiedNodes = new address[](0);
         IController.CommitDkgParams memory params;
 
-        // Succesful Commit: Node 1
-        params = IController.CommitDkgParams(groupIndex, groupEpoch, _publicKey, _partialPublicKey1, disqualifiedNodes);
-        vm.prank(_node1);
-        _controller.commitDkg(params);
+        for (uint256 i = 0; i < nodes.length; i++) {
+            vm.deal(nodes[i], 1 * 10 ** 18);
+            vm.prank(nodes[i]);
+            _controller.nodeRegister(pubKeys[i]);
+        }
 
-        // Succesful Commit: Node 2
-        params = IController.CommitDkgParams(groupIndex, groupEpoch, _publicKey, _partialPublicKey2, disqualifiedNodes);
-        vm.prank(_node2);
-        _controller.commitDkg(params);
+        for (uint256 i = 0; i < nodes.length; i++) {
+            params = IController.CommitDkgParams(groupIndex, groupEpoch, groupPublicKey, dkgPartialPubKeys[i], disqualifiedNodes);
+            vm.prank(nodes[i]);
+            _controller.commitDkg(params);
+        }
+    }
 
-        // Succesful Commit: Node 3
-        params = IController.CommitDkgParams(groupIndex, groupEpoch, _publicKey, _partialPublicKey3, disqualifiedNodes);
-        vm.prank(_node3);
-        _controller.commitDkg(params);
+    function prepareAnAvailableGroup() public returns (uint256 threshold, uint256 size) {
+        threshold = 3;
+        size = 5;
+        
+        address[] memory _nodesGroup1 = new address[](5);
+        _nodesGroup1[0] = _node1;
+        _nodesGroup1[1] = _node2;
+        _nodesGroup1[2] = _node3;
+        _nodesGroup1[3] = _node4;
+        _nodesGroup1[4] = _node5;
 
-        // Succesful Commit: Node 4
-        params = IController.CommitDkgParams(groupIndex, groupEpoch, _publicKey, _partialPublicKey4, disqualifiedNodes);
-        vm.prank(_node4);
-        _controller.commitDkg(params);
+        bytes[] memory _dkgPartialPubKeysGroup1 = new bytes[](5);
+        _dkgPartialPubKeysGroup1[0] = _partialPublicKey1;
+        _dkgPartialPubKeysGroup1[1] = _partialPublicKey2;
+        _dkgPartialPubKeysGroup1[2] = _partialPublicKey3;
+        _dkgPartialPubKeysGroup1[3] = _partialPublicKey4;
+        _dkgPartialPubKeysGroup1[4] = _partialPublicKey5;
 
-        // Succesful Commit: Node 5
-        params = IController.CommitDkgParams(groupIndex, groupEpoch, _publicKey, _partialPublicKey5, disqualifiedNodes);
-        vm.prank(_node5);
-        _controller.commitDkg(params);
+        bytes[] memory _publicKeys1 = new bytes[](5);
+        _publicKeys1[0] = _dkgPubkey1;
+        _publicKeys1[1] = _dkgPubkey2;
+        _publicKeys1[2] = _dkgPubkey3;
+        _publicKeys1[3] = _dkgPubkey4;
+        _publicKeys1[4] = _dkgPubkey5;
+
+        prepareAnAvailableGroupByKeys(_nodesGroup1, _dkgPartialPubKeysGroup1, _publicKeys1, _publicKey, 0);
     }
 
     function printGroupInfo(uint256 groupIndex) public {
