@@ -28,7 +28,7 @@ function shuffle(uint256 upper, uint256 randomness) pure returns (uint256[] memo
 }
 
 /**
- * @dev This function returns a subset of randomly chosen indeces from an array.
+ * @dev This function returns a subset of randomly chosen elments from an array.
  * @param seed The initial value used for generating hash.
  * @param indices The initial array of indices to choose from.
  * @param count The number of indices to choose.
@@ -54,17 +54,17 @@ function draw(uint256 seed, uint256[] memory indices, uint256 count) pure return
 }
 
 /**
- * @dev This function performs a simple random roll to pick an index within a specified size.
- * @param randomness Random number used in determining the chosen index.
+ * @dev This function performs a simple random roll to pick an number within a specified size.
+ * @param randomness Random number used in determining the chosen number.
  * @param size The range (or size) of possible indices.
- * @return chosenIndex The randomly chosen index.
+ * @return number The randomly chosen number.
  */
-function roll(uint256 randomness, uint256 size) pure returns (uint256 chosenIndex) {
+function roll(uint256 randomness, uint256 size) pure returns (uint256 number) {
     return randomness % size;
 }
 
 /**
- * @dev Chooses an index based on provided weights of each index, will revert if valueWeights is empty.
+ * @dev This function chooses an index based on provided weights, will revert if valueWeights is empty.
  * @param randomness The random number used to choose the index.
  * @param valueWeights An array of weight values corresponding to indices.
  * @return chosenIndex The picked index.
