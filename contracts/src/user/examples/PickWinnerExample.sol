@@ -8,12 +8,15 @@ contract PickWinnerExample is GeneralRandcastConsumerBase {
     /* requestId -> randomness */
     mapping(bytes32 => uint256) public randomResults;
     uint256 public indexResult;
-    event WinnerResult(uint256);
+    mapping(uint256 => string) public indexToName;
+    event WinnerResult(string);
 
-    // solhint-disable-next-line no-empty-blocks
     constructor(address controller) BasicRandcastConsumerBase(controller) {
-
+        indexToName[0] = "player1 win";
+        indexToName[1] = "player2 win";
+        indexToName[2] = "tie";
     }
+
     /**
      * Requests randomness
      */
@@ -28,8 +31,8 @@ contract PickWinnerExample is GeneralRandcastConsumerBase {
     // solhint-disable-next-line
     function _fulfillRandomness(bytes32 requestId, uint256 randomness) internal override {
         randomResults[requestId] = randomness;
-        uint256 winnerIndex = RandcastSDK.roll(randomness, 2);
+        uint256 winnerIndex = RandcastSDK.roll(randomness, 3);
         indexResult = winnerIndex;
-        emit WinnerResult(winnerIndex);
+        emit WinnerResult(indexToName[winnerIndex]);
     }
 }

@@ -224,7 +224,7 @@ contract RandcastSDKExampleTest is RandcastTestHelper {
 
         deal(_node1, 1 * 1e18);
         _fulfillRequest(_node1, requestId, 16);
-        assertTrue(_pickWinnerExample.indexResult() < 2);
+        assertTrue(_pickWinnerExample.indexResult() < 3);
     }
 
 }
