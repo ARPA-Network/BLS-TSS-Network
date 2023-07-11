@@ -28,7 +28,7 @@ function shuffle(uint256 upper, uint256 randomness) pure returns (uint256[] memo
 }
 
 /**
- * @dev This function returns a subset of randomly chosen elments from an array.
+ * @dev This function returns a subset of randomly chosen elements from an array.
  * @param seed The initial value used for generating hash.
  * @param indices The initial array of indices to choose from.
  * @param count The number of indices to choose.
