@@ -9,6 +9,12 @@ echo "127.0.0.1 $HOSTNAME" >> /etc/hosts
 sudo yum update -y
 sudo yum -y groupinstall "Development Tools" && sudo yum -y install pkgconfig libssh-devel docker git
 
+# clone repo
+cd /tmp
+git clone https://github.com/ARPA-Network/BLS-TSS-Network
+chown -R ssm-user BLS-TSS-Network
+cd /tmp/BLS-TSS-Network/contracts
+
 # install docker
 sudo service docker start
 sudo usermod -a -G docker ec2-user
@@ -22,14 +28,10 @@ docker pull ghcr.io/foundry-rs/foundry:latest
 docker tag ghcr.io/foundry-rs/foundry:latest foundry:latest
 #docker run foundry "cast block --rpc-url $RPC_URL latest"
 
-# clone repo
-git clone https://github.com/ARPA-Network/BLS-TSS-Network
-cd /tmp/BLS-TSS-Network/contracts
-
 # pull container-init and arpa-node images
-docker pull wrinkledeth/anvil-chain:latest
-docker pull wrinkledeth/contract-init:latest
-docker pull wrinkledeth/arpa-node:latest
+docker pull arpachainio/anvil-test:latest
+docker pull arpachainio/contracts-test:latest
+docker pull arpachainio/node:latest
 
 # create complete file
 touch /tmp/complete
