@@ -120,13 +120,6 @@ class EC2InstanceStack(Stack):
                     "cd /tmp",
                     "git clone https://github.com/ARPA-Network/BLS-TSS-Network.git",
                     "chown -R ubuntu:ubuntu /tmp/BLS-TSS-Network",
-                    # # Pull All Container Images
-                    # "docker pull ghcr.io/foundry-rs/foundry:latest",
-                    # "docker tag ghcr.io/foundry-rs/foundry:latest foundry:latest",
-                    # "docker pull arpachainio/anvil-test:latest",
-                    # "docker pull arpachainio/contracts-test:latest",
-                    # "docker pull arpachainio/node:latest",
-                    # "docker pull arpachainio/user-shell:latest",df
                     # create complete file
                     "touch /tmp/complete",
                     # broadcast completion wiht wall
@@ -134,8 +127,6 @@ class EC2InstanceStack(Stack):
                 ]
             },
         )
-
-        # ssh ubuntu@18.116.24.202
 
         # Userdata script
         ubuntu_asset = Asset(
@@ -167,11 +158,3 @@ app = App()
 EC2InstanceStack(app, "usershell-ec2-stack")
 
 app.synth()
-
-# pull arpa containers.
-# "docker pull arpachainio/anvil-test:latest",
-# "docker pull arpachainio/contracts-test:latest",
-# "docker pull arpachainio/node:latest",
-# # pull and tag foundry container
-# "docker pull ghcr.io/foundry-rs/foundry:latest",
-# "docker tag ghcr.io/foundry-rs/foundry:latest foundry:latest",

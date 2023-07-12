@@ -28,9 +28,7 @@ RUN mkdir -p /usr/src/app/external
 # Copy files from builder stage
 COPY --from=builder /usr/src/app/BLS-TSS-Network/target/release/user-shell /usr/src/app/user-shell
 
-# # add user-shell to the path
-# RUN echo "export PATH=$PATH:/usr/src/app/user-shell" >> ~/.bashrc
-
+# Install dependencies
 RUN apt-get update && \
     apt-get install -y protobuf-compiler libprotobuf-dev pkg-config libssh-dev build-essential neovim git net-tools netcat
 
