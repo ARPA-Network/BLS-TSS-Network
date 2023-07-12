@@ -11,7 +11,7 @@ docker pull arpachainio/user-shell:latest
 docker run -it -v /home/ubuntu/BLS-TSS-Network/docker/user-shell/user_config.yml:/usr/src/app/external/config.yml arpachainio/user-shell:latest "/usr/src/app/user-shell -c /usr/src/app/external/config.yml"
 
 # Run Cast Command
-docker run --name cast -v /home/ubuntu/BLS-TSS-Network/docker/user-shell/user_config.yml:/usr/src/app/external/config.yml arpachainio/user-shell:latest "/root/.foundry/bin/cast <CASTCOMMAND>"
+docker run -v /home/ubuntu/BLS-TSS-Network/docker/user-shell/user_config.yml:/usr/src/app/external/config.yml arpachainio/user-shell:latest "/root/.foundry/bin/cast"
 
 
 # Start Anvil (long running daemon)
