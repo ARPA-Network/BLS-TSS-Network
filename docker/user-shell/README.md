@@ -8,14 +8,8 @@ This folder contains tooling to develop and build a container that runs a user-c
 docker pull arpachainio/user-shell:latest
 
 # Run User Shell
-docker run -it -v /home/ubuntu/BLS-TSS-Network/docker/user-shell/user_config.yml:/usr/src/app/external/config.yml arpachainio/user-shell:latest "/usr/src/app/user-shell -c /usr/src/app/external/config.yml"
+docker run -it -v ./docker/user-shell:/data --network=host arpachainio/user-shell:latest "user-shell -c /data/user_config.yml -H /data/user-shell.history"
 
-# Run Cast Command
-docker run -v /home/ubuntu/BLS-TSS-Network/docker/user-shell/user_config.yml:/usr/src/app/external/config.yml arpachainio/user-shell:latest "/root/.foundry/bin/cast"
-
-
-# Start Anvil (long running daemon)
-docker run -d --name anvil -p 8545:8545 -v /home/ubuntu/BLS-TSS-Network/docker/user-shell/user_config.yml:/usr/src/app/external/config.yml arpachainio/user-shell:latest /root/.foundry/bin/anvil
 ```
 
 # Building the container
@@ -46,8 +40,9 @@ docker push arpachainio/user-shell:latest
 # Kill all containers
 docker kill $(docker ps -q)
 docker rm $(docker ps -a -q)
+# rm all docker images
+docker rmi $(docker images -q)
 
-# create permanent container for debugging
-docker run -d --name perm -p 8545:8545 -v /home/ubuntu/BLS-TSS-Network/docker/user-shell/user_config.yml:/usr/src/app/external/config.yml user-shell "tail -f /dev/null"
-docker exec -it perm /bin/bash
+# exec into container for debugging
+docker run -it -v /home/ubuntu/BLS-TSS-Network/docker/user-shell/user_config.yml:/usr/src/app/external/config.yml user-shell "bin/sh"
 ```

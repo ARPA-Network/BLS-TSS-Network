@@ -17,23 +17,12 @@ RUN git clone https://github.com/ARPA-Network/BLS-TSS-Network.git && \
     cargo build --release
 
 ####### Final Stage ########
-FROM rust:latest
-
-# expose the anvil port
-EXPOSE 8545 
+FROM ghcr.io/foundry-rs/foundry:latest
 
 # Create a directory for the external config.yml file
-RUN mkdir -p /usr/src/app/external
+RUN mkdir -p /data
 
 # Copy files from builder stage
-COPY --from=builder /usr/src/app/BLS-TSS-Network/target/release/user-shell /usr/src/app/user-shell
+COPY --from=builder /usr/src/app/BLS-TSS-Network/target/release/user-shell /usr/local/bin/user-shell
 
-# Install dependencies
-RUN apt-get update && \
-    apt-get install -y protobuf-compiler libprotobuf-dev pkg-config libssh-dev build-essential neovim git net-tools netcat
-
-# Install Foundry
-RUN curl -L https://foundry.paradigm.xyz | bash && \
-    /root/.foundry/bin/foundryup
-
-ENTRYPOINT ["/bin/bash", "-c"]
+ENTRYPOINT ["/bin/sh", "-c"]
