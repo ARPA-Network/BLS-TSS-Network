@@ -9,10 +9,10 @@ threshold-bls = { path = "../threshold-bls", default-features = false, features 
     "bn254",
 ] }
 
-ethers-core = "1.0.2"
-ethers-signers = "1.0.2"
-ethers-providers = "1.0.2"
-ethers-middleware = "1.0.2"
+ethers-core.workspace = true
+ethers-signers.workspace = true
+ethers-providers.workspace = true
+ethers-middleware.workspace = true
 thiserror = "1.0.15"
 serde = "1.0.106"
 log = "0.4"

@@ -207,9 +207,11 @@ pub mod coordinator_tests {
     use super::{CoordinatorClient, WalletSigner};
     use crate::contract_stub::coordinator::Coordinator;
     use crate::coordinator::CoordinatorTransactions;
+    use crate::error::ContractClientError;
     use arpa_core::Config;
     use arpa_core::GeneralChainIdentity;
     use ethers::abi::Tokenize;
+    use ethers::prelude::ContractError::Revert;
     use ethers::prelude::*;
     use ethers::signers::coins_bip39::English;
     use ethers::utils::Anvil;
@@ -326,8 +328,12 @@ pub mod coordinator_tests {
 
         let res = client.publish(mock_value.clone()).await;
         assert!(res.is_err());
-        let err = res.unwrap_err();
-        assert!(err.to_string().contains("share existed"));
+        if let ContractClientError::ContractError(Revert(bytes)) = res.unwrap_err() {
+            let error_msg = String::decode_with_selector(&bytes).unwrap();
+            assert_eq!("share existed", error_msg);
+        } else {
+            panic!("should be revert error")
+        }
     }
 
     #[test]

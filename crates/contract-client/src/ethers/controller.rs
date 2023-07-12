@@ -196,7 +196,7 @@ impl ControllerLogs for ControllerClient {
     ) -> ContractClientResult<()> {
         let contract = Controller::new(self.controller_address, self.signer.clone());
 
-        let events: Event<WalletSigner, DkgTaskFilter> = contract
+        let events = contract
             .event::<DkgTaskFilter>()
             .from_block(BlockNumber::Latest);
 
