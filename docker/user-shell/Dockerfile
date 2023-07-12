@@ -25,7 +25,6 @@ EXPOSE 8545
 # Create a directory for the external config.yml file
 RUN mkdir -p /usr/src/app/external
 
-
 # Copy files from builder stage
 COPY --from=builder /usr/src/app/BLS-TSS-Network/target/release/user-shell /usr/src/app/user-shell
 

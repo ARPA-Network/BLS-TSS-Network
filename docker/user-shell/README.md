@@ -2,6 +2,22 @@
 
 This folder contains tooling to develop and build a container that runs a user-cli tool for interacting with randcast contracts.
 
+# Using the user-shell container
+```bash
+# pull image from dockerhub
+docker pull arpachainio/user-shell:latest
+
+# Run User Shell
+docker run -it -v /home/ubuntu/BLS-TSS-Network/docker/user-shell/user_config.yml:/usr/src/app/external/config.yml arpachainio/user-shell:latest "/usr/src/app/user-shell -c /usr/src/app/external/config.yml"
+
+# Run Cast Command
+docker run --name cast -v /home/ubuntu/BLS-TSS-Network/docker/user-shell/user_config.yml:/usr/src/app/external/config.yml arpachainio/user-shell:latest "/root/.foundry/bin/cast <CASTCOMMAND>"
+
+
+# Start Anvil (long running daemon)
+docker run -d --name anvil -p 8545:8545 -v /home/ubuntu/BLS-TSS-Network/docker/user-shell/user_config.yml:/usr/src/app/external/config.yml arpachainio/user-shell:latest /root/.foundry/bin/anvil
+```
+
 # Building the container
 
 ```bash
@@ -22,22 +38,6 @@ docker build -t user-shell ./docker/user-shell
 # Tagging and uploading to dockerhub
 docker tag user-shell arpachainio/user-shell:latest
 docker push arpachainio/user-shell:latest
-```
-
-# Using the user-shell container
-```bash
-# pull image form dockerhub
-docker pull arpachainio/user-shell:latest
-
-# Run User Shell
-docker run -it -v /home/ubuntu/BLS-TSS-Network/docker/user-shell/user_config.yml:/usr/src/app/external/config.yml arpachainio/user-shell:latest "/usr/src/app/user-shell -c /usr/src/app/external/config.yml"
-
-# Run Cast Command
-docker run --name cast -v /home/ubuntu/BLS-TSS-Network/docker/user-shell/user_config.yml:/usr/src/app/external/config.yml arpachainio/user-shell:latest "/root/.foundry/bin/cast <CASTCOMMAND>"
-
-
-# Start Anvil (long running daemon)
-docker run -d --name anvil -p 8545:8545 -v /home/ubuntu/BLS-TSS-Network/docker/user-shell/user_config.yml:/usr/src/app/external/config.yml arpachainio/user-shell:latest /root/.foundry/bin/anvil
 ```
 
 # Useful stuff
