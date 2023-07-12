@@ -15,7 +15,7 @@ arpa-core = { path = "../core" }
 tokio = { version = "1.20.1", features = ["full"] }
 serde = "1.0.106"
 serde_yaml = "0.8"
-ethers = "1.0.2"
+ethers.workspace = true
 thiserror = "1.0.15"
 bincode = "1.2.1"
 hex = "0.4.2"

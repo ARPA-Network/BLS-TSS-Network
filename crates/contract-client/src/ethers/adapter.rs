@@ -189,7 +189,7 @@ impl AdapterLogs for AdapterClient {
     ) -> ContractClientResult<()> {
         let contract = Adapter::new(self.adapter_address, self.signer.clone());
 
-        let events: Event<WalletSigner, RandomnessRequestFilter> = contract
+        let events = contract
             .event::<RandomnessRequestFilter>()
             .from_block(BlockNumber::Latest);
 

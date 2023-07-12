@@ -35,3 +35,11 @@ opt-level = 0
 incremental = true
 debug-assertions = true
 debug = true
+
+[workspace.dependencies]
+ethers = "2.0"
+ethers-core = "2.0"
+ethers-signers = "2.0"
+ethers-providers = "2.0"
+ethers-middleware = "2.0"
+ethers-contract-abigen = "2.0"
