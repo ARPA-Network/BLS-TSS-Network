@@ -1,0 +1,43 @@
+[package]
+name = "arpa-sqlite-db"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[dependencies]
+entity = { path = "./entity" }
+migration = { path = "./migration" }
+arpa-core = { path = "../../core" }
+arpa-dal = { path = "../../dal" }
+threshold-bls = { path = "../../threshold-bls", default-features = false, features = [
+      "bn254",
+] }
+dkg-core = { path = "../../dkg-core" }
+
+sea-orm = { version = "^0.11.0", features = [
+      "sqlx-sqlite",
+      "runtime-tokio-rustls",
+      "macros",
+      "debug-print",
+] }
+libsqlite3-sys = { version = "0.24.2", default-features = false, features = [
+      "pkg-config",
+      "vcpkg",
+      "bundled-sqlcipher-vendored-openssl",
+      "unlock_notify",
+] }
+chrono = "0.4"
+log = "0.4"
+tokio = { version = "1.20.1", features = ["full"] }
+ethers-core.workspace = true
+thiserror = "1.0.15"
+anyhow = "1.0.31"
+bincode = "1.2.1"
+rand = "0.8"
+async-trait = "0.1.35"
+serde = "1.0.106"
+serde_json = "1.0.53"
+
+[lib]
+name = "arpa_sqlite_db"
+path = "src/lib.rs"

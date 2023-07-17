@@ -1,0 +1,27 @@
+[package]
+name = "arpa-dal"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[dependencies]
+arpa-core = { path = "../core" }
+dkg-core = { path = "../dkg-core" }
+threshold-bls = { path = "../threshold-bls", default-features = false, features = [
+    "bn254",
+] }
+
+tokio = { version = "1.20.1", features = ["full"] }
+ethers-core.workspace = true
+thiserror = "1.0.15"
+anyhow = "1.0.31"
+serde = "1.0.106"
+log = "0.4"
+async-trait = "0.1.35"
+log-mdc = "0.1.0"
+serde_json = "1.0.53"
+bincode = "1.2.1"
+
+[lib]
+name = "arpa_dal"
+path = "src/lib.rs"

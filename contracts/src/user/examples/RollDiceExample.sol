@@ -2,6 +2,8 @@
 pragma solidity ^0.8.18;
 
 import {GeneralRandcastConsumerBase, BasicRandcastConsumerBase} from "../GeneralRandcastConsumerBase.sol";
+// solhint-disable-next-line no-global-import
+import "src/user/RandcastSDK.sol" as RandcastSDK;
 
 contract RollDiceExample is GeneralRandcastConsumerBase {
     /* requestId -> randomness */
@@ -26,7 +28,7 @@ contract RollDiceExample is GeneralRandcastConsumerBase {
         randomResults[requestId] = randomWords;
         diceResults = new uint256[](randomWords.length);
         for (uint32 i = 0; i < randomWords.length; i++) {
-            diceResults[i] = (randomWords[i] % 6) + 1;
+            diceResults[i] = RandcastSDK.roll(randomWords[i], 6) + 1;
         }
     }
 

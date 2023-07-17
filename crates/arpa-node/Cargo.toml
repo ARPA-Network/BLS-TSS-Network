@@ -2,7 +2,7 @@
 name = "arpa-node"
 version = "0.0.1"
 authors = ["arpa-network"]
-edition = "2018"
+edition = "2021"
 
 [[bin]]
 name = "node-client"
@@ -13,11 +13,11 @@ name = "node-shell"
 path = "src/node_shell.rs"
 
 [dependencies]
-arpa-node-log = { path = "./src/node/log" }
-arpa-node-core = { path = "./src/node/core" }
-arpa-node-dal = { path = "./src/node/dal" }
-arpa-node-sqlite-db = { path = "./src/node/dal/sqlite" }
-arpa-node-contract-client = { path = "./src/node/contract_client" }
+arpa-log = { path = "../log" }
+arpa-core = { path = "../core" }
+arpa-dal = { path = "../dal" }
+arpa-sqlite-db = { path = "../dal/sqlite" }
+arpa-contract-client = { path = "../contract-client" }
 dkg-core = { path = "../dkg-core" }
 threshold-bls = { path = "../threshold-bls", default-features = false, features = [
     "bn254",
@@ -37,7 +37,7 @@ async-trait = "0.1.35"
 tokio = { version = "1.20.1", features = ["full"] }
 rustc-hex = "2.1.0"
 clt = "0.0.6"
-tonic = "0.8"
+tonic = "0.9"
 prost = "0.11"
 serde_yaml = "0.8"
 tokio-retry = "0.3"
@@ -46,12 +46,12 @@ log4rs = "1.2.0"
 log-mdc = "0.1.0"
 chrono = "0.4"
 structopt = "0.3"
-ethers = { version = "1.0.2", features = ["abigen"] }
+ethers = { workspace = true, features = ["abigen"] }
 uuid = { version = "1.2.2", features = ["v4", "fast-rng", "macro-diagnostics"] }
 tower = "0.4"
 hyper = "0.14"
-reedline-repl-rs = { version = "^1.0", features = ["async"] }
+reedline-repl-rs = { version = "1.0.6", features = ["async"] }
 
 [build-dependencies]
-tonic-build = "0.8"
+tonic-build = "0.9"
 prost-build = "0.11"

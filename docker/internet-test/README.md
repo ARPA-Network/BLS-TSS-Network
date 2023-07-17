@@ -17,6 +17,8 @@ This example also includes a CDK script (located in ec2_cdk) which creates:
 - Based on latest Amazon Linux 2 image.
 - Systems Manager replaces SSH
 
+Below are the instructions to test out the end to end flow of deploying randcast on docker containers running on AWS EC2 instances.
+
 ## Install AWS CLI and AWS Session Manager plugin
 
 [install aws cli](https://docs.aws.amazon.com/cli/latest/userguide/getting-started-install.html)
@@ -53,6 +55,8 @@ cdk bootstrap # initialize assets before deploy
 cdk synth # emits the synthesized CloudFormation template
 
 cdk deploy # deploy this stack to your default AWS account/region
+
+
 ```
 
 Sample Stack Outputs after "cdk deploy"
@@ -69,6 +73,8 @@ export ETH_RPC_URL="http://18.118.32.254:8545"
 export NODE_RPC_IP="18.224.44.15"
 ```
 
+Note: After cdk deploy finishes running, the configure_node.sh userdata script make take some more time to complete. Please wait for "complete" to appear in the /tmp directory.
+
 ## Anvil EC2 Instructions
 
 The anvil container should start automatically. If you need to monitor logs or restart the chain, please see the following.
@@ -78,11 +84,11 @@ The anvil container should start automatically. If you need to monitor logs or r
 aws ssm start-session --target i-0e3242cc893c86a25 # see stack outputs
 
 # monitor anvil 
-watch "docker logs anvil-chain | tail -n 20"
+docker logs -f <containerid>
 
 # Restart chain
-docker pull wrinkledeth/anvil-chain:latest
-docker run -d --name anvil-chain -p 8545:8545 wrinkledeth/anvil-chain:latest
+docker pull arpachainio/anvil-test:latest
+docker run -d --name anvil-chain -p 8545:8545 arpachainio/anvil-test:latest
 ```
 
 ## Node EC2 Instructions
@@ -95,32 +101,39 @@ The node container requires a few steps to start. First, you will need to deploy
 aws ssm start-session --target i-0da73558ad639280b # see stack outputs
 
 # Prep environment
-cd /tmp
-git clone https://github.com/ARPA-Network/BLS-TSS-Network
-export ETH_RPC_URL="http://18.118.32.254:8545" # see stack outputs
-export NODE_RPC_IP="18.224.44.15"
+cd /tmp/BLS-TSS-Network/docker/internet-test/arpa-node
+export ETH_RPC_URL="http://<ETH_RPC_IP>:8545" # see stack outputs
+export NODE_RPC_IP="<NODE_RPC_IP>" # see stack outputs
+./prep_config.sh # prep node config files with the above env values.
+# config_1.yml:
+# Prior values:
+#  . provider_endpoint: "http://0.0.0.0:8545" 
+#  . node_advertised_committer_rpc_endpoint: "0.0.0.0:50061" 
+# Updated values:
+#  . provider_endpoint: "http://3.142.54.57:8545"
+#  . node_advertised_committer_rpc_endpoint: "18.188.109.131:50061"   etc....
+
+# NOTE: This is a sample script only. For production, you would need to edit these values in addition to your wallet private key and other parameters. Please see the root level README for more details. 
 
 # run container-init to deploy contracts
-docker run -d --name contract-init -v /tmp/BLS-TSS-Network/contracts/.env_example:/usr/src/app/external/.env -e ETH_RPC_URL=$ETH_RPC_URL wrinkledeth/contract-init:latest
+docker run -d --name contract-init -v /tmp/BLS-TSS-Network/contracts/.env.example:/usr/src/app/external/.env -e ETH_RPC_URL=$ETH_RPC_URL arpachainio/contracts-test:latest
 # monitor logs to see when contract deployment is complete
-watch "docker logs contract-init | tail -n 20" 
+docker logs -f contract-init
 ```
 
 Once the contract-init container has finished deploying the contracts, you can start the node containers.
 
-Note: default test values for the config files are provided for test purposes. But you will need to provide your own as a node operator (config_1.yml, config_2.yml, config_3.yml etc..)
 
 ```bash
 
 # run arpa node containers
-docker run -d --name node1 -p 50061:50061 -p 50091:50091 -v /tmp/BLS-TSS-Network/docker/internet-test/arpa-node/config_1.yml:/usr/src/app/external/config.yml -e ETH_RPC_URL=$ETH_RPC_URL -e NODE_RPC_URL=${NODE_RPC_IP}:50061 wrinkledeth/arpa-node:latest
-docker run -d --name node2 -p 50062:50061 -p 50092:50091 -v /tmp/BLS-TSS-Network/docker/internet-test/arpa-node/config_2.yml:/usr/src/app/external/config.yml -e ETH_RPC_URL=$ETH_RPC_URL -e NODE_RPC_URL=${NODE_RPC_IP}:50062 wrinkledeth/arpa-node:latest
-docker run -d --name node3 -p 50063:50061 -p 50093:50091 -v /tmp/BLS-TSS-Network/docker/internet-test/arpa-node/config_3.yml:/usr/src/app/external/config.yml -e ETH_RPC_URL=$ETH_RPC_URL -e NODE_RPC_URL=${NODE_RPC_IP}:50063 wrinkledeth/arpa-node:latest
+docker run -d --name node1 -p 50061:50061 -p 50091:50091 -v /tmp/BLS-TSS-Network/docker/internet-test/arpa-node/config_1.yml:/usr/src/app/external/config.yml arpachainio/node:latest
+docker run -d --name node2 -p 50062:50061 -p 50092:50091 -v /tmp/BLS-TSS-Network/docker/internet-test/arpa-node/config_2.yml:/usr/src/app/external/config.yml arpachainio/node:latest
+docker run -d --name node3 -p 50063:50061 -p 50093:50091 -v /tmp/BLS-TSS-Network/docker/internet-test/arpa-node/config_3.yml:/usr/src/app/external/config.yml arpachainio/node:latest
 
 # check if nodes grouped succesfully
 docker exec -it node1 /bin/bash       
-watch 'cat /usr/src/app/log/1/node.log | grep "available"'
-cat /var/log/randcast_node_client.log
+watch 'cat /var/log/randcast_node_client.log | grep "available"'
 
 # deploy user contract / check if randomness worked.
 docker exec -it contract-init /bin/bash
@@ -147,16 +160,4 @@ docker run foundry "cast block --rpc-url $RPC_URL latest"
 # Cleanup Docker images
 docker kill $(docker ps -q)
 docker rm $(docker ps -a -q)
-
-# if you need to pull images from docker hub
-docker pull wrinkledeth/anvil-chain:latest
-docker pull wrinkledeth/contract-init:latest
-docker pull wrinkledeth/arpa-node:latest
-
-# if you need to manually build images
-cd BLS-TSS-Network
-docker build -t anvil-chain ./docker/localnet/anvil-chain
-docker build -t contract-init -f ./docker/localnet/contract-init/Dockerfile .
-docker build -t arpa-node ./docker/localnet/arpa-node
-
 ```

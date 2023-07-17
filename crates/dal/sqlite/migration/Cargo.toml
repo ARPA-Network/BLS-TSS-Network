@@ -1,0 +1,23 @@
+[package]
+name = "migration"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[lib]
+name = "migration"
+path = "src/lib.rs"
+
+[dependencies]
+entity = { path = "../entity" }
+async-std = { version = "^1", features = ["attributes", "tokio1"] }
+libsqlite3-sys = { version = "0.24.2", default-features = false, features = [
+      "pkg-config",
+      "vcpkg",
+      "bundled-sqlcipher-vendored-openssl",
+      "unlock_notify",
+] }
+
+[dependencies.sea-orm-migration]
+version = "^0.11.0"
+features = ["sqlx-sqlite", "runtime-tokio-rustls"]

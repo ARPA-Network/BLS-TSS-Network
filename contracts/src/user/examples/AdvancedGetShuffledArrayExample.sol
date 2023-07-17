@@ -2,10 +2,11 @@
 pragma solidity ^0.8.18;
 
 import {BasicRandcastConsumerBase} from "../BasicRandcastConsumerBase.sol";
-import {RandomnessHandler} from "../../utils/RandomnessHandler.sol";
 import {RequestIdBase} from "../../utils/RequestIdBase.sol";
+// solhint-disable-next-line no-global-import
+import "src/user/RandcastSDK.sol" as RandcastSDK;
 
-contract AdvancedGetShuffledArrayExample is RequestIdBase, BasicRandcastConsumerBase, RandomnessHandler {
+contract AdvancedGetShuffledArrayExample is RequestIdBase, BasicRandcastConsumerBase {
     mapping(bytes32 => uint256) public shuffledArrayUppers;
     uint256[][] public shuffleResults;
 
@@ -52,7 +53,7 @@ contract AdvancedGetShuffledArrayExample is RequestIdBase, BasicRandcastConsumer
      * Callback function used by Randcast Adapter
      */
     function _fulfillRandomness(bytes32 requestId, uint256 randomness) internal override {
-        shuffleResults.push(_shuffle(shuffledArrayUppers[requestId], randomness));
+        shuffleResults.push(RandcastSDK.shuffle(shuffledArrayUppers[requestId], randomness));
     }
 
     function lengthOfShuffleResults() public view returns (uint256) {
