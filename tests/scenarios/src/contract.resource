@@ -17,7 +17,6 @@ Resource            common.resource
 ${PROXY_CONTRACT_DEPLOYER_KEY}           0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80
 ${PROXY_CONTRACT_ADDRESS}
 ${PROXY_OUTPUT}                          contracts/out/
-${CONTRACT_PATH}                         contracts/
 ${PROXY_CONTRACT}
 ${CONTROLLER_CONTRACT}
 ${STAKE_CONTRACT}
@@ -30,19 +29,20 @@ ${MODIFIRD_PARTIAL_PUB_KEY}              0x02
 @{MODIFIRD_DISQUALIFIED_NODES}           0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC
 
 *** Keywords ***
+
 Set Enviorment And Deploy Contract
     [Documentation]    Set enviorment and deploy proxy contract
     Clear Log
     Setup Chain Environment
     ${result} =    Run    cd contracts/;forge build -o out/
-    ${result} =    Exec Script    ControllerLocalTestProxy.s.sol:ControllerLocalTestProxyScript
-    #${result} =    Exec Script    ControllerLocalTest.s.sol:ControllerLocalTestScript
-    ${result} =    Exec Script    StakeOperatorLocalTest.s.sol:StakeOperatorLocalTestScript
+    ${result} =    Exec Script    ControllerScenarioTest.s.sol:ControllerScenarioTest
+    ${result} =    Exec Script    StakeOperatorScenarioTest.s.sol:StakeOperatorScenarioTestScript
     Bound Contract ABI
     Set ARPA Address
     ${adapter_address} =    Get Value From Env    ADAPTER_ADDRESS
     ${result} =    Create Node Config    ${PROXY_CONTRACT_ADDRESS}    ${adapter_address}
     Kill Previous Node
+    Clear Database
     Set Global Variable    $NODE_PROCESS_LIST    ${EMPTY_LIST}
 
 Bound Contract ABI
@@ -63,18 +63,18 @@ Bound Contract ABI
     ${adapter_contract} =    Get Contract    ${PROXY_OUTPUT}Adapter.sol/Adapter.json    ${adapter_address}
     Set Global Variable    $ADAPTER_CONTRACT   ${adapter_contract}
 
-Deploy User Contract And Request Randomness
-    [Documentation]    Deploy the user contract
-    ${request_id} =    Set Variable    
-    IF  ${USER_CONTRACT_ADDRESS == 'NULL'}
-        ${contract_output} =    Exec Script    GetRandomNumberLocalTest.s.sol:GetRandomNumberLocalTestScript
-        ${contract_address} =    Get Contract Address From File    contracts/broadcast/GetRandomNumberLocalTest.s.sol/31337/run-latest.json
-        Set Global Variable    $USER_CONTRACT_ADDRESS    ${contract_address[0]}  
-        ${user_contract} =    Get Contract    ${PROXY_OUTPUT}GetRandomNumberExample.sol/GetRandomNumberExample.json    ${user_contract_address}
-        Set Global Variable    $USER_CONTRACT   ${user_contract}
-    ELSE
-        ${request_id} =    Contract Function Transact    ${USER_CONTRACT}    getRandomNumber
-    END
+
+Deploy User Contract
+    [Documentation]    Deploy user request contract
+    ${contract_output} =    Exec Script    GetRandomNumberScenarioTest.s.sol:GetRandomNumberScenarioTestScript
+    ${contract_address} =    Get Contract Address From File    contracts/broadcast/GetRandomNumberScenarioTest.s.sol/31337/run-latest.json
+    Set Global Variable    $USER_CONTRACT_ADDRESS    ${contract_address[0]}  
+    ${user_contract} =    Get Contract    ${PROXY_OUTPUT}GetRandomNumberExample.sol/GetRandomNumberExample.json    ${user_contract_address}
+    Set Global Variable    $USER_CONTRACT   ${user_contract}
+
+Request Randomness
+    [Documentation]    Request randomness
+    ${request_id} =    Contract Function Transact    ${USER_CONTRACT}    getRandomNumber
     RETURN    ${request_id}
 
 Check Randomness
@@ -241,11 +241,6 @@ In Phase
     Log    Phase: ${result}
     RETURN    ${result}
 
-Request Randomness
-    [Documentation]    Request randomness
-    ${result} =    Run   forge script script/GetRandomNumberLocalTest.s.sol:GetRandomNumberLocalTestScript --fork-url http://localhost:8545 --broadcast
-    Log    Request randomness: ${result}
-
 Get Delegation Reward
     [Documentation]    Get delegation reward
     [Arguments]    ${address}
@@ -324,3 +319,9 @@ Claim Frozen Principal
     ${address} =    Get Value From Env    STAKING_ADDRESS
     ${key} =    Get Private Key By Index    ${index}
     ${result} =    Run    cast send ${address} "claimFrozenPrincipal()" --private-key=${key}
+
+Node Quit
+    [Documentation]    Node quit
+    [Arguments]    ${index}
+    ${key} =    Get Private Key By Index    ${index}
+    ${result} =    Run    cast send ${PROXY_CONTRACT_ADDRESS} "nodeQuit()" --private-key=${key}

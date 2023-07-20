@@ -4,7 +4,7 @@ This module contains necessary packages to interact with web3 and blockchain
 import json
 import os
 
-from web3 import Web3 
+from web3 import Web3
 
 def get_abi(file_name):
     """
@@ -74,8 +74,8 @@ def get_contract_address_from_file(file_name):
     Get contract address from receipt file.
     file_name: the receipt file name.
     """
-    with open(file_name, 'r', encoding='UTF-8') as f:
-        data = json.load(f)
+    with open(file_name, 'r', encoding='UTF-8') as file:
+        data = json.load(file)
     transactions = data.get('transactions')
     contract_addresses = []
     for transaction in transactions:

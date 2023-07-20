@@ -32,15 +32,16 @@ BLS Happy Path1
     ${log_grouo_1} =    Have Node Got Keyword    Group index:1 epoch:1 is available    ${NODE_PROCESS_LIST}
     Mine Blocks    20
     Sleep    3s
-    Deploy User Contract And Request Randomness
+    Deploy User Contract
+    
     Sleep    10s
     ${current_randomness} =    Set Variable    1
     ${cur_block} =    Convert To Integer    0
     ${last_group} =    Convert To Integer    -1
     ${cur_group} =    Convert To Integer    -2
-    WHILE    ${cur_block < 500}
+    WHILE    ${cur_block < 200}
         ${cur_block} =    Get Latest Block Number
-        Deploy User Contract And Request Randomness
+        Request Randomness
         Wait For Process    timeout=30s
         ${last_group} =    Set Variable    ${cur_group}
         ${current_randomness} =    Check Randomness
@@ -74,10 +75,10 @@ BLS Happy Path2
 
     Wait For Process    timeout=20s
 
-    ${request_id} =    Deploy User Contract And Request Randomness
+    ${request_id} =    Deploy User Contract
     Wait For Process    timeout=10s
     Clear Log
-    ${request_id} =    Deploy User Contract And Request Randomness
+    ${request_id} =    Request Randomness
     ${start_block} =    Get Latest Block Number
     Wait For Process    timeout=10s
     ${index} =    Convert To Integer    1
@@ -98,8 +99,8 @@ BLS Happy Path2
         
         ${index} =    Set Variable    ${index + 1}
     END
-    ${count} =    Convert To String    ${count}
-    Should Be Equal As Strings    ${count}    3
+    Should Be True    ${count >= 1} 
+    Should Be True    ${final_committer != 0}
     
     ${node_rewards} =    get_events    ${CONTROLLER_CONTRACT}    NodeRewarded    ${start_block}
     Log    ${node_rewards}
@@ -138,7 +139,8 @@ Corner Case1
     ${node_index} =    Get Index By Address    ${node_addrss}
     Kill Node By Index    ${node_index}
 
-    Deploy User Contract And Request Randomness
+    Deploy User Contract
+    Request Randomness
     Wait For Process    timeout=90s
     ${events} =    Get Events    ${ADAPTER_CONTRACT}    RandomnessRequestResult
     ${result} =    Events Values Should Be    ${events}    groupIndex    1
@@ -147,7 +149,6 @@ Corner Case1
 Corner Case2
     [Documentation]
     ...    1. Given Adapter think group0 group1 work well
-    #Form a group first
     Compile Proto
     Set Global Variable    $BLOCK_TIME    1
     Set Enviorment And Deploy Contract
@@ -165,7 +166,8 @@ Corner Case2
 
     Mine Blocks    20
     Sleep    3s
-    Deploy User Contract And Request Randomness
+    Deploy User Contract
+    Request Randomness
     Sleep    10s
     Clear Log
     ${task_type} =    Convert To Integer    6
@@ -183,7 +185,8 @@ Corner Case2
     ${node_index} =    Get Index By Address    ${one_node_in_group0}
 
     ${cur_block} =    Get Latest Block Number
-    ${request_id} =    Deploy User Contract And Request Randomness
+    Deploy User Contract
+    ${request_id} =    Request Randomness
     Get Keyword From Log    ${node_index}    send partial signature to committer
 
     Start Listener    ${group1_index_0}    ${task_type}

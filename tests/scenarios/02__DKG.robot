@@ -80,7 +80,8 @@ DKG Happy Path1
     ${slash_event} =    Get Event    ${CONTROLLER_CONTRACT}    NodeSlashed
     Should Be Equal As Strings    ${slash_event['args']['nodeIdAddress']}    ${address4}
     
-    Deploy User Contract And Request Randomness
+    Deploy User Contract
+    Request Randomness
     ${log_received_randomness_task} =    Get Keyword From Log   1    received new randomness task
     Sleep    5s
     Mine Blocks    6
@@ -123,7 +124,8 @@ DKG Happy Path2
     ${result} =    Has Equal Value    ${node_rewards['args']['nodeAddress']}    ${address1}    ${address2}    ${address3}    ${address4}
     Should Be True    ${result}
 
-    Deploy User Contract And Request Randomness
+    Deploy User Contract
+    Request Randomness
     ${log_received_randomness_task} =    All Nodes Have Keyword    received new randomness task    ${NODE_PROCESS_LIST}
     Sleep    2s
     Mine Blocks    6

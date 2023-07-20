@@ -14,7 +14,7 @@ import {ERC1967Proxy} from "openzeppelin-contracts/contracts/proxy/ERC1967/ERC19
 import {Staking} from "Staking-v0.1/Staking.sol";
 
 // solhint-disable-next-line max-states-count
-contract ControllerLocalTestProxyScript is Script {
+contract ControllerScenarioTest is Script {
     uint256 internal _deployerPrivateKey = vm.envUint("ADMIN_PRIVATE_KEY");
 
     uint256 internal _disqualifiedNodePenaltyAmount = vm.envUint("DISQUALIFIED_NODE_PENALTY_AMOUNT");
@@ -47,7 +47,7 @@ contract ControllerLocalTestProxyScript is Script {
     uint16 internal _flatFeePromotionGlobalPercentage = uint16(vm.envUint("FLAT_FEE_PROMOTION_GLOBAL_PERCENTAGE"));
     bool internal _isFlatFeePromotionEnabledPermanently = vm.envBool("IS_FLAT_FEE_PROMOTION_ENABLED_PERMANENTLY");
     uint256 internal _flatFeePromotionStartTimestamp = block.timestamp;
-    uint256 internal _flatFeePromotionEndTimestamp = block.timestamp + 200;
+    uint256 internal _flatFeePromotionEndTimestamp = block.timestamp + 86400;
 
     uint256 internal _initialMaxPoolSize = vm.envUint("INITIAL_MAX_POOL_SIZE");
     uint256 internal _initialMaxCommunityStakeAmount = vm.envUint("INITIAL_MAX_COMMUNITY_STAKE_AMOUNT");

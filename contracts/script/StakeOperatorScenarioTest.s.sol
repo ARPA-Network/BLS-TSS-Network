@@ -5,7 +5,7 @@ import {Script} from "forge-std/Script.sol";
 import {Staking} from "Staking-v0.1/Staking.sol";
 import {Arpa} from "./ArpaLocalTest.sol";
 
-contract StakeOperatorLocalTestScript is Script {
+contract StakeOperatorScenarioTestScript is Script {
     uint256 internal _deployerPrivateKey = vm.envUint("ADMIN_PRIVATE_KEY");
     uint256 internal _userPrivateKey = vm.envUint("USER_PRIVATE_KEY");
 

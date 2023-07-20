@@ -18,6 +18,7 @@ ${ARPA_CONTRACT_ADDRESS}                0xBA50933C268F567BDC86E1aC131BE072C6B0b7
 ${NUM_ACCOUNTS}                         40
 ${BALANCE}                              1000
 ${ENV_PATH}                             tests/scenarios/.env
+${CONTRACT_PATH}                        contracts/
 
 # Ethereum RPC client, Cast CLI command and arguments:
 ${LOCAL_ETHEREUM_CHAIN_PROCESS_HANDLE}
@@ -44,6 +45,7 @@ Teardown Scenario Testing Environment
     Set Global Variable    $NODE_PROCESS_LIST    ${EMPTY_LIST}
     Set Global Variable    $BLOCK_TIME    0
     Set Global Variable    $USER_CONTRACT_ADDRESS    NULL
+    Clear Database
     
 
 Process Completes Successfully
@@ -52,8 +54,6 @@ Process Completes Successfully
     Should Be Equal As Integers    ${result.rc}    0
     Should Be Empty    ${result.stderr}
 
-# Helper function section for interacting with local Ethereum chain
-
 Start Local Ethereum Chain
     [Documentation]    Starts a local Ethereum blockchain child process in the background with Anvil CLI
     ...    then saves the process handle to a suite-wide variable for later termination in the suite teardown
@@ -61,13 +61,13 @@ Start Local Ethereum Chain
     IF  ${BLOCK_TIME} == 0
         ${anvil_process_handle} =    Start Process    anvil
         ...    --accounts    ${NUM_ACCOUNTS}
-        ...    --gas-price    1000000000
+        ...    --gas-price    100000000
         ...    stdout=${LOG_PATH}/anvil-chain.log
     ELSE
         ${anvil_process_handle} =    Start Process    anvil
         ...    --block-time    ${BLOCK_TIME}
         ...    --accounts    ${NUM_ACCOUNTS}
-        ...    --gas-price    1000000000
+        ...    --gas-price    100000000
         ...    stdout=${LOG_PATH}/anvil-chain.log
     END
 

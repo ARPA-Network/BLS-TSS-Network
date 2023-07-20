@@ -19,7 +19,7 @@ Payment Should In The Range
 
 Request Randomenes And Check Payment
     [Arguments]    ${min_value}    ${max_value}
-    Deploy User Contract And Request Randomness
+    Request Randomness
     ${block} =    Get Latest Block Number
     Sleep    1s
     ${sub} =    Get Subscription    1
@@ -44,12 +44,12 @@ Set Marketing Discount
     Mine Blocks    9
     ${log_group} =    All Nodes Have Keyword    Group index:0 epoch:1 is available    ${NODE_PROCESS_LIST}
 
-    Deploy User Contract And Request Randomness
+    Deploy User Contract
+    Request Randomness
     Mine Blocks    10
     All Nodes Have Keyword    Calling contract transaction fulfill_randomness    ${NODE_PROCESS_LIST}
-    Sleep    10s
-    
-    #Exec Script    TestFeeConfig.s.sol:TestFeeConfigScript
+    Mine Blocks    10
+    Sleep    2s
 
     Request Randomenes And Check Payment    50000000000000000    100000000000000000
 
@@ -59,7 +59,9 @@ Set Marketing Discount
 
     Request Randomenes And Check Payment    200000000000000000    300000000000000000
 
-    Sleep    2m
+    # Set timestamp 1 day later
+    Set Timestamp Interval    86400
+    Mine Blocks    1
 
     Request Randomenes And Check Payment    50000000000000000    100000000000000000
     
@@ -80,7 +82,8 @@ Test Referral
     Mine Blocks    9
     ${log_group} =    All Nodes Have Keyword    Group index:0 epoch:1 is available    ${NODE_PROCESS_LIST}
 
-    Deploy User Contract And Request Randomness
+    Deploy User Contract
+    Request Randomness
     Mine Blocks    10
     All Nodes Have Keyword    Calling contract transaction fulfill_randomness    ${NODE_PROCESS_LIST}
     Sleep    10s
@@ -88,20 +91,23 @@ Test Referral
     Exec Script    TestFeeConfig.s.sol:TestFeeConfigScript
     ${original_private_key} =    Get Value From Env    USER_PRIVATE_KEY
     Set Value To Env    USER_PRIVATE_KEY    0xf214f2b2cd398c806f84e317254e0f0b801d0643303237d97a22a48e01628897
-    Exec Script    GetRandomNumberLocalTest.s.sol:GetRandomNumberLocalTestScript
+    Exec Script    GetRandomNumberScenarioTest.s.sol:GetRandomNumberScenarioTestScript
 
     Mine Blocks    10
     All Nodes Have Keyword    Calling contract transaction fulfill_randomness    ${NODE_PROCESS_LIST}
     Sleep    10s
     
-    ${contract_address} =    Get Contract Address From File    contracts/broadcast/GetRandomNumberLocalTest.s.sol/31337/run-latest.json
+    ${contract_address} =    Get Contract Address From File    contracts/broadcast/GetRandomNumberScenarioTest.s.sol/31337/run-latest.json
     ${new_user_contract} =    Get Contract    ${PROXY_OUTPUT}GetRandomNumberExample.sol/GetRandomNumberExample.json    ${contract_address[0]}
+    ${result} =    Contract Function Transact    ${new_user_contract}    getRandomNumber
+    Mine Blocks    10
+    ${result} =    All Nodes Have Keyword    Calling contract transaction fulfill_randomness    ${NODE_PROCESS_LIST}
     ${subId1} =    Convert To Integer    1
     ${subId2} =    Convert To Integer    2
     ${adapter_address} =    Get Value From Env    ADAPTER_ADDRESS
     
     ${result} =    Run    cast send ${adapter_address} "setReferral(uint64, uint64)" ${subId1} ${subId2} --private-key ${original_private_key}
-
+    
     Request Randomenes And Check Payment    0    100000000000000000
     Request Randomenes And Check Payment    0    100000000000000000
 
@@ -125,5 +131,5 @@ Test Referral
 *** Test Cases ***
 
 Run Test Cases
-    Repeat Keyword    1    Set Marketing Discount
+    #Repeat Keyword    1    Set Marketing Discount
     Repeat Keyword    1    Test Referral

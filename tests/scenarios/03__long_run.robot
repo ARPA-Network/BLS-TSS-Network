@@ -30,9 +30,10 @@ Long Running Request Randomness
     Group Node Number Should Be    0    1
     ${current_randomness} =    Set Variable    1
     ${last_randomness} =    Set Variable    0
+    Deploy User Contract
 
     WHILE    ${current_randomness} != ${last_randomness}
-        Deploy User Contract And Request Randomness
+        Request Randomness
         Wait For Process    timeout=20s
         ${log_received_randomness_task} =       All Nodes Have Keyword    received new randomness task
         ...    ${NODE_PROCESS_LIST}    100
@@ -66,9 +67,9 @@ Test Log Size
     Wait For Process    timeout=20s
     Group Node Number Should Be    0    10
     ${current_randomness} =    Convert To Integer    0
-
+    Deploy User Contract
     WHILE    ${current_randomness != 60}
-        Deploy User Contract And Request Randomness
+        Request Randomness
         Wait For Process    timeout=1s
         ${current_randomness} =    Set Variable    ${current_randomness + 1}
     END
@@ -76,5 +77,5 @@ Test Log Size
 
 *** Test Cases ***
 Run Long Running Case
-    #Long Running Request Randomness
-    Test Log Size
+    Repeat Keyword    0    Long Running Request Randomness
+    Repeat Keyword    0    Test Log Size

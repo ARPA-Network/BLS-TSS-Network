@@ -1,16 +1,19 @@
 """
 Node management functions for the Arpa test environment.
 """
+
 import os
 import platform
 import subprocess
 import sys
 import re
 import grpc
-from google.protobuf.empty_pb2 import Empty
 sys.path.insert(1, 'tests/scenarios/src/environment/proto')
-import management_pb2_grpc
 import management_pb2
+import management_pb2_grpc
+from google.protobuf.empty_pb2 import Empty
+
+
 
 def get_request(request_name, **args):
     """
@@ -77,15 +80,15 @@ def parse_chain_result_to_account_list():
             is_private_key = False
             # locating private keys
             matches = re.finditer('(0x)?[A-Fa-f0-9]{64}', line)
-            for m in matches:
-                private_keys.append(m.group())
+            for match in matches:
+                private_keys.append(match.group())
                 is_private_key = True
             if is_private_key:
                 continue
             # locating accounts
             matches = re.finditer('(0x)?[A-Fa-f0-9]{40}', line)
-            for m in matches:
-                accounts.append(m.group())
+            for match in matches:
+                accounts.append(match.group())
         # Create a list of Account objects using the namedtuple syntax
         account_list = [Account(a,k) for a,k in zip(accounts, private_keys)]
         return account_list
@@ -184,13 +187,13 @@ def start_node(node_idx):
     root_path = os.path.dirname(os.path.abspath(__file__))
     root_path = root_path.split("/tests/")[0]
     cmd = ("cd crates/arpa-node;"
-       "cargo run --bin node-client -- -m new-run -c "
+       "cargo run --bin node-client -- -c "
        "{}/tests/scenarios/src/environment/node_config/config{}.yml"
       ).format(root_path, node_idx)
-    print(cmd)
-    log_path = ("crates/arpa-node/log/running/node{}.log").format(node_idx)
-    proc = subprocess.Popen(cmd, shell=True, stdout=open(log_path, "w"),
-                            stderr=subprocess.STDOUT, cwd=root_path)
+    log_path = f"crates/arpa-node/log/running/node{node_idx}.log"
+    with open(log_path, 'w', encoding='utf-8') as log_file:
+        proc = subprocess.Popen(cmd, shell=True, stdout=log_file,
+                                stderr=subprocess.STDOUT, cwd=root_path)
     return proc
 
 def kill_node(proc):
@@ -256,8 +259,8 @@ def print_node_process():
     """
     # Find all processes using ports 50061-50110
     cmd = 'lsof -i :50061-50220'
-    p = subprocess.Popen(cmd.split(), stdout=subprocess.PIPE)
-    out, err = p.communicate()
+    proc = subprocess.Popen(cmd.split(), stdout=subprocess.PIPE)
+    out,_ = proc.communicate()
     for line in out.splitlines()[1:]:
         fields = line.strip().split()
         if fields:

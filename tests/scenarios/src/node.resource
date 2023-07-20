@@ -49,12 +49,6 @@ Activate Node
     ${res} =    Call Request    ${node_port}    NodeActivate
     RETURN    ${res}
 
-Node Quit
-    [Arguments]    ${node_index}
-    ${node_port} =    Get Node Port From Index    ${node_index}
-    ${res} =    Call Request    ${node_port}    NodeQuit
-    RETURN    ${res}
-
 Shutdown Node
     [Arguments]    ${node_index}
     ${node_port} =    Get Node Port From Index    ${node_index}

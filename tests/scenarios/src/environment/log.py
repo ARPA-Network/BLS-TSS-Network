@@ -33,7 +33,7 @@ def get_keyword_from_log(node_idx, keyword, retry_time=30):
     i =  0
     while i < retry_time:
         i = i + 1
-        log_path = ("crates/arpa-node/log/running/node{}.log").format(node_idx)
+        log_path = f"crates/arpa-node/log/running/node{node_idx}.log"
         with open(log_path, 'r', encoding='UTF-8') as process:
             log_info = get_log_info(process, keyword)
             if log_info is not None:
@@ -88,7 +88,7 @@ def get_err_log_from_chain():
     """
     Get the error log from the chain
     """
-    log_path = ("crates/arpa-node/log/running/anvil-chain.log")
+    log_path = "crates/arpa-node/log/running/anvil-chain.log"
     with open(log_path, 'r', encoding='UTF-8') as log:
         for line in log:
             if line.upper().find('ERROR') != -1:

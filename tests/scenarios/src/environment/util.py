@@ -1,6 +1,7 @@
 """
 Util functions for the Arpa test environment.
 """
+import glob
 import os
 import signal
 from datetime import datetime, timezone
@@ -109,3 +110,15 @@ def convert_timestamp(time_str):
 
     unix_timestamp = rdt_obj.timestamp()
     return int(unix_timestamp)
+
+def clear_database():
+    """
+    Clear sqlite database.
+    """
+    pattern = os.path.join('crates/arpa-node/', '*.sqlite')
+    # find all the matching files
+    sqlite_files = glob.glob(pattern)
+    # iterate over the list of files and remove them
+    for file_path in sqlite_files:
+        print(f'Deleting file {file_path}')
+        os.remove(file_path)

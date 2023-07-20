@@ -11,9 +11,8 @@ ${CRATES_PATH}                         crates/
 Unit Test
     [Documentation]
     ...    Run unit test
-    ${result} =    Run Process    cargo    test    --no-fail-fast    --    --test-threads=1    cwd=${CRATES_PATH}    stdout=PIPE    stderr=PIPE
-    Log Many    stdout=${result.stdout}
-    #Should Not Contain    ${result.stdout}    FAIL
+    ${result} =    Run    cargo test --all -- --test-threads=1 --nocapture
+    Should Contain    ${result}    result: ok
 
 
 *** Test Cases ***
