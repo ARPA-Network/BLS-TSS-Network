@@ -2,6 +2,7 @@
 This module contains functions to retrieve information from the logs
 """
 import json
+import os
 import time
 
 def get_log_info(log, keyword):
@@ -34,6 +35,9 @@ def get_keyword_from_log(node_idx, keyword, retry_time=30):
     while i < retry_time:
         i = i + 1
         log_path = f"crates/arpa-node/log/running/node{node_idx}.log"
+        # Check if file exists, if not create an empty file
+        if not os.path.exists(log_path):
+            open(log_path, 'w', encoding='UTF-8').close()
         with open(log_path, 'r', encoding='UTF-8') as process:
             log_info = get_log_info(process, keyword)
             if log_info is not None:
