@@ -1,0 +1,38 @@
+name: Scenario Tests
+
+on:
+  push:
+    pull_request:
+
+jobs:
+  scenario-test:
+
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Install latest nightly
+      uses: actions-rs/toolchain@v1
+      with:
+        toolchain: nightly-2022-11-29
+        override: true
+        components: rustfmt, clippy
+    - name: Install Protoc
+      uses: arduino/setup-protoc@v1
+      with:
+        version: "3.x"
+        repo-token: ${{ secrets.GITHUB_TOKEN }}
+    - name: Install Anvil
+      uses: foundry-rs/foundry-toolchain@v1
+      with:
+        version: nightly
+    - name: Set up Python 3.8
+      uses: actions/setup-python@v2
+      with:
+        python-version: 3.8
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        ls
+        pip install -r requirements.txt
+      working-directory: tests/
+

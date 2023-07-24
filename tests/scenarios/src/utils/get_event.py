@@ -19,9 +19,12 @@ CONTRACT_ABI = get_abi('contracts/out/RewardLib.sol/RewardLib.json')
 CONTRACT_ADDRESS = '0xCf7Ed3AccA5a467e9e704C703E8D87F634fB0Fc9'
 
 def main():
+    """
+    This function connects to Sepolia Testnet via Infura.
+    """
     # Connect to Sepolia Testnet via Infura
     #w3 = Web3(Web3.HTTPProvider(f'https://eth-sepolia.g.alchemy.com/v2/7RFds6TGJiIN5gR4BHrEtiMjJRvV44Na'))
-    w3 = Web3(Web3.HTTPProvider(f'http://127.0.0.1:8545'))
+    w3 = Web3(Web3.HTTPProvider('http://127.0.0.1:8545'))
 
     # Set up the contract instance
     contract_instance = w3.eth.contract(address=Web3.to_checksum_address(CONTRACT_ADDRESS), abi=CONTRACT_ABI)

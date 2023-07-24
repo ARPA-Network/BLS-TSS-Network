@@ -1,5 +1,6 @@
 *** Settings ***
-Documentation       Node Registration Suite
+Documentation       
+...    Scenario Test Suite
 
 Resource            src/common.resource
 Resource            src/node.resource
