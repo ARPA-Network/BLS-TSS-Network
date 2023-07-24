@@ -191,6 +191,9 @@ def start_node(node_idx):
        "{}/tests/scenarios/src/environment/node_config/config{}.yml"
       ).format(root_path, node_idx)
     log_path = f"crates/arpa-node/log/running/node{node_idx}.log"
+    # Check if file exists, if not create an empty file
+    if not os.path.exists(log_path):
+        open(log_path, 'w', encoding='UTF-8').close()
     with open(log_path, 'w', encoding='utf-8') as log_file:
         proc = subprocess.Popen(cmd, shell=True, stdout=log_file,
                                 stderr=subprocess.STDOUT, cwd=root_path)
