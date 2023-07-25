@@ -87,9 +87,10 @@ def kill_process_by_name(name):
     if os.name == 'nt': # For Windows
         os.system(f"taskkill /f /im {name}.exe")
     else: # For Linux
-        result = os.popen(f"pgrep {name}").read()
-        if len(result) != 0:
-            os.kill(int(result), signal.SIGTERM)
+        result = os.popen(f"pgrep {name}").read().splitlines()
+        for pid in result:
+            if pid != "":
+                os.kill(int(pid), signal.SIGTERM)
     print(f"{name} process was killed successfully!")
 
 def approximately_equal(val_x, val_y, tolerance = 1000000000):

@@ -106,9 +106,9 @@ def create_node_config(controller_address, adapter_address):
         # Create filename
         file_name = f'config{i + 1}.yml'
         # Create contents
-        content = f"""node_committer_rpc_endpoint: \"[::1]:501{61 + i}\"
+        content = f"""node_committer_rpc_endpoint: \"0.0.0.0:501{61 + i}\"
 
-node_management_rpc_endpoint: \"[::1]:50{201 + i}\"
+node_management_rpc_endpoint: \"0.0.0.0:50{201 + i}\"
 
 node_management_rpc_token: "for_test"
 
@@ -216,7 +216,7 @@ def kill_process_by_port(port):
         command = f'FOR /F "tokens=5 delims= " %P IN (\'netstat -a -n -o ^| findstr :{port}\') DO TaskKill.exe /F /PID %P'
         os.system(command)
     else:
-        command = f'lsof -ti :{port} | xargs kill'
+        command = f'lsof -ti :{port} | xargs kill -9'
         subprocess.call(command, shell=True)
 
 def kill_node_by_index(index):
