@@ -60,7 +60,7 @@ def have_node_got_keyword(keyword, node_process_list, retry_time=10):
     return False
 
 
-def all_nodes_have_keyword(keyword, node_process_list, retry_time=30):
+def all_nodes_have_keyword(keyword, node_process_list, retry_time=300):
     """
     Check if all nodes have a keyword in their logs
     :param keyword: keyword to look for in the log

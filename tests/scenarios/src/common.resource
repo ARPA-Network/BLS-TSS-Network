@@ -25,6 +25,7 @@ ${LOCAL_ETHEREUM_CHAIN_PROCESS_HANDLE}
 ${BLOCK_TIME}                           0
 
 *** Keywords ***
+
 Setup Chain Environment
     [Documentation]    Sets up the scenario testing encironment
     Source Environment Variables
@@ -35,7 +36,11 @@ Setup Chain Environment
     Set Balance Should Work
     Get Balance Should Work
 
-
+Build code
+    [Documentation]    Build code
+    ${result} =    Run Process    cargo    build
+    Process Completes Successfully    ${result}
+    
 Teardown Scenario Testing Environment
     [Documentation]    Tears down the scenario testing environment
     Stop Local Ethereum Chain

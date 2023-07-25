@@ -18,6 +18,7 @@ RUN apt-get install -y protobuf-compiler
 RUN apt-get install libssl-dev
 RUN apt-get install pkg-config
 RUN apt install protobuf-compiler
+RUN apt install lsof
 
 # Anvil and other custom steps
 RUN curl -L https://foundry.paradigm.xyz | bash
