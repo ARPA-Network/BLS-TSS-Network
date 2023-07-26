@@ -6,4 +6,4 @@ Resource            src/common.resource
 Resource            src/node.resource
 Resource            src/contract.resource
 
-Suite Setup         Build Contract
+Suite Setup         Init Envioirmnet

@@ -33,22 +33,22 @@ BLS Happy Path1
     Mine Blocks    20
     Sleep    3s
     Deploy User Contract
-    
-    Sleep    10s
     ${current_randomness} =    Set Variable    1
     ${cur_block} =    Convert To Integer    0
     ${last_group} =    Convert To Integer    -1
     ${cur_group} =    Convert To Integer    -2
-    WHILE    ${cur_block < 200}
+    WHILE    ${cur_block < 400}
         ${cur_block} =    Get Latest Block Number
         Request Randomness
-        Wait For Process    timeout=30s
+        Mine Blocks    10
+        Sleep    3s
         ${last_group} =    Set Variable    ${cur_group}
         ${current_randomness} =    Check Randomness
         ${event} =    Get Latest Event    ${ADAPTER_CONTRACT}    RandomnessRequestResult        ${cur_block}
         ${cur_group} =    Set Variable    ${event['args']['groupIndex']}
         Should Not Be Equal As Strings    ${cur_group}    ${last_group}
-        Wait For Process    timeout=1m
+        Mine Blocks    10
+        Sleep   3s
         ${cur_block} =    Convert To Integer    ${cur_block}
     END
 
@@ -72,15 +72,14 @@ BLS Happy Path2
     ${node4} =    Stake And Run Node    4
 
     ${log_group_available} =       All Nodes Have Keyword    Group index:0 epoch:2 is available    ${NODE_PROCESS_LIST}
-
-    Wait For Process    timeout=20s
-
+    
+    Sleep    3s
     ${request_id} =    Deploy User Contract
-    Wait For Process    timeout=10s
     Clear Log
     ${request_id} =    Request Randomness
     ${start_block} =    Get Latest Block Number
-    Wait For Process    timeout=10s
+    mine_blocks    10
+    Sleep    3s
     ${index} =    Convert To Integer    1
     ${count} =    Convert To Integer    0
     ${final_committer} =    Set Variable    0
@@ -132,7 +131,7 @@ Corner Case1
     ${log_group_0} =    Have Node Got Keyword    Group index:0 epoch:4 is available    ${NODE_PROCESS_LIST}
     ${log_grouo_1} =    Have Node Got Keyword    Group index:1 epoch:1 is available    ${NODE_PROCESS_LIST}
     
-    Wait For Process    timeout=20s
+    Sleep    10s
     ${group0} =    Get Group    0
     ${nodes} =    Set Variable    ${group0[5]}
     ${node_addrss} =    Set Variable    ${nodes[0]}
@@ -141,7 +140,8 @@ Corner Case1
 
     Deploy User Contract
     Request Randomness
-    Wait For Process    timeout=90s
+    Mine Blocks    10
+    Sleep    10s
     ${events} =    Get Events    ${ADAPTER_CONTRACT}    RandomnessRequestResult
     ${result} =    Events Values Should Be    ${events}    groupIndex    1
     Teardown Scenario Testing Environment
@@ -168,7 +168,8 @@ Corner Case2
     Sleep    3s
     Deploy User Contract
     Request Randomness
-    Sleep    10s
+    Mine Blocks    10
+    Sleep    3s
     Clear Log
     ${task_type} =    Convert To Integer    6
     ${group1} =    Get Group    1

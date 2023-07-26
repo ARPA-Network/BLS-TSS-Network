@@ -40,7 +40,6 @@ Test Rebalance
 
     Group Node Number Should Be    0    3
     Group Node Number Should Be    1    3
-    ${result} =    Get Err Log From Chain
     Teardown Scenario Testing Environment
 
 DKG Happy Path1
@@ -82,12 +81,11 @@ DKG Happy Path1
     
     Deploy User Contract
     Request Randomness
-    ${log_received_randomness_task} =    Get Keyword From Log   1    received new randomness task
+    Mine Blocks    10
+    Have Node Got Keyword    Partial signature sent and accepted by committer    ${NODE_PROCESS_LIST}
+    Mine Blocks    10
     Sleep    5s
-    Mine Blocks    6
-    Sleep    10s
     Check Randomness
-    Set Global Variable    ${NODE_PROCESS_LIST}    ${EMPTY_LIST}
     Teardown Scenario Testing Environment
 
 DKG Happy Path2
@@ -126,10 +124,10 @@ DKG Happy Path2
 
     Deploy User Contract
     Request Randomness
-    ${log_received_randomness_task} =    All Nodes Have Keyword    received new randomness task    ${NODE_PROCESS_LIST}
-    Sleep    2s
-    Mine Blocks    6
-    Sleep    10s
+    Mine Blocks    10
+    Have Node Got Keyword    Partial signature sent and accepted by committer    ${NODE_PROCESS_LIST}
+    Mine Blocks    10
+    Sleep    5s
     Check Randomness
     ${group} =   Get Group    0
     Teardown Scenario Testing Environment
@@ -163,7 +161,8 @@ DKG Sad Path1
 
     ${log_phase_1} =    All Nodes Have Keyword    Transaction successful(commit_dkg)    ${NODE_PROCESS_LIST}
     
-    Sleep    25s
+    Mine Blocks    20
+    Sleep    5s
     ${slash_events} =    Get Events    ${CONTROLLER_CONTRACT}    NodeSlashed
     
     ${result} =    Events Should Contain All Value    ${slash_events}    nodeIdAddress    ${address1}    ${address2}    ${address3}    ${address4}

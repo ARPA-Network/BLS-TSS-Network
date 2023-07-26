@@ -44,6 +44,14 @@ Set Enviorment And Deploy Contract
     Clear Database
     Set Global Variable    $NODE_PROCESS_LIST    ${EMPTY_LIST}
 
+Init Envioirmnet
+    [Documentation]    Init enviorment
+    Build Contract
+    Get Latest Block Number Should Work
+    Mine Blocks Should Work
+    Set Balance Should Work
+    Get Balance Should Work
+
 Build Contract
     [Documentation]    Build contract
     ${result} =    Run    cd contracts/;forge build -o out/

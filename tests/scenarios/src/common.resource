@@ -31,10 +31,6 @@ Setup Chain Environment
     Source Environment Variables
     Start Local Ethereum Chain
     Local Ethereum Chain Should Be Up And Running
-    Get Latest Block Number Should Work
-    Mine Blocks Should Work
-    Set Balance Should Work
-    Get Balance Should Work
 
 Teardown Scenario Testing Environment
     [Documentation]    Tears down the scenario testing environment
