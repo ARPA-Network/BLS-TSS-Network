@@ -34,7 +34,6 @@ Set Enviorment And Deploy Contract
     [Documentation]    Set enviorment and deploy proxy contract
     Clear Log
     Setup Chain Environment
-    ${result} =    Run    cd contracts/;forge build -o out/
     ${result} =    Exec Script    ControllerScenarioTest.s.sol:ControllerScenarioTest
     ${result} =    Exec Script    StakeOperatorScenarioTest.s.sol:StakeOperatorScenarioTestScript
     Bound Contract ABI
@@ -44,6 +43,11 @@ Set Enviorment And Deploy Contract
     Kill Previous Node
     Clear Database
     Set Global Variable    $NODE_PROCESS_LIST    ${EMPTY_LIST}
+
+Build Contract
+    [Documentation]    Build contract
+    ${result} =    Run    cd contracts/;forge build -o out/
+    RETURN    ${result}
 
 Bound Contract ABI
     [Documentation]    Bound contract ABI to handle contract function call
@@ -62,7 +66,6 @@ Bound Contract ABI
     ${adapter_address} =    To Checksum Address    ${adapter_address}
     ${adapter_contract} =    Get Contract    ${PROXY_OUTPUT}Adapter.sol/Adapter.json    ${adapter_address}
     Set Global Variable    $ADAPTER_CONTRACT   ${adapter_contract}
-
 
 Deploy User Contract
     [Documentation]    Deploy user request contract

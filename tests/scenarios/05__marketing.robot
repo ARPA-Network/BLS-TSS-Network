@@ -19,13 +19,13 @@ Payment Should In The Range
 
 Request Randomenes And Check Payment
     [Arguments]    ${min_value}    ${max_value}
-    Request Randomness
-    ${block} =    Get Latest Block Number
-    Sleep    1s
+    ${result} =    Request Randomness
     ${sub} =    Get Subscription    1
     ${payment} =   Set Variable    ${sub[3]}
     Mine Blocks    10
-    All Nodes Have Keyword    Calling contract transaction fulfill_randomness    ${NODE_PROCESS_LIST}
+    All Nodes Have Keyword    Partial signature sent and accepted by committer    ${NODE_PROCESS_LIST}
+    Mine Blocks    10
+    Sleep    5s
     ${result} =    Get Event    ${ADAPTER_CONTRACT}    RandomnessRequest
     Payment Should In The Range    ${payment}    ${min_value}    ${max_value}
 
@@ -47,9 +47,9 @@ Set Marketing Discount
     Deploy User Contract
     Request Randomness
     Mine Blocks    10
-    All Nodes Have Keyword    Calling contract transaction fulfill_randomness    ${NODE_PROCESS_LIST}
+    All Nodes Have Keyword    Partial signature sent and accepted by committer    ${NODE_PROCESS_LIST}
     Mine Blocks    10
-    Sleep    2s
+    Sleep    5s
 
     Request Randomenes And Check Payment    50000000000000000    100000000000000000
 
@@ -85,7 +85,7 @@ Test Referral
     Deploy User Contract
     Request Randomness
     Mine Blocks    10
-    All Nodes Have Keyword    Calling contract transaction fulfill_randomness    ${NODE_PROCESS_LIST}
+    All Nodes Have Keyword    Partial signature sent and accepted by committer    ${NODE_PROCESS_LIST}
     Sleep    10s
     
     Exec Script    TestFeeConfig.s.sol:TestFeeConfigScript
@@ -94,14 +94,14 @@ Test Referral
     Exec Script    GetRandomNumberScenarioTest.s.sol:GetRandomNumberScenarioTestScript
 
     Mine Blocks    10
-    All Nodes Have Keyword    Calling contract transaction fulfill_randomness    ${NODE_PROCESS_LIST}
     Sleep    10s
     
     ${contract_address} =    Get Contract Address From File    contracts/broadcast/GetRandomNumberScenarioTest.s.sol/31337/run-latest.json
     ${new_user_contract} =    Get Contract    ${PROXY_OUTPUT}GetRandomNumberExample.sol/GetRandomNumberExample.json    ${contract_address[0]}
     ${result} =    Contract Function Transact    ${new_user_contract}    getRandomNumber
     Mine Blocks    10
-    ${result} =    All Nodes Have Keyword    Calling contract transaction fulfill_randomness    ${NODE_PROCESS_LIST}
+    Sleep    10s
+    ${result} =    All Nodes Have Keyword    Partial signature sent and accepted by committer    ${NODE_PROCESS_LIST}
     ${subId1} =    Convert To Integer    1
     ${subId2} =    Convert To Integer    2
     ${adapter_address} =    Get Value From Env    ADAPTER_ADDRESS
@@ -116,14 +116,14 @@ Test Referral
     ${payment} =   Set Variable    ${sub[3]}
     Payment Should In The Range    ${payment}    0    100000000000000000
     Mine Blocks    10
-    All Nodes Have Keyword    Calling contract transaction fulfill_randomness    ${NODE_PROCESS_LIST}
+    All Nodes Have Keyword    Partial signature sent and accepted by committer    ${NODE_PROCESS_LIST}
 
     Contract Function Transact    ${new_user_contract}    getRandomNumber
     ${sub} =    Get Subscription    2
     ${payment} =   Set Variable    ${sub[3]}
     Payment Should In The Range    ${payment}    0    100000000000000000
     Mine Blocks    10
-    All Nodes Have Keyword    Calling contract transaction fulfill_randomness    ${NODE_PROCESS_LIST}
+    All Nodes Have Keyword    Partial signature sent and accepted by committer    ${NODE_PROCESS_LIST}
 
     
     Teardown Scenario Testing Environment
@@ -131,5 +131,5 @@ Test Referral
 *** Test Cases ***
 
 Run Test Cases
-    #Repeat Keyword    1    Set Marketing Discount
+    Repeat Keyword    1    Set Marketing Discount
     Repeat Keyword    1    Test Referral

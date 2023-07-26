@@ -4,6 +4,8 @@ SHELL ["/bin/bash", "-c"]
 
 EXPOSE 50061-50220
 
+EXPOSE 8545
+
 # Set up environment variables for rust and Python
 ENV RUSTUP_HOME=/usr/local/rustup \
     CARGO_HOME=/usr/local/cargo \
@@ -13,12 +15,8 @@ ENV PYTHONUNBUFFERED=1
 # Prepare system
 RUN apt-get update -y && apt-get install -y curl build-essential python3 python3-pip
 
-# Install Protobuf Compiler
-RUN apt-get install -y protobuf-compiler
-RUN apt-get install libssl-dev
-RUN apt-get install pkg-config
-RUN apt install protobuf-compiler
-RUN apt install lsof
+RUN apt-get update && \
+    apt-get install -y protobuf-compiler libprotobuf-dev pkg-config libssh-dev build-essential lsof findutils supervisor neovim git net-tools netcat
 
 # Anvil and other custom steps
 RUN curl -L https://foundry.paradigm.xyz | bash
