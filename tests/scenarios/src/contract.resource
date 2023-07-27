@@ -40,17 +40,13 @@ Set Enviorment And Deploy Contract
     Set ARPA Address
     ${adapter_address} =    Get Value From Env    ADAPTER_ADDRESS
     ${result} =    Create Node Config    ${PROXY_CONTRACT_ADDRESS}    ${adapter_address}
-    Kill Previous Node
+    Kill Previous Node    20
     Clear Database
     Set Global Variable    $NODE_PROCESS_LIST    ${EMPTY_LIST}
 
 Init Envioirmnet
     [Documentation]    Init enviorment
     Build Contract
-    Get Latest Block Number Should Work
-    Mine Blocks Should Work
-    Set Balance Should Work
-    Get Balance Should Work
 
 Build Contract
     [Documentation]    Build contract

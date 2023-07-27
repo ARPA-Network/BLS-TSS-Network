@@ -39,9 +39,10 @@ BLS Happy Path1
     ${cur_group} =    Convert To Integer    -2
     WHILE    ${cur_block < 400}
         ${cur_block} =    Get Latest Block Number
+        Mine Blocks    10
         Request Randomness
         Mine Blocks    10
-        Sleep    3s
+        Sleep    5s
         ${last_group} =    Set Variable    ${cur_group}
         ${current_randomness} =    Check Randomness
         ${event} =    Get Latest Event    ${ADAPTER_CONTRACT}    RandomnessRequestResult        ${cur_block}
