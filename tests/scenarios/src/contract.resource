@@ -50,7 +50,7 @@ Init Envioirmnet
 
 Build Contract
     [Documentation]    Build contract
-    ${result} =    Run    cd contracts/;forge build -o out/
+    ${result} =    Run    cd contracts; forge build -o out; cd ..
     RETURN    ${result}
 
 Bound Contract ABI
