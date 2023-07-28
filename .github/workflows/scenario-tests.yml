@@ -14,6 +14,7 @@ jobs:
       run: |
         docker run --name=scenario \
           andlyn/arpanetwork-test:latest \
-          /bin/bash -c "git clone ${{ github.repositoryUrl }}; \
+          /bin/bash -c "git config --global url."https://".insteadOf git://; \
+          git clone ${{ github.repositoryUrl }}; \
           cd BLS-TSS-Network; git checkout ${{ github.head_ref }}; \
           robot ./"
