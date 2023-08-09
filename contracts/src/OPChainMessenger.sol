@@ -24,9 +24,11 @@ contract OPChainMessenger is Ownable, IChainMessenger {
         if (msg.sender != _controllerRelayer) {
             revert WrongControllerRelayer();
         }
-        // call portal of that chain on L1 to trigger message relay, e.g. for OP this is to call
+        // call portal of L2 chain on L1 to trigger message relay, e.g. for OP this is to call
         _crossDomainMessenger.sendMessage(
-            _controllerOracle, abi.encodeWithSelector(IControllerOracle.updateGroup.selector, committer, group), 1000000
+            _controllerOracle,
+            abi.encodeWithSelector(IControllerOracle.updateGroup.selector, committer, group),
+            (344270 + 112487 * uint32(group.size)) * 3 / 2
         );
     }
 

@@ -43,7 +43,9 @@ contract ControllerOracle is Initializable, IControllerOracle, OwnableUpgradeabl
 
     // *Events*
     event NodeRewarded(address indexed nodeAddress, uint256 ethAmount, uint256 arpaAmount);
-    event GroupUpdated(uint256 epoch, uint256 groupIndex, uint256 groupEpoch, address committer);
+    event GroupUpdated(
+        uint256 epoch, uint256 indexed groupIndex, uint256 indexed groupEpoch, address indexed committer
+    );
 
     // *Errors*
     error GroupObsolete(uint256 groupIndex, uint256 relayedGroupEpoch, uint256 currentGroupEpoch);
@@ -68,14 +70,15 @@ contract ControllerOracle is Initializable, IControllerOracle, OwnableUpgradeabl
     }
 
     function updateGroup(address committer, Group memory group) external {
-        // TODO if there is a alias or not?
         if (
             msg.sender != address(_l2CrossDomainMessenger)
                 || _l2CrossDomainMessenger.xDomainMessageSender() != _chainMessenger
         ) {
             revert SenderNotChainMessenger();
         }
+
         uint256 groupIndex = group.index;
+
         if (group.epoch <= _groupData.groups[groupIndex].epoch) {
             revert GroupObsolete(groupIndex, group.epoch, _groupData.groups[groupIndex].epoch);
         }
@@ -86,7 +89,7 @@ contract ControllerOracle is Initializable, IControllerOracle, OwnableUpgradeabl
             _groupData.groupCount++;
         }
 
-        _groupData.groups[groupIndex] = group;
+        _copyGroup(group);
 
         emit GroupUpdated(_groupData.epoch, groupIndex, group.epoch, committer);
     }
@@ -195,22 +198,12 @@ contract ControllerOracle is Initializable, IControllerOracle, OwnableUpgradeabl
         returns (int256, int256)
     {
         for (uint256 i = 0; i < _groupData.groupCount; i++) {
-            int256 memberIndex = getMemberIndexByAddress(i, nodeAddress);
+            int256 memberIndex = _getMemberIndexByAddress(i, nodeAddress);
             if (memberIndex != -1) {
                 return (int256(i), memberIndex);
             }
         }
         return (-1, -1);
-    }
-
-    function getMemberIndexByAddress(uint256 groupIndex, address nodeAddress) public view returns (int256) {
-        Group memory g = _groupData.groups[groupIndex];
-        for (uint256 i = 0; i < g.members.length; i++) {
-            if (g.members[i].nodeIdAddress == nodeAddress) {
-                return int256(i);
-            }
-        }
-        return -1;
     }
 
     function getNodeWithdrawableTokens(address nodeAddress)
@@ -227,5 +220,30 @@ contract ControllerOracle is Initializable, IControllerOracle, OwnableUpgradeabl
 
     function getLastOutput() external view returns (uint256) {
         return _lastOutput;
+    }
+
+    function _copyGroup(Group memory group) internal {
+        Group storage g = _groupData.groups[group.index];
+        g.index = group.index;
+        g.epoch = group.epoch;
+        g.threshold = group.threshold;
+        g.size = group.size;
+        g.isStrictlyMajorityConsensusReached = group.isStrictlyMajorityConsensusReached;
+        delete g.members;
+        for (uint256 i = 0; i < group.size; i++) {
+            g.members.push(group.members[i]);
+        }
+        g.committers = group.committers;
+        g.publicKey = group.publicKey;
+    }
+
+    function _getMemberIndexByAddress(uint256 groupIndex, address nodeAddress) internal view returns (int256) {
+        Group memory g = _groupData.groups[groupIndex];
+        for (uint256 i = 0; i < g.members.length; i++) {
+            if (g.members[i].nodeIdAddress == nodeAddress) {
+                return int256(i);
+            }
+        }
+        return -1;
     }
 }

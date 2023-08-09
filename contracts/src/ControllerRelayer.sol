@@ -15,7 +15,9 @@ contract ControllerRelayer is Ownable {
         _controller = IController(controller);
     }
 
-    event GroupRelayed(uint256 epoch, uint256 groupIndex, uint256 groupEpoch, address committer);
+    event GroupRelayed(
+        uint256 epoch, uint256 indexed groupIndex, uint256 indexed groupEpoch, address indexed committer
+    );
 
     error AbsentChainMessenger(uint256 chainId);
     error GroupObsolete(uint256 groupIndex, uint256 relayedGroupEpoch, uint256 currentGroupEpoch);
@@ -35,13 +37,13 @@ contract ControllerRelayer is Ownable {
 
         if (_chainRelayRecord[chainId][groupIndex] >= groupToRelay.epoch) {
             revert GroupObsolete(groupIndex, groupToRelay.epoch, _chainRelayRecord[chainId][groupIndex]);
-        } else {
-            _chainRelayRecord[chainId][groupIndex] = groupToRelay.epoch;
-            // call the messenger of corresponding chain
-            IChainMessenger(_chainMessengers[chainId]).relayMessage(msg.sender, groupToRelay);
-
-            emit GroupRelayed(_controller.getGroupEpoch(), groupIndex, groupToRelay.epoch, msg.sender);
         }
+
+        _chainRelayRecord[chainId][groupIndex] = groupToRelay.epoch;
+        // call the messenger of corresponding chain
+        IChainMessenger(_chainMessengers[chainId]).relayMessage(msg.sender, groupToRelay);
+
+        emit GroupRelayed(_controller.getGroupEpoch(), groupIndex, groupToRelay.epoch, msg.sender);
     }
 
     function setChainMessenger(uint256 chainId, address chainMessenger) external onlyOwner {
