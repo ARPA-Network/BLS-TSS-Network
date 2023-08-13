@@ -4,13 +4,13 @@ node_management_rpc_endpoint: "0.0.0.0:50091"
 
 node_management_rpc_token: "for_test"
 
-provider_endpoint: "http://0.0.0.0:8545" 
+provider_endpoint: "http://0.0.0.0:8545"
 
 chain_id: 31337
 
-controller_address: "0xdc64a140aa3e981100a9beca4e685f962f0cf6c9"
+controller_address: "0xd9fEc8238711935D6c8d79Bef2B9546ef23FC046"
 
-adapter_address: "0xa513e6e4b8f2a923d98304ec87f64353c4d5c853"
+adapter_address: "0xeAd789bd8Ce8b9E94F5D0FCa99F8787c7e758817"
 
 data_path: "./data1.sqlite"
 

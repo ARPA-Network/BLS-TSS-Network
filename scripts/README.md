@@ -8,5 +8,6 @@ make devnet-up-deploy
 
 ## Deploy ARPA Network to L1 and L2
 cd scripts
+pip3 install -r requirements.txt
 python3 main.py
 ```
