@@ -3,7 +3,10 @@
 ## Working OP Repo.
 
 ```bash
-git clone https://github.com/wrinkledeth/optimism
+git clone https://github.com/wrinkledeth/optimism 
+# changes made in this repo can be found below
+
+# reset to latest stable build
 git reset --hard f30fdd3f2a25c87c57531f0a33dbf3d902a7ca57
 
 # edit bedrock-devnet/devnet 
@@ -41,7 +44,7 @@ t=2023-08-11T19:46:55+0000 lvl=crit msg=“Application failed”               m
 docker start be5377ffaac6  ## OR
 
 # in path: optimism/ops-bedrock
-docker-compose start op-batcher    
+cd ops-bedrock && docker compose start op-batcher && cd ..
 ```
 
 ----
@@ -76,11 +79,13 @@ Untracked files:
 
 ## Scripting Steps
 
-1. Initialize L1 anvil and L2 Optimism anvil + contracts
-2. Deploy 3 randcast nodes + L1 randcast contracts and group nodes.
-3. Test: request randomness on L1
-4. Deploy L2 randcast contracts
-5. Test: request randomness on L2
+1. Initialize devnet (L1 + L2)
+2. Deploy L2 randcast contracts
+3. 
+4. Deploy L1 randcast contracts.
+5. Deploy 3 randcast nodes with docker compose and wait for grouping.
+6. (Test request randomness on L1)
+7. (Test request randomness on L2)
 
 ```bash
 # prep env file + dependencies
@@ -89,14 +94,14 @@ cp .env.example .env
 forge test # download dependencies
 
 # deploy L1 contracts
-forge script script/ControllerLocalTest.s.sol:ControllerLocalTestScript --fork-url http://0.0.0.0:8545 --broadcast
+forge script script/ControllerLocalTest.s.sol:ControllerLocalTestScript --fork-url http://localhost:8545 --broadcast
 
-forge script script/StakeNodeLocalTest.s.sol:StakeNodeLocalTestScript --fork-url http://0.0.0.0:8545 --broadcast -g 150
+forge script script/StakeNodeLocalTest.s.sol:StakeNodeLocalTestScript --fork-url http://localhost:8545 --broadcast -g 150
 
 ## deploy L2 contracts
-forge script script/OPControllerOracleLocalTest.s.sol:OPControllerOracleLocalTestScript --fork-url http://0.0.0.0:9545 --broadcast
+forge script script/OPControllerOracleLocalTest.s.sol:OPControllerOracleLocalTestScript --fork-url http://localhost:9545 --broadcast
 
-forge script script/OPControllerOracleInitializationLocalTest.s.sol:OPControllerOracleInitializationLocalTestScript --fork-url http://0.0.0.0:9545 --broadcast
+forge script script/OPControllerOracleInitializationLocalTest.s.sol:OPControllerOracleInitializationLocalTestScript --fork-url http://localhost:9545 --broadcast
 
 # start randcast nodes
 cd BLS-TSS_NETWORK/scripts
@@ -135,8 +140,8 @@ docker-compose down
 [crosshain calls tutorial](https://github.com/ethereum-optimism/optimism-tutorial/tree/main/cross-dom-comm)
 
 ```bash
-export GOERLI_URL=http://0.0.0.0:8545
-export OP_GOERLI_URL=http://0.0.0.0:9545
+export GOERLI_URL=http://localhost:8545
+export OP_GOERLI_URL=http://localhost:9545
 
 export GREETER_L1=0x4d0fcc1Bedd933dA4121240C2955c3Ceb68AAE84
 export GREETER_L2=0xE8B462EEF7Cbd4C855Ea4B65De65a5c5Bab650A9
