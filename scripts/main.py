@@ -1,6 +1,7 @@
 import os
 import subprocess
 import json
+import time
 from pprint import pprint
 from dotenv import load_dotenv, set_key
 import ruamel.yaml
@@ -70,109 +71,109 @@ def main():
     ###### Contract Deployment #######
     ##################################
 
-    # ###############################
-    # # 1. Copy .env.example to .env, and load .env file for editing
-    # run_command(["cp", env_example_path, env_path])
-    # load_dotenv(dotenv_path=env_path)
+    ###############################
+    # 1. Copy .env.example to .env, and load .env file for editing
+    run_command(["cp", env_example_path, env_path])
+    load_dotenv(dotenv_path=env_path)
 
-    # ###############################
-    # # 2. Deploy L2 OPControllerOracleLocalTest contracts (ControllerOracle, Adapter, Arpa)
-    # # # forge script script/OPControllerOracleLocalTest.s.sol:OPControllerOracleLocalTestScript --fork-url http://localhost:9545 --broadcast
-    # run_command(
-    #     [
-    #         "forge",
-    #         "script",
-    #         "script/OPControllerOracleLocalTest.s.sol:OPControllerOracleLocalTestScript",
-    #         "--fork-url",
-    #         "http://localhost:9545",
-    #         "--broadcast",
-    #     ],
-    #     env={},
-    #     cwd=contracts_dir,
-    # )
-    # # get L2 contract addresses from broadcast and update .env file
-    # l2_addresses = get_addresses_from_json(op_controller_oracle_broadcast_path)
-    # set_key(env_path, "OP_ADAPTER_ADDRESS", l2_addresses["Adapter"])
-    # set_key(env_path, "OP_ARPA_ADDRESS", l2_addresses["Arpa"])
-    # set_key(env_path, "OP_CONTROLLER_ORACLE_ADDRESS", l2_addresses["ControllerOracle"])
+    ###############################
+    # 2. Deploy L2 OPControllerOracleLocalTest contracts (ControllerOracle, Adapter, Arpa)
+    # # forge script script/OPControllerOracleLocalTest.s.sol:OPControllerOracleLocalTestScript --fork-url http://localhost:9545 --broadcast
+    run_command(
+        [
+            "forge",
+            "script",
+            "script/OPControllerOracleLocalTest.s.sol:OPControllerOracleLocalTestScript",
+            "--fork-url",
+            "http://localhost:9545",
+            "--broadcast",
+        ],
+        env={},
+        cwd=contracts_dir,
+    )
+    # get L2 contract addresses from broadcast and update .env file
+    l2_addresses = get_addresses_from_json(op_controller_oracle_broadcast_path)
+    set_key(env_path, "OP_ADAPTER_ADDRESS", l2_addresses["Adapter"])
+    set_key(env_path, "OP_ARPA_ADDRESS", l2_addresses["Arpa"])
+    set_key(env_path, "OP_CONTROLLER_ORACLE_ADDRESS", l2_addresses["ControllerOracle"])
 
-    # ###############################
-    # # 3. Deploy L1 ControllerLocalTest contracts
-    # #     (Controller, Controller Relayer, OPChainMessenger, Adapter, Arpa, Staking)
+    ###############################
+    # 3. Deploy L1 ControllerLocalTest contracts
+    #     (Controller, Controller Relayer, OPChainMessenger, Adapter, Arpa, Staking)
 
-    # # forge script script/ControllerLocalTest.s.sol:ControllerLocalTestScript --fork-url http://localhost:8545 --broadcast
-    # run_command(
-    #     [
-    #         "forge",
-    #         "script",
-    #         "script/ControllerLocalTest.s.sol:ControllerLocalTestScript",
-    #         "--fork-url",
-    #         "http://localhost:8545",
-    #         "--broadcast",
-    #     ],
-    #     env={},
-    #     cwd=contracts_dir,
-    # )
+    # forge script script/ControllerLocalTest.s.sol:ControllerLocalTestScript --fork-url http://localhost:8545 --broadcast
+    run_command(
+        [
+            "forge",
+            "script",
+            "script/ControllerLocalTest.s.sol:ControllerLocalTestScript",
+            "--fork-url",
+            "http://localhost:8545",
+            "--broadcast",
+        ],
+        env={},
+        cwd=contracts_dir,
+    )
 
-    # # get L1 contract addresses from broadcast and update .env file
-    # l1_addresses = get_addresses_from_json(controller_local_test_broadcast_path)
-    # set_key(env_path, "ARPA_ADDRESS", l1_addresses["Arpa"])
-    # set_key(env_path, "STAKING_ADDRESS", l1_addresses["Staking"])
-    # set_key(env_path, "CONTROLLER_ADDRESS", l1_addresses["Controller"])
-    # set_key(env_path, "ADAPTER_ADDRESS", l1_addresses["Adapter"])
+    # get L1 contract addresses from broadcast and update .env file
+    l1_addresses = get_addresses_from_json(controller_local_test_broadcast_path)
+    set_key(env_path, "ARPA_ADDRESS", l1_addresses["Arpa"])
+    set_key(env_path, "STAKING_ADDRESS", l1_addresses["Staking"])
+    set_key(env_path, "CONTROLLER_ADDRESS", l1_addresses["Controller"])
+    set_key(env_path, "ADAPTER_ADDRESS", l1_addresses["Adapter"])
 
-    # # reload new .env file
-    # load_dotenv(dotenv_path=env_path)
-    # # TODO: This is not working... had to fill in env manually below.
+    # reload new .env file
+    load_dotenv(dotenv_path=env_path)
+    # TODO: This is not working... had to fill in env manually below.
 
-    # ###############################
-    # # 4. deploy remaining contracts (Controller Oracle Init, StakeNodeLocalTest)
+    ###############################
+    # 4. deploy remaining contracts (Controller Oracle Init, StakeNodeLocalTest)
 
-    # # forge script script/OPControllerOracleInitializationLocalTest.s.sol:OPControllerOracleInitializationLocalTestScript --fork-url http://localhost:9545 --broadcast
-    # run_command(
-    #     [
-    #         "forge",
-    #         "script",
-    #         "script/OPControllerOracleInitializationLocalTest.s.sol:OPControllerOracleInitializationLocalTestScript",
-    #         "--fork-url",
-    #         "http://localhost:9545",
-    #         "--broadcast",
-    #     ],
-    #     env={
-    #         "OP_ADAPTER_ADDRESS": l2_addresses["Adapter"],
-    #         "OP_ARPA_ADDRESS": l2_addresses["Arpa"],
-    #         "OP_CONTROLLER_ORACLE_ADDRESS": l2_addresses["ControllerOracle"],
-    #         "ARPA_ADDRESS": l1_addresses["Arpa"],
-    #         "STAKING_ADDRESS": l1_addresses["Staking"],
-    #         "CONTROLLER_ADDRESS": l1_addresses["Controller"],
-    #         "ADAPTER_ADDRESS": l1_addresses["Adapter"],
-    #     },
-    #     cwd=contracts_dir,
-    # )
+    # forge script script/OPControllerOracleInitializationLocalTest.s.sol:OPControllerOracleInitializationLocalTestScript --fork-url http://localhost:9545 --broadcast
+    run_command(
+        [
+            "forge",
+            "script",
+            "script/OPControllerOracleInitializationLocalTest.s.sol:OPControllerOracleInitializationLocalTestScript",
+            "--fork-url",
+            "http://localhost:9545",
+            "--broadcast",
+        ],
+        env={
+            "OP_ADAPTER_ADDRESS": l2_addresses["Adapter"],
+            "OP_ARPA_ADDRESS": l2_addresses["Arpa"],
+            "OP_CONTROLLER_ORACLE_ADDRESS": l2_addresses["ControllerOracle"],
+            "ARPA_ADDRESS": l1_addresses["Arpa"],
+            "STAKING_ADDRESS": l1_addresses["Staking"],
+            "CONTROLLER_ADDRESS": l1_addresses["Controller"],
+            "ADAPTER_ADDRESS": l1_addresses["Adapter"],
+        },
+        cwd=contracts_dir,
+    )
 
-    # # forge script script/StakeNodeLocalTest.s.sol:StakeNodeLocalTestScript --fork-url http://localhost:8545 --broadcast
-    # run_command(
-    #     [
-    #         "forge",
-    #         "script",
-    #         "script/StakeNodeLocalTest.s.sol:StakeNodeLocalTestScript",
-    #         "--fork-url",
-    #         "http://localhost:8545",
-    #         "--broadcast",
-    #         "-g",
-    #         "150",
-    #     ],
-    #     env={
-    #         "OP_ADAPTER_ADDRESS": l2_addresses["Adapter"],
-    #         "OP_ARPA_ADDRESS": l2_addresses["Arpa"],
-    #         "OP_CONTROLLER_ORACLE_ADDRESS": l2_addresses["ControllerOracle"],
-    #         "ARPA_ADDRESS": l1_addresses["Arpa"],
-    #         "STAKING_ADDRESS": l1_addresses["Staking"],
-    #         "CONTROLLER_ADDRESS": l1_addresses["Controller"],
-    #         "ADAPTER_ADDRESS": l1_addresses["Adapter"],
-    #     },
-    #     cwd=contracts_dir,
-    # )
+    # forge script script/StakeNodeLocalTest.s.sol:StakeNodeLocalTestScript --fork-url http://localhost:8545 --broadcast
+    run_command(
+        [
+            "forge",
+            "script",
+            "script/StakeNodeLocalTest.s.sol:StakeNodeLocalTestScript",
+            "--fork-url",
+            "http://localhost:8545",
+            "--broadcast",
+            "-g",
+            "150",
+        ],
+        env={
+            "OP_ADAPTER_ADDRESS": l2_addresses["Adapter"],
+            "OP_ARPA_ADDRESS": l2_addresses["Arpa"],
+            "OP_CONTROLLER_ORACLE_ADDRESS": l2_addresses["ControllerOracle"],
+            "ARPA_ADDRESS": l1_addresses["Arpa"],
+            "STAKING_ADDRESS": l1_addresses["Staking"],
+            "CONTROLLER_ADDRESS": l1_addresses["Controller"],
+            "ADAPTER_ADDRESS": l1_addresses["Adapter"],
+        },
+        cwd=contracts_dir,
+    )
 
     ######################################
     ###### ARPA Network Deployment #######
@@ -180,6 +181,7 @@ def main():
 
     # update config.yml files with correect L1 controller and adapter addresses
     l1_addresses = get_addresses_from_json(controller_local_test_broadcast_path)
+    # l2_addresses = get_addresses_from_json(op_controller_oracle_broadcast_path)
 
     config_files = ["config_1.yml", "config_2.yml", "config_3.yml"]
     yaml = ruamel.yaml.YAML()
@@ -196,9 +198,43 @@ def main():
             yaml.dump(data, f)
 
     # start notes
-    # run_command(["docker", "compose", "up", "-d"], cwd=script_dir)
+    run_command(["docker", "compose", "up", "-d"], cwd=script_dir)
 
     # test to make sure things are good
+
+    # Start the timer
+    # start_time = time.time()
+    # while True:
+    #     try:
+    #         # Attempt to check if "available" is found within the logs
+    #         result = subprocess.check_output(
+    #             [
+    #                 "docker",
+    #                 "exec",
+    #                 "-it",
+    #                 "node1",
+    #                 "/bin/bash",
+    #                 "-c",
+    #                 "cat /var/log/randcast_node_client.log | grep 'available'",
+    #             ],
+    #             timeout=1,
+    #         )
+
+    #         if "available" in result.decode("utf-8"):
+    #             print("'available' found in logs. Proceeding...")
+    #             break
+    #         else:
+    #             print("'available' not found in logs yet. Retrying in 5 sec...")
+
+    #     except subprocess.TimeoutExpired:
+    #         elapsed_time = time.time() - start_time
+    #         if elapsed_time > 60:
+    #             print("Failure: 1 minute elapsed without success.")
+    #             break
+    #         else:
+    #             print(f"Still retrying... elapsed time: {int(elapsed_time)} sec...")
+
+    # print(l1_addresses)
 
 
 if __name__ == "__main__":

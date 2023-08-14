@@ -131,6 +131,21 @@ forge script script/StakeNodeLocalTest.s.sol:StakeNodeLocalTestScript --fork-url
 ```bash
 docker-compose up -d
 docker-compose down
+
+# checks
+docker exec -it node1 /bin/bash       
+watch 'cat /var/log/randcast_node_client.log | grep "available"'
+
+# cleanup
+docker kill $(docker ps -q -f ancestor=arpachainio/node:latest) # kill node containers
+
+#node_advertised_committer_rpc_endpoint: "172.17.0.1:50061"
+node_advertised_committer_rpc_endpoint: "172.17.0.1:50061"
+provider_endpoint: "http://172.17.0.1:8545"
+
+{"time":"2023-08-13T18:35:58.189934059+00:00","message":"listener is interrupted. Retry... Error: ContractClientError(ContractError(MiddlewareError(MiddlewareError(MiddlewareError(HTTPError(reqwest::Error { kind: Request, url: Url { scheme: \"http\", cannot_be_a_base: false, username: \"\", password: None, host: Some(Ipv4(0.0.0.0)), port: Some(8545), path: \"/\", query: None, fragment: None }, source: hyper::Error(Connect, ConnectError(\"tcp connect error\", Os { code: 111, kind: ConnectionRefused, message: \"Connection refused\" })) })))))), ","module_path":"arpa_node::node::listener","file":"crates/arpa-node/src/node/listener/mod.rs","line":25,"level":"ERROR","target":"arpa_node::node::listener","thread":"tokio-runtime-worker","thread_id":140451236574976,"node_id":"running","mdc":{},"node_info":"","group_info":""}
+Error: ContractError(MiddlewareError(MiddlewareError(MiddlewareError(HTTPError(reqwest::Error { kind: Request, url: Url { scheme: "http", cannot_be_a_base: false, username: "", password: None, host: Some(Ipv4(0.0.0.0)), port: Some(8545), path: "/", query: None, fragment: None }, source: hyper::Error(Connect, ConnectError("tcp connect error", Os { code: 111, kind: ConnectionRefused, message: "Connection refused" })) })))))
+
 ```
 
 
