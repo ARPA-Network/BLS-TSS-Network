@@ -52,21 +52,42 @@ contract StakeNodeLocalTestScript is Script {
 
         // let a user stake to accumulate some rewards
         vm.rememberKey(_userPrivateKey);
-        _stake(vm.addr(_userPrivateKey));
+        // _stake(vm.addr(_userPrivateKey));
+        _mintTokens(vm.addr(_userPrivateKey));
+        _approveTokens(vm.addr(_userPrivateKey));
+        _stakeTokens(vm.addr(_userPrivateKey));
 
         for (uint256 i = 0; i < _operators.length; i++) {
-            _stake(_operators[i]);
+            // _stake(_operators[i]);
+            _mintTokens(_operators[i]);
+            _approveTokens(_operators[i]);
+            _stakeTokens(_operators[i]);
         }
     }
 
-    function _stake(address sender) internal {
+    function _mintTokens(address sender) internal {
         vm.broadcast(sender);
         _arpa.mint(sender, _operatorStakeAmount);
+    }
 
+    function _approveTokens(address sender) internal {
         vm.broadcast(sender);
         _arpa.approve(address(_staking), _operatorStakeAmount);
+    }
 
+    function _stakeTokens(address sender) internal {
         vm.broadcast(sender);
         _staking.stake(_operatorStakeAmount);
     }
+
+    // function _stake(address sender) internal {
+    //     vm.broadcast(sender);
+    //     _arpa.mint(sender, _operatorStakeAmount);
+
+    //     vm.broadcast(sender);
+    //     _arpa.approve(address(_staking), _operatorStakeAmount);
+
+    //     vm.broadcast(sender);
+    //     _staking.stake(_operatorStakeAmount);
+    // }
 }
