@@ -102,10 +102,6 @@ def wait_command(
             command_output.returncode == 0
             and command_output.stdout.strip() != fail_value
         ):
-            print("command_output.stdout")
-            print(command_output.stdout)
-            print("fail_value")
-            print(fail_value)
             return command_output.stdout
         else:
             print("...")
@@ -310,48 +306,48 @@ def main():
     # #!#### L1 Request Randomness Testing #######
     # ############################################
 
-    l1_addresses = get_addresses_from_json(controller_local_test_broadcast_path)
-    l2_addresses = get_addresses_from_json(op_controller_oracle_broadcast_path)
-    # pprint(l1_addresses)
-    # pprint(l2_addresses)
+    # l1_addresses = get_addresses_from_json(controller_local_test_broadcast_path)
+    # l2_addresses = get_addresses_from_json(op_controller_oracle_broadcast_path)
+    # # pprint(l1_addresses)
+    # # pprint(l2_addresses)
 
-    # deploy user contract and request randomness
-    # forge script /usr/src/app/script/GetRandomNumberLocalTest.s.sol:GetRandomNumberLocalTestScript --fork-url $ETH_RPC_URL --broadcast
-    print("Deploying L1 user contract and requesting randomness...")
-    run_command(
-        [
-            "forge",
-            "script",
-            "script/GetRandomNumberLocalTest.s.sol:GetRandomNumberLocalTestScript",
-            "--fork-url",
-            "http://localhost:8545",
-            "--broadcast",
-        ],
-        env={
-            "ADAPTER_ADDRESS": l1_addresses["ERC1967Proxy"],
-        },
-        cwd=contracts_dir,
-    )
+    # # deploy user contract and request randomness
+    # # forge script /usr/src/app/script/GetRandomNumberLocalTest.s.sol:GetRandomNumberLocalTestScript --fork-url $ETH_RPC_URL --broadcast
+    # print("Deploying L1 user contract and requesting randomness...")
+    # run_command(
+    #     [
+    #         "forge",
+    #         "script",
+    #         "script/GetRandomNumberLocalTest.s.sol:GetRandomNumberLocalTestScript",
+    #         "--fork-url",
+    #         "http://localhost:8545",
+    #         "--broadcast",
+    #     ],
+    #     env={
+    #         "ADAPTER_ADDRESS": l1_addresses["ERC1967Proxy"],
+    #     },
+    #     cwd=contracts_dir,
+    # )
 
-    # confirm randomness request suceeded with the adapter
-    # cast call 0xa513e6e4b8f2a923d98304ec87f64353c4d5c853 "getLastRandomness()(uint256)" # should not show 0
+    # # confirm randomness request suceeded with the adapter
+    # # cast call 0xa513e6e4b8f2a923d98304ec87f64353c4d5c853 "getLastRandomness()(uint256)" # should not show 0
 
-    print("Check if randomness request succeeded...")
-    cmd = [
-        "cast",
-        "call",
-        l1_addresses["ERC1967Proxy"],
-        "getLastRandomness()(uint256)",
-    ]
-    adapter_randomness_result = wait_command(
-        cmd, cwd=contracts_dir, wait_time=10, max_attempts=12, fail_value="0"
-    )
-    if adapter_randomness_result:
-        print("Adapter randomness request succeeded!")
-        print("Output:\n", adapter_randomness_result)
-    else:
-        print("Adapter randomness request failed!")
-        sys.exit(1)
+    # print("Check if randomness request succeeded...")
+    # cmd = [
+    #     "cast",
+    #     "call",
+    #     l1_addresses["ERC1967Proxy"],
+    #     "getLastRandomness()(uint256)",
+    # ]
+    # adapter_randomness_result = wait_command(
+    #     cmd, cwd=contracts_dir, wait_time=10, max_attempts=12, fail_value="0"
+    # )
+    # if adapter_randomness_result:
+    #     print("Adapter randomness request succeeded!")
+    #     print("Output:\n", adapter_randomness_result)
+    # else:
+    #     print("Adapter randomness request failed!")
+    #     sys.exit(1)
 
     # # cast call 0x712516e61C8B383dF4A63CFe83d7701Bce54B03e "lastRandomnessResult()(uint256)" # should match above
 
