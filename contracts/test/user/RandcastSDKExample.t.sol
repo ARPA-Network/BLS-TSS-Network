@@ -131,7 +131,7 @@ contract RandcastSDKExampleTest is RandcastTestHelper {
         _prepareSubscription(_admin, address(_pickRarityExample), plentyOfEthBalance);
         _prepareSubscription(_admin, address(_pickPropertyExample), plentyOfEthBalance);
         _prepareSubscription(_admin, address(_pickWinnerExample), plentyOfEthBalance);
-        
+
         address[] memory _nodesGroup = new address[](5);
         _nodesGroup[0] = _node1;
         _nodesGroup[1] = _node2;
@@ -158,7 +158,7 @@ contract RandcastSDKExampleTest is RandcastTestHelper {
 
     function testDrawLottery() public {
         deal(_user, 1 * 1e18);
-        
+
         uint32 ticketNumber = 10;
         uint32 winnerNumber = 2;
 
@@ -226,5 +226,4 @@ contract RandcastSDKExampleTest is RandcastTestHelper {
         _fulfillRequest(_node1, requestId, 16);
         assertTrue(_pickWinnerExample.indexResult() < 3);
     }
-
 }

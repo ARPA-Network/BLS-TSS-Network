@@ -144,9 +144,5 @@ interface IAdapter is IRequestTypeBase {
     ) external view returns (uint256);
 
     // delete the request that cannot be fulfilled, triggered by user themselves
-    function deleteOvertimeRequest(
-        uint64 subId,
-        bytes32 requestId,
-        RequestDetail calldata requestDetail
-    ) external;
+    function cancelOvertimeRequest(bytes32 requestId, RequestDetail calldata requestDetail) external;
 }

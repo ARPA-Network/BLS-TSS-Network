@@ -51,8 +51,6 @@ contract Adapter is UUPSUpgradeable, IAdapter, IAdapterOwner, RequestIdBase, Own
     // Flat Fee Promotion
     FlatFeeConfig internal _flatFeeConfig;
 
-    uint256 internal _testProxy;
-
     // *Structs*
     // Note a nonce of 0 indicates an the consumer is not assigned to that subscription.
     struct Consumer {
@@ -125,6 +123,8 @@ contract Adapter is UUPSUpgradeable, IAdapter, IAdapterOwner, RequestIdBase, Own
         uint256 flatFee,
         bool success
     );
+
+    event OvertimeRequestCanceled(bytes32 requestId, uint64 subId);
 
     // *Errors*
     error Reentrant();
@@ -945,13 +945,11 @@ contract Adapter is UUPSUpgradeable, IAdapter, IAdapterOwner, RequestIdBase, Own
         }
     }
 
-    event OvertimeRequestDeleted(bytes32 requestId, uint64 subId);
-
-    function deleteOvertimeRequest(uint64 subId, bytes32 requestId, RequestDetail calldata requestDetail)
-        external  override(IAdapter) onlySubOwner(subId){
-        if (requestDetail.subId != subId) {
-            revert InvalidSubscription();
-        }
+    function cancelOvertimeRequest(bytes32 requestId, RequestDetail calldata requestDetail)
+        external
+        override(IAdapter)
+        onlySubOwner(requestDetail.subId)
+    {
         if (_requestCommitments[requestId] == 0) {
             revert NoCorrespondingRequest();
         }
@@ -976,19 +974,12 @@ contract Adapter is UUPSUpgradeable, IAdapter, IAdapterOwner, RequestIdBase, Own
             revert IncorrectCommitment();
         }
         uint256 blockNum24H = 86400 / getBlockTime();
-        //uint256 blockNum24H = 4096;
-        if (block.number >= requestDetail.blockNum + blockNum24H) {
-            delete _requestCommitments[requestId];
-            emit OvertimeRequestDeleted(requestId, subId);
-        } else {
+        if (block.number < requestDetail.blockNum + blockNum24H) {
             revert OvertimeRequestNotExpired();
         }
-    }
-
-    function setTestProxy(uint256 value) public {
-       _testProxy = value;
-    }
-    function getTestProxy() public returns(uint256){
-       return _testProxy;
+        delete _requestCommitments[requestId];
+        _subscriptions[requestDetail.subId].inflightCost -=
+            _subscriptions[requestDetail.subId].inflightPayments[requestId];
+        emit OvertimeRequestCanceled(requestId, requestDetail.subId);
     }
 }

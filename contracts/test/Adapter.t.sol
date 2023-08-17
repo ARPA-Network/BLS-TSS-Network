@@ -220,28 +220,45 @@ contract AdapterTest is RandcastTestHelper {
         Adapter.RequestDetail memory rd = AdapterForTest(address(_adapter)).getPendingRequest(requestId);
 
         bytes32 pendingRequest = IAdapter(address(_adapter)).getPendingRequestCommitment(requestId);
-        assertEq(pendingRequest, keccak256(
-                    abi.encode(
-                        requestId,
-                        rd.subId,
-                        rd.groupIndex,
-                        rd.requestType,
-                        rd.params,
-                        rd.callbackContract,
-                        rd.seed,
-                        rd.requestConfirmations,
-                        rd.callbackGasLimit,
-                        rd.callbackMaxGasPrice,
-                        rd.blockNum
-                    )
-        ));
+        assertEq(
+            pendingRequest,
+            keccak256(
+                abi.encode(
+                    requestId,
+                    rd.subId,
+                    rd.groupIndex,
+                    rd.requestType,
+                    rd.params,
+                    rd.callbackContract,
+                    rd.seed,
+                    rd.requestConfirmations,
+                    rd.callbackGasLimit,
+                    rd.callbackMaxGasPrice,
+                    rd.blockNum
+                )
+            )
+        );
         vm.broadcast(_user);
         vm.expectRevert(abi.encodeWithSelector(Adapter.OvertimeRequestNotExpired.selector));
-        IAdapter(address(_adapter)).deleteOvertimeRequest(_subId, requestId, rd);
+        IAdapter(address(_adapter)).cancelOvertimeRequest(requestId, rd);
+
+        (,,, uint256 inflightCost,,,,,) = IAdapter(address(_adapter)).getSubscription(_subId);
         vm.roll(block.number + 7200);
         vm.broadcast(_user);
-        IAdapter(address(_adapter)).deleteOvertimeRequest(_subId, requestId, rd);
+        IAdapter(address(_adapter)).cancelOvertimeRequest(requestId, rd);
         pendingRequest = IAdapter(address(_adapter)).getPendingRequestCommitment(requestId);
         assertEq(pendingRequest, bytes32(0));
+
+        uint256 payment = IAdapter(address(_adapter)).estimatePaymentAmountInETH(
+            _getRandomNumberExample.callbackGasLimit() + Adapter(address(_adapter)).RANDOMNESS_REWARD_GAS() * 3
+                + Adapter(address(_adapter)).VERIFICATION_GAS_OVER_MINIMUM_THRESHOLD()
+                    * (3 - Adapter(address(_adapter)).DEFAULT_MINIMUM_THRESHOLD()),
+            _gasExceptCallback,
+            0,
+            tx.gasprice * 3
+        );
+
+        (,,, uint256 newInflightCost,,,,,) = IAdapter(address(_adapter)).getSubscription(_subId);
+        assertEq(inflightCost, newInflightCost + payment);
     }
 }
