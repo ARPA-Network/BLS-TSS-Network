@@ -208,4 +208,40 @@ contract AdapterTest is RandcastTestHelper {
         assertEq(_getRandomNumberExample.randomnessResults(0), IAdapter(address(_adapter)).getLastRandomness());
         assertEq(_getRandomNumberExample.lengthOfRandomnessResults(), times);
     }
+
+    function testDeleteOvertimeRequest() public {
+        prepareAnAvailableGroup();
+        deal(_user, 1 * 1e18);
+
+        vm.broadcast(_user);
+        bytes32 requestId = _getRandomNumberExample.getRandomNumber();
+        emit log_bytes32(requestId);
+
+        Adapter.RequestDetail memory rd = AdapterForTest(address(_adapter)).getPendingRequest(requestId);
+
+        bytes32 pendingRequest = IAdapter(address(_adapter)).getPendingRequestCommitment(requestId);
+        assertEq(pendingRequest, keccak256(
+                    abi.encode(
+                        requestId,
+                        rd.subId,
+                        rd.groupIndex,
+                        rd.requestType,
+                        rd.params,
+                        rd.callbackContract,
+                        rd.seed,
+                        rd.requestConfirmations,
+                        rd.callbackGasLimit,
+                        rd.callbackMaxGasPrice,
+                        rd.blockNum
+                    )
+        ));
+        vm.broadcast(_user);
+        vm.expectRevert(abi.encodeWithSelector(Adapter.OvertimeRequestNotExpired.selector));
+        IAdapter(address(_adapter)).deleteOvertimeRequest(_subId, requestId, rd);
+        vm.roll(block.number + 7200);
+        vm.broadcast(_user);
+        IAdapter(address(_adapter)).deleteOvertimeRequest(_subId, requestId, rd);
+        pendingRequest = IAdapter(address(_adapter)).getPendingRequestCommitment(requestId);
+        assertEq(pendingRequest, bytes32(0));
+    }
 }

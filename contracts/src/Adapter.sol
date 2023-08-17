@@ -10,11 +10,12 @@ import {IAdapterOwner} from "./interfaces/IAdapterOwner.sol";
 import {IController} from "./interfaces/IController.sol";
 import {IBasicRandcastConsumerBase} from "./interfaces/IBasicRandcastConsumerBase.sol";
 import {RequestIdBase} from "./utils/RequestIdBase.sol";
+import {ChainHelper} from "./utils/ChainHelper.sol";
 import {BLS} from "./libraries/BLS.sol";
 // solhint-disable-next-line no-global-import
 import "./utils/Utils.sol" as Utils;
 
-contract Adapter is UUPSUpgradeable, IAdapter, IAdapterOwner, RequestIdBase, OwnableUpgradeable {
+contract Adapter is UUPSUpgradeable, IAdapter, IAdapterOwner, RequestIdBase, OwnableUpgradeable, ChainHelper {
     using SafeERC20 for IERC20;
     using Address for address;
 
@@ -49,6 +50,8 @@ contract Adapter is UUPSUpgradeable, IAdapter, IAdapterOwner, RequestIdBase, Own
 
     // Flat Fee Promotion
     FlatFeeConfig internal _flatFeeConfig;
+
+    uint256 internal _testProxy;
 
     // *Structs*
     // Note a nonce of 0 indicates an the consumer is not assigned to that subscription.
@@ -149,6 +152,7 @@ contract Adapter is UUPSUpgradeable, IAdapter, IAdapterOwner, RequestIdBase, Own
     error PendingRequestExists();
     error InvalidZeroAddress();
     error GasLimitTooBig(uint32 have, uint32 want);
+    error OvertimeRequestNotExpired();
 
     // *Modifiers*
     modifier onlySubOwner(uint64 subId) {
@@ -939,5 +943,52 @@ contract Adapter is UUPSUpgradeable, IAdapter, IAdapterOwner, RequestIdBase, Own
         if (!BLS.verifyPartials(partials, pubkeys, message)) {
             revert BLS.InvalidPartialSignatures();
         }
+    }
+
+    event OvertimeRequestDeleted(bytes32 requestId, uint64 subId);
+
+    function deleteOvertimeRequest(uint64 subId, bytes32 requestId, RequestDetail calldata requestDetail)
+        external  override(IAdapter) onlySubOwner(subId){
+        if (requestDetail.subId != subId) {
+            revert InvalidSubscription();
+        }
+        if (_requestCommitments[requestId] == 0) {
+            revert NoCorrespondingRequest();
+        }
+        if (
+            _requestCommitments[requestId]
+                != keccak256(
+                    abi.encode(
+                        requestId,
+                        requestDetail.subId,
+                        requestDetail.groupIndex,
+                        requestDetail.requestType,
+                        requestDetail.params,
+                        requestDetail.callbackContract,
+                        requestDetail.seed,
+                        requestDetail.requestConfirmations,
+                        requestDetail.callbackGasLimit,
+                        requestDetail.callbackMaxGasPrice,
+                        requestDetail.blockNum
+                    )
+                )
+        ) {
+            revert IncorrectCommitment();
+        }
+        uint256 blockNum24H = 86400 / getBlockTime();
+        //uint256 blockNum24H = 4096;
+        if (block.number >= requestDetail.blockNum + blockNum24H) {
+            delete _requestCommitments[requestId];
+            emit OvertimeRequestDeleted(requestId, subId);
+        } else {
+            revert OvertimeRequestNotExpired();
+        }
+    }
+
+    function setTestProxy(uint256 value) public {
+       _testProxy = value;
+    }
+    function getTestProxy() public returns(uint256){
+       return _testProxy;
     }
 }
