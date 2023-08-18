@@ -11,7 +11,7 @@ use arpa_contract_client::ethers::controller::ControllerClient;
 use arpa_contract_client::{ServiceClient, TransactionCaller, ViewCaller};
 use arpa_core::{
     address_to_string, build_wallet_from_config, pad_to_bytes32, ChainIdentity, Config,
-    GeneralChainIdentity, WalletSigner,
+    GeneralMainChainIdentity, WalletSigner,
 };
 use arpa_dal::NodeInfoFetcher;
 use arpa_node::management::client::GeneralManagementClient;
@@ -28,7 +28,7 @@ use std::fs::File;
 use std::io::{BufRead, BufReader};
 use std::path::PathBuf;
 use structopt::StructOpt;
-use threshold_bls::curve::bn254::PairingCurve as BN254;
+use threshold_bls::curve::bn254::G2Curve;
 use threshold_bls::serialize::scalar_to_hex;
 
 pub const MAX_HISTORY_CAPACITY: usize = 1000;
@@ -63,7 +63,7 @@ pub struct Opt {
 struct Context {
     config: Config,
     wallet: LocalWallet,
-    main_chain_identity: GeneralChainIdentity,
+    main_chain_identity: GeneralMainChainIdentity,
     db: SqliteDB,
     staking_contract_address: Address,
     arpa_contract_address: Address,
@@ -153,6 +153,7 @@ async fn send(args: ArgMatches, context: &mut Context) -> anyhow::Result<Option<
             );
 
             let trx_hash = ArpaClient::call_contract_transaction(
+                context.config.chain_id,
                 "approve-arpa-to-staking",
                 arpa_contract.approve(context.staking_contract_address, amount),
                 context
@@ -179,6 +180,7 @@ async fn send(args: ArgMatches, context: &mut Context) -> anyhow::Result<Option<
             );
 
             let is_operator = StakingClient::call_contract_view(
+                context.config.chain_id,
                 "is_operator",
                 staking_contract.is_operator(context.main_chain_identity.get_id_address()),
                 context
@@ -201,6 +203,7 @@ async fn send(args: ArgMatches, context: &mut Context) -> anyhow::Result<Option<
             );
 
             let balance = ArpaClient::call_contract_view(
+                context.config.chain_id,
                 "balance_of",
                 arpa_contract.balance_of(context.main_chain_identity.get_id_address()),
                 context
@@ -219,6 +222,7 @@ async fn send(args: ArgMatches, context: &mut Context) -> anyhow::Result<Option<
             }
 
             let allowance = ArpaClient::call_contract_view(
+                context.config.chain_id,
                 "allowance",
                 arpa_contract.allowance(
                     context.main_chain_identity.get_id_address(),
@@ -240,6 +244,7 @@ async fn send(args: ArgMatches, context: &mut Context) -> anyhow::Result<Option<
             }
 
             let trx_hash = StakingClient::call_contract_transaction(
+                context.config.chain_id,
                 "stake",
                 staking_contract.stake(amount),
                 context
@@ -266,6 +271,7 @@ async fn send(args: ArgMatches, context: &mut Context) -> anyhow::Result<Option<
             );
 
             let staked_amount = StakingClient::call_contract_view(
+                context.config.chain_id,
                 "staked_amount",
                 staking_contract.get_stake(context.main_chain_identity.get_id_address()),
                 context
@@ -284,6 +290,7 @@ async fn send(args: ArgMatches, context: &mut Context) -> anyhow::Result<Option<
             }
 
             let trx_hash = StakingClient::call_contract_transaction(
+                context.config.chain_id,
                 "unstake",
                 staking_contract.unstake(amount),
                 context
@@ -307,6 +314,7 @@ async fn send(args: ArgMatches, context: &mut Context) -> anyhow::Result<Option<
             );
 
             let trx_hash = StakingClient::call_contract_transaction(
+                context.config.chain_id,
                 "claim_frozen_principal",
                 staking_contract.claim_frozen_principal(),
                 context
@@ -324,18 +332,18 @@ async fn send(args: ArgMatches, context: &mut Context) -> anyhow::Result<Option<
             )))
         }
         Some(("register", _sub_matches)) => {
-            let client = ControllerClientBuilder::<BN254>::build_controller_client(
+            let client = ControllerClientBuilder::<G2Curve>::build_controller_client(
                 &context.main_chain_identity,
             );
 
             let node =
-                ControllerViews::<BN254>::get_node(&client, context.wallet.address()).await?;
+                ControllerViews::<G2Curve>::get_node(&client, context.wallet.address()).await?;
 
             if node.id_address != Address::zero() {
                 return Ok(Some("Node already registered".to_string()));
             }
 
-            let mut node_cache = context.db.get_node_info_client::<BN254>();
+            let mut node_cache = context.db.get_node_info_client::<G2Curve>();
 
             node_cache.refresh_current_node_info().await?;
 
@@ -351,12 +359,12 @@ async fn send(args: ArgMatches, context: &mut Context) -> anyhow::Result<Option<
             )))
         }
         Some(("activate", _sub_matches)) => {
-            let client = ControllerClientBuilder::<BN254>::build_controller_client(
+            let client = ControllerClientBuilder::<G2Curve>::build_controller_client(
                 &context.main_chain_identity,
             );
 
             let node =
-                ControllerViews::<BN254>::get_node(&client, context.wallet.address()).await?;
+                ControllerViews::<G2Curve>::get_node(&client, context.wallet.address()).await?;
 
             if node.id_address == Address::zero() {
                 return Ok(Some("Node has not registered".to_string()));
@@ -371,6 +379,7 @@ async fn send(args: ArgMatches, context: &mut Context) -> anyhow::Result<Option<
                     .await?;
 
             let trx_hash = ControllerClient::call_contract_transaction(
+                context.config.chain_id,
                 "node_activate",
                 controller_contract.node_activate(),
                 context
@@ -388,12 +397,12 @@ async fn send(args: ArgMatches, context: &mut Context) -> anyhow::Result<Option<
             )))
         }
         Some(("quit", _sub_matches)) => {
-            let client = ControllerClientBuilder::<BN254>::build_controller_client(
+            let client = ControllerClientBuilder::<G2Curve>::build_controller_client(
                 &context.main_chain_identity,
             );
 
             let node =
-                ControllerViews::<BN254>::get_node(&client, context.wallet.address()).await?;
+                ControllerViews::<G2Curve>::get_node(&client, context.wallet.address()).await?;
 
             if node.id_address == Address::zero() {
                 return Ok(Some("Node has not registered".to_string()));
@@ -404,6 +413,7 @@ async fn send(args: ArgMatches, context: &mut Context) -> anyhow::Result<Option<
                     .await?;
 
             let trx_hash = ControllerClient::call_contract_transaction(
+                context.config.chain_id,
                 "node_quit",
                 controller_contract.node_quit(),
                 context
@@ -421,12 +431,12 @@ async fn send(args: ArgMatches, context: &mut Context) -> anyhow::Result<Option<
             )))
         }
         Some(("change-dkg-public-key", _sub_matches)) => {
-            let client = ControllerClientBuilder::<BN254>::build_controller_client(
+            let client = ControllerClientBuilder::<G2Curve>::build_controller_client(
                 &context.main_chain_identity,
             );
 
             let node =
-                ControllerViews::<BN254>::get_node(&client, context.wallet.address()).await?;
+                ControllerViews::<G2Curve>::get_node(&client, context.wallet.address()).await?;
 
             if node.id_address == Address::zero() {
                 return Ok(Some("Node has not registered".to_string()));
@@ -436,7 +446,7 @@ async fn send(args: ArgMatches, context: &mut Context) -> anyhow::Result<Option<
                 return Ok(Some("Node already activated".to_string()));
             }
 
-            let mut node_cache = context.db.get_node_info_client::<BN254>();
+            let mut node_cache = context.db.get_node_info_client::<G2Curve>();
 
             node_cache.refresh_current_node_info().await?;
 
@@ -447,6 +457,7 @@ async fn send(args: ArgMatches, context: &mut Context) -> anyhow::Result<Option<
                     .await?;
 
             let trx_hash = ControllerClient::call_contract_transaction(
+                context.config.chain_id,
                 "change_dkg_public_key",
                 controller_contract
                     .change_dkg_public_key(bincode::serialize(&dkg_public_key)?.into()),
@@ -473,12 +484,12 @@ async fn send(args: ArgMatches, context: &mut Context) -> anyhow::Result<Option<
                 return Ok(Some("Invalid recipient address".to_string()));
             }
 
-            let client = ControllerClientBuilder::<BN254>::build_controller_client(
+            let client = ControllerClientBuilder::<G2Curve>::build_controller_client(
                 &context.main_chain_identity,
             );
 
             let node =
-                ControllerViews::<BN254>::get_node(&client, context.wallet.address()).await?;
+                ControllerViews::<G2Curve>::get_node(&client, context.wallet.address()).await?;
 
             if node.id_address == Address::zero() {
                 return Ok(Some("Node has not registered".to_string()));
@@ -489,6 +500,7 @@ async fn send(args: ArgMatches, context: &mut Context) -> anyhow::Result<Option<
                     .await?;
 
             let trx_hash = ControllerClient::call_contract_transaction(
+                context.config.chain_id,
                 "node_withdraw",
                 controller_contract.node_withdraw(recipient),
                 context
@@ -518,11 +530,11 @@ async fn call(args: ArgMatches, context: &mut Context) -> anyhow::Result<Option<
 
             let id_address = id_address.parse::<Address>()?;
 
-            let client = ControllerClientBuilder::<BN254>::build_controller_client(
+            let client = ControllerClientBuilder::<G2Curve>::build_controller_client(
                 &context.main_chain_identity,
             );
 
-            let node = ControllerViews::<BN254>::get_node(&client, id_address).await?;
+            let node = ControllerViews::<G2Curve>::get_node(&client, id_address).await?;
 
             Ok(Some(format!("{:#?}", node)))
         }
@@ -530,17 +542,17 @@ async fn call(args: ArgMatches, context: &mut Context) -> anyhow::Result<Option<
         Some(("group", sub_matches)) => {
             let group_index = sub_matches.get_one::<usize>("group-index").unwrap();
 
-            let client = ControllerClientBuilder::<BN254>::build_controller_client(
+            let client = ControllerClientBuilder::<G2Curve>::build_controller_client(
                 &context.main_chain_identity,
             );
 
-            let group = ControllerViews::<BN254>::get_group(&client, *group_index).await?;
+            let group = ControllerViews::<G2Curve>::get_group(&client, *group_index).await?;
 
             Ok(Some(format!("{:#?}", group)))
         }
         // getValidGroupIndices
         Some(("valid-group-indices", _sub_matches)) => {
-            let client = ControllerClientBuilder::<BN254>::build_controller_client(
+            let client = ControllerClientBuilder::<G2Curve>::build_controller_client(
                 &context.main_chain_identity,
             );
 
@@ -549,6 +561,7 @@ async fn call(args: ArgMatches, context: &mut Context) -> anyhow::Result<Option<
                     .await?;
 
             let valid_group_indices = ControllerClient::call_contract_view(
+                context.config.chain_id,
                 "valid_group_indices",
                 controller_contract.get_valid_group_indices(),
                 context
@@ -563,7 +576,7 @@ async fn call(args: ArgMatches, context: &mut Context) -> anyhow::Result<Option<
         }
         // getGroupEpoch
         Some(("group-epoch", _sub_matches)) => {
-            let client = ControllerClientBuilder::<BN254>::build_controller_client(
+            let client = ControllerClientBuilder::<G2Curve>::build_controller_client(
                 &context.main_chain_identity,
             );
 
@@ -572,6 +585,7 @@ async fn call(args: ArgMatches, context: &mut Context) -> anyhow::Result<Option<
                     .await?;
 
             let group_epoch = ControllerClient::call_contract_view(
+                context.config.chain_id,
                 "group_epoch",
                 controller_contract.get_group_epoch(),
                 context
@@ -586,7 +600,7 @@ async fn call(args: ArgMatches, context: &mut Context) -> anyhow::Result<Option<
         }
         // getGroupCount
         Some(("group-count", _sub_matches)) => {
-            let client = ControllerClientBuilder::<BN254>::build_controller_client(
+            let client = ControllerClientBuilder::<G2Curve>::build_controller_client(
                 &context.main_chain_identity,
             );
 
@@ -595,6 +609,7 @@ async fn call(args: ArgMatches, context: &mut Context) -> anyhow::Result<Option<
                     .await?;
 
             let group_count = ControllerClient::call_contract_view(
+                context.config.chain_id,
                 "group_count",
                 controller_contract.get_group_count(),
                 context
@@ -613,7 +628,7 @@ async fn call(args: ArgMatches, context: &mut Context) -> anyhow::Result<Option<
 
             let node_address = node_address.parse::<Address>()?;
 
-            let client = ControllerClientBuilder::<BN254>::build_controller_client(
+            let client = ControllerClientBuilder::<G2Curve>::build_controller_client(
                 &context.main_chain_identity,
             );
 
@@ -622,6 +637,7 @@ async fn call(args: ArgMatches, context: &mut Context) -> anyhow::Result<Option<
                     .await?;
 
             let (belonging_group_index, member_index) = ControllerClient::call_contract_view(
+                context.config.chain_id,
                 "belonging_group",
                 controller_contract.get_belonging_group(node_address),
                 context
@@ -643,7 +659,7 @@ async fn call(args: ArgMatches, context: &mut Context) -> anyhow::Result<Option<
 
             let member_index = sub_matches.get_one::<usize>("member-index").unwrap();
 
-            let client = ControllerClientBuilder::<BN254>::build_controller_client(
+            let client = ControllerClientBuilder::<G2Curve>::build_controller_client(
                 &context.main_chain_identity,
             );
 
@@ -652,6 +668,7 @@ async fn call(args: ArgMatches, context: &mut Context) -> anyhow::Result<Option<
                     .await?;
 
             let member = ControllerClient::call_contract_view(
+                context.config.chain_id,
                 "member",
                 controller_contract.get_member((*group_index).into(), (*member_index).into()),
                 context
@@ -668,7 +685,7 @@ async fn call(args: ArgMatches, context: &mut Context) -> anyhow::Result<Option<
         Some(("coordinator", sub_matches)) => {
             let group_index = sub_matches.get_one::<usize>("group-index").unwrap();
 
-            let client = ControllerClientBuilder::<BN254>::build_controller_client(
+            let client = ControllerClientBuilder::<G2Curve>::build_controller_client(
                 &context.main_chain_identity,
             );
 
@@ -677,6 +694,7 @@ async fn call(args: ArgMatches, context: &mut Context) -> anyhow::Result<Option<
                     .await?;
 
             let coordinator = ControllerClient::call_contract_view(
+                context.config.chain_id,
                 "coordinator",
                 controller_contract.get_coordinator((*group_index).into()),
                 context
@@ -695,7 +713,7 @@ async fn call(args: ArgMatches, context: &mut Context) -> anyhow::Result<Option<
 
             let node_address = node_address.parse::<Address>()?;
 
-            let client = ControllerClientBuilder::<BN254>::build_controller_client(
+            let client = ControllerClientBuilder::<G2Curve>::build_controller_client(
                 &context.main_chain_identity,
             );
 
@@ -705,6 +723,7 @@ async fn call(args: ArgMatches, context: &mut Context) -> anyhow::Result<Option<
 
             let (node_withdrawable_eth, node_withdrawable_arpa) =
                 ControllerClient::call_contract_view(
+                    context.config.chain_id,
                     "node_withdrawable_tokens",
                     controller_contract.get_node_withdrawable_tokens(node_address),
                     context
@@ -722,7 +741,7 @@ async fn call(args: ArgMatches, context: &mut Context) -> anyhow::Result<Option<
         }
         // getControllerConfig
         Some(("controller-config", _sub_matches)) => {
-            let client = ControllerClientBuilder::<BN254>::build_controller_client(
+            let client = ControllerClientBuilder::<G2Curve>::build_controller_client(
                 &context.main_chain_identity,
             );
 
@@ -742,6 +761,7 @@ async fn call(args: ArgMatches, context: &mut Context) -> anyhow::Result<Option<
                 pending_block_after_quit,
                 dkg_post_process_reward,
             ) = ControllerClient::call_contract_view(
+                context.config.chain_id,
                 "controller_config",
                 controller_contract.get_controller_config(),
                 context
@@ -854,6 +874,7 @@ async fn call(args: ArgMatches, context: &mut Context) -> anyhow::Result<Option<
             );
 
             let delegation_reward = StakingClient::call_contract_view(
+                context.config.chain_id,
                 "delegation_reward",
                 staking_contract
                     .get_delegation_reward(context.main_chain_identity.get_id_address()),
@@ -874,6 +895,7 @@ async fn call(args: ArgMatches, context: &mut Context) -> anyhow::Result<Option<
             );
 
             let delegates_count = StakingClient::call_contract_view(
+                context.config.chain_id,
                 "delegates_count",
                 staking_contract.get_delegates_count(),
                 context
@@ -893,6 +915,7 @@ async fn call(args: ArgMatches, context: &mut Context) -> anyhow::Result<Option<
             );
 
             let amount = StakingClient::call_contract_view(
+                context.config.chain_id,
                 "get_stake",
                 staking_contract.get_stake(context.main_chain_identity.get_id_address()),
                 context
@@ -912,6 +935,7 @@ async fn call(args: ArgMatches, context: &mut Context) -> anyhow::Result<Option<
             );
 
             let (amounts, timestamps) = StakingClient::call_contract_view(
+                context.config.chain_id,
                 "frozen_principal",
                 staking_contract.get_frozen_principal(context.main_chain_identity.get_id_address()),
                 context
@@ -946,6 +970,7 @@ async fn call(args: ArgMatches, context: &mut Context) -> anyhow::Result<Option<
             );
 
             let balance = ArpaClient::call_contract_view(
+                context.config.chain_id,
                 "balance_of",
                 arpa_contract.balance_of(context.main_chain_identity.get_id_address()),
                 context
@@ -978,6 +1003,7 @@ async fn call(args: ArgMatches, context: &mut Context) -> anyhow::Result<Option<
                 reward_per_signature,
                 committer_reward_per_signature,
             ) = AdapterClient::call_contract_view(
+                context.config.chain_id,
                 "adapter_config",
                 adapter_contract.get_adapter_config(),
                 context
@@ -1013,6 +1039,7 @@ async fn call(args: ArgMatches, context: &mut Context) -> anyhow::Result<Option<
                     .await?;
 
             let last_assigned_group_index = AdapterClient::call_contract_view(
+                context.config.chain_id,
                 "last_assigned_group_index",
                 adapter_contract.get_last_assigned_group_index(),
                 context
@@ -1040,6 +1067,7 @@ async fn call(args: ArgMatches, context: &mut Context) -> anyhow::Result<Option<
                     .await?;
 
             let randomness_count = AdapterClient::call_contract_view(
+                context.config.chain_id,
                 "randomness_count",
                 adapter_contract.get_randomness_count(),
                 context
@@ -1143,6 +1171,7 @@ async fn call(args: ArgMatches, context: &mut Context) -> anyhow::Result<Option<
                 cumulative_committer_reward,
                 cumulative_partial_signature_reward,
             ) = AdapterClient::call_contract_view(
+                context.config.chain_id,
                 "cumulative_data",
                 adapter_contract.get_cumulative_data(),
                 context
@@ -1240,7 +1269,7 @@ async fn show(args: ArgMatches, context: &mut Context) -> anyhow::Result<Option<
         Some(("node", sub_matches)) => {
             let display_sensitive = sub_matches.get_flag("display-sensitive");
 
-            let mut node_cache = context.db.get_node_info_client::<BN254>();
+            let mut node_cache = context.db.get_node_info_client::<G2Curve>();
 
             node_cache.refresh_current_node_info().await?;
 
@@ -1310,7 +1339,7 @@ async fn main() -> anyhow::Result<()> {
 
     let wallet = build_wallet_from_config(&config.account)?;
 
-    let main_chain_identity = GeneralChainIdentity::new(
+    let main_chain_identity = GeneralMainChainIdentity::new(
         config.chain_id,
         wallet.clone(),
         config.provider_endpoint.clone(),
@@ -1319,6 +1348,10 @@ async fn main() -> anyhow::Result<()> {
             .controller_address
             .parse()
             .expect("bad format of controller_address"),
+        config
+            .controller_relayer_address
+            .parse()
+            .expect("bad format of controller_relayer_address"),
         config
             .adapter_address
             .parse()
@@ -1340,12 +1373,13 @@ async fn main() -> anyhow::Result<()> {
     .await
     .unwrap();
 
-    let client = ControllerClientBuilder::<BN254>::build_controller_client(&main_chain_identity);
+    let client = ControllerClientBuilder::<G2Curve>::build_controller_client(&main_chain_identity);
 
     let controller_contract =
         ServiceClient::<ControllerContract<WalletSigner>>::prepare_service_client(&client).await?;
 
     let staking_contract_address = ControllerClient::call_contract_view(
+        config.chain_id,
         "controller_config",
         controller_contract.get_controller_config(),
         config.time_limits.unwrap().contract_view_retry_descriptor,
@@ -1356,6 +1390,7 @@ async fn main() -> anyhow::Result<()> {
     let staking_contract =
         StakingContract::new(staking_contract_address, main_chain_identity.get_signer());
     let arpa_contract_address = StakingClient::call_contract_view(
+        config.chain_id,
         "get_arpa_token",
         staking_contract.get_arpa_token(),
         config.time_limits.unwrap().contract_view_retry_descriptor,

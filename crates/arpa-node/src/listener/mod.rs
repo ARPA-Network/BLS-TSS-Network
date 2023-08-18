@@ -30,3 +30,17 @@ pub trait Listener {
 
     async fn listen(&self) -> NodeResult<()>;
 }
+
+#[cfg(test)]
+pub mod tests {
+    use arpa_core::jitter;
+    use tokio_retry::strategy::FixedInterval;
+
+    #[tokio::test]
+    async fn test() {
+        let mut s = FixedInterval::from_millis(1000).map(jitter);
+        for _ in 0..10 {
+            println!("{:?}", s.next().unwrap());
+        }
+    }
+}

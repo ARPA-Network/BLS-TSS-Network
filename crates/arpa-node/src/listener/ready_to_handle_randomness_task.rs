@@ -1,52 +1,39 @@
 use super::Listener;
 use crate::{
+    context::{BLSTasksHandler, BlockInfoHandler, ChainIdentityHandlerType, GroupInfoHandler},
     error::NodeResult,
     event::ready_to_handle_randomness_task::ReadyToHandleRandomnessTask,
     queue::{event_queue::EventQueue, EventPublisher},
 };
-use arpa_contract_client::adapter::{AdapterClientBuilder, AdapterViews};
-use arpa_core::{ChainIdentity, RandomnessTask};
-use arpa_dal::{BLSTasksUpdater, BlockInfoFetcher, GroupInfoFetcher};
+use arpa_contract_client::adapter::AdapterViews;
+use arpa_core::RandomnessTask;
 use async_trait::async_trait;
 use ethers::types::Address;
 use std::{marker::PhantomData, sync::Arc};
-use threshold_bls::group::PairingCurve;
+use threshold_bls::group::Curve;
 use tokio::sync::RwLock;
 
-pub struct ReadyToHandleRandomnessTaskListener<
-    B: BlockInfoFetcher,
-    G: GroupInfoFetcher<PC>,
-    T: BLSTasksUpdater<RandomnessTask>,
-    I: ChainIdentity + AdapterClientBuilder,
-    PC: PairingCurve,
-> {
+pub struct ReadyToHandleRandomnessTaskListener<PC: Curve> {
     chain_id: usize,
     id_address: Address,
-    chain_identity: Arc<RwLock<I>>,
-    block_cache: Arc<RwLock<B>>,
-    group_cache: Arc<RwLock<G>>,
-    randomness_tasks_cache: Arc<RwLock<T>>,
+    chain_identity: Arc<RwLock<ChainIdentityHandlerType<PC>>>,
+    block_cache: Arc<RwLock<Box<dyn BlockInfoHandler>>>,
+    group_cache: Arc<RwLock<Box<dyn GroupInfoHandler<PC>>>>,
+    randomness_tasks_cache: Arc<RwLock<Box<dyn BLSTasksHandler<RandomnessTask>>>>,
     eq: Arc<RwLock<EventQueue>>,
     pc: PhantomData<PC>,
     randomness_task_exclusive_window: usize,
 }
 
-impl<
-        B: BlockInfoFetcher,
-        G: GroupInfoFetcher<PC>,
-        T: BLSTasksUpdater<RandomnessTask>,
-        I: ChainIdentity + AdapterClientBuilder,
-        PC: PairingCurve,
-    > ReadyToHandleRandomnessTaskListener<B, G, T, I, PC>
-{
+impl<PC: Curve> ReadyToHandleRandomnessTaskListener<PC> {
     #[allow(clippy::too_many_arguments)]
     pub fn new(
         chain_id: usize,
         id_address: Address,
-        chain_identity: Arc<RwLock<I>>,
-        block_cache: Arc<RwLock<B>>,
-        group_cache: Arc<RwLock<G>>,
-        randomness_tasks_cache: Arc<RwLock<T>>,
+        chain_identity: Arc<RwLock<ChainIdentityHandlerType<PC>>>,
+        block_cache: Arc<RwLock<Box<dyn BlockInfoHandler>>>,
+        group_cache: Arc<RwLock<Box<dyn GroupInfoHandler<PC>>>>,
+        randomness_tasks_cache: Arc<RwLock<Box<dyn BLSTasksHandler<RandomnessTask>>>>,
         eq: Arc<RwLock<EventQueue>>,
         randomness_task_exclusive_window: usize,
     ) -> Self {
@@ -65,14 +52,8 @@ impl<
 }
 
 #[async_trait]
-impl<
-        B: BlockInfoFetcher + Sync + Send,
-        G: GroupInfoFetcher<PC> + Sync + Send,
-        T: BLSTasksUpdater<RandomnessTask> + Sync + Send,
-        I: ChainIdentity + AdapterClientBuilder + Sync + Send,
-        PC: PairingCurve + Sync + Send,
-    > EventPublisher<ReadyToHandleRandomnessTask>
-    for ReadyToHandleRandomnessTaskListener<B, G, T, I, PC>
+impl<PC: Curve + Sync + Send> EventPublisher<ReadyToHandleRandomnessTask>
+    for ReadyToHandleRandomnessTaskListener<PC>
 {
     async fn publish(&self, event: ReadyToHandleRandomnessTask) {
         self.eq.read().await.publish(event).await;
@@ -80,14 +61,7 @@ impl<
 }
 
 #[async_trait]
-impl<
-        B: BlockInfoFetcher + Sync + Send,
-        G: GroupInfoFetcher<PC> + Sync + Send,
-        T: BLSTasksUpdater<RandomnessTask> + Sync + Send,
-        I: ChainIdentity + AdapterClientBuilder + Sync + Send,
-        PC: PairingCurve + Sync + Send,
-    > Listener for ReadyToHandleRandomnessTaskListener<B, G, T, I, PC>
-{
+impl<PC: Curve + Sync + Send> Listener for ReadyToHandleRandomnessTaskListener<PC> {
     async fn listen(&self) -> NodeResult<()> {
         let is_bls_ready = self.group_cache.read().await.get_state();
 

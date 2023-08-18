@@ -1,47 +1,52 @@
 use super::{DebuggableEvent, DebuggableSubscriber, Subscriber};
 use crate::{
     algorithm::bls::{BLSCore, SimpleBLSCore},
+    context::{ChainIdentityHandlerType, SignatureResultCacheHandler},
     error::{NodeError, NodeResult},
     event::{ready_to_fulfill_randomness_task::ReadyToFulfillRandomnessTask, types::Topic},
     queue::{event_queue::EventQueue, EventSubscriber},
     scheduler::{dynamic::SimpleDynamicTaskScheduler, TaskScheduler},
 };
-use arpa_contract_client::adapter::{AdapterClientBuilder, AdapterTransactions, AdapterViews};
-use arpa_core::{ChainIdentity, PartialSignature, RandomnessTask, SubscriberType, TaskType};
-use arpa_dal::{cache::RandomnessResultCache, BLSResultCacheState, SignatureResultCacheUpdater};
+use arpa_contract_client::adapter::{AdapterTransactions, AdapterViews};
+use arpa_core::{PartialSignature, RandomnessTask, SubscriberType, TaskType};
+use arpa_dal::{cache::RandomnessResultCache, BLSResultCacheState};
 use async_trait::async_trait;
 use ethers::types::Address;
 use log::{debug, error, info};
 use std::{collections::HashMap, marker::PhantomData, sync::Arc};
-use threshold_bls::{group::PairingCurve, poly::Eval};
+use threshold_bls::{
+    group::Curve,
+    poly::Eval,
+    sig::{SignatureScheme, ThresholdScheme},
+};
 use tokio::sync::RwLock;
 
 #[derive(Debug)]
 pub struct RandomnessSignatureAggregationSubscriber<
-    I: ChainIdentity + AdapterClientBuilder,
-    C: SignatureResultCacheUpdater<RandomnessResultCache>,
-    PC: PairingCurve,
+    PC: Curve,
+    S: SignatureScheme + ThresholdScheme<Public = PC::Point, Private = PC::Scalar>,
 > {
     pub chain_id: usize,
     id_address: Address,
-    chain_identity: Arc<RwLock<I>>,
-    randomness_signature_cache: Arc<RwLock<C>>,
+    chain_identity: Arc<RwLock<ChainIdentityHandlerType<PC>>>,
+    randomness_signature_cache:
+        Arc<RwLock<Box<dyn SignatureResultCacheHandler<RandomnessResultCache>>>>,
     eq: Arc<RwLock<EventQueue>>,
     ts: Arc<RwLock<SimpleDynamicTaskScheduler>>,
     c: PhantomData<PC>,
+    s: PhantomData<S>,
 }
 
-impl<
-        I: ChainIdentity + AdapterClientBuilder,
-        C: SignatureResultCacheUpdater<RandomnessResultCache>,
-        PC: PairingCurve,
-    > RandomnessSignatureAggregationSubscriber<I, C, PC>
+impl<PC: Curve, S: SignatureScheme + ThresholdScheme<Public = PC::Point, Private = PC::Scalar>>
+    RandomnessSignatureAggregationSubscriber<PC, S>
 {
     pub fn new(
         chain_id: usize,
         id_address: Address,
-        chain_identity: Arc<RwLock<I>>,
-        randomness_signature_cache: Arc<RwLock<C>>,
+        chain_identity: Arc<RwLock<ChainIdentityHandlerType<PC>>>,
+        randomness_signature_cache: Arc<
+            RwLock<Box<dyn SignatureResultCacheHandler<RandomnessResultCache>>>,
+        >,
         eq: Arc<RwLock<EventQueue>>,
         ts: Arc<RwLock<SimpleDynamicTaskScheduler>>,
     ) -> Self {
@@ -53,6 +58,7 @@ impl<
             eq,
             ts,
             c: PhantomData,
+            s: PhantomData,
         }
     }
 }
@@ -68,21 +74,16 @@ pub trait FulfillRandomnessHandler {
     ) -> NodeResult<()>;
 }
 
-pub struct GeneralFulfillRandomnessHandler<
-    I: ChainIdentity + AdapterClientBuilder,
-    C: SignatureResultCacheUpdater<RandomnessResultCache>,
-> {
+pub struct GeneralFulfillRandomnessHandler<PC: Curve> {
     id_address: Address,
-    chain_identity: Arc<RwLock<I>>,
-    randomness_signature_cache: Arc<RwLock<C>>,
+    chain_identity: Arc<RwLock<ChainIdentityHandlerType<PC>>>,
+    randomness_signature_cache:
+        Arc<RwLock<Box<dyn SignatureResultCacheHandler<RandomnessResultCache>>>>,
+    pc: PhantomData<PC>,
 }
 
 #[async_trait]
-impl<
-        I: ChainIdentity + AdapterClientBuilder + Sync + Send,
-        C: SignatureResultCacheUpdater<RandomnessResultCache> + Sync + Send,
-    > FulfillRandomnessHandler for GeneralFulfillRandomnessHandler<I, C>
-{
+impl<PC: Curve> FulfillRandomnessHandler for GeneralFulfillRandomnessHandler<PC> {
     async fn handle(
         &self,
         group_index: usize,
@@ -173,14 +174,17 @@ impl<
 
 #[async_trait]
 impl<
-        I: ChainIdentity + AdapterClientBuilder + std::fmt::Debug + Sync + Send + 'static,
-        C: SignatureResultCacheUpdater<RandomnessResultCache>
-            + std::fmt::Debug
+        PC: Curve + std::fmt::Debug + Sync + Send + 'static,
+        S: SignatureScheme
+            + ThresholdScheme<Public = PC::Point, Private = PC::Scalar>
+            + Clone
             + Sync
             + Send
             + 'static,
-        PC: PairingCurve + std::fmt::Debug + Sync + Send + 'static,
-    > Subscriber for RandomnessSignatureAggregationSubscriber<I, C, PC>
+    > Subscriber for RandomnessSignatureAggregationSubscriber<PC, S>
+where
+    <S as ThresholdScheme>::Error: Sync + Send,
+    <S as SignatureScheme>::Error: Sync + Send,
 {
     async fn notify(&self, topic: Topic, payload: &(dyn DebuggableEvent)) -> NodeResult<()> {
         debug!("{:?}", topic);
@@ -207,7 +211,7 @@ impl<
                 .cloned()
                 .collect::<Vec<Vec<u8>>>();
 
-            let signature = SimpleBLSCore::<PC>::aggregate(threshold, &partials)?;
+            let signature = SimpleBLSCore::<PC, S>::aggregate(threshold, &partials)?;
 
             let partial_signatures = partial_signatures
                 .iter()
@@ -228,12 +232,16 @@ impl<
             let randomness_signature_cache = self.randomness_signature_cache.clone();
 
             self.ts.write().await.add_task(
-                TaskType::Subscriber(SubscriberType::RandomnessSignatureAggregation),
+                TaskType::Subscriber(
+                    self.chain_identity.read().await.get_chain_id(),
+                    SubscriberType::RandomnessSignatureAggregation,
+                ),
                 async move {
                     let handler = GeneralFulfillRandomnessHandler {
                         id_address,
                         chain_identity,
                         randomness_signature_cache,
+                        pc: PhantomData,
                     };
 
                     if let Err(e) = handler
@@ -268,13 +276,16 @@ impl<
 }
 
 impl<
-        I: ChainIdentity + AdapterClientBuilder + std::fmt::Debug + Sync + Send + 'static,
-        C: SignatureResultCacheUpdater<RandomnessResultCache>
-            + std::fmt::Debug
+        PC: Curve + std::fmt::Debug + Sync + Send + 'static,
+        S: SignatureScheme
+            + ThresholdScheme<Public = PC::Point, Private = PC::Scalar>
+            + Clone
             + Sync
             + Send
             + 'static,
-        PC: PairingCurve + std::fmt::Debug + Sync + Send + 'static,
-    > DebuggableSubscriber for RandomnessSignatureAggregationSubscriber<I, C, PC>
+    > DebuggableSubscriber for RandomnessSignatureAggregationSubscriber<PC, S>
+where
+    <S as ThresholdScheme>::Error: Sync + Send,
+    <S as SignatureScheme>::Error: Sync + Send,
 {
 }
