@@ -6,6 +6,10 @@ mod m20220920_000003_create_randomness_task_table;
 mod m20220920_000004_create_randomness_task_index;
 mod m20230612_000005_create_randomness_result_table;
 mod m20230612_000006_create_randomness_result_index;
+mod m20230815_000007_create_op_randomness_task_table;
+mod m20230815_000008_create_op_randomness_task_index;
+mod m20230815_000009_create_op_randomness_result_table;
+mod m20230815_000010_create_op_randomness_result_index;
 
 pub struct Migrator;
 
@@ -19,6 +23,10 @@ impl MigratorTrait for Migrator {
             Box::new(m20220920_000004_create_randomness_task_index::Migration),
             Box::new(m20230612_000005_create_randomness_result_table::Migration),
             Box::new(m20230612_000006_create_randomness_result_index::Migration),
+            Box::new(m20230815_000007_create_op_randomness_task_table::Migration),
+            Box::new(m20230815_000008_create_op_randomness_task_index::Migration),
+            Box::new(m20230815_000009_create_op_randomness_result_table::Migration),
+            Box::new(m20230815_000010_create_op_randomness_result_index::Migration),
         ]
     }
 }
