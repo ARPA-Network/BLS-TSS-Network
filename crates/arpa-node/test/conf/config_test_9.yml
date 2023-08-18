@@ -6,11 +6,13 @@ node_management_rpc_token: "for_test"
 
 provider_endpoint: "http://127.0.0.1:8545"
 
-chain_id: 31337
+chain_id: 900
 
-controller_address: "0xdc64a140aa3e981100a9beca4e685f962f0cf6c9"
+controller_address: "0x9d4454B023096f34B160D6B654540c56A1F81688"
 
-adapter_address: "0xa513e6e4b8f2a923d98304ec87f64353c4d5c853"
+controller_relayer_address: "0xCD8a1C3ba11CF5ECfa6267617243239504a98d90"
+
+adapter_address: "0x809d550fca64d94Bd9F66E60752A544199cfAC3D"
 
 data_path: "./data9.sqlite"
 
@@ -67,3 +69,42 @@ time_limits:
     factor: 1000
     max_attempts: 5
     use_jitter: false
+
+relayed_chains:
+  - chain_id: 901
+    description: "OP"
+    provider_endpoint: "http://127.0.0.1:9545"
+    controller_oracle_address: "0x9fE46736679d2D9a65F0992F2272dE9f3c7fa6e0"
+    adapter_address: "0xDc64a140Aa3E981100a9becA4E685f962f0cF6C9"
+    listeners:
+      - l_type: Block
+        interval_millis: 0
+        use_jitter: true
+      - l_type: NewRandomnessTask
+        interval_millis: 0
+        use_jitter: true
+      - l_type: ReadyToHandleRandomnessTask
+        interval_millis: 1000
+        use_jitter: true
+      - l_type: RandomnessSignatureAggregation
+        interval_millis: 2000
+        use_jitter: false
+    time_limits:
+      randomness_task_exclusive_window: 10
+      listener_interval_millis: 1000
+      provider_polling_interval_millis: 1000
+      contract_transaction_retry_descriptor:
+        base: 2
+        factor: 1000
+        max_attempts: 3
+        use_jitter: true
+      contract_view_retry_descriptor:
+        base: 2
+        factor: 500
+        max_attempts: 5
+        use_jitter: true
+      commit_partial_signature_retry_descriptor:
+        base: 2
+        factor: 1000
+        max_attempts: 5
+        use_jitter: false

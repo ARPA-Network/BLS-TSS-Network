@@ -168,6 +168,7 @@ async fn send(args: ArgMatches, context: &mut Context) -> anyhow::Result<Option<
                 ArpaContract::new(context.config.arpa_address(), context.signer.clone());
 
             let trx_hash = ArpaClient::call_contract_transaction(
+                context.config.chain_id,
                 "approve-arpa-to-staking",
                 arpa_contract.approve(context.config.staking_address(), amount),
                 context.config.contract_transaction_retry_descriptor,
@@ -191,6 +192,7 @@ async fn send(args: ArgMatches, context: &mut Context) -> anyhow::Result<Option<
                 ArpaContract::new(context.config.arpa_address(), context.signer.clone());
 
             let balance = ArpaClient::call_contract_view(
+                context.config.chain_id,
                 "balance_of",
                 arpa_contract.balance_of(context.signer.address()),
                 context.config.contract_view_retry_descriptor,
@@ -205,6 +207,7 @@ async fn send(args: ArgMatches, context: &mut Context) -> anyhow::Result<Option<
             }
 
             let allowance = ArpaClient::call_contract_view(
+                context.config.chain_id,
                 "allowance",
                 arpa_contract.allowance(context.signer.address(), context.config.staking_address()),
                 context.config.contract_view_retry_descriptor,
@@ -219,6 +222,7 @@ async fn send(args: ArgMatches, context: &mut Context) -> anyhow::Result<Option<
             }
 
             let trx_hash = StakingClient::call_contract_transaction(
+                context.config.chain_id,
                 "stake",
                 staking_contract.stake(amount),
                 context.config.contract_transaction_retry_descriptor,
@@ -239,6 +243,7 @@ async fn send(args: ArgMatches, context: &mut Context) -> anyhow::Result<Option<
                 StakingContract::new(context.config.staking_address(), context.signer.clone());
 
             let staked_amount = StakingClient::call_contract_view(
+                context.config.chain_id,
                 "staked_amount",
                 staking_contract.get_stake(context.signer.address()),
                 context.config.contract_view_retry_descriptor,
@@ -253,6 +258,7 @@ async fn send(args: ArgMatches, context: &mut Context) -> anyhow::Result<Option<
             }
 
             let trx_hash = StakingClient::call_contract_transaction(
+                context.config.chain_id,
                 "unstake",
                 staking_contract.unstake(amount),
                 context.config.contract_transaction_retry_descriptor,
@@ -270,6 +276,7 @@ async fn send(args: ArgMatches, context: &mut Context) -> anyhow::Result<Option<
                 StakingContract::new(context.config.staking_address(), context.signer.clone());
 
             let trx_hash = StakingClient::call_contract_transaction(
+                context.config.chain_id,
                 "claim",
                 staking_contract.claim(),
                 context.config.contract_transaction_retry_descriptor,
@@ -287,6 +294,7 @@ async fn send(args: ArgMatches, context: &mut Context) -> anyhow::Result<Option<
                 StakingContract::new(context.config.staking_address(), context.signer.clone());
 
             let trx_hash = StakingClient::call_contract_transaction(
+                context.config.chain_id,
                 "claim_reward",
                 staking_contract.claim_reward(),
                 context.config.contract_transaction_retry_descriptor,
@@ -304,6 +312,7 @@ async fn send(args: ArgMatches, context: &mut Context) -> anyhow::Result<Option<
                 StakingContract::new(context.config.staking_address(), context.signer.clone());
 
             let trx_hash = StakingClient::call_contract_transaction(
+                context.config.chain_id,
                 "claim_frozen_principal",
                 staking_contract.claim_frozen_principal(),
                 context.config.contract_transaction_retry_descriptor,
@@ -321,6 +330,7 @@ async fn send(args: ArgMatches, context: &mut Context) -> anyhow::Result<Option<
                 AdapterContract::new(context.config.adapter_address(), context.signer.clone());
 
             let trx_hash = AdapterClient::call_contract_transaction(
+                context.config.chain_id,
                 "create_subscription",
                 adapter_contract.create_subscription(),
                 context.config.contract_transaction_retry_descriptor,
@@ -341,6 +351,7 @@ async fn send(args: ArgMatches, context: &mut Context) -> anyhow::Result<Option<
                 AdapterContract::new(context.config.adapter_address(), context.signer.clone());
 
             let trx_hash = AdapterClient::call_contract_transaction(
+                context.config.chain_id,
                 "add_consumer",
                 adapter_contract.add_consumer(*sub_id, consumer.parse().unwrap()),
                 context.config.contract_transaction_retry_descriptor,
@@ -362,6 +373,7 @@ async fn send(args: ArgMatches, context: &mut Context) -> anyhow::Result<Option<
                 AdapterContract::new(context.config.adapter_address(), context.signer.clone());
 
             let trx_hash = AdapterClient::call_contract_transaction(
+                context.config.chain_id,
                 "fund_subscription",
                 adapter_contract.fund_subscription(*sub_id).value(amount),
                 context.config.contract_transaction_retry_descriptor,
@@ -382,6 +394,7 @@ async fn send(args: ArgMatches, context: &mut Context) -> anyhow::Result<Option<
                 AdapterContract::new(context.config.adapter_address(), context.signer.clone());
 
             let trx_hash = AdapterClient::call_contract_transaction(
+                context.config.chain_id,
                 "set_referral",
                 adapter_contract.set_referral(*sub_id, *referral_sub_id),
                 context.config.contract_transaction_retry_descriptor,
@@ -402,6 +415,7 @@ async fn send(args: ArgMatches, context: &mut Context) -> anyhow::Result<Option<
                 AdapterContract::new(context.config.adapter_address(), context.signer.clone());
 
             let trx_hash = AdapterClient::call_contract_transaction(
+                context.config.chain_id,
                 "cancel_subscription",
                 adapter_contract.cancel_subscription(*sub_id, recipient.parse().unwrap()),
                 context.config.contract_transaction_retry_descriptor,
@@ -422,6 +436,7 @@ async fn send(args: ArgMatches, context: &mut Context) -> anyhow::Result<Option<
                 AdapterContract::new(context.config.adapter_address(), context.signer.clone());
 
             let trx_hash = AdapterClient::call_contract_transaction(
+                context.config.chain_id,
                 "remove_consumer",
                 adapter_contract.remove_consumer(*sub_id, consumer.parse().unwrap()),
                 context.config.contract_transaction_retry_descriptor,
@@ -558,6 +573,7 @@ async fn call(args: ArgMatches, context: &mut Context) -> anyhow::Result<Option<
                 ArpaContract::new(context.config.arpa_address(), context.signer.clone());
 
             let balance = ArpaClient::call_contract_view(
+                context.config.chain_id,
                 "balance_of",
                 arpa_contract.balance_of(context.signer.address()),
                 context.config.contract_view_retry_descriptor,
@@ -720,6 +736,7 @@ async fn randcast(args: ArgMatches, context: &mut Context) -> anyhow::Result<Opt
                 AdapterContract::new(context.config.adapter_address(), context.signer.clone());
 
             let payment_amount_in_eth = AdapterClient::call_contract_view(
+                context.config.chain_id,
                 "estimate_payment_amount",
                 adapter_contract.estimate_payment_amount_in_eth(
                     *callback_gas_limit,
@@ -749,6 +766,7 @@ async fn randcast(args: ArgMatches, context: &mut Context) -> anyhow::Result<Opt
                 reward_per_signature,
                 committer_reward_per_signature,
             ) = AdapterClient::call_contract_view(
+                context.config.chain_id,
                 "adapter_config",
                 adapter_contract.get_adapter_config(),
                 context.config.contract_view_retry_descriptor,
@@ -818,6 +836,7 @@ async fn randcast(args: ArgMatches, context: &mut Context) -> anyhow::Result<Opt
                 free_request_count_for_referrer,
                 free_request_count_for_referee,
             ) = AdapterClient::call_contract_view(
+                context.config.chain_id,
                 "referral_config",
                 adapter_contract.get_referral_config(),
                 context.config.contract_view_retry_descriptor,
@@ -837,6 +856,7 @@ async fn randcast(args: ArgMatches, context: &mut Context) -> anyhow::Result<Opt
                 AdapterContract::new(context.config.adapter_address(), context.signer.clone());
 
             let fee_ppm = AdapterClient::call_contract_view(
+                context.config.chain_id,
                 "fee_tier",
                 adapter_contract.get_fee_tier(*req_count),
                 context.config.contract_view_retry_descriptor,
@@ -861,6 +881,7 @@ async fn randcast(args: ArgMatches, context: &mut Context) -> anyhow::Result<Opt
                 req_count_in_current_period,
                 last_request_timestamp,
             ) = AdapterClient::call_contract_view(
+                context.config.chain_id,
                 "get_subscription",
                 adapter_contract.get_subscription(*sub_id),
                 context.config.contract_view_retry_descriptor,
@@ -939,6 +960,7 @@ async fn randcast(args: ArgMatches, context: &mut Context) -> anyhow::Result<Opt
                 _req_count_in_current_period,
                 _last_request_timestamp,
             ) = AdapterClient::call_contract_view(
+                context.config.chain_id,
                 "get_subscription",
                 adapter_contract.get_subscription(*sub_id),
                 context.config.contract_view_retry_descriptor,
@@ -1096,6 +1118,7 @@ async fn randcast(args: ArgMatches, context: &mut Context) -> anyhow::Result<Opt
                 AdapterContract::new(context.config.adapter_address(), context.signer.clone());
 
             let last_assigned_group_index = AdapterClient::call_contract_view(
+                context.config.chain_id,
                 "get_last_assigned_group_index",
                 adapter_contract.get_last_assigned_group_index(),
                 context.config.contract_view_retry_descriptor,
@@ -1112,6 +1135,7 @@ async fn randcast(args: ArgMatches, context: &mut Context) -> anyhow::Result<Opt
                 AdapterContract::new(context.config.adapter_address(), context.signer.clone());
 
             let randomness_count = AdapterClient::call_contract_view(
+                context.config.chain_id,
                 "get_randomness_count",
                 adapter_contract.get_randomness_count(),
                 context.config.contract_view_retry_descriptor,
@@ -1129,6 +1153,7 @@ async fn randcast(args: ArgMatches, context: &mut Context) -> anyhow::Result<Opt
                 cumulative_committer_reward,
                 cumulative_partial_signature_reward,
             ) = AdapterClient::call_contract_view(
+                context.config.chain_id,
                 "cumulative_data",
                 adapter_contract.get_cumulative_data(),
                 context.config.contract_view_retry_descriptor,
@@ -1143,6 +1168,7 @@ async fn randcast(args: ArgMatches, context: &mut Context) -> anyhow::Result<Opt
                 AdapterContract::new(context.config.adapter_address(), context.signer.clone());
 
             let last_randomness = AdapterClient::call_contract_view(
+                context.config.chain_id,
                 "get_last_randomness",
                 adapter_contract.get_last_randomness(),
                 context.config.contract_view_retry_descriptor,
@@ -1175,6 +1201,7 @@ async fn stake(args: ArgMatches, context: &mut Context) -> anyhow::Result<Option
                 StakingContract::new(context.config.staking_address(), context.signer.clone());
 
             let amount = StakingClient::call_contract_view(
+                context.config.chain_id,
                 "get_stake",
                 staking_contract.get_stake(context.signer.address()),
                 context.config.contract_view_retry_descriptor,
@@ -1188,6 +1215,7 @@ async fn stake(args: ArgMatches, context: &mut Context) -> anyhow::Result<Option
                 StakingContract::new(context.config.staking_address(), context.signer.clone());
 
             let base_reward = StakingClient::call_contract_view(
+                context.config.chain_id,
                 "get_base_reward",
                 staking_contract.get_base_reward(context.signer.address()),
                 context.config.contract_view_retry_descriptor,
@@ -1206,6 +1234,7 @@ async fn stake(args: ArgMatches, context: &mut Context) -> anyhow::Result<Option
                 StakingContract::new(context.config.staking_address(), context.signer.clone());
 
             let delegation_reward = StakingClient::call_contract_view(
+                context.config.chain_id,
                 "get_delegation_reward",
                 staking_contract.get_delegation_reward(delegator_address),
                 context.config.contract_view_retry_descriptor,
@@ -1219,6 +1248,7 @@ async fn stake(args: ArgMatches, context: &mut Context) -> anyhow::Result<Option
                 StakingContract::new(context.config.staking_address(), context.signer.clone());
 
             let total_delegated_amount = StakingClient::call_contract_view(
+                context.config.chain_id,
                 "get_total_delegated_amount",
                 staking_contract.get_total_delegated_amount(),
                 context.config.contract_view_retry_descriptor,
@@ -1235,6 +1265,7 @@ async fn stake(args: ArgMatches, context: &mut Context) -> anyhow::Result<Option
                 StakingContract::new(context.config.staking_address(), context.signer.clone());
 
             let delegates_count = StakingClient::call_contract_view(
+                context.config.chain_id,
                 "get_delegates_count",
                 staking_contract.get_delegates_count(),
                 context.config.contract_view_retry_descriptor,
@@ -1248,6 +1279,7 @@ async fn stake(args: ArgMatches, context: &mut Context) -> anyhow::Result<Option
                 StakingContract::new(context.config.staking_address(), context.signer.clone());
 
             let community_stakers_count = StakingClient::call_contract_view(
+                context.config.chain_id,
                 "get_community_stakers_count",
                 staking_contract.get_community_stakers_count(),
                 context.config.contract_view_retry_descriptor,
@@ -1264,6 +1296,7 @@ async fn stake(args: ArgMatches, context: &mut Context) -> anyhow::Result<Option
                 StakingContract::new(context.config.staking_address(), context.signer.clone());
 
             let total_staked_amount = StakingClient::call_contract_view(
+                context.config.chain_id,
                 "get_total_staked_amount",
                 staking_contract.get_total_staked_amount(),
                 context.config.contract_view_retry_descriptor,
@@ -1280,6 +1313,7 @@ async fn stake(args: ArgMatches, context: &mut Context) -> anyhow::Result<Option
                 StakingContract::new(context.config.staking_address(), context.signer.clone());
 
             let total_community_staked_amount = StakingClient::call_contract_view(
+                context.config.chain_id,
                 "get_total_community_staked_amount",
                 staking_contract.get_total_community_staked_amount(),
                 context.config.contract_view_retry_descriptor,
@@ -1296,6 +1330,7 @@ async fn stake(args: ArgMatches, context: &mut Context) -> anyhow::Result<Option
                 StakingContract::new(context.config.staking_address(), context.signer.clone());
 
             let total_frozen_amount = StakingClient::call_contract_view(
+                context.config.chain_id,
                 "get_total_frozen_amount",
                 staking_contract.get_total_frozen_amount(),
                 context.config.contract_view_retry_descriptor,
@@ -1312,6 +1347,7 @@ async fn stake(args: ArgMatches, context: &mut Context) -> anyhow::Result<Option
                 StakingContract::new(context.config.staking_address(), context.signer.clone());
 
             let max_pool_size = StakingClient::call_contract_view(
+                context.config.chain_id,
                 "get_max_pool_size",
                 staking_contract.get_max_pool_size(),
                 context.config.contract_view_retry_descriptor,
@@ -1325,6 +1361,7 @@ async fn stake(args: ArgMatches, context: &mut Context) -> anyhow::Result<Option
                 StakingContract::new(context.config.staking_address(), context.signer.clone());
 
             let (min, max) = StakingClient::call_contract_view(
+                context.config.chain_id,
                 "get_community_staker_limits",
                 staking_contract.get_community_staker_limits(),
                 context.config.contract_view_retry_descriptor,
@@ -1338,6 +1375,7 @@ async fn stake(args: ArgMatches, context: &mut Context) -> anyhow::Result<Option
                 StakingContract::new(context.config.staking_address(), context.signer.clone());
 
             let limit = StakingClient::call_contract_view(
+                context.config.chain_id,
                 "get_operator_limit",
                 staking_contract.get_operator_limit(),
                 context.config.contract_view_retry_descriptor,
@@ -1351,6 +1389,7 @@ async fn stake(args: ArgMatches, context: &mut Context) -> anyhow::Result<Option
                 StakingContract::new(context.config.staking_address(), context.signer.clone());
 
             let (init, expiry) = StakingClient::call_contract_view(
+                context.config.chain_id,
                 "get_reward_timestamps",
                 staking_contract.get_reward_timestamps(),
                 context.config.contract_view_retry_descriptor,
@@ -1364,6 +1403,7 @@ async fn stake(args: ArgMatches, context: &mut Context) -> anyhow::Result<Option
                 StakingContract::new(context.config.staking_address(), context.signer.clone());
 
             let rate = StakingClient::call_contract_view(
+                context.config.chain_id,
                 "get_reward_rate",
                 staking_contract.get_reward_rate(),
                 context.config.contract_view_retry_descriptor,
@@ -1377,6 +1417,7 @@ async fn stake(args: ArgMatches, context: &mut Context) -> anyhow::Result<Option
                 StakingContract::new(context.config.staking_address(), context.signer.clone());
 
             let rate = StakingClient::call_contract_view(
+                context.config.chain_id,
                 "get_reward_rate",
                 staking_contract.get_reward_rate(),
                 context.config.contract_view_retry_descriptor,
@@ -1384,6 +1425,7 @@ async fn stake(args: ArgMatches, context: &mut Context) -> anyhow::Result<Option
             .await?;
 
             let total_community_staked_amount = StakingClient::call_contract_view(
+                context.config.chain_id,
                 "get_total_community_staked_amount",
                 staking_contract.get_total_community_staked_amount(),
                 context.config.contract_view_retry_descriptor,
@@ -1403,6 +1445,7 @@ async fn stake(args: ArgMatches, context: &mut Context) -> anyhow::Result<Option
                 StakingContract::new(context.config.staking_address(), context.signer.clone());
 
             let rate = StakingClient::call_contract_view(
+                context.config.chain_id,
                 "get_delegation_rate_denominator",
                 staking_contract.get_delegation_rate_denominator(),
                 context.config.contract_view_retry_descriptor,
@@ -1416,6 +1459,7 @@ async fn stake(args: ArgMatches, context: &mut Context) -> anyhow::Result<Option
                 StakingContract::new(context.config.staking_address(), context.signer.clone());
 
             let (amounts, timestamps) = StakingClient::call_contract_view(
+                context.config.chain_id,
                 "frozen_principal",
                 staking_contract.get_frozen_principal(context.signer.address()),
                 context.config.contract_view_retry_descriptor,
