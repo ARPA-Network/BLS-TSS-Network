@@ -21,6 +21,7 @@ pub trait ServiceClient<C> {
 #[async_trait]
 pub trait TransactionCaller {
     async fn call_contract_transaction<D: Detokenize + std::fmt::Debug + Send + Sync + 'static>(
+        chain_id: usize,
         info: &str,
         call: ContractCall<WalletSigner, D>,
         contract_transaction_retry_descriptor: ExponentialBackoffRetryDescriptor,
@@ -47,8 +48,9 @@ pub trait TransactionCaller {
                 })?;
 
                 info!(
-                    "Calling contract transaction {}: {:?}",
+                    "Calling contract transaction {} with chain_id({}): {:?}",
                     info,
+                    chain_id,
                     pending_tx.tx_hash()
                 );
 
@@ -61,10 +63,16 @@ pub trait TransactionCaller {
                     .ok_or(ContractClientError::NoTransactionReceipt)?;
 
                 if receipt.status == Some(U64::from(0)) {
-                    error!("Transaction failed({}), receipt: {:?}", info, receipt);
+                    error!(
+                        "Transaction failed({}) with chain_id({}), receipt: {:?}",
+                        info, chain_id, receipt
+                    );
                     return Err(ContractClientError::TransactionFailed);
                 } else {
-                    info!("Transaction successful({}), receipt: {:?}", info, receipt);
+                    info!(
+                        "Transaction successful({}) with chain_id({}), receipt: {:?}",
+                        info, chain_id, receipt
+                    );
                 }
 
                 Ok(receipt.transaction_hash)
@@ -82,6 +90,7 @@ pub trait TransactionCaller {
 #[async_trait]
 pub trait ViewCaller {
     async fn call_contract_view<D: Detokenize + std::fmt::Debug + Send + Sync + 'static>(
+        chain_id: usize,
         info: &str,
         call: ContractCall<WalletSigner, D>,
         contract_view_retry_descriptor: ExponentialBackoffRetryDescriptor,
@@ -103,7 +112,10 @@ pub trait ViewCaller {
                 e
             })?;
 
-            info!("Calling contract view {}: {:?}", info, result);
+            info!(
+                "Calling contract view {} with chain_id({}): {:?}",
+                info, chain_id, result
+            );
 
             Result::<D, ContractClientError>::Ok(result)
         })
@@ -148,7 +160,7 @@ pub mod controller {
     use ethers::core::types::Address;
     use ethers::types::H256;
     use std::future::Future;
-    use threshold_bls::group::PairingCurve;
+    use threshold_bls::group::Curve;
 
     #[async_trait]
     pub trait ControllerTransactions {
@@ -171,7 +183,7 @@ pub mod controller {
     }
 
     #[async_trait]
-    pub trait ControllerViews<C: PairingCurve> {
+    pub trait ControllerViews<C: Curve> {
         async fn get_node(&self, id_address: Address) -> ContractClientResult<Node>;
 
         async fn get_group(&self, group_index: usize) -> ContractClientResult<Group<C>>;
@@ -190,10 +202,35 @@ pub mod controller {
         ) -> ContractClientResult<()>;
     }
 
-    pub trait ControllerClientBuilder<C: PairingCurve> {
-        type Service: ControllerTransactions + ControllerViews<C> + ControllerLogs + Send + Sync;
+    pub trait ControllerClientBuilder<C: Curve> {
+        type ControllerService: ControllerTransactions
+            + ControllerViews<C>
+            + ControllerLogs
+            + Send
+            + Sync;
 
-        fn build_controller_client(&self) -> Self::Service;
+        fn build_controller_client(&self) -> Self::ControllerService;
+    }
+}
+
+pub mod controller_relayer {
+    use crate::error::ContractClientResult;
+    use async_trait::async_trait;
+    use ethers::types::H256;
+
+    #[async_trait]
+    pub trait ControllerRelayerTransactions {
+        async fn relay_group(
+            &self,
+            chain_id: usize,
+            group_index: usize,
+        ) -> ContractClientResult<H256>;
+    }
+
+    pub trait ControllerRelayerClientBuilder {
+        type ControllerRelayerService: ControllerRelayerTransactions + Send + Sync;
+
+        fn build_controller_relayer_client(&self) -> Self::ControllerRelayerService;
     }
 }
 
@@ -203,7 +240,7 @@ pub mod coordinator {
     use ethers::core::types::Address;
     use ethers::types::H256;
     use thiserror::Error;
-    use threshold_bls::{group::Curve, schemes::bn254::G2Curve};
+    use threshold_bls::group::Curve;
 
     use crate::error::{ContractClientError, ContractClientResult};
 
@@ -247,10 +284,14 @@ pub mod coordinator {
         async fn in_phase(&self) -> ContractClientResult<i8>;
     }
 
-    pub trait CoordinatorClientBuilder<C: Curve = G2Curve> {
-        type Service: CoordinatorTransactions + CoordinatorViews + BoardPublisher<C> + Sync + Send;
+    pub trait CoordinatorClientBuilder<C: Curve> {
+        type CoordinatorService: CoordinatorTransactions
+            + CoordinatorViews
+            + BoardPublisher<C>
+            + Sync
+            + Send;
 
-        fn build_coordinator_client(&self, contract_address: Address) -> Self::Service;
+        fn build_coordinator_client(&self, contract_address: Address) -> Self::CoordinatorService;
     }
 }
 
@@ -293,9 +334,9 @@ pub mod adapter {
     }
 
     pub trait AdapterClientBuilder {
-        type Service: AdapterTransactions + AdapterViews + AdapterLogs + Send + Sync;
+        type AdapterService: AdapterTransactions + AdapterViews + AdapterLogs + Send + Sync;
 
-        fn build_adapter_client(&self, main_id_address: Address) -> Self::Service;
+        fn build_adapter_client(&self, main_id_address: Address) -> Self::AdapterService;
     }
 }
 
@@ -319,8 +360,8 @@ pub mod provider {
     }
 
     pub trait ChainProviderBuilder {
-        type Service: BlockFetcher + Send + Sync;
+        type ProviderService: BlockFetcher + Send + Sync;
 
-        fn build_chain_provider(&self) -> Self::Service;
+        fn build_chain_provider(&self) -> Self::ProviderService;
     }
 }

@@ -6,8 +6,10 @@ use crate::{
     error::ContractClientResult,
     ServiceClient, TransactionCaller, ViewCaller,
 };
+use ::core::panic;
 use arpa_core::{
-    ChainIdentity, ExponentialBackoffRetryDescriptor, GeneralChainIdentity, WalletSigner,
+    ChainIdentity, ExponentialBackoffRetryDescriptor, GeneralMainChainIdentity,
+    GeneralRelayedChainIdentity, WalletSigner,
 };
 use async_trait::async_trait;
 use dkg_core::{
@@ -20,6 +22,7 @@ use std::sync::Arc;
 use threshold_bls::group::Curve;
 
 pub struct CoordinatorClient {
+    chain_id: usize,
     coordinator_address: Address,
     signer: Arc<WalletSigner>,
     contract_transaction_retry_descriptor: ExponentialBackoffRetryDescriptor,
@@ -28,12 +31,14 @@ pub struct CoordinatorClient {
 
 impl CoordinatorClient {
     pub fn new(
+        chain_id: usize,
         coordinator_address: Address,
-        identity: &GeneralChainIdentity,
+        identity: &GeneralMainChainIdentity,
         contract_transaction_retry_descriptor: ExponentialBackoffRetryDescriptor,
         contract_view_retry_descriptor: ExponentialBackoffRetryDescriptor,
     ) -> Self {
         CoordinatorClient {
+            chain_id,
             coordinator_address,
             signer: identity.get_signer(),
             contract_transaction_retry_descriptor,
@@ -42,16 +47,25 @@ impl CoordinatorClient {
     }
 }
 
-impl<C: Curve + 'static> CoordinatorClientBuilder<C> for GeneralChainIdentity {
-    type Service = CoordinatorClient;
+impl<C: Curve + 'static> CoordinatorClientBuilder<C> for GeneralMainChainIdentity {
+    type CoordinatorService = CoordinatorClient;
 
     fn build_coordinator_client(&self, contract_address: Address) -> CoordinatorClient {
         CoordinatorClient::new(
+            self.get_chain_id(),
             contract_address,
             self,
             self.get_contract_transaction_retry_descriptor(),
             self.get_contract_view_retry_descriptor(),
         )
+    }
+}
+
+impl<C: Curve + 'static> CoordinatorClientBuilder<C> for GeneralRelayedChainIdentity {
+    type CoordinatorService = CoordinatorClient;
+
+    fn build_coordinator_client(&self, _contract_address: Address) -> CoordinatorClient {
+        panic!("not implemented")
     }
 }
 
@@ -81,6 +95,7 @@ impl CoordinatorTransactions for CoordinatorClient {
         let call = coordinator_contract.publish(value.into());
 
         CoordinatorClient::call_contract_transaction(
+            self.chain_id,
             "publish",
             call,
             self.contract_transaction_retry_descriptor,
@@ -97,6 +112,7 @@ impl CoordinatorViews for CoordinatorClient {
             ServiceClient::<CoordinatorContract>::prepare_service_client(self).await?;
 
         CoordinatorClient::call_contract_view(
+            self.chain_id,
             "get_shares",
             coordinator_contract.get_shares(),
             self.contract_view_retry_descriptor,
@@ -110,6 +126,7 @@ impl CoordinatorViews for CoordinatorClient {
             ServiceClient::<CoordinatorContract>::prepare_service_client(self).await?;
 
         CoordinatorClient::call_contract_view(
+            self.chain_id,
             "get_responses",
             coordinator_contract.get_responses(),
             self.contract_view_retry_descriptor,
@@ -123,6 +140,7 @@ impl CoordinatorViews for CoordinatorClient {
             ServiceClient::<CoordinatorContract>::prepare_service_client(self).await?;
 
         CoordinatorClient::call_contract_view(
+            self.chain_id,
             "get_justifications",
             coordinator_contract.get_justifications(),
             self.contract_view_retry_descriptor,
@@ -136,6 +154,7 @@ impl CoordinatorViews for CoordinatorClient {
             ServiceClient::<CoordinatorContract>::prepare_service_client(self).await?;
 
         CoordinatorClient::call_contract_view(
+            self.chain_id,
             "get_participants",
             coordinator_contract.get_participants(),
             self.contract_view_retry_descriptor,
@@ -148,6 +167,7 @@ impl CoordinatorViews for CoordinatorClient {
             ServiceClient::<CoordinatorContract>::prepare_service_client(self).await?;
 
         CoordinatorClient::call_contract_view(
+            self.chain_id,
             "get_dkg_keys",
             coordinator_contract.get_dkg_keys(),
             self.contract_view_retry_descriptor,
@@ -166,6 +186,7 @@ impl CoordinatorViews for CoordinatorClient {
             ServiceClient::<CoordinatorContract>::prepare_service_client(self).await?;
 
         CoordinatorClient::call_contract_view(
+            self.chain_id,
             "in_phase",
             coordinator_contract.in_phase(),
             self.contract_view_retry_descriptor,
@@ -209,7 +230,7 @@ pub mod coordinator_tests {
     use crate::coordinator::CoordinatorTransactions;
     use crate::error::ContractClientError;
     use arpa_core::Config;
-    use arpa_core::GeneralChainIdentity;
+    use arpa_core::GeneralMainChainIdentity;
     use ethers::abi::Tokenize;
     use ethers::prelude::ContractError::Revert;
     use ethers::prelude::*;
@@ -298,11 +319,12 @@ pub mod coordinator_tests {
             .await
             .unwrap();
 
-        let main_chain_identity = GeneralChainIdentity::new(
+        let main_chain_identity = GeneralMainChainIdentity::new(
             anvil.chain_id() as usize,
             wallet,
             anvil.endpoint(),
             3000,
+            Address::random(),
             Address::random(),
             Address::random(),
             config
@@ -313,6 +335,7 @@ pub mod coordinator_tests {
         );
 
         let client = CoordinatorClient::new(
+            anvil.chain_id() as usize,
             coordinator_contract.address(),
             &main_chain_identity,
             config
