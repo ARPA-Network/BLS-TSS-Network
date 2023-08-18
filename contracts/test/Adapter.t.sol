@@ -243,22 +243,15 @@ contract AdapterTest is RandcastTestHelper {
         IAdapter(address(_adapter)).cancelOvertimeRequest(requestId, rd);
 
         (,,, uint256 inflightCost,,,,,) = IAdapter(address(_adapter)).getSubscription(_subId);
+        assertEq(inflightCost > 0, true);
+
         vm.roll(block.number + 7200);
         vm.broadcast(_user);
         IAdapter(address(_adapter)).cancelOvertimeRequest(requestId, rd);
         pendingRequest = IAdapter(address(_adapter)).getPendingRequestCommitment(requestId);
         assertEq(pendingRequest, bytes32(0));
 
-        uint256 payment = IAdapter(address(_adapter)).estimatePaymentAmountInETH(
-            _getRandomNumberExample.callbackGasLimit() + Adapter(address(_adapter)).RANDOMNESS_REWARD_GAS() * 3
-                + Adapter(address(_adapter)).VERIFICATION_GAS_OVER_MINIMUM_THRESHOLD()
-                    * (3 - Adapter(address(_adapter)).DEFAULT_MINIMUM_THRESHOLD()),
-            _gasExceptCallback,
-            0,
-            tx.gasprice * 3
-        );
-
-        (,,, uint256 newInflightCost,,,,,) = IAdapter(address(_adapter)).getSubscription(_subId);
-        assertEq(inflightCost, newInflightCost + payment);
+        (,,, inflightCost,,,,,) = IAdapter(address(_adapter)).getSubscription(_subId);
+        assertEq(inflightCost, 0);
     }
 }

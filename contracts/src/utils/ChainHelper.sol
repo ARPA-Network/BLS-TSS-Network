@@ -2,7 +2,7 @@
 pragma solidity ^0.8.18;
 
 contract ChainHelper {
-    function getBlockTime() public returns (uint256) {
+    function getBlockTime() public view returns (uint256) {
         uint256 chainId = block.chainid;
         if (chainId == 1) {
             // mainnet
