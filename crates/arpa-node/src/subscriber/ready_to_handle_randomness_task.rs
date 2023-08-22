@@ -3,6 +3,7 @@ use crate::{
     committer::{
         client::GeneralCommitterClient, CommitterClient, CommitterClientHandler, CommitterService,
     },
+    context::{BLSTasksHandler, GroupInfoHandler, SignatureResultCacheHandler},
     error::NodeResult,
     event::{ready_to_handle_randomness_task::ReadyToHandleRandomnessTask, types::Topic},
     queue::{event_queue::EventQueue, EventSubscriber},
@@ -12,53 +13,49 @@ use arpa_core::{
     u256_to_vec, BLSTaskType, ExponentialBackoffRetryDescriptor, RandomnessTask, SubscriberType,
     TaskType,
 };
-use arpa_dal::{
-    cache::RandomnessResultCache, BLSTasksFetcher, GroupInfoFetcher, SignatureResultCacheFetcher,
-    SignatureResultCacheUpdater,
-};
+use arpa_dal::cache::RandomnessResultCache;
 use async_trait::async_trait;
 use ethers::types::{Address, U256};
 use log::{debug, error, info};
 use std::{marker::PhantomData, sync::Arc};
-use threshold_bls::group::PairingCurve;
+use threshold_bls::{
+    group::Curve,
+    sig::{SignatureScheme, ThresholdScheme},
+};
 use tokio::sync::RwLock;
 
 use super::{DebuggableEvent, DebuggableSubscriber, Subscriber};
 
 #[derive(Debug)]
 pub struct ReadyToHandleRandomnessTaskSubscriber<
-    G: GroupInfoFetcher<PC>,
-    T: BLSTasksFetcher<RandomnessTask>,
-    C: SignatureResultCacheUpdater<RandomnessResultCache>
-        + SignatureResultCacheFetcher<RandomnessResultCache>,
-    PC: PairingCurve,
+    PC: Curve,
+    S: SignatureScheme + ThresholdScheme<Public = PC::Point, Private = PC::Scalar>,
 > {
     pub chain_id: usize,
     id_address: Address,
-    group_cache: Arc<RwLock<G>>,
-    randomness_tasks_cache: Arc<RwLock<T>>,
-    randomness_signature_cache: Arc<RwLock<C>>,
+    group_cache: Arc<RwLock<Box<dyn GroupInfoHandler<PC>>>>,
+    randomness_tasks_cache: Arc<RwLock<Box<dyn BLSTasksHandler<RandomnessTask>>>>,
+    randomness_signature_cache:
+        Arc<RwLock<Box<dyn SignatureResultCacheHandler<RandomnessResultCache>>>>,
     eq: Arc<RwLock<EventQueue>>,
     ts: Arc<RwLock<SimpleDynamicTaskScheduler>>,
     c: PhantomData<PC>,
+    s: PhantomData<S>,
     commit_partial_signature_retry_descriptor: ExponentialBackoffRetryDescriptor,
 }
 
-impl<
-        G: GroupInfoFetcher<PC>,
-        T: BLSTasksFetcher<RandomnessTask>,
-        C: SignatureResultCacheUpdater<RandomnessResultCache>
-            + SignatureResultCacheFetcher<RandomnessResultCache>,
-        PC: PairingCurve,
-    > ReadyToHandleRandomnessTaskSubscriber<G, T, C, PC>
+impl<PC: Curve, S: SignatureScheme + ThresholdScheme<Public = PC::Point, Private = PC::Scalar>>
+    ReadyToHandleRandomnessTaskSubscriber<PC, S>
 {
     #[allow(clippy::too_many_arguments)]
     pub fn new(
         chain_id: usize,
         id_address: Address,
-        group_cache: Arc<RwLock<G>>,
-        randomness_tasks_cache: Arc<RwLock<T>>,
-        randomness_signature_cache: Arc<RwLock<C>>,
+        group_cache: Arc<RwLock<Box<dyn GroupInfoHandler<PC>>>>,
+        randomness_tasks_cache: Arc<RwLock<Box<dyn BLSTasksHandler<RandomnessTask>>>>,
+        randomness_signature_cache: Arc<
+            RwLock<Box<dyn SignatureResultCacheHandler<RandomnessResultCache>>>,
+        >,
         eq: Arc<RwLock<EventQueue>>,
         ts: Arc<RwLock<SimpleDynamicTaskScheduler>>,
         commit_partial_signature_retry_descriptor: ExponentialBackoffRetryDescriptor,
@@ -72,6 +69,7 @@ impl<
             eq,
             ts,
             c: PhantomData,
+            s: PhantomData,
             commit_partial_signature_retry_descriptor,
         }
     }
@@ -83,40 +81,33 @@ pub trait RandomnessHandler {
 }
 
 pub struct GeneralRandomnessHandler<
-    G: GroupInfoFetcher<PC>,
-    T: BLSTasksFetcher<RandomnessTask>,
-    C: SignatureResultCacheUpdater<RandomnessResultCache>
-        + SignatureResultCacheFetcher<RandomnessResultCache>,
-    PC: PairingCurve,
+    PC: Curve,
+    S: SignatureScheme + ThresholdScheme<Public = PC::Point, Private = PC::Scalar>,
 > {
     chain_id: usize,
     id_address: Address,
     tasks: Vec<RandomnessTask>,
-    group_cache: Arc<RwLock<G>>,
-    randomness_tasks_cache: Arc<RwLock<T>>,
-    randomness_signature_cache: Arc<RwLock<C>>,
+    group_cache: Arc<RwLock<Box<dyn GroupInfoHandler<PC>>>>,
+    randomness_tasks_cache: Arc<RwLock<Box<dyn BLSTasksHandler<RandomnessTask>>>>,
+    randomness_signature_cache:
+        Arc<RwLock<Box<dyn SignatureResultCacheHandler<RandomnessResultCache>>>>,
     ts: Arc<RwLock<SimpleDynamicTaskScheduler>>,
     c: PhantomData<PC>,
+    s: PhantomData<S>,
     commit_partial_signature_retry_descriptor: ExponentialBackoffRetryDescriptor,
 }
 
 #[async_trait]
 impl<
-        G: GroupInfoFetcher<PC> + Sync + Send,
-        T: BLSTasksFetcher<RandomnessTask> + Sync + Send,
-        C: SignatureResultCacheUpdater<RandomnessResultCache>
-            + SignatureResultCacheFetcher<RandomnessResultCache>
-            + Sync
-            + Send,
-        PC: PairingCurve + Sync + Send,
-    > CommitterClientHandler<GeneralCommitterClient, G, PC>
-    for GeneralRandomnessHandler<G, T, C, PC>
+        PC: Curve + Sync + Send,
+        S: SignatureScheme + ThresholdScheme<Public = PC::Point, Private = PC::Scalar> + Sync + Send,
+    > CommitterClientHandler<GeneralCommitterClient, PC> for GeneralRandomnessHandler<PC, S>
 {
     async fn get_id_address(&self) -> Address {
         self.id_address
     }
 
-    fn get_group_cache(&self) -> Arc<RwLock<G>> {
+    fn get_group_cache(&self) -> Arc<RwLock<Box<dyn GroupInfoHandler<PC>>>> {
         self.group_cache.clone()
     }
 
@@ -127,15 +118,17 @@ impl<
 
 #[async_trait]
 impl<
-        G: GroupInfoFetcher<PC> + Sync + Send + 'static,
-        T: BLSTasksFetcher<RandomnessTask> + Sync + Send + 'static,
-        C: SignatureResultCacheUpdater<RandomnessResultCache>
-            + SignatureResultCacheFetcher<RandomnessResultCache>
+        PC: Curve + Sync + Send + 'static,
+        S: SignatureScheme
+            + ThresholdScheme<Public = PC::Point, Private = PC::Scalar>
+            + Clone
             + Sync
             + Send
             + 'static,
-        PC: PairingCurve + Sync + Send + 'static,
-    > RandomnessHandler for GeneralRandomnessHandler<G, T, C, PC>
+    > RandomnessHandler for GeneralRandomnessHandler<PC, S>
+where
+    <S as ThresholdScheme>::Error: Sync + Send,
+    <S as SignatureScheme>::Error: Sync + Send,
 {
     async fn handle(self) -> NodeResult<()> {
         for task in self.tasks.iter() {
@@ -145,7 +138,7 @@ impl<
             ]
             .concat();
 
-            let partial_signature = SimpleBLSCore::<PC>::partial_sign(
+            let partial_signature = SimpleBLSCore::<PC, S>::partial_sign(
                 self.group_cache.read().await.get_secret_share()?,
                 &actual_seed,
             )?;
@@ -201,7 +194,7 @@ impl<
                 let partial_signature = partial_signature.clone();
 
                 self.ts.write().await.add_task(
-                    TaskType::Subscriber(SubscriberType::SendingPartialSignature),
+                    TaskType::Subscriber(chain_id, SubscriberType::SendingPartialSignature),
                     async move {
                         let committer_id = committer.get_committer_id_address();
 
@@ -245,16 +238,17 @@ impl<
 
 #[async_trait]
 impl<
-        G: GroupInfoFetcher<PC> + std::fmt::Debug + Sync + Send + 'static,
-        T: BLSTasksFetcher<RandomnessTask> + std::fmt::Debug + Sync + Send + 'static,
-        C: SignatureResultCacheUpdater<RandomnessResultCache>
-            + SignatureResultCacheFetcher<RandomnessResultCache>
-            + std::fmt::Debug
+        PC: Curve + std::fmt::Debug + Sync + Send + 'static,
+        S: SignatureScheme
+            + ThresholdScheme<Public = PC::Point, Private = PC::Scalar>
+            + Clone
             + Sync
             + Send
             + 'static,
-        PC: PairingCurve + std::fmt::Debug + Sync + Send + 'static,
-    > Subscriber for ReadyToHandleRandomnessTaskSubscriber<G, T, C, PC>
+    > Subscriber for ReadyToHandleRandomnessTaskSubscriber<PC, S>
+where
+    <S as ThresholdScheme>::Error: Sync + Send,
+    <S as SignatureScheme>::Error: Sync + Send,
 {
     async fn notify(&self, topic: Topic, payload: &(dyn DebuggableEvent)) -> NodeResult<()> {
         debug!("{:?}", topic);
@@ -281,7 +275,7 @@ impl<
             self.commit_partial_signature_retry_descriptor;
 
         self.ts.write().await.add_task(
-            TaskType::Subscriber(SubscriberType::ReadyToHandleRandomnessTask),
+            TaskType::Subscriber(chain_id, SubscriberType::ReadyToHandleRandomnessTask),
             async move {
                 let handler = GeneralRandomnessHandler {
                     chain_id,
@@ -292,6 +286,7 @@ impl<
                     randomness_signature_cache: randomness_signature_cache_for_handler,
                     ts: task_scheduler_for_handler,
                     c: PhantomData::<PC>,
+                    s: PhantomData::<S>,
                     commit_partial_signature_retry_descriptor,
                 };
 
@@ -318,15 +313,16 @@ impl<
 }
 
 impl<
-        G: GroupInfoFetcher<PC> + std::fmt::Debug + Sync + Send + 'static,
-        T: BLSTasksFetcher<RandomnessTask> + std::fmt::Debug + Sync + Send + 'static,
-        C: SignatureResultCacheUpdater<RandomnessResultCache>
-            + SignatureResultCacheFetcher<RandomnessResultCache>
-            + std::fmt::Debug
+        PC: Curve + std::fmt::Debug + Sync + Send + 'static,
+        S: SignatureScheme
+            + ThresholdScheme<Public = PC::Point, Private = PC::Scalar>
+            + Clone
             + Sync
             + Send
             + 'static,
-        PC: PairingCurve + std::fmt::Debug + Sync + Send + 'static,
-    > DebuggableSubscriber for ReadyToHandleRandomnessTaskSubscriber<G, T, C, PC>
+    > DebuggableSubscriber for ReadyToHandleRandomnessTaskSubscriber<PC, S>
+where
+    <S as ThresholdScheme>::Error: Sync + Send,
+    <S as SignatureScheme>::Error: Sync + Send,
 {
 }

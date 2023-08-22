@@ -2,7 +2,10 @@ use std::collections::BTreeMap;
 
 use arpa_core::{format_now_date, DKGStatus};
 use arpa_dal::BLSResultCacheState;
-use entity::{group_info, node_info, randomness_result, randomness_task};
+use entity::{
+    group_info, node_info, op_randomness_result, op_randomness_task, randomness_result,
+    randomness_task,
+};
 use ethers_core::types::Address;
 use sea_orm::{ActiveModelTrait, DbBackend, DbConn, DbErr, FromQueryResult, Set, Statement};
 
@@ -186,9 +189,9 @@ impl RandomnessTaskMutation {
     ) -> Result<Vec<randomness_task::Model>, DbErr> {
         randomness_task::Model::find_by_statement(Statement::from_sql_and_values(
                 DbBackend::Sqlite,
-                r#"update randomness_task set state = 1 where state = 0 and (group_index = $1 or assignment_block_height < $2) 
+                r#"update randomness_task set state = 1, update_at = $1 where state = 0 and (group_index = $2 or assignment_block_height < $3) 
                 returning *"#,
-                vec![group_index.into(),assignment_block_height.into()],
+                vec![format_now_date().into(), group_index.into(), assignment_block_height.into()],
             ))
             .all(db).await
     }
@@ -248,6 +251,123 @@ impl RandomnessResultMutation {
         status: i32,
     ) -> Result<randomness_result::Model, DbErr> {
         let mut randomness_result: randomness_result::ActiveModel = model.into();
+
+        randomness_result.state = Set(status);
+
+        randomness_result.update_at = Set(format_now_date());
+
+        randomness_result.update(db).await
+    }
+}
+
+pub struct OPRandomnessTaskMutation;
+
+impl OPRandomnessTaskMutation {
+    #[allow(clippy::too_many_arguments)]
+    pub async fn add_task(
+        db: &DbConn,
+        request_id: Vec<u8>,
+        subscription_id: i32,
+        group_index: i32,
+        request_type: i32,
+        params: Vec<u8>,
+        requester: String,
+        seed: Vec<u8>,
+        request_confirmations: i32,
+        callback_gas_limit: i32,
+        callback_max_gas_price: Vec<u8>,
+        assignment_block_height: i32,
+    ) -> Result<op_randomness_task::ActiveModel, DbErr> {
+        op_randomness_task::ActiveModel {
+            request_id: Set(request_id),
+            subscription_id: Set(subscription_id),
+            group_index: Set(group_index),
+            request_type: Set(request_type),
+            params: Set(params),
+            requester: Set(requester),
+            seed: Set(seed),
+            request_confirmations: Set(request_confirmations),
+            callback_gas_limit: Set(callback_gas_limit),
+            callback_max_gas_price: Set(callback_max_gas_price),
+            assignment_block_height: Set(assignment_block_height),
+            create_at: Set(format_now_date()),
+            update_at: Set(format_now_date()),
+            state: Set(0),
+            ..Default::default()
+        }
+        .save(db)
+        .await
+    }
+
+    pub async fn fetch_available_tasks(
+        db: &DbConn,
+        group_index: i32,
+        assignment_block_height: i32,
+    ) -> Result<Vec<op_randomness_task::Model>, DbErr> {
+        op_randomness_task::Model::find_by_statement(Statement::from_sql_and_values(
+                DbBackend::Sqlite,
+                r#"update op_randomness_task set state = 1, update_at = $1 where state = 0 and (group_index = $2 or assignment_block_height < $3) 
+                returning *"#,
+                vec![format_now_date().into(), group_index.into(), assignment_block_height.into()],
+            ))
+            .all(db).await
+    }
+}
+
+pub struct OPRandomnessResultMutation;
+
+impl OPRandomnessResultMutation {
+    pub async fn add(
+        db: &DbConn,
+        request_id: Vec<u8>,
+        group_index: i32,
+        message: Vec<u8>,
+        threshold: i32,
+    ) -> Result<op_randomness_result::ActiveModel, DbErr> {
+        op_randomness_result::ActiveModel {
+            request_id: Set(request_id),
+            group_index: Set(group_index),
+            message: Set(message),
+            threshold: Set(threshold),
+            partial_signatures: Set(
+                serde_json::to_string(&BTreeMap::<Address, Vec<u8>>::new()).unwrap()
+            ),
+            create_at: Set(format_now_date()),
+            update_at: Set(format_now_date()),
+            state: Set(BLSResultCacheState::NotCommitted.to_i32()),
+            ..Default::default()
+        }
+        .save(db)
+        .await
+    }
+
+    pub async fn add_partial_signature(
+        db: &DbConn,
+        model: op_randomness_result::Model,
+        member_address: Address,
+        partial_signature: Vec<u8>,
+    ) -> Result<op_randomness_result::Model, DbErr> {
+        let mut partial_signatures: BTreeMap<Address, Vec<u8>> =
+            serde_json::from_str(&model.partial_signatures).unwrap();
+
+        partial_signatures.insert(member_address, partial_signature);
+
+        let mut randomness_result: op_randomness_result::ActiveModel = model.into();
+
+        randomness_result.partial_signatures =
+            Set(serde_json::to_string(&partial_signatures).unwrap());
+
+        randomness_result.update_at = Set(format_now_date());
+
+        randomness_result.update(db).await
+    }
+
+    pub async fn update_commit_result(
+        db: &DbConn,
+        model: op_randomness_result::Model,
+        status: i32,
+    ) -> Result<op_randomness_result::Model, DbErr> {
+        let mut randomness_result: op_randomness_result::ActiveModel = model.into();
 
         randomness_result.state = Set(status);
 

@@ -235,7 +235,11 @@ Configuration items in [`conf/config.yml`](conf/config.yml) are listed here:
 
 - chain_id: Config chain id of main chain. (example: 31337)
 
-- controller_address: Config on-chain arpa network controller contract address. (example: "0x0000000000000000000000000000000000000001")
+- controller_address: Config Controller contract address to manage nodes and groups. (example: "0x0000000000000000000000000000000000000001")
+
+- controller_relayer_address: Config ControllerRelayer contract address to relay groups to relayed chains. (example: "0x0000000000000000000000000000000000000001")
+
+- adapter_address: Config Adapter contract address to request and fulfill randomness task. (example: "0x0000000000000000000000000000000000000001")
 
 - data_path(Optional): Config DB file for persistence. (example: "data.sqlite")
 
@@ -366,6 +370,55 @@ Configuration items in [`conf/config.yml`](conf/config.yml) are listed here:
     - The polling of PostCommitGrouping, PostGrouping, ReadyToHandleRandomnessTask are triggered by view calls on the chain, so the interval_millis should be set to a value no larger than the block time of the chain.
 
     - The polling of RandomnessSignatureAggregation is triggered by the node itself, so the interval_millis can be set relatively small.
+
+- relayed_chains: Config chain_id, description, contract addresses, endpoint, time_limits and listeners for all relayed chains we support.
+
+  - example:
+
+  ```
+  relayed_chains:
+  - chain_id: 901
+    description: "OP"
+    provider_endpoint: "http://127.0.0.1:9545"
+    controller_oracle_address: "0x9fE46736679d2D9a65F0992F2272dE9f3c7fa6e0"
+    adapter_address: "0xDc64a140Aa3E981100a9becA4E685f962f0cF6C9"
+    listeners:
+      - l_type: Block
+        interval_millis: 0
+        use_jitter: true
+      - l_type: NewRandomnessTask
+        interval_millis: 0
+        use_jitter: true
+      - l_type: ReadyToHandleRandomnessTask
+        interval_millis: 1000
+        use_jitter: true
+      - l_type: RandomnessSignatureAggregation
+        interval_millis: 2000
+        use_jitter: false
+    time_limits:
+      randomness_task_exclusive_window: 10
+      listener_interval_millis: 1000
+      provider_polling_interval_millis: 1000
+      contract_transaction_retry_descriptor:
+        base: 2
+        factor: 1000
+        max_attempts: 3
+        use_jitter: true
+      contract_view_retry_descriptor:
+        base: 2
+        factor: 500
+        max_attempts: 5
+        use_jitter: true
+      commit_partial_signature_retry_descriptor:
+        base: 2
+        factor: 1000
+        max_attempts: 5
+        use_jitter: false
+  ```
+
+  - The node share the same identity with the main chain on all relayed chains, so the node MUST be registered on the main chain first(will automatically execute on the new-run).
+
+  - Currently latest grouping info are relayed from the main chain to relayed chains, so the listeners of PreGrouping, PostCommitGrouping and PostGrouping are not needed.
 
 # Local Test
 

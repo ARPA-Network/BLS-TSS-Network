@@ -13,7 +13,7 @@ use dkg_core::primitives::DKGOutput;
 use ethers_core::types::Address;
 use log::info;
 use std::collections::{BTreeMap, HashMap};
-use threshold_bls::group::{Curve, Element, PairingCurve};
+use threshold_bls::group::{Curve, Element};
 use threshold_bls::serialize::point_to_hex;
 use threshold_bls::sig::Share;
 
@@ -41,14 +41,14 @@ impl BlockInfoUpdater for InMemoryBlockInfoCache {
 }
 
 #[derive(Clone)]
-pub struct InMemoryNodeInfoCache<C: PairingCurve> {
+pub struct InMemoryNodeInfoCache<C: Curve> {
     pub(crate) id_address: Address,
     pub(crate) node_rpc_endpoint: Option<String>,
     pub(crate) dkg_private_key: Option<C::Scalar>,
-    pub(crate) dkg_public_key: Option<C::G2>,
+    pub(crate) dkg_public_key: Option<C::Point>,
 }
 
-impl<C: PairingCurve> std::fmt::Debug for InMemoryNodeInfoCache<C> {
+impl<C: Curve> std::fmt::Debug for InMemoryNodeInfoCache<C> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("InMemoryNodeInfoCache")
             .field("id_address", &self.id_address)
@@ -62,7 +62,7 @@ impl<C: PairingCurve> std::fmt::Debug for InMemoryNodeInfoCache<C> {
     }
 }
 
-impl<C: PairingCurve> InMemoryNodeInfoCache<C> {
+impl<C: Curve> InMemoryNodeInfoCache<C> {
     pub fn new(id_address: Address) -> Self {
         InMemoryNodeInfoCache {
             id_address,
@@ -76,7 +76,7 @@ impl<C: PairingCurve> InMemoryNodeInfoCache<C> {
         id_address: Address,
         node_rpc_endpoint: String,
         dkg_private_key: C::Scalar,
-        dkg_public_key: C::G2,
+        dkg_public_key: C::Point,
     ) -> Self {
         InMemoryNodeInfoCache {
             id_address,
@@ -87,14 +87,14 @@ impl<C: PairingCurve> InMemoryNodeInfoCache<C> {
     }
 }
 
-impl<C: PairingCurve> ContextInfoUpdater for InMemoryNodeInfoCache<C> {
+impl<C: Curve> ContextInfoUpdater for InMemoryNodeInfoCache<C> {
     fn refresh_context_entry(&self) {
         encoder::CONTEXT_INFO.write()[0] = format!("{:?}", &self);
     }
 }
 
 #[async_trait]
-impl<C: PairingCurve> NodeInfoUpdater<C> for InMemoryNodeInfoCache<C> {
+impl<C: Curve> NodeInfoUpdater<C> for InMemoryNodeInfoCache<C> {
     async fn set_node_rpc_endpoint(&mut self, node_rpc_endpoint: String) -> DataAccessResult<()> {
         self.node_rpc_endpoint = Some(node_rpc_endpoint);
         self.refresh_context_entry();
@@ -104,7 +104,7 @@ impl<C: PairingCurve> NodeInfoUpdater<C> for InMemoryNodeInfoCache<C> {
     async fn set_dkg_key_pair(
         &mut self,
         dkg_private_key: C::Scalar,
-        dkg_public_key: C::G2,
+        dkg_public_key: C::Point,
     ) -> DataAccessResult<()> {
         self.dkg_private_key = Some(dkg_private_key);
         self.dkg_public_key = Some(dkg_public_key);
@@ -113,7 +113,7 @@ impl<C: PairingCurve> NodeInfoUpdater<C> for InMemoryNodeInfoCache<C> {
     }
 }
 
-impl<C: PairingCurve> NodeInfoFetcher<C> for InMemoryNodeInfoCache<C> {
+impl<C: Curve> NodeInfoFetcher<C> for InMemoryNodeInfoCache<C> {
     fn get_id_address(&self) -> DataAccessResult<Address> {
         Ok(self.id_address)
     }
@@ -131,7 +131,7 @@ impl<C: PairingCurve> NodeInfoFetcher<C> for InMemoryNodeInfoCache<C> {
             .ok_or_else(|| NodeInfoError::NoDKGKeyPair.into())
     }
 
-    fn get_dkg_public_key(&self) -> DataAccessResult<&C::G2> {
+    fn get_dkg_public_key(&self) -> DataAccessResult<&C::Point> {
         self.dkg_public_key
             .as_ref()
             .ok_or_else(|| NodeInfoError::NoDKGKeyPair.into())
@@ -139,7 +139,7 @@ impl<C: PairingCurve> NodeInfoFetcher<C> for InMemoryNodeInfoCache<C> {
 }
 
 #[derive(Clone)]
-pub struct InMemoryGroupInfoCache<C: PairingCurve> {
+pub struct InMemoryGroupInfoCache<C: Curve> {
     pub(crate) share: Option<Share<C::Scalar>>,
     pub(crate) group: Group<C>,
     pub(crate) dkg_status: DKGStatus,
@@ -147,13 +147,13 @@ pub struct InMemoryGroupInfoCache<C: PairingCurve> {
     pub(crate) dkg_start_block_height: usize,
 }
 
-impl<C: PairingCurve> Default for InMemoryGroupInfoCache<C> {
+impl<C: Curve> Default for InMemoryGroupInfoCache<C> {
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl<C: PairingCurve> std::fmt::Debug for InMemoryGroupInfoCache<C> {
+impl<C: Curve> std::fmt::Debug for InMemoryGroupInfoCache<C> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("InMemoryGroupInfoCache")
             .field("share", &"ignored")
@@ -165,7 +165,7 @@ impl<C: PairingCurve> std::fmt::Debug for InMemoryGroupInfoCache<C> {
     }
 }
 
-impl<C: PairingCurve> InMemoryGroupInfoCache<C> {
+impl<C: Curve> InMemoryGroupInfoCache<C> {
     pub fn new() -> Self {
         let group: Group<C> = Group::new();
 
@@ -203,14 +203,14 @@ impl<C: PairingCurve> InMemoryGroupInfoCache<C> {
     }
 }
 
-impl<C: PairingCurve> ContextInfoUpdater for InMemoryGroupInfoCache<C> {
+impl<C: Curve> ContextInfoUpdater for InMemoryGroupInfoCache<C> {
     fn refresh_context_entry(&self) {
         encoder::CONTEXT_INFO.write()[1] = format!("{:?}", &self);
     }
 }
 
 #[async_trait]
-impl<PC: PairingCurve + Send + Sync> GroupInfoUpdater<PC> for InMemoryGroupInfoCache<PC> {
+impl<C: Curve> GroupInfoUpdater<C> for InMemoryGroupInfoCache<C> {
     async fn update_dkg_status(
         &mut self,
         index: usize,
@@ -282,12 +282,12 @@ impl<PC: PairingCurve + Send + Sync> GroupInfoUpdater<PC> for InMemoryGroupInfoC
         Ok(())
     }
 
-    async fn save_output<C: Curve>(
+    async fn save_output(
         &mut self,
         index: usize,
         epoch: usize,
         output: DKGOutput<C>,
-    ) -> DataAccessResult<(PC::G2, PC::G2, Vec<Address>)> {
+    ) -> DataAccessResult<(C::Point, C::Point, Vec<Address>)> {
         self.only_has_group_task()?;
 
         if self.group.index != index {
@@ -318,10 +318,9 @@ impl<PC: PairingCurve + Send + Sync> GroupInfoUpdater<PC> for InMemoryGroupInfoC
             .map(|(id_address, _)| *id_address)
             .collect::<Vec<_>>();
 
-        let public_key: PC::G2 =
-            bincode::deserialize(&bincode::serialize(&output.public.public_key())?)?;
+        let public_key = output.public.public_key().clone();
 
-        let mut partial_public_key = PC::G2::new();
+        let mut partial_public_key = C::Point::new();
 
         let share = bincode::deserialize(&bincode::serialize(&output.share)?)?;
 
@@ -389,7 +388,7 @@ impl<PC: PairingCurve + Send + Sync> GroupInfoUpdater<PC> for InMemoryGroupInfoC
     }
 }
 
-impl<C: PairingCurve> GroupInfoFetcher<C> for InMemoryGroupInfoCache<C> {
+impl<C: Curve> GroupInfoFetcher<C> for InMemoryGroupInfoCache<C> {
     fn get_group(&self) -> DataAccessResult<&Group<C>> {
         self.only_has_group_task()?;
 
@@ -432,7 +431,7 @@ impl<C: PairingCurve> GroupInfoFetcher<C> for InMemoryGroupInfoCache<C> {
         Ok(self.self_index)
     }
 
-    fn get_public_key(&self) -> DataAccessResult<&C::G2> {
+    fn get_public_key(&self) -> DataAccessResult<&C::Point> {
         self.only_has_group_task()?;
 
         self.group

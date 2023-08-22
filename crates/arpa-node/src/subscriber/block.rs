@@ -1,24 +1,28 @@
 use super::{DebuggableEvent, DebuggableSubscriber, Subscriber};
 use crate::{
+    context::BlockInfoHandler,
     error::NodeResult,
     event::{new_block::NewBlock, types::Topic},
     queue::{event_queue::EventQueue, EventSubscriber},
 };
-use arpa_dal::BlockInfoUpdater;
 use async_trait::async_trait;
 use log::debug;
 use std::sync::Arc;
 use tokio::sync::RwLock;
 
 #[derive(Debug)]
-pub struct BlockSubscriber<B: BlockInfoUpdater> {
+pub struct BlockSubscriber {
     pub chain_id: usize,
-    block_cache: Arc<RwLock<B>>,
+    block_cache: Arc<RwLock<Box<dyn BlockInfoHandler>>>,
     eq: Arc<RwLock<EventQueue>>,
 }
 
-impl<B: BlockInfoUpdater> BlockSubscriber<B> {
-    pub fn new(chain_id: usize, block_cache: Arc<RwLock<B>>, eq: Arc<RwLock<EventQueue>>) -> Self {
+impl BlockSubscriber {
+    pub fn new(
+        chain_id: usize,
+        block_cache: Arc<RwLock<Box<dyn BlockInfoHandler>>>,
+        eq: Arc<RwLock<EventQueue>>,
+    ) -> Self {
         BlockSubscriber {
             chain_id,
             block_cache,
@@ -28,9 +32,7 @@ impl<B: BlockInfoUpdater> BlockSubscriber<B> {
 }
 
 #[async_trait]
-impl<B: BlockInfoUpdater + std::fmt::Debug + Sync + Send + 'static> Subscriber
-    for BlockSubscriber<B>
-{
+impl Subscriber for BlockSubscriber {
     async fn notify(&self, topic: Topic, payload: &(dyn DebuggableEvent)) -> NodeResult<()> {
         debug!("{:?}", topic);
 
@@ -57,7 +59,4 @@ impl<B: BlockInfoUpdater + std::fmt::Debug + Sync + Send + 'static> Subscriber
     }
 }
 
-impl<B: BlockInfoUpdater + std::fmt::Debug + Sync + Send + 'static> DebuggableSubscriber
-    for BlockSubscriber<B>
-{
-}
+impl DebuggableSubscriber for BlockSubscriber {}

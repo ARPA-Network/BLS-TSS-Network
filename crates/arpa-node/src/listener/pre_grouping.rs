@@ -1,38 +1,31 @@
 use super::Listener;
 use crate::{
+    context::{ChainIdentityHandlerType, GroupInfoHandler},
     error::NodeResult,
     event::new_dkg_task::NewDKGTask,
     queue::{event_queue::EventQueue, EventPublisher},
 };
-use arpa_contract_client::controller::{ControllerClientBuilder, ControllerLogs};
-use arpa_core::ChainIdentity;
-use arpa_dal::GroupInfoFetcher;
+use arpa_contract_client::controller::ControllerLogs;
 use async_trait::async_trait;
 use std::{marker::PhantomData, sync::Arc};
-use threshold_bls::group::PairingCurve;
+use threshold_bls::group::Curve;
 use tokio::sync::RwLock;
 
-pub struct PreGroupingListener<
-    G: GroupInfoFetcher<PC>,
-    I: ChainIdentity + ControllerClientBuilder<PC>,
-    PC: PairingCurve,
-> {
-    main_chain_identity: Arc<RwLock<I>>,
-    group_cache: Arc<RwLock<G>>,
+pub struct PreGroupingListener<PC: Curve> {
+    chain_identity: Arc<RwLock<ChainIdentityHandlerType<PC>>>,
+    group_cache: Arc<RwLock<Box<dyn GroupInfoHandler<PC>>>>,
     eq: Arc<RwLock<EventQueue>>,
     pc: PhantomData<PC>,
 }
 
-impl<G: GroupInfoFetcher<PC>, I: ChainIdentity + ControllerClientBuilder<PC>, PC: PairingCurve>
-    PreGroupingListener<G, I, PC>
-{
+impl<PC: Curve> PreGroupingListener<PC> {
     pub fn new(
-        main_chain_identity: Arc<RwLock<I>>,
-        group_cache: Arc<RwLock<G>>,
+        chain_identity: Arc<RwLock<ChainIdentityHandlerType<PC>>>,
+        group_cache: Arc<RwLock<Box<dyn GroupInfoHandler<PC>>>>,
         eq: Arc<RwLock<EventQueue>>,
     ) -> Self {
         PreGroupingListener {
-            main_chain_identity,
+            chain_identity,
             group_cache,
             eq,
             pc: PhantomData,
@@ -41,31 +34,17 @@ impl<G: GroupInfoFetcher<PC>, I: ChainIdentity + ControllerClientBuilder<PC>, PC
 }
 
 #[async_trait]
-impl<
-        G: GroupInfoFetcher<PC> + Sync + Send,
-        I: ChainIdentity + ControllerClientBuilder<PC> + Sync + Send,
-        PC: PairingCurve + Sync + Send,
-    > EventPublisher<NewDKGTask> for PreGroupingListener<G, I, PC>
-{
+impl<PC: Curve + Sync + Send> EventPublisher<NewDKGTask> for PreGroupingListener<PC> {
     async fn publish(&self, event: NewDKGTask) {
         self.eq.read().await.publish(event).await;
     }
 }
 
 #[async_trait]
-impl<
-        G: GroupInfoFetcher<PC> + Sync + Send + 'static,
-        I: ChainIdentity + ControllerClientBuilder<PC> + Sync + Send,
-        PC: PairingCurve + Sync + Send,
-    > Listener for PreGroupingListener<G, I, PC>
-{
+impl<PC: Curve + Sync + Send> Listener for PreGroupingListener<PC> {
     async fn listen(&self) -> NodeResult<()> {
-        let client = self
-            .main_chain_identity
-            .read()
-            .await
-            .build_controller_client();
-        let self_id_address = self.main_chain_identity.read().await.get_id_address();
+        let client = self.chain_identity.read().await.build_controller_client();
+        let self_id_address = self.chain_identity.read().await.get_id_address();
 
         client
             .subscribe_dkg_task(move |dkg_task| {

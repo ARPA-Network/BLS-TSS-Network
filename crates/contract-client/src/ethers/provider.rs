@@ -2,7 +2,7 @@ use crate::{
     error::{ContractClientError, ContractClientResult},
     provider::{BlockFetcher, ChainProviderBuilder},
 };
-use arpa_core::{ChainIdentity, GeneralChainIdentity};
+use arpa_core::{ChainIdentity, GeneralMainChainIdentity, GeneralRelayedChainIdentity};
 use async_trait::async_trait;
 use ethers::prelude::*;
 use ethers::providers::Http as HttpProvider;
@@ -13,18 +13,24 @@ pub struct ChainProvider {
 }
 
 impl ChainProvider {
-    pub fn new(identity: &GeneralChainIdentity) -> Self {
-        ChainProvider {
-            provider: identity.get_provider(),
-        }
+    pub fn new(provider: Arc<Provider<HttpProvider>>) -> Self {
+        ChainProvider { provider }
     }
 }
 
-impl ChainProviderBuilder for GeneralChainIdentity {
-    type Service = ChainProvider;
+impl ChainProviderBuilder for GeneralMainChainIdentity {
+    type ProviderService = ChainProvider;
 
     fn build_chain_provider(&self) -> ChainProvider {
-        ChainProvider::new(self)
+        ChainProvider::new(self.get_provider())
+    }
+}
+
+impl ChainProviderBuilder for GeneralRelayedChainIdentity {
+    type ProviderService = ChainProvider;
+
+    fn build_chain_provider(&self) -> ChainProvider {
+        ChainProvider::new(self.get_provider())
     }
 }
 

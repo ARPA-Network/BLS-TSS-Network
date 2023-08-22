@@ -1,26 +1,29 @@
 use super::{DebuggableEvent, DebuggableSubscriber, Subscriber};
 use crate::{
+    context::GroupInfoHandler,
     error::NodeResult,
     event::{dkg_success::DKGSuccess, types::Topic},
     queue::{event_queue::EventQueue, EventSubscriber},
 };
 use arpa_core::DKGStatus;
-use arpa_dal::GroupInfoUpdater;
 use async_trait::async_trait;
 use log::{debug, info};
 use std::{marker::PhantomData, sync::Arc};
-use threshold_bls::group::PairingCurve;
+use threshold_bls::group::Curve;
 use tokio::sync::RwLock;
 
 #[derive(Debug)]
-pub struct PostSuccessGroupingSubscriber<G: GroupInfoUpdater<C> + Sync + Send, C: PairingCurve> {
-    group_cache: Arc<RwLock<G>>,
+pub struct PostSuccessGroupingSubscriber<PC: Curve> {
+    group_cache: Arc<RwLock<Box<dyn GroupInfoHandler<PC>>>>,
     eq: Arc<RwLock<EventQueue>>,
-    c: PhantomData<C>,
+    c: PhantomData<PC>,
 }
 
-impl<G: GroupInfoUpdater<C> + Sync + Send, C: PairingCurve> PostSuccessGroupingSubscriber<G, C> {
-    pub fn new(group_cache: Arc<RwLock<G>>, eq: Arc<RwLock<EventQueue>>) -> Self {
+impl<PC: Curve> PostSuccessGroupingSubscriber<PC> {
+    pub fn new(
+        group_cache: Arc<RwLock<Box<dyn GroupInfoHandler<PC>>>>,
+        eq: Arc<RwLock<EventQueue>>,
+    ) -> Self {
         PostSuccessGroupingSubscriber {
             group_cache,
             eq,
@@ -30,17 +33,15 @@ impl<G: GroupInfoUpdater<C> + Sync + Send, C: PairingCurve> PostSuccessGroupingS
 }
 
 #[async_trait]
-impl<
-        G: GroupInfoUpdater<C> + std::fmt::Debug + Sync + Send + 'static,
-        C: PairingCurve + std::fmt::Debug + Sync + Send + 'static,
-    > Subscriber for PostSuccessGroupingSubscriber<G, C>
+impl<PC: Curve + std::fmt::Debug + Sync + Send + 'static> Subscriber
+    for PostSuccessGroupingSubscriber<PC>
 {
     async fn notify(&self, topic: Topic, payload: &(dyn DebuggableEvent)) -> NodeResult<()> {
         debug!("{:?}", topic);
 
         let DKGSuccess { group } = payload
             .as_any()
-            .downcast_ref::<DKGSuccess<C>>()
+            .downcast_ref::<DKGSuccess<PC>>()
             .unwrap()
             .clone();
 
@@ -80,9 +81,7 @@ impl<
     }
 }
 
-impl<
-        G: GroupInfoUpdater<C> + std::fmt::Debug + Sync + Send + 'static,
-        C: PairingCurve + std::fmt::Debug + Sync + Send + 'static,
-    > DebuggableSubscriber for PostSuccessGroupingSubscriber<G, C>
+impl<PC: Curve + std::fmt::Debug + Sync + Send + 'static> DebuggableSubscriber
+    for PostSuccessGroupingSubscriber<PC>
 {
 }

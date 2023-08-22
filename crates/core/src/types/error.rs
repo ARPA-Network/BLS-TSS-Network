@@ -27,6 +27,9 @@ pub enum SchedulerError {
 
     #[error("task already exists")]
     TaskAlreadyExisted,
+
+    #[error("the listener {1} is not supported in relayed chain {0}")]
+    UnsupportedListenerType(usize, String),
 }
 
 #[derive(Debug, Error)]

@@ -1,18 +1,21 @@
-use crate::context::chain::MainChainFetcher;
-use crate::rpc_stub::committer::{
-    committer_service_server::{CommitterService, CommitterServiceServer},
-    CommitPartialSignatureReply, CommitPartialSignatureRequest,
-};
 use crate::{
     algorithm::bls::{BLSCore, SimpleBLSCore},
-    context::{chain::ChainFetcher, types::GeneralContext, ContextFetcher},
+    context::{types::GeneralContext, Context, GroupInfoHandler},
     error::NodeError,
+};
+use crate::{
+    context::chain::Chain,
+    rpc_stub::committer::{
+        committer_service_server::{CommitterService, CommitterServiceServer},
+        CommitPartialSignatureReply, CommitPartialSignatureRequest,
+    },
 };
 use arpa_contract_client::{
     adapter::AdapterClientBuilder, controller::ControllerClientBuilder,
-    coordinator::CoordinatorClientBuilder, provider::ChainProviderBuilder,
+    controller_relayer::ControllerRelayerClientBuilder, coordinator::CoordinatorClientBuilder,
+    provider::ChainProviderBuilder,
 };
-use arpa_core::{BLSTaskError, BLSTaskType, ChainIdentity, RandomnessTask};
+use arpa_core::{BLSTaskError, BLSTaskType, MainChainIdentity, RandomnessTask};
 use arpa_dal::cache::RandomnessResultCache;
 use arpa_dal::{
     BLSTasksFetcher, BLSTasksUpdater, ContextInfoUpdater, GroupInfoFetcher, GroupInfoUpdater,
@@ -21,103 +24,58 @@ use arpa_dal::{
 use ethers::types::Address;
 use futures::Future;
 use std::{marker::PhantomData, sync::Arc};
-use threshold_bls::group::PairingCurve;
+use threshold_bls::{
+    group::Curve,
+    sig::{SignatureScheme, ThresholdScheme},
+};
 use tokio::sync::RwLock;
 use tonic::{transport::Server, Request, Response, Status};
 
-type NodeContext<N, G, T, C, I, PC> = Arc<RwLock<GeneralContext<N, G, T, C, I, PC>>>;
+type NodeContext<PC, S> = Arc<RwLock<GeneralContext<PC, S>>>;
 
 pub(crate) struct BLSCommitterServiceServer<
-    N: NodeInfoFetcher<PC> + NodeInfoUpdater<PC> + ContextInfoUpdater,
-    G: GroupInfoFetcher<PC> + GroupInfoUpdater<PC> + ContextInfoUpdater,
-    T: BLSTasksFetcher<RandomnessTask> + BLSTasksUpdater<RandomnessTask>,
-    C: SignatureResultCacheFetcher<RandomnessResultCache>
-        + SignatureResultCacheUpdater<RandomnessResultCache>,
-    I: ChainIdentity
-        + ControllerClientBuilder<PC>
-        + CoordinatorClientBuilder
-        + AdapterClientBuilder
-        + ChainProviderBuilder,
-    PC: PairingCurve,
+    PC: Curve,
+    S: SignatureScheme + ThresholdScheme<Public = PC::Point, Private = PC::Scalar>,
 > {
     id_address: Address,
-    group_cache: Arc<RwLock<G>>,
-    context: NodeContext<N, G, T, C, I, PC>,
+    group_cache: Arc<RwLock<Box<dyn GroupInfoHandler<PC>>>>,
+    context: NodeContext<PC, S>,
     c: PhantomData<PC>,
+    s: PhantomData<S>,
 }
 
-impl<
-        N: NodeInfoFetcher<PC> + NodeInfoUpdater<PC> + ContextInfoUpdater,
-        G: GroupInfoFetcher<PC> + GroupInfoUpdater<PC> + ContextInfoUpdater,
-        T: BLSTasksFetcher<RandomnessTask> + BLSTasksUpdater<RandomnessTask>,
-        C: SignatureResultCacheFetcher<RandomnessResultCache>
-            + SignatureResultCacheUpdater<RandomnessResultCache>,
-        I: ChainIdentity
-            + ControllerClientBuilder<PC>
-            + CoordinatorClientBuilder
-            + AdapterClientBuilder
-            + ChainProviderBuilder,
-        PC: PairingCurve,
-    > BLSCommitterServiceServer<N, G, T, C, I, PC>
+impl<PC: Curve, S: SignatureScheme + ThresholdScheme<Public = PC::Point, Private = PC::Scalar>>
+    BLSCommitterServiceServer<PC, S>
 {
     pub fn new(
         id_address: Address,
-        group_cache: Arc<RwLock<G>>,
-        context: NodeContext<N, G, T, C, I, PC>,
+        group_cache: Arc<RwLock<Box<dyn GroupInfoHandler<PC>>>>,
+        context: NodeContext<PC, S>,
     ) -> Self {
         BLSCommitterServiceServer {
             id_address,
             group_cache,
             context,
             c: PhantomData,
+            s: PhantomData,
         }
     }
 }
 
 #[tonic::async_trait]
 impl<
-        N: NodeInfoFetcher<PC>
-            + NodeInfoUpdater<PC>
-            + ContextInfoUpdater
+        PC: Curve + std::fmt::Debug + Clone + Sync + Send + 'static,
+        S: SignatureScheme
+            + ThresholdScheme<Public = PC::Point, Private = PC::Scalar>
             + std::fmt::Debug
             + Clone
             + Sync
             + Send
             + 'static,
-        G: GroupInfoFetcher<PC>
-            + GroupInfoUpdater<PC>
-            + ContextInfoUpdater
-            + std::fmt::Debug
-            + Clone
-            + Sync
-            + Send
-            + 'static,
-        T: BLSTasksFetcher<RandomnessTask>
-            + BLSTasksUpdater<RandomnessTask>
-            + std::fmt::Debug
-            + Clone
-            + Sync
-            + Send
-            + 'static,
-        C: SignatureResultCacheFetcher<RandomnessResultCache>
-            + SignatureResultCacheUpdater<RandomnessResultCache>
-            + std::fmt::Debug
-            + Clone
-            + Sync
-            + Send
-            + 'static,
-        I: ChainIdentity
-            + ControllerClientBuilder<PC>
-            + CoordinatorClientBuilder
-            + AdapterClientBuilder
-            + ChainProviderBuilder
-            + std::fmt::Debug
-            + Clone
-            + Sync
-            + Send
-            + 'static,
-        PC: PairingCurve + std::fmt::Debug + Clone + Sync + Send + 'static,
-    > CommitterService for BLSCommitterServiceServer<N, G, T, C, I, PC>
+    > CommitterService for BLSCommitterServiceServer<PC, S>
+where
+    <S as ThresholdScheme>::Error: Sync + Send,
+    <S as SignatureScheme>::Error: Sync + Send,
 {
     async fn commit_partial_signature(
         &self,
@@ -133,6 +91,8 @@ impl<
             return Err(Status::not_found(NodeError::NotCommitter.to_string()));
         }
 
+        let chain_id = req.chain_id as usize;
+
         let req_id_address: Address = req
             .id_address
             .parse()
@@ -141,7 +101,7 @@ impl<
         if let Ok(member) = self.group_cache.read().await.get_member(req_id_address) {
             let partial_public_key = member.partial_public_key.clone().unwrap();
 
-            SimpleBLSCore::<PC>::partial_verify(
+            SimpleBLSCore::<PC, S>::partial_verify(
                 &partial_public_key,
                 &req.message,
                 &req.partial_signature,
@@ -150,12 +110,35 @@ impl<
 
             match BLSTaskType::from(req.task_type) {
                 BLSTaskType::Randomness => {
-                    let randomness_result_cache = self
+                    let main_chain_id = self
                         .context
                         .read()
                         .await
                         .get_main_chain()
-                        .get_randomness_result_cache();
+                        .get_chain_identity()
+                        .read()
+                        .await
+                        .get_chain_id();
+
+                    let randomness_result_cache = if chain_id == main_chain_id {
+                        self.context
+                            .read()
+                            .await
+                            .get_main_chain()
+                            .get_randomness_result_cache()
+                    } else {
+                        if !self.context.read().await.contains_relayed_chain(chain_id) {
+                            return Err(Status::invalid_argument(
+                                NodeError::InvalidChainId(chain_id).to_string(),
+                            ));
+                        }
+                        self.context
+                            .read()
+                            .await
+                            .get_relayed_chain(req.chain_id as usize)
+                            .unwrap()
+                            .get_randomness_result_cache()
+                    };
 
                     if !randomness_result_cache
                         .read()
@@ -250,22 +233,33 @@ pub async fn start_committer_server_with_shutdown<
         + Sync
         + Send
         + 'static,
-    I: ChainIdentity
+    MI: MainChainIdentity
         + ControllerClientBuilder<PC>
-        + CoordinatorClientBuilder
+        + ControllerRelayerClientBuilder
+        + CoordinatorClientBuilder<PC>
         + AdapterClientBuilder
         + ChainProviderBuilder
-        + std::fmt::Debug
-        + Clone
         + Sync
         + Send
+        + std::fmt::Debug
+        + Clone
         + 'static,
-    PC: PairingCurve + std::fmt::Debug + Clone + Sync + Send + 'static,
+    PC: Curve + std::fmt::Debug + Clone + Sync + Send + 'static,
+    S: SignatureScheme
+        + ThresholdScheme<Public = PC::Point, Private = PC::Scalar>
+        + Clone
+        + Send
+        + Sync
+        + 'static,
 >(
     endpoint: String,
-    context: NodeContext<N, G, T, C, I, PC>,
+    context: NodeContext<PC, S>,
     shutdown_signal: F,
-) -> Result<(), Box<dyn std::error::Error>> {
+) -> Result<(), Box<dyn std::error::Error>>
+where
+    <S as ThresholdScheme>::Error: Sync + Send,
+    <S as SignatureScheme>::Error: Sync + Send,
+{
     let addr = endpoint.parse()?;
 
     let id_address = context
@@ -290,51 +284,22 @@ pub async fn start_committer_server_with_shutdown<
 }
 
 pub async fn start_committer_server<
-    N: NodeInfoFetcher<PC>
-        + NodeInfoUpdater<PC>
-        + ContextInfoUpdater
+    PC: Curve + std::fmt::Debug + Clone + Sync + Send + 'static,
+    S: SignatureScheme
+        + ThresholdScheme<Public = PC::Point, Private = PC::Scalar>
         + std::fmt::Debug
         + Clone
         + Sync
         + Send
         + 'static,
-    G: GroupInfoFetcher<PC>
-        + GroupInfoUpdater<PC>
-        + ContextInfoUpdater
-        + std::fmt::Debug
-        + Clone
-        + Sync
-        + Send
-        + 'static,
-    T: BLSTasksFetcher<RandomnessTask>
-        + BLSTasksUpdater<RandomnessTask>
-        + std::fmt::Debug
-        + Clone
-        + Sync
-        + Send
-        + 'static,
-    C: SignatureResultCacheFetcher<RandomnessResultCache>
-        + SignatureResultCacheUpdater<RandomnessResultCache>
-        + std::fmt::Debug
-        + Clone
-        + Sync
-        + Send
-        + 'static,
-    I: ChainIdentity
-        + ControllerClientBuilder<PC>
-        + CoordinatorClientBuilder
-        + AdapterClientBuilder
-        + ChainProviderBuilder
-        + std::fmt::Debug
-        + Clone
-        + Sync
-        + Send
-        + 'static,
-    PC: PairingCurve + std::fmt::Debug + Clone + Sync + Send + 'static,
 >(
     endpoint: String,
-    context: NodeContext<N, G, T, C, I, PC>,
-) -> Result<(), Box<dyn std::error::Error>> {
+    context: NodeContext<PC, S>,
+) -> Result<(), Box<dyn std::error::Error>>
+where
+    <S as ThresholdScheme>::Error: Sync + Send,
+    <S as SignatureScheme>::Error: Sync + Send,
+{
     let addr = endpoint.parse()?;
 
     let id_address = context

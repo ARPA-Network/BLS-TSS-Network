@@ -6,7 +6,7 @@ use serde::de;
 use serde::{Deserialize, Serialize};
 use std::convert::TryFrom;
 use std::env;
-use std::fmt;
+use std::fmt::{self};
 use std::time::Duration;
 use std::{fs::read_to_string, path::PathBuf};
 
@@ -59,6 +59,7 @@ pub struct Config {
     pub provider_endpoint: String,
     pub chain_id: usize,
     pub controller_address: String,
+    pub controller_relayer_address: String,
     pub adapter_address: String,
     // Data file for persistence
     pub data_path: Option<String>,
@@ -66,6 +67,7 @@ pub struct Config {
     pub listeners: Option<Vec<ListenerDescriptor>>,
     pub logger: Option<LoggerDescriptor>,
     pub time_limits: Option<TimeLimitDescriptor>,
+    pub relayed_chains: Vec<RelayedChain>,
 }
 
 impl Default for Config {
@@ -77,15 +79,28 @@ impl Default for Config {
             node_management_rpc_token: "for_test".to_string(),
             provider_endpoint: "localhost:8545".to_string(),
             chain_id: 0,
-            controller_address: "0xdc64a140aa3e981100a9beca4e685f962f0cf6c9".to_string(),
-            adapter_address: "0xa513e6e4b8f2a923d98304ec87f64353c4d5c853".to_string(),
+            controller_address: PLACEHOLDER_ADDRESS.to_string(),
+            controller_relayer_address: PLACEHOLDER_ADDRESS.to_string(),
+            adapter_address: PLACEHOLDER_ADDRESS.to_string(),
             data_path: None,
             account: Default::default(),
             listeners: Default::default(),
             logger: Default::default(),
             time_limits: Default::default(),
+            relayed_chains: vec![],
         }
     }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RelayedChain {
+    pub chain_id: usize,
+    pub description: String,
+    pub provider_endpoint: String,
+    pub controller_oracle_address: String,
+    pub adapter_address: String,
+    pub listeners: Option<Vec<ListenerDescriptor>>,
+    pub time_limits: Option<TimeLimitDescriptor>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -213,8 +228,8 @@ impl ListenerDescriptor {
 #[derive(Debug, Copy, Clone, Serialize, Deserialize)]
 pub struct TimeLimitDescriptor {
     pub listener_interval_millis: u64,
-    pub dkg_wait_for_phase_interval_millis: u64,
-    pub dkg_timeout_duration: usize,
+    pub dkg_wait_for_phase_interval_millis: Option<u64>,
+    pub dkg_timeout_duration: Option<usize>,
     pub randomness_task_exclusive_window: usize,
     pub provider_polling_interval_millis: u64,
     pub contract_transaction_retry_descriptor: ExponentialBackoffRetryDescriptor,
@@ -284,12 +299,18 @@ impl Config {
             Some(time_limits) if time_limits.listener_interval_millis == 0 => {
                 time_limits.listener_interval_millis = DEFAULT_LISTENER_INTERVAL_MILLIS;
             }
-            Some(time_limits) if time_limits.dkg_wait_for_phase_interval_millis == 0 => {
+            Some(time_limits)
+                if time_limits.dkg_wait_for_phase_interval_millis == Some(0)
+                    || time_limits.dkg_wait_for_phase_interval_millis.is_none() =>
+            {
                 time_limits.dkg_wait_for_phase_interval_millis =
-                    DEFAULT_DKG_WAIT_FOR_PHASE_INTERVAL_MILLIS;
+                    Some(DEFAULT_DKG_WAIT_FOR_PHASE_INTERVAL_MILLIS);
             }
-            Some(time_limits) if time_limits.dkg_timeout_duration == 0 => {
-                time_limits.dkg_timeout_duration = DEFAULT_DKG_TIMEOUT_DURATION;
+            Some(time_limits)
+                if time_limits.dkg_timeout_duration == Some(0)
+                    || time_limits.dkg_timeout_duration.is_none() =>
+            {
+                time_limits.dkg_timeout_duration = Some(DEFAULT_DKG_TIMEOUT_DURATION);
             }
             Some(time_limits) if time_limits.randomness_task_exclusive_window == 0 => {
                 time_limits.randomness_task_exclusive_window =
@@ -303,8 +324,10 @@ impl Config {
             None => {
                 self.time_limits = Some(TimeLimitDescriptor {
                     listener_interval_millis: DEFAULT_LISTENER_INTERVAL_MILLIS,
-                    dkg_wait_for_phase_interval_millis: DEFAULT_DKG_WAIT_FOR_PHASE_INTERVAL_MILLIS,
-                    dkg_timeout_duration: DEFAULT_DKG_TIMEOUT_DURATION,
+                    dkg_wait_for_phase_interval_millis: Some(
+                        DEFAULT_DKG_WAIT_FOR_PHASE_INTERVAL_MILLIS,
+                    ),
+                    dkg_timeout_duration: Some(DEFAULT_DKG_TIMEOUT_DURATION),
                     randomness_task_exclusive_window: DEFAULT_RANDOMNESS_TASK_EXCLUSIVE_WINDOW,
                     provider_polling_interval_millis: DEFAULT_PROVIDER_POLLING_INTERVAL_MILLIS,
                     contract_transaction_retry_descriptor: ExponentialBackoffRetryDescriptor {
@@ -325,26 +348,95 @@ impl Config {
                         max_attempts: DEFAULT_COMMIT_PARTIAL_SIGNATURE_RETRY_MAX_ATTEMPTS,
                         use_jitter: DEFAULT_COMMIT_PARTIAL_SIGNATURE_RETRY_USE_JITTER,
                     },
-                });
+                })
             }
-        };
+        }
+
+        for relayed_chain in self.relayed_chains.iter_mut() {
+            relayed_chain.initialize();
+        }
+
         self
+    }
+}
+
+impl RelayedChain {
+    pub fn initialize(&mut self) {
+        if self.listeners.is_none() {
+            let listeners = vec![
+                ListenerDescriptor::default(ListenerType::Block),
+                ListenerDescriptor::default(ListenerType::NewRandomnessTask),
+                ListenerDescriptor::default(ListenerType::ReadyToHandleRandomnessTask),
+                ListenerDescriptor::default(ListenerType::RandomnessSignatureAggregation),
+            ];
+            self.listeners = Some(listeners);
+        }
+
+        match self.time_limits.as_mut() {
+            Some(time_limits) if time_limits.listener_interval_millis == 0 => {
+                time_limits.listener_interval_millis = DEFAULT_LISTENER_INTERVAL_MILLIS;
+            }
+            Some(time_limits) if time_limits.randomness_task_exclusive_window == 0 => {
+                time_limits.randomness_task_exclusive_window =
+                    DEFAULT_RANDOMNESS_TASK_EXCLUSIVE_WINDOW;
+            }
+            Some(time_limits) if time_limits.provider_polling_interval_millis == 0 => {
+                time_limits.provider_polling_interval_millis =
+                    DEFAULT_PROVIDER_POLLING_INTERVAL_MILLIS;
+            }
+            Some(_) => {}
+            None => {
+                self.time_limits = Some(TimeLimitDescriptor {
+                    listener_interval_millis: DEFAULT_LISTENER_INTERVAL_MILLIS,
+                    dkg_wait_for_phase_interval_millis: None,
+                    dkg_timeout_duration: None,
+                    randomness_task_exclusive_window: DEFAULT_RANDOMNESS_TASK_EXCLUSIVE_WINDOW,
+                    provider_polling_interval_millis: DEFAULT_PROVIDER_POLLING_INTERVAL_MILLIS,
+                    contract_transaction_retry_descriptor: ExponentialBackoffRetryDescriptor {
+                        base: DEFAULT_CONTRACT_TRANSACTION_RETRY_BASE,
+                        factor: DEFAULT_CONTRACT_TRANSACTION_RETRY_FACTOR,
+                        max_attempts: DEFAULT_CONTRACT_TRANSACTION_RETRY_MAX_ATTEMPTS,
+                        use_jitter: DEFAULT_CONTRACT_TRANSACTION_RETRY_USE_JITTER,
+                    },
+                    contract_view_retry_descriptor: ExponentialBackoffRetryDescriptor {
+                        base: DEFAULT_CONTRACT_VIEW_RETRY_BASE,
+                        factor: DEFAULT_CONTRACT_VIEW_RETRY_FACTOR,
+                        max_attempts: DEFAULT_CONTRACT_VIEW_RETRY_MAX_ATTEMPTS,
+                        use_jitter: DEFAULT_CONTRACT_VIEW_RETRY_USE_JITTER,
+                    },
+                    commit_partial_signature_retry_descriptor: ExponentialBackoffRetryDescriptor {
+                        base: DEFAULT_COMMIT_PARTIAL_SIGNATURE_RETRY_BASE,
+                        factor: DEFAULT_COMMIT_PARTIAL_SIGNATURE_RETRY_FACTOR,
+                        max_attempts: DEFAULT_COMMIT_PARTIAL_SIGNATURE_RETRY_MAX_ATTEMPTS,
+                        use_jitter: DEFAULT_COMMIT_PARTIAL_SIGNATURE_RETRY_USE_JITTER,
+                    },
+                })
+            }
+        }
     }
 }
 
 #[derive(Debug, Eq, Clone, Copy, Hash, PartialEq)]
 pub enum TaskType {
-    Listener(ListenerType),
-    Subscriber(SubscriberType),
+    Listener(usize, ListenerType),
+    Subscriber(usize, SubscriberType),
     RpcServer(RpcServerType),
 }
 
 impl std::fmt::Display for TaskType {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         match self {
-            TaskType::Listener(l) => std::fmt::Display::fmt(l, f),
-            TaskType::Subscriber(s) => std::fmt::Display::fmt(s, f),
-            TaskType::RpcServer(r) => std::fmt::Display::fmt(r, f),
+            TaskType::Listener(id, l) => f
+                .debug_struct("TaskType")
+                .field("chain_id", id)
+                .field("listener", l)
+                .finish(),
+            TaskType::Subscriber(id, s) => f
+                .debug_struct("TaskType")
+                .field("chain_id", id)
+                .field("subscriber", s)
+                .finish(),
+            TaskType::RpcServer(r) => f.debug_struct("TaskType").field("rpc server", r).finish(),
         }
     }
 }
@@ -511,6 +603,22 @@ mod tests {
     }
 
     #[test]
+    fn test_read_from_config_example() {
+        let config_str = &read_to_string("../arpa-node/test/conf/config_test_3.yml")
+            .unwrap_or_else(|e| {
+                panic!(
+                    "Error loading configuration file: {:?}, please check the configuration!",
+                    e
+                )
+            });
+
+        let config: Config =
+            serde_yaml::from_str(config_str).expect("Error loading configuration file");
+
+        println!("config = {:#?}", config.initialize());
+    }
+
+    #[test]
     fn test_deserialization_from_config() {
         let config = Config::default();
 
@@ -528,7 +636,7 @@ mod tests {
         let config: Config =
             serde_yaml::from_str(config_str).expect("Error loading configuration file");
 
-        println!("config = {:?}", config.initialize());
+        println!("config = {:#?}", config.initialize());
 
         fs::remove_file("config.yml").unwrap();
     }

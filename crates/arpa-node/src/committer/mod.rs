@@ -1,13 +1,12 @@
 pub mod client;
 pub mod server;
 
-use crate::error::NodeResult;
+use crate::{context::GroupInfoHandler, error::NodeResult};
 use arpa_core::{BLSTaskType, ExponentialBackoffRetryDescriptor};
-use arpa_dal::GroupInfoFetcher;
 use async_trait::async_trait;
 use ethers::types::Address;
 use std::sync::Arc;
-use threshold_bls::group::PairingCurve;
+use threshold_bls::group::Curve;
 use tokio::sync::RwLock;
 
 #[async_trait]
@@ -43,15 +42,10 @@ pub(crate) trait CommitterClient {
 }
 
 #[async_trait]
-pub(crate) trait CommitterClientHandler<
-    C: CommitterClient + Sync + Send,
-    G: GroupInfoFetcher<PC> + Sync + Send,
-    PC: PairingCurve,
->
-{
+pub(crate) trait CommitterClientHandler<C: CommitterClient + Sync + Send, PC: Curve> {
     async fn get_id_address(&self) -> Address;
 
-    fn get_group_cache(&self) -> Arc<RwLock<G>>;
+    fn get_group_cache(&self) -> Arc<RwLock<Box<dyn GroupInfoHandler<PC>>>>;
 
     fn get_commit_partial_signature_retry_descriptor(&self) -> ExponentialBackoffRetryDescriptor;
 

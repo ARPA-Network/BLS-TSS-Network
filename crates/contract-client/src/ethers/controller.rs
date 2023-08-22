@@ -10,8 +10,9 @@ use crate::{
 };
 use crate::{TransactionCaller, ViewCaller};
 use arpa_core::{
-    u256_to_vec, ChainIdentity, DKGTask, ExponentialBackoffRetryDescriptor, GeneralChainIdentity,
-    Group, Member, Node, WalletSigner,
+    u256_to_vec, ChainIdentity, DKGTask, ExponentialBackoffRetryDescriptor,
+    GeneralMainChainIdentity, GeneralRelayedChainIdentity, Group, MainChainIdentity, Member, Node,
+    WalletSigner,
 };
 use async_trait::async_trait;
 use ethers::prelude::*;
@@ -19,9 +20,10 @@ use log::info;
 use std::collections::BTreeMap;
 use std::marker::PhantomData;
 use std::{future::Future, sync::Arc};
-use threshold_bls::group::PairingCurve;
+use threshold_bls::group::Curve;
 
 pub struct ControllerClient {
+    chain_id: usize,
     controller_address: Address,
     signer: Arc<WalletSigner>,
     contract_transaction_retry_descriptor: ExponentialBackoffRetryDescriptor,
@@ -30,12 +32,14 @@ pub struct ControllerClient {
 
 impl ControllerClient {
     pub fn new(
+        chain_id: usize,
         controller_address: Address,
-        identity: &GeneralChainIdentity,
+        identity: &GeneralMainChainIdentity,
         contract_transaction_retry_descriptor: ExponentialBackoffRetryDescriptor,
         contract_view_retry_descriptor: ExponentialBackoffRetryDescriptor,
     ) -> Self {
         ControllerClient {
+            chain_id,
             controller_address,
             signer: identity.get_signer(),
             contract_transaction_retry_descriptor,
@@ -44,16 +48,25 @@ impl ControllerClient {
     }
 }
 
-impl<C: PairingCurve> ControllerClientBuilder<C> for GeneralChainIdentity {
-    type Service = ControllerClient;
+impl<C: Curve> ControllerClientBuilder<C> for GeneralMainChainIdentity {
+    type ControllerService = ControllerClient;
 
     fn build_controller_client(&self) -> ControllerClient {
         ControllerClient::new(
+            self.get_chain_id(),
             self.get_controller_address(),
             self,
             self.get_contract_transaction_retry_descriptor(),
             self.get_contract_view_retry_descriptor(),
         )
+    }
+}
+
+impl<C: Curve> ControllerClientBuilder<C> for GeneralRelayedChainIdentity {
+    type ControllerService = ControllerClient;
+
+    fn build_controller_client(&self) -> ControllerClient {
+        panic!("not implemented")
     }
 }
 
@@ -83,6 +96,7 @@ impl ControllerTransactions for ControllerClient {
         let call = controller_contract.node_register(id_public_key.into());
 
         ControllerClient::call_contract_transaction(
+            self.chain_id,
             "node_register",
             call,
             self.contract_transaction_retry_descriptor,
@@ -111,6 +125,7 @@ impl ControllerTransactions for ControllerClient {
         });
 
         ControllerClient::call_contract_transaction(
+            self.chain_id,
             "commit_dkg",
             call,
             self.contract_transaction_retry_descriptor,
@@ -130,6 +145,7 @@ impl ControllerTransactions for ControllerClient {
         let call = controller_contract.post_process_dkg(group_index.into(), group_epoch.into());
 
         ControllerClient::call_contract_transaction(
+            self.chain_id,
             "post_process_dkg",
             call,
             self.contract_transaction_retry_descriptor,
@@ -140,12 +156,13 @@ impl ControllerTransactions for ControllerClient {
 }
 
 #[async_trait]
-impl<C: PairingCurve> ControllerViews<C> for ControllerClient {
+impl<C: Curve> ControllerViews<C> for ControllerClient {
     async fn get_group(&self, group_index: usize) -> ContractClientResult<Group<C>> {
         let controller_contract =
             ServiceClient::<ControllerContract>::prepare_service_client(self).await?;
 
         ControllerClient::call_contract_view(
+            self.chain_id,
             "get_group",
             controller_contract.get_group(group_index.into()),
             self.contract_view_retry_descriptor,
@@ -159,6 +176,7 @@ impl<C: PairingCurve> ControllerViews<C> for ControllerClient {
             ServiceClient::<ControllerContract>::prepare_service_client(self).await?;
 
         ControllerClient::call_contract_view(
+            self.chain_id,
             "get_node",
             controller_contract.get_node(id_address),
             self.contract_view_retry_descriptor,
@@ -177,6 +195,7 @@ impl<C: PairingCurve> ControllerViews<C> for ControllerClient {
             ServiceClient::<ControllerContract>::prepare_service_client(self).await?;
 
         ControllerClient::call_contract_view(
+            self.chain_id,
             "get_coordinator",
             controller_contract.get_coordinator(group_index.into()),
             self.contract_view_retry_descriptor,
@@ -238,7 +257,7 @@ impl ControllerLogs for ControllerClient {
     }
 }
 
-fn parse_contract_group<C: PairingCurve>(cg: ContractGroup) -> Group<C> {
+fn parse_contract_group<C: Curve>(cg: ContractGroup) -> Group<C> {
     let ContractGroup {
         index,
         epoch,

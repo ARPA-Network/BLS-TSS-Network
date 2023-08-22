@@ -1,45 +1,43 @@
 use super::{
-    chain::{types::GeneralMainChain, Chain},
-    CommitterServerStarter, Context, ContextFetcher, ManagementServerStarter, TaskWaiter,
+    chain::{types::GeneralMainChain, Chain, RelayedChain},
+    BLSTasksHandler, BlockInfoHandler, ChainIdentityHandler, ChainIdentityHandlerType,
+    CommitterServerStarter, Context, ContextFetcher, GroupInfoHandler, ManagementServerStarter,
+    NodeInfoHandler, RelayedChainType, SignatureResultCacheHandler, TaskWaiter,
 };
 use crate::{
     committer::server as committer_server,
+    error::{NodeError, NodeResult},
     management::server as management_server,
     queue::event_queue::EventQueue,
     scheduler::{
         dynamic::SimpleDynamicTaskScheduler, fixed::SimpleFixedTaskScheduler, TaskScheduler,
     },
 };
-use arpa_contract_client::{
-    adapter::AdapterClientBuilder, controller::ControllerClientBuilder,
-    coordinator::CoordinatorClientBuilder, provider::ChainProviderBuilder,
-};
 use arpa_core::{
-    ChainIdentity, Config, RandomnessTask, RpcServerType, SchedulerResult, TaskType,
-    DEFAULT_DYNAMIC_TASK_CLEANER_INTERVAL_MILLIS,
+    Config, GeneralMainChainIdentity, GeneralRelayedChainIdentity, RandomnessTask, RpcServerType,
+    SchedulerResult, TaskType, DEFAULT_DYNAMIC_TASK_CLEANER_INTERVAL_MILLIS,
 };
-use arpa_dal::{
-    cache::RandomnessResultCache, BLSTasksFetcher, BLSTasksUpdater, ContextInfoUpdater,
-    GroupInfoFetcher, GroupInfoUpdater, NodeInfoFetcher, NodeInfoUpdater,
-    SignatureResultCacheFetcher, SignatureResultCacheUpdater,
+use arpa_dal::cache::{InMemoryBlockInfoCache, RandomnessResultCache};
+use arpa_sqlite_db::{
+    BLSTasksDBClient, GroupInfoDBClient, NodeInfoDBClient, OPBLSTasksDBClient,
+    OPSignatureResultDBClient, SignatureResultDBClient,
 };
 use async_trait::async_trait;
 use log::error;
-use std::sync::Arc;
-use threshold_bls::group::PairingCurve;
+use std::{collections::HashMap, fmt::Debug, sync::Arc};
+use threshold_bls::{
+    group::Curve,
+    sig::{SignatureScheme, ThresholdScheme},
+};
 use tokio::sync::RwLock;
 
 #[derive(Debug)]
 pub struct GeneralContext<
-    N: NodeInfoFetcher<PC> + NodeInfoUpdater<PC> + ContextInfoUpdater,
-    G: GroupInfoFetcher<PC> + GroupInfoUpdater<PC> + ContextInfoUpdater,
-    T: BLSTasksFetcher<RandomnessTask> + BLSTasksUpdater<RandomnessTask>,
-    C: SignatureResultCacheFetcher<RandomnessResultCache>
-        + SignatureResultCacheUpdater<RandomnessResultCache>,
-    I: ChainIdentity + ControllerClientBuilder<PC> + CoordinatorClientBuilder + AdapterClientBuilder,
-    PC: PairingCurve,
+    PC: Curve,
+    S: SignatureScheme + ThresholdScheme<Public = PC::Point, Private = PC::Scalar>,
 > {
-    main_chain: GeneralMainChain<N, G, T, C, I, PC>,
+    main_chain: GeneralMainChain<PC, S>,
+    relayed_chains: HashMap<usize, RelayedChainType<PC, S>>,
     eq: Arc<RwLock<EventQueue>>,
     ts: Arc<RwLock<SimpleDynamicTaskScheduler>>,
     f_ts: Arc<RwLock<SimpleFixedTaskScheduler>>,
@@ -47,28 +45,19 @@ pub struct GeneralContext<
 }
 
 impl<
-        N: NodeInfoFetcher<PC> + NodeInfoUpdater<PC> + ContextInfoUpdater + Sync + Send + 'static,
-        G: GroupInfoFetcher<PC> + GroupInfoUpdater<PC> + ContextInfoUpdater + Sync + Send + 'static,
-        T: BLSTasksFetcher<RandomnessTask> + BLSTasksUpdater<RandomnessTask> + Sync + Send + 'static,
-        C: SignatureResultCacheFetcher<RandomnessResultCache>
-            + SignatureResultCacheUpdater<RandomnessResultCache>
-            + Sync
+        PC: Curve,
+        S: SignatureScheme
+            + ThresholdScheme<Public = PC::Point, Private = PC::Scalar>
+            + Clone
             + Send
-            + 'static,
-        I: ChainIdentity
-            + ControllerClientBuilder<PC>
-            + CoordinatorClientBuilder
-            + AdapterClientBuilder
-            + ChainProviderBuilder
             + Sync
-            + Send
             + 'static,
-        PC: PairingCurve,
-    > GeneralContext<N, G, T, C, I, PC>
+    > GeneralContext<PC, S>
 {
-    pub fn new(main_chain: GeneralMainChain<N, G, T, C, I, PC>, config: Config) -> Self {
+    pub fn new(main_chain: GeneralMainChain<PC, S>, config: Config) -> Self {
         GeneralContext {
             main_chain,
+            relayed_chains: HashMap::new(),
             eq: Arc::new(RwLock::new(EventQueue::new())),
             ts: Arc::new(RwLock::new(SimpleDynamicTaskScheduler::new())),
             f_ts: Arc::new(RwLock::new(SimpleFixedTaskScheduler::new())),
@@ -78,53 +67,85 @@ impl<
 }
 
 impl<
-        N: NodeInfoFetcher<PC>
-            + NodeInfoUpdater<PC>
-            + ContextInfoUpdater
-            + std::fmt::Debug
+        PC: Curve + std::fmt::Debug + Clone + Sync + Send + 'static,
+        S: SignatureScheme
+            + ThresholdScheme<Public = PC::Point, Private = PC::Scalar>
             + Clone
-            + Sync
             + Send
-            + 'static,
-        G: GroupInfoFetcher<PC>
-            + GroupInfoUpdater<PC>
-            + ContextInfoUpdater
-            + std::fmt::Debug
-            + Clone
             + Sync
-            + Send
             + 'static,
-        T: BLSTasksFetcher<RandomnessTask>
-            + BLSTasksUpdater<RandomnessTask>
-            + std::fmt::Debug
-            + Clone
-            + Sync
-            + Send
-            + 'static,
-        C: SignatureResultCacheFetcher<RandomnessResultCache>
-            + SignatureResultCacheUpdater<RandomnessResultCache>
-            + std::fmt::Debug
-            + Clone
-            + Sync
-            + Send
-            + 'static,
-        I: ChainIdentity
-            + ControllerClientBuilder<PC>
-            + CoordinatorClientBuilder
-            + AdapterClientBuilder
-            + ChainProviderBuilder
-            + std::fmt::Debug
-            + Clone
-            + Sync
-            + Send
-            + 'static,
-        PC: PairingCurve + std::fmt::Debug + Clone + Sync + Send + 'static,
-    > Context for GeneralContext<N, G, T, C, I, PC>
+    > Context<PC, S> for GeneralContext<PC, S>
+where
+    <S as ThresholdScheme>::Error: Sync + Send,
+    <S as SignatureScheme>::Error: Sync + Send,
 {
-    type MainChain = GeneralMainChain<N, G, T, C, I, PC>;
+    type MainChain = GeneralMainChain<PC, S>;
+
+    fn get_main_chain(&self) -> &<GeneralContext<PC, S> as Context<PC, S>>::MainChain {
+        &self.main_chain
+    }
+
+    fn contains_relayed_chain(&self, index: usize) -> bool {
+        self.relayed_chains.contains_key(&index)
+    }
+
+    fn get_relayed_chain(
+        &self,
+        index: usize,
+    ) -> Option<
+        &Box<
+            dyn RelayedChain<
+                    PC,
+                    S,
+                    NodeInfoCache = Box<dyn NodeInfoHandler<PC>>,
+                    GroupInfoCache = Box<dyn GroupInfoHandler<PC>>,
+                    BlockInfoCache = Box<dyn BlockInfoHandler>,
+                    RandomnessTasksQueue = Box<dyn BLSTasksHandler<RandomnessTask>>,
+                    RandomnessResultCaches = Box<
+                        dyn SignatureResultCacheHandler<RandomnessResultCache>,
+                    >,
+                    ChainIdentity = ChainIdentityHandlerType<PC>,
+                > + Sync
+                + Send,
+        >,
+    > {
+        self.relayed_chains.get(&index)
+    }
+
+    fn add_relayed_chain(
+        &mut self,
+        relayed_chain: Box<
+            dyn RelayedChain<
+                    PC,
+                    S,
+                    NodeInfoCache = Box<dyn NodeInfoHandler<PC>>,
+                    GroupInfoCache = Box<dyn GroupInfoHandler<PC>>,
+                    BlockInfoCache = Box<dyn BlockInfoHandler>,
+                    RandomnessTasksQueue = Box<dyn BLSTasksHandler<RandomnessTask>>,
+                    RandomnessResultCaches = Box<
+                        dyn SignatureResultCacheHandler<RandomnessResultCache>,
+                    >,
+                    ChainIdentity = ChainIdentityHandlerType<PC>,
+                > + Sync
+                + Send,
+        >,
+    ) -> NodeResult<()> {
+        let index = relayed_chain.id();
+
+        if self.relayed_chains.contains_key(&index) {
+            return Err(NodeError::RepeatedChainId);
+        }
+
+        self.relayed_chains.insert(index, relayed_chain);
+
+        Ok(())
+    }
 
     async fn deploy(self) -> SchedulerResult<ContextHandle> {
         self.get_main_chain().init_components(&self).await?;
+        for relayed_chain in self.relayed_chains.values() {
+            relayed_chain.init_components(&self).await?;
+        }
 
         let f_ts = self.get_fixed_task_handler();
 
@@ -149,51 +170,17 @@ impl<
 }
 
 impl<
-        N: NodeInfoFetcher<PC>
-            + NodeInfoUpdater<PC>
-            + ContextInfoUpdater
-            + std::fmt::Debug
+        PC: Curve + std::fmt::Debug + Clone + Sync + Send + 'static,
+        S: SignatureScheme
+            + ThresholdScheme<Public = PC::Point, Private = PC::Scalar>
             + Clone
-            + Sync
             + Send
-            + 'static,
-        G: GroupInfoFetcher<PC>
-            + GroupInfoUpdater<PC>
-            + ContextInfoUpdater
-            + std::fmt::Debug
-            + Clone
             + Sync
-            + Send
             + 'static,
-        T: BLSTasksFetcher<RandomnessTask>
-            + BLSTasksUpdater<RandomnessTask>
-            + std::fmt::Debug
-            + Clone
-            + Sync
-            + Send
-            + 'static,
-        C: SignatureResultCacheFetcher<RandomnessResultCache>
-            + SignatureResultCacheUpdater<RandomnessResultCache>
-            + std::fmt::Debug
-            + Clone
-            + Sync
-            + Send
-            + 'static,
-        I: ChainIdentity
-            + ControllerClientBuilder<PC>
-            + CoordinatorClientBuilder
-            + AdapterClientBuilder
-            + ChainProviderBuilder
-            + std::fmt::Debug
-            + Clone
-            + Sync
-            + Send
-            + 'static,
-        PC: PairingCurve + std::fmt::Debug + Clone + Sync + Send + 'static,
-    > ContextFetcher<GeneralContext<N, G, T, C, I, PC>> for GeneralContext<N, G, T, C, I, PC>
+    > ContextFetcher for GeneralContext<PC, S>
 {
-    fn get_main_chain(&self) -> &<GeneralContext<N, G, T, C, I, PC> as Context>::MainChain {
-        &self.main_chain
+    fn get_supported_relayed_chains(&self) -> Vec<usize> {
+        self.relayed_chains.keys().cloned().collect()
     }
 
     fn get_fixed_task_handler(&self) -> Arc<RwLock<SimpleFixedTaskScheduler>> {
@@ -212,7 +199,6 @@ impl<
         &self.config
     }
 }
-
 pub struct ContextHandle {
     ts: Arc<RwLock<SimpleDynamicTaskScheduler>>,
 }
@@ -240,53 +226,22 @@ impl TaskWaiter for ContextHandle {
 }
 
 impl<
-        N: NodeInfoFetcher<PC>
-            + NodeInfoUpdater<PC>
-            + ContextInfoUpdater
-            + std::fmt::Debug
+        PC: Curve + std::fmt::Debug + Clone + Sync + Send + 'static,
+        S: SignatureScheme
+            + ThresholdScheme<Public = PC::Point, Private = PC::Scalar>
             + Clone
-            + Sync
             + Send
-            + 'static,
-        G: GroupInfoFetcher<PC>
-            + GroupInfoUpdater<PC>
-            + ContextInfoUpdater
-            + std::fmt::Debug
-            + Clone
             + Sync
-            + Send
             + 'static,
-        T: BLSTasksFetcher<RandomnessTask>
-            + BLSTasksUpdater<RandomnessTask>
-            + std::fmt::Debug
-            + Clone
-            + Sync
-            + Send
-            + 'static,
-        C: SignatureResultCacheFetcher<RandomnessResultCache>
-            + SignatureResultCacheUpdater<RandomnessResultCache>
-            + std::fmt::Debug
-            + Clone
-            + Sync
-            + Send
-            + 'static,
-        I: ChainIdentity
-            + ControllerClientBuilder<PC>
-            + CoordinatorClientBuilder
-            + AdapterClientBuilder
-            + ChainProviderBuilder
-            + std::fmt::Debug
-            + Clone
-            + Sync
-            + Send
-            + 'static,
-        PC: PairingCurve + std::fmt::Debug + Clone + Sync + Send + 'static,
-    > CommitterServerStarter<GeneralContext<N, G, T, C, I, PC>> for SimpleFixedTaskScheduler
+    > CommitterServerStarter<GeneralContext<PC, S>, PC, S> for SimpleFixedTaskScheduler
+where
+    <S as ThresholdScheme>::Error: Sync + Send,
+    <S as SignatureScheme>::Error: Sync + Send,
 {
     fn start_committer_server(
         &mut self,
         rpc_endpoint: String,
-        context: Arc<RwLock<GeneralContext<N, G, T, C, I, PC>>>,
+        context: Arc<RwLock<GeneralContext<PC, S>>>,
     ) -> SchedulerResult<()> {
         self.add_task(TaskType::RpcServer(RpcServerType::Committer), async move {
             if let Err(e) = committer_server::start_committer_server(rpc_endpoint, context).await {
@@ -297,53 +252,22 @@ impl<
 }
 
 impl<
-        N: NodeInfoFetcher<PC>
-            + NodeInfoUpdater<PC>
-            + ContextInfoUpdater
-            + std::fmt::Debug
+        PC: Curve + std::fmt::Debug + Clone + Sync + Send + 'static,
+        S: SignatureScheme
+            + ThresholdScheme<Public = PC::Point, Private = PC::Scalar>
             + Clone
-            + Sync
             + Send
-            + 'static,
-        G: GroupInfoFetcher<PC>
-            + GroupInfoUpdater<PC>
-            + ContextInfoUpdater
-            + std::fmt::Debug
-            + Clone
             + Sync
-            + Send
             + 'static,
-        T: BLSTasksFetcher<RandomnessTask>
-            + BLSTasksUpdater<RandomnessTask>
-            + std::fmt::Debug
-            + Clone
-            + Sync
-            + Send
-            + 'static,
-        C: SignatureResultCacheFetcher<RandomnessResultCache>
-            + SignatureResultCacheUpdater<RandomnessResultCache>
-            + std::fmt::Debug
-            + Clone
-            + Sync
-            + Send
-            + 'static,
-        I: ChainIdentity
-            + ControllerClientBuilder<PC>
-            + CoordinatorClientBuilder
-            + AdapterClientBuilder
-            + ChainProviderBuilder
-            + std::fmt::Debug
-            + Clone
-            + Sync
-            + Send
-            + 'static,
-        PC: PairingCurve + std::fmt::Debug + Clone + Sync + Send + 'static,
-    > ManagementServerStarter<GeneralContext<N, G, T, C, I, PC>> for SimpleFixedTaskScheduler
+    > ManagementServerStarter<GeneralContext<PC, S>, PC, S> for SimpleFixedTaskScheduler
+where
+    <S as ThresholdScheme>::Error: Sync + Send,
+    <S as SignatureScheme>::Error: Sync + Send,
 {
     fn start_management_server(
         &mut self,
         rpc_endpoint: String,
-        context: Arc<RwLock<GeneralContext<N, G, T, C, I, PC>>>,
+        context: Arc<RwLock<GeneralContext<PC, S>>>,
     ) -> SchedulerResult<()> {
         self.add_task(TaskType::RpcServer(RpcServerType::Management), async move {
             if let Err(e) = management_server::start_management_server(rpc_endpoint, context).await
@@ -352,4 +276,20 @@ impl<
             };
         })
     }
+}
+
+impl<PC: Curve + 'static> ChainIdentityHandler<PC> for GeneralMainChainIdentity {}
+impl<PC: Curve + 'static> NodeInfoHandler<PC> for NodeInfoDBClient<PC> {}
+impl<PC: Curve + 'static> GroupInfoHandler<PC> for GroupInfoDBClient<PC> {}
+impl<PC: Curve + 'static> ChainIdentityHandler<PC> for GeneralRelayedChainIdentity {}
+impl BlockInfoHandler for InMemoryBlockInfoCache {}
+impl BLSTasksHandler<RandomnessTask> for OPBLSTasksDBClient<RandomnessTask> {}
+impl BLSTasksHandler<RandomnessTask> for BLSTasksDBClient<RandomnessTask> {}
+impl SignatureResultCacheHandler<RandomnessResultCache>
+    for SignatureResultDBClient<RandomnessResultCache>
+{
+}
+impl SignatureResultCacheHandler<RandomnessResultCache>
+    for OPSignatureResultDBClient<RandomnessResultCache>
+{
 }
