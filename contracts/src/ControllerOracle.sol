@@ -231,7 +231,13 @@ contract ControllerOracle is Initializable, IControllerOracle, OwnableUpgradeabl
         g.isStrictlyMajorityConsensusReached = group.isStrictlyMajorityConsensusReached;
         delete g.members;
         for (uint256 i = 0; i < group.size; i++) {
+            address memberAddress = group.members[i].nodeIdAddress;
             g.members.push(group.members[i]);
+            // Initialize withdrawable eths and arpa rewards to save gas for adapter call
+            if (_withdrawableEths[memberAddress] == 0 && _arpaRewards[memberAddress] == 0) {
+                _withdrawableEths[memberAddress] = _BALANCE_BASE;
+                _arpaRewards[memberAddress] = _BALANCE_BASE;
+            }
         }
         g.committers = group.committers;
         g.publicKey = group.publicKey;

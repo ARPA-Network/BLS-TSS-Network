@@ -99,17 +99,42 @@ cast receipt [transaction_hash]
 Deployment steps:
 
 ```bash
-# L2: OP Controller Oracle Local Test 
 forge script script/OPControllerOracleLocalTest.s.sol:OPControllerOracleLocalTestScript --fork-url http://localhost:9545 --broadcast
-# (update the L2 contract addresses in .env) 
-
-# L1 Controller Local Test 
+# update the L2 contract addresses in .env
 forge script script/ControllerLocalTest.s.sol:ControllerLocalTestScript --fork-url http://localhost:8545 --broadcast
-# (update the L1 contract addresses in .env)
-
-# OP Controller Oracle Initialization
+# update the L1 contract addresses in .env
 forge script script/OPControllerOracleInitializationLocalTest.s.sol:OPControllerOracleInitializationLocalTestScript --fork-url http://localhost:9545 --broadcast
-
-# StakeNode Local test script
+forge script script/InitStakingLocalTest.s.sol:InitStakingLocalTestScript --fork-url http://localhost:8545 --broadcast -g 150
 forge script script/StakeNodeLocalTest.s.sol:StakeNodeLocalTestScript --fork-url http://localhost:8545 --broadcast -g 150
+```
+
+Run nodes:
+
+```bash
+cd crates/arpa-node
+cargo run --bin node-client -- -c test/conf/config_test_1.yml
+cargo run --bin node-client -- -c test/conf/config_test_2.yml
+cargo run --bin node-client -- -c test/conf/config_test_3.yml
+```
+
+Request randomness:
+
+```bash
+# L1
+forge script script/GetRandomNumberLocalTest.s.sol:GetRandomNumberLocalTestScript --fork-url http://localhost:8545 --broadcast
+# L2
+forge script script/OPGetRandomNumberLocalTest.s.sol:OPGetRandomNumberLocalTestScript --fork-url http://localhost:9545 --broadcast
+```
+
+Some view calls:
+
+```bash
+
+# to check if the latest group info is relayed to L2
+cast call 0x9fE46736679d2D9a65F0992F2272dE9f3c7fa6e0 "getGroup(uint256)" 0 --rpc-url http://127.0.0.1:9545
+cast call 0x9d4454B023096f34B160D6B654540c56A1F81688 "getGroup(uint256)" 0 --rpc-url http://127.0.0.1:8545
+
+# to check if the randomness is successfully fulfilled on L2
+cast call 0xDc64a140Aa3E981100a9becA4E685f962f0cF6C9 "getLastRandomness()(uint256)" --rpc-url http://127.0.0.1:9545
+
 ```
