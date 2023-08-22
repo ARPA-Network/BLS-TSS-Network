@@ -5,13 +5,13 @@ import {Script} from "forge-std/Script.sol";
 import {IAdapter} from "../src/interfaces/IAdapter.sol";
 import {GetRandomNumberExample} from "../src/user/examples/GetRandomNumberExample.sol";
 
-contract GetRandomNumberLocalTestScript is Script {
+contract OPGetRandomNumberLocalTestScript is Script {
     function run() external {
         GetRandomNumberExample getRandomNumberExample;
         IAdapter adapter;
 
         uint256 plentyOfEthBalance = vm.envUint("PLENTY_OF_ETH_BALANCE");
-        address adapterAddress = vm.envAddress("ADAPTER_ADDRESS");
+        address adapterAddress = vm.envAddress("OP_ADAPTER_ADDRESS");
         uint256 userPrivateKey = vm.envUint("USER_PRIVATE_KEY");
 
         adapter = IAdapter(adapterAddress);

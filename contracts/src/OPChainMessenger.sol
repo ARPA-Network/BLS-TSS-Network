@@ -28,7 +28,8 @@ contract OPChainMessenger is Ownable, IChainMessenger {
         _crossDomainMessenger.sendMessage(
             _controllerOracle,
             abi.encodeWithSelector(IControllerOracle.updateGroup.selector, committer, group),
-            (344270 + 112487 * uint32(group.size)) * 3 / 2
+            // 20% more gas than the actual gas used
+            (344270 + 157160 * uint32(group.size)) * 6 / 5
         );
     }
 
