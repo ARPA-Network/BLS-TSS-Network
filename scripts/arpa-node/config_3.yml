@@ -8,9 +8,9 @@ provider_endpoint: "http://172.17.0.1:8545"
 
 chain_id: 900
 
-controller_address: "0xE57A305f34fD0B6A55A66e8ec9559e6573100cBe"
+controller_address: "0x2fe19128A8257182fdD77f90eA96D27cA342897A"
 
-adapter_address: "0x33f4f8bf90d8AA3d19fF812B50e79c15Df0d0b03"
+adapter_address: "0x594f79e85F6f041eb56cF6822FF4125ee316409E"
 
 data_path: "./data3.sqlite"
 
