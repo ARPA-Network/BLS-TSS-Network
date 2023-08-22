@@ -6,7 +6,7 @@ import time
 from pprint import pprint
 
 import ruamel.yaml
-from dotenv import load_dotenv, set_key
+from dotenv import load_dotenv, set_key, dotenv_values
 
 
 def get_addresses_from_json(path: str) -> dict:
@@ -201,6 +201,8 @@ def main():
     # reload new .env file
     load_dotenv(dotenv_path=env_path)
     # TODO: This is not working... had to fill in env manually below.
+    # load .env into json
+    env_json = dotenv_values(env_path)
 
     ###############################
     # 4. deploy remaining contracts (Controller Oracle Init, StakeNodeLocalTest)
@@ -223,6 +225,30 @@ def main():
         cwd=contracts_dir,
     )
 
+    # troubleshooting
+    pprint(env_json)
+    pprint(l2_addresses)
+    pprint(l1_addresses)
+
+    # forge script script/InitStakingLocalTest.s.sol:InitStakingLocalTestScript --fork-url http://localhost:8545 --broadcast -g 15
+    run_command(
+        [
+            "forge",
+            "script",
+            "script/InitStakingLocalTest.s.sol:InitStakingLocalTestScript",
+            "--fork-url",
+            "http://localhost:8545",
+            "--broadcast",
+            "-g",
+            "150",
+        ],
+        env={
+            "ARPA_ADDRESS": l1_addresses["Arpa"],
+            "STAKING_ADDRESS": l1_addresses["Staking"],
+        },
+        cwd=contracts_dir,
+    )
+
     # forge script script/StakeNodeLocalTest.s.sol:StakeNodeLocalTestScript --fork-url http://localhost:8545 --broadcast
     run_command(
         [
@@ -234,7 +260,7 @@ def main():
             "--broadcast",
             "-g",
             "150",
-            "--slow",  # important
+            # "--slow",  # important
         ],
         env={
             "ARPA_ADDRESS": l1_addresses["Arpa"],
@@ -244,116 +270,116 @@ def main():
         cwd=contracts_dir,
     )
 
-    ######################################
-    #!#### ARPA Network Deployment #######
-    ######################################
+    # ######################################
+    # #!#### ARPA Network Deployment #######
+    # ######################################
 
-    # update config.yml files with correect L1 controller and adapter addresses
-    l1_addresses = get_addresses_from_json(controller_local_test_broadcast_path)
-    # l2_addresses = get_addresses_from_json(op_controller_oracle_broadcast_path)
-
-    config_files = ["config_1.yml", "config_2.yml", "config_3.yml"]
-    yaml = ruamel.yaml.YAML()
-    yaml.preserve_quotes = True  # preserves quotes
-    yaml.indent(sequence=4, offset=2)  # set indentation
-
-    for file in config_files:
-        file_path = os.path.join(arpa_node_dir, file)
-        with open(file_path, "r") as f:
-            data = yaml.load(f)
-        data["adapter_address"] = l1_addresses["Arpa"]
-        data["controller_address"] = l1_addresses["Controller"]
-        with open(file_path, "w") as f:
-            yaml.dump(data, f)
-
-    # start randcast nodes
-    print("Starting randcast nodes...")
-    run_command(["docker", "compose", "up", "-d"], cwd=script_dir)
-
-    # wait for succesful grouping (fail after 1m without grouping)
-    print("Waiting for nodes to group...")
-    cmd = [
-        "docker",
-        "exec",
-        "-it",
-        "node1",
-        "sh",
-        "-c",
-        "cat /var/log/randcast_node_client.log | grep 'available'",
-    ]
-
-    nodes_grouped = wait_command(cmd, wait_time=10, max_attempts=12)
-
-    if nodes_grouped:
-        print("Nodes grouped succesfully!")
-        print("Output:\n", nodes_grouped)
-    else:
-        print("Nodes failed to group!")
-        run_command(
-            [
-                "docker",
-                "exec",
-                "-it",
-                "node1",
-                "sh",
-                "-c",
-                "cat /var/log/randcast_node_client.log | tail",
-            ]
-        )
-        sys.exit(1)
-
-    # ############################################
-    # #!#### L1 Request Randomness Testing #######
-    # ############################################
-
+    # # update config.yml files with correect L1 controller and adapter addresses
     # l1_addresses = get_addresses_from_json(controller_local_test_broadcast_path)
-    # l2_addresses = get_addresses_from_json(op_controller_oracle_broadcast_path)
-    # # pprint(l1_addresses)
-    # # pprint(l2_addresses)
+    # # l2_addresses = get_addresses_from_json(op_controller_oracle_broadcast_path)
 
-    # # deploy user contract and request randomness
-    # # forge script /usr/src/app/script/GetRandomNumberLocalTest.s.sol:GetRandomNumberLocalTestScript --fork-url $ETH_RPC_URL --broadcast
-    # print("Deploying L1 user contract and requesting randomness...")
-    # run_command(
-    #     [
-    #         "forge",
-    #         "script",
-    #         "script/GetRandomNumberLocalTest.s.sol:GetRandomNumberLocalTestScript",
-    #         "--fork-url",
-    #         "http://localhost:8545",
-    #         "--broadcast",
-    #     ],
-    #     env={
-    #         "ADAPTER_ADDRESS": l1_addresses["ERC1967Proxy"],
-    #     },
-    #     cwd=contracts_dir,
-    # )
+    # config_files = ["config_1.yml", "config_2.yml", "config_3.yml"]
+    # yaml = ruamel.yaml.YAML()
+    # yaml.preserve_quotes = True  # preserves quotes
+    # yaml.indent(sequence=4, offset=2)  # set indentation
 
-    # # confirm randomness request suceeded with the adapter
-    # # cast call 0xa513e6e4b8f2a923d98304ec87f64353c4d5c853 "getLastRandomness()(uint256)" # should not show 0
+    # for file in config_files:
+    #     file_path = os.path.join(arpa_node_dir, file)
+    #     with open(file_path, "r") as f:
+    #         data = yaml.load(f)
+    #     data["adapter_address"] = l1_addresses["Arpa"]
+    #     data["controller_address"] = l1_addresses["Controller"]
+    #     with open(file_path, "w") as f:
+    #         yaml.dump(data, f)
 
-    # print("Check if randomness request succeeded...")
+    # # start randcast nodes
+    # print("Starting randcast nodes...")
+    # run_command(["docker", "compose", "up", "-d"], cwd=script_dir)
+
+    # # wait for succesful grouping (fail after 1m without grouping)
+    # print("Waiting for nodes to group...")
     # cmd = [
-    #     "cast",
-    #     "call",
-    #     l1_addresses["ERC1967Proxy"],
-    #     "getLastRandomness()(uint256)",
+    #     "docker",
+    #     "exec",
+    #     "-it",
+    #     "node1",
+    #     "sh",
+    #     "-c",
+    #     "cat /var/log/randcast_node_client.log | grep 'available'",
     # ]
-    # adapter_randomness_result = wait_command(
-    #     cmd, cwd=contracts_dir, wait_time=10, max_attempts=12, fail_value="0"
-    # )
-    # if adapter_randomness_result:
-    #     print("Adapter randomness request succeeded!")
-    #     print("Output:\n", adapter_randomness_result)
+
+    # nodes_grouped = wait_command(cmd, wait_time=10, max_attempts=12)
+
+    # if nodes_grouped:
+    #     print("Nodes grouped succesfully!")
+    #     print("Output:\n", nodes_grouped)
     # else:
-    #     print("Adapter randomness request failed!")
+    #     print("Nodes failed to group!")
+    #     run_command(
+    #         [
+    #             "docker",
+    #             "exec",
+    #             "-it",
+    #             "node1",
+    #             "sh",
+    #             "-c",
+    #             "cat /var/log/randcast_node_client.log | tail",
+    #         ]
+    #     )
     #     sys.exit(1)
 
-    # # cast call 0x712516e61C8B383dF4A63CFe83d7701Bce54B03e "lastRandomnessResult()(uint256)" # should match above
+    # # ############################################
+    # # #!#### L1 Request Randomness Testing #######
+    # # ############################################
 
-    # ############################################
-    # #!#### L2 Request Randomness Testing #######
-    # ############################################
+    # # l1_addresses = get_addresses_from_json(controller_local_test_broadcast_path)
+    # # l2_addresses = get_addresses_from_json(op_controller_oracle_broadcast_path)
+    # # # pprint(l1_addresses)
+    # # # pprint(l2_addresses)
+
+    # # # deploy user contract and request randomness
+    # # # forge script /usr/src/app/script/GetRandomNumberLocalTest.s.sol:GetRandomNumberLocalTestScript --fork-url $ETH_RPC_URL --broadcast
+    # # print("Deploying L1 user contract and requesting randomness...")
+    # # run_command(
+    # #     [
+    # #         "forge",
+    # #         "script",
+    # #         "script/GetRandomNumberLocalTest.s.sol:GetRandomNumberLocalTestScript",
+    # #         "--fork-url",
+    # #         "http://localhost:8545",
+    # #         "--broadcast",
+    # #     ],
+    # #     env={
+    # #         "ADAPTER_ADDRESS": l1_addresses["ERC1967Proxy"],
+    # #     },
+    # #     cwd=contracts_dir,
+    # # )
+
+    # # # confirm randomness request suceeded with the adapter
+    # # # cast call 0xa513e6e4b8f2a923d98304ec87f64353c4d5c853 "getLastRandomness()(uint256)" # should not show 0
+
+    # # print("Check if randomness request succeeded...")
+    # # cmd = [
+    # #     "cast",
+    # #     "call",
+    # #     l1_addresses["ERC1967Proxy"],
+    # #     "getLastRandomness()(uint256)",
+    # # ]
+    # # adapter_randomness_result = wait_command(
+    # #     cmd, cwd=contracts_dir, wait_time=10, max_attempts=12, fail_value="0"
+    # # )
+    # # if adapter_randomness_result:
+    # #     print("Adapter randomness request succeeded!")
+    # #     print("Output:\n", adapter_randomness_result)
+    # # else:
+    # #     print("Adapter randomness request failed!")
+    # #     sys.exit(1)
+
+    # # # cast call 0x712516e61C8B383dF4A63CFe83d7701Bce54B03e "lastRandomnessResult()(uint256)" # should match above
+
+    # # ############################################
+    # # #!#### L2 Request Randomness Testing #######
+    # # ############################################
 
 
 if __name__ == "__main__":

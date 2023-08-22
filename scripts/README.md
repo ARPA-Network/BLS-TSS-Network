@@ -21,3 +21,9 @@ pip3 install -r requirements.txt
 # run script
 python3 main.py
 ```
+
+Kill Existing randcast nodes
+
+```bash
+docker kill $(docker ps -q -f ancestxor=arpachainio/node:latest); docker rm -f $(docker ps -a -q -f ancestor=arpachainio/node:latest)
+```

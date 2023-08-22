@@ -121,6 +121,9 @@ forge script script/ControllerLocalTest.s.sol:ControllerLocalTestScript --fork-u
 # OP Controller Oracle Initialization
 forge script script/OPControllerOracleInitializationLocalTest.s.sol:OPControllerOracleInitializationLocalTestScript --fork-url http://localhost:9545 --broadcast
 
+# Init staking local test
+forge script script/InitStakingLocalTest.s.sol:InitStakingLocalTestScript --fork-url http://localhost:8545 --broadcast -g 150
+
 # StakeNode Local test script
 forge script script/StakeNodeLocalTest.s.sol:StakeNodeLocalTestScript --fork-url http://localhost:8545 --broadcast -g 150
 ```

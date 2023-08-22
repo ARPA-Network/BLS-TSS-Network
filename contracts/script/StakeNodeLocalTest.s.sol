@@ -35,22 +35,9 @@ contract StakeNodeLocalTestScript is Script {
     function _stake(address sender) internal {
         // vm.broadcast(sender);
         _arpa.mint(sender, _operatorStakeAmount);
-    }
 
         _arpa.approve(address(_staking), _operatorStakeAmount);
-    }
 
         _staking.stake(_operatorStakeAmount);
     }
-
-    // function _stake(address sender) internal {
-    //     vm.broadcast(sender);
-    //     _arpa.mint(sender, _operatorStakeAmount);
-
-    //     vm.broadcast(sender);
-    //     _arpa.approve(address(_staking), _operatorStakeAmount);
-
-    //     vm.broadcast(sender);
-    //     _staking.stake(_operatorStakeAmount);
-    // }
 }
