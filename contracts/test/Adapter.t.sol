@@ -208,4 +208,60 @@ contract AdapterTest is RandcastTestHelper {
         assertEq(_getRandomNumberExample.randomnessResults(0), IAdapter(address(_adapter)).getLastRandomness());
         assertEq(_getRandomNumberExample.lengthOfRandomnessResults(), times);
     }
+
+    function testDeleteOvertimeRequest() public {
+        prepareAnAvailableGroup();
+        deal(_user, 1 * 1e18);
+        (,,, uint256 inflightCost,,,,,) = IAdapter(address(_adapter)).getSubscription(_subId);
+
+        vm.prank(_user);
+        bytes32 requestId = _getRandomNumberExample.getRandomNumber();
+        emit log_bytes32(requestId);
+
+        Adapter.RequestDetail memory rd = AdapterForTest(address(_adapter)).getPendingRequest(requestId);
+
+        bytes32 pendingRequest = IAdapter(address(_adapter)).getPendingRequestCommitment(requestId);
+        assertEq(
+            pendingRequest,
+            keccak256(
+                abi.encode(
+                    requestId,
+                    rd.subId,
+                    rd.groupIndex,
+                    rd.requestType,
+                    rd.params,
+                    rd.callbackContract,
+                    rd.seed,
+                    rd.requestConfirmations,
+                    rd.callbackGasLimit,
+                    rd.callbackMaxGasPrice,
+                    rd.blockNum
+                )
+            )
+        );
+        vm.chainId(1);
+        vm.prank(_user);
+        vm.expectRevert(abi.encodeWithSelector(Adapter.RequestNotExpired.selector));
+        IAdapter(address(_adapter)).cancelOvertimeRequest(requestId, rd);
+
+        (,,, inflightCost,,,,,) = IAdapter(address(_adapter)).getSubscription(_subId);
+        assertEq(inflightCost > 0, true);
+
+        vm.roll(block.number + 7200);
+        vm.prank(_user);
+        IAdapter(address(_adapter)).cancelOvertimeRequest(requestId, rd);
+
+        pendingRequest = IAdapter(address(_adapter)).getPendingRequestCommitment(requestId);
+        assertEq(pendingRequest, bytes32(0));
+        (,,, inflightCost,,,,,) = IAdapter(address(_adapter)).getSubscription(_subId);
+        assertEq(inflightCost, 0);
+
+        uint256 inflightPayment = AdapterForTest(address(_adapter)).getInflightCost(_subId, requestId);
+        assertEq(inflightPayment, 0);
+
+        vm.prank(_user);
+        IAdapter(address(_adapter)).cancelSubscription(_subId, _user);
+        vm.expectRevert(abi.encodeWithSelector(Adapter.InvalidSubscription.selector));
+        IAdapter(address(_adapter)).getSubscription(_subId);
+    }
 }

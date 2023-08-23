@@ -12,6 +12,8 @@ import {IBasicRandcastConsumerBase} from "./interfaces/IBasicRandcastConsumerBas
 import {RequestIdBase} from "./utils/RequestIdBase.sol";
 import {BLS} from "./libraries/BLS.sol";
 // solhint-disable-next-line no-global-import
+import "./utils/ChainHelper.sol" as ChainHelper;
+// solhint-disable-next-line no-global-import
 import "./utils/Utils.sol" as Utils;
 
 contract Adapter is UUPSUpgradeable, IAdapter, IAdapterOwner, RequestIdBase, OwnableUpgradeable {
@@ -123,6 +125,8 @@ contract Adapter is UUPSUpgradeable, IAdapter, IAdapterOwner, RequestIdBase, Own
         bool success
     );
 
+    event OvertimeRequestCanceled(bytes32 requestId, uint64 subId);
+
     // *Errors*
     error Reentrant();
     error InvalidRequestConfirmations(uint16 have, uint16 min, uint16 max);
@@ -149,6 +153,7 @@ contract Adapter is UUPSUpgradeable, IAdapter, IAdapterOwner, RequestIdBase, Own
     error PendingRequestExists();
     error InvalidZeroAddress();
     error GasLimitTooBig(uint32 have, uint32 want);
+    error RequestNotExpired();
 
     // *Modifiers*
     modifier onlySubOwner(uint64 subId) {
@@ -939,5 +944,44 @@ contract Adapter is UUPSUpgradeable, IAdapter, IAdapterOwner, RequestIdBase, Own
         if (!BLS.verifyPartials(partials, pubkeys, message)) {
             revert BLS.InvalidPartialSignatures();
         }
+    }
+
+    function cancelOvertimeRequest(bytes32 requestId, RequestDetail calldata requestDetail)
+        external
+        override(IAdapter)
+        onlySubOwner(requestDetail.subId)
+    {
+        if (_requestCommitments[requestId] == 0) {
+            revert NoCorrespondingRequest();
+        }
+        if (
+            _requestCommitments[requestId]
+                != keccak256(
+                    abi.encode(
+                        requestId,
+                        requestDetail.subId,
+                        requestDetail.groupIndex,
+                        requestDetail.requestType,
+                        requestDetail.params,
+                        requestDetail.callbackContract,
+                        requestDetail.seed,
+                        requestDetail.requestConfirmations,
+                        requestDetail.callbackGasLimit,
+                        requestDetail.callbackMaxGasPrice,
+                        requestDetail.blockNum
+                    )
+                )
+        ) {
+            revert IncorrectCommitment();
+        }
+        uint256 blockNum24H = 86400 / ChainHelper.getBlockTime();
+        if (block.number < requestDetail.blockNum + blockNum24H) {
+            revert RequestNotExpired();
+        }
+        delete _requestCommitments[requestId];
+        _subscriptions[requestDetail.subId].inflightCost -=
+            _subscriptions[requestDetail.subId].inflightPayments[requestId];
+        delete _subscriptions[requestDetail.subId].inflightPayments[requestId];
+        emit OvertimeRequestCanceled(requestId, requestDetail.subId);
     }
 }

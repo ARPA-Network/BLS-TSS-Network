@@ -4,13 +4,15 @@ pragma solidity ^0.8.18;
 import {GeneralRandcastConsumerBase, BasicRandcastConsumerBase} from "../GeneralRandcastConsumerBase.sol";
 // solhint-disable-next-line no-global-import
 import "src/user/RandcastSDK.sol" as RandcastSDK;
+
 contract PickPropertyExample is GeneralRandcastConsumerBase {
     /* requestId -> randomness */
     mapping(bytes32 => uint256) public randomResults;
     mapping(uint256 => string) public propertyValue;
     uint256 public indexResult;
+
     event PropertyValueResult(string);
-    
+
     constructor(address controller) BasicRandcastConsumerBase(controller) {
         propertyValue[0] = "fire";
         propertyValue[1] = "wind";

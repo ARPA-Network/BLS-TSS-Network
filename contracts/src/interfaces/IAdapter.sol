@@ -142,4 +142,7 @@ interface IAdapter is IRequestTypeBase {
         uint32 fulfillmentFlatFeeEthPPM,
         uint256 weiPerUnitGas
     ) external view returns (uint256);
+
+    // delete the request that cannot be fulfilled, triggered by user themselves
+    function cancelOvertimeRequest(bytes32 requestId, RequestDetail calldata requestDetail) external;
 }
