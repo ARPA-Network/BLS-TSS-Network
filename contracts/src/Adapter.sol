@@ -10,12 +10,12 @@ import {IAdapterOwner} from "./interfaces/IAdapterOwner.sol";
 import {IController} from "./interfaces/IController.sol";
 import {IBasicRandcastConsumerBase} from "./interfaces/IBasicRandcastConsumerBase.sol";
 import {RequestIdBase} from "./utils/RequestIdBase.sol";
-import {ChainHelper} from "./utils/ChainHelper.sol";
+import "./utils/ChainHelper.sol" as ChainHelper;
 import {BLS} from "./libraries/BLS.sol";
 // solhint-disable-next-line no-global-import
 import "./utils/Utils.sol" as Utils;
 
-contract Adapter is UUPSUpgradeable, IAdapter, IAdapterOwner, RequestIdBase, OwnableUpgradeable, ChainHelper {
+contract Adapter is UUPSUpgradeable, IAdapter, IAdapterOwner, RequestIdBase, OwnableUpgradeable {
     using SafeERC20 for IERC20;
     using Address for address;
 
@@ -152,7 +152,7 @@ contract Adapter is UUPSUpgradeable, IAdapter, IAdapterOwner, RequestIdBase, Own
     error PendingRequestExists();
     error InvalidZeroAddress();
     error GasLimitTooBig(uint32 have, uint32 want);
-    error OvertimeRequestNotExpired();
+    error RequestNotExpired();
 
     // *Modifiers*
     modifier onlySubOwner(uint64 subId) {
@@ -973,13 +973,14 @@ contract Adapter is UUPSUpgradeable, IAdapter, IAdapterOwner, RequestIdBase, Own
         ) {
             revert IncorrectCommitment();
         }
-        uint256 blockNum24H = 86400 / getBlockTime();
+        uint256 blockNum24H = 86400 / ChainHelper.getBlockTime();
         if (block.number < requestDetail.blockNum + blockNum24H) {
-            revert OvertimeRequestNotExpired();
+            revert RequestNotExpired();
         }
         delete _requestCommitments[requestId];
         _subscriptions[requestDetail.subId].inflightCost -=
             _subscriptions[requestDetail.subId].inflightPayments[requestId];
+        delete _subscriptions[requestDetail.subId].inflightPayments[requestId];
         emit OvertimeRequestCanceled(requestId, requestDetail.subId);
     }
 }

@@ -212,8 +212,9 @@ contract AdapterTest is RandcastTestHelper {
     function testDeleteOvertimeRequest() public {
         prepareAnAvailableGroup();
         deal(_user, 1 * 1e18);
+        (,,, uint256 inflightCost,,,,,) = IAdapter(address(_adapter)).getSubscription(_subId);
 
-        vm.broadcast(_user);
+        vm.prank(_user);
         bytes32 requestId = _getRandomNumberExample.getRandomNumber();
         emit log_bytes32(requestId);
 
@@ -238,20 +239,26 @@ contract AdapterTest is RandcastTestHelper {
                 )
             )
         );
-        vm.broadcast(_user);
-        vm.expectRevert(abi.encodeWithSelector(Adapter.OvertimeRequestNotExpired.selector));
+        vm.chainId(1);
+        vm.prank(_user);
+        vm.expectRevert(abi.encodeWithSelector(Adapter.RequestNotExpired.selector));
         IAdapter(address(_adapter)).cancelOvertimeRequest(requestId, rd);
 
-        (,,, uint256 inflightCost,,,,,) = IAdapter(address(_adapter)).getSubscription(_subId);
+        (,,, inflightCost,,,,,) = IAdapter(address(_adapter)).getSubscription(_subId);
         assertEq(inflightCost > 0, true);
 
         vm.roll(block.number + 7200);
-        vm.broadcast(_user);
+        vm.prank(_user);
         IAdapter(address(_adapter)).cancelOvertimeRequest(requestId, rd);
         pendingRequest = IAdapter(address(_adapter)).getPendingRequestCommitment(requestId);
         assertEq(pendingRequest, bytes32(0));
 
         (,,, inflightCost,,,,,) = IAdapter(address(_adapter)).getSubscription(_subId);
         assertEq(inflightCost, 0);
+
+        vm.prank(_user);
+        IAdapter(address(_adapter)).cancelSubscription(_subId, _user);
+        vm.expectRevert(abi.encodeWithSelector(Adapter.InvalidSubscription.selector));
+        IAdapter(address(_adapter)).getSubscription(_subId);
     }
 }
