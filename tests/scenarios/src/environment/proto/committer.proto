@@ -1,0 +1,26 @@
+syntax = "proto3";
+
+package committer;
+
+service CommitterService {
+  rpc CommitPartialSignature(CommitPartialSignatureRequest)
+      returns (CommitPartialSignatureReply);
+}
+
+message CommitPartialSignatureRequest {
+  string id_address = 1;
+  uint32 chain_id = 2;
+  enum BLSTaskType {
+    Randomness = 0;
+    GroupRelay = 1;
+    GroupRelayConfirmation = 2;
+  }
+  BLSTaskType task_type = 3;
+  bytes request_id = 4;
+  bytes message = 5;
+  bytes partial_signature = 6;
+}
+
+message CommitPartialSignatureReply {
+  bool result = 1;
+}
