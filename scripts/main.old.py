@@ -8,33 +8,6 @@ from pprint import pprint
 import ruamel.yaml
 from dotenv import load_dotenv, set_key, dotenv_values
 
-# Global Variables
-l1_chain_id = "900"
-l2_chain_id = "901"
-
-# prep directories
-script_dir = os.getcwd()
-root_dir = os.path.abspath(os.path.join(script_dir, os.pardir))
-arpa_node_dir = os.path.join(root_dir, "crates/arpa-node")
-arpa_node_config_dir = os.path.join(arpa_node_dir, "test/conf")
-contracts_dir = os.path.join(root_dir, "contracts")
-env_example_path = os.path.join(contracts_dir, ".env.example")
-env_path = os.path.join(contracts_dir, ".env")
-op_controller_oracle_broadcast_path = os.path.join(
-    contracts_dir,
-    "broadcast",
-    "OPControllerOracleLocalTest.s.sol",
-    l2_chain_id,
-    "run-latest.json",
-)
-controller_local_test_broadcast_path = os.path.join(
-    contracts_dir,
-    "broadcast",
-    "ControllerLocalTest.s.sol",
-    l1_chain_id,
-    "run-latest.json",
-)
-
 
 def get_addresses_from_json(path: str) -> dict:
     """
@@ -144,14 +117,44 @@ def wait_command(
         time.sleep(wait_time)
 
 
-def deploy_contracts():
+def main():
+    l1_chain_id = "900"
+    l2_chain_id = "901"
+
+    # prep directories
+    script_dir = os.getcwd()
+    root_dir = os.path.abspath(os.path.join(script_dir, os.pardir))
+    # arpa_node_config_dir = os.path.join(script_dir, "arpa-node") # docker dir
+    arpa_node_dir = os.path.join(root_dir, "crates/arpa-node")  # cargo dir
+    arpa_node_config_dir = os.path.join(arpa_node_dir, "test/conf")
+    contracts_dir = os.path.join(root_dir, "contracts")
+    env_example_path = os.path.join(contracts_dir, ".env.example")
+    env_path = os.path.join(contracts_dir, ".env")
+    op_controller_oracle_broadcast_path = os.path.join(
+        contracts_dir,
+        "broadcast",
+        "OPControllerOracleLocalTest.s.sol",
+        l2_chain_id,
+        "run-latest.json",
+    )
+    controller_local_test_broadcast_path = os.path.join(
+        contracts_dir,
+        "broadcast",
+        "ControllerLocalTest.s.sol",
+        l1_chain_id,
+        "run-latest.json",
+    )
+
     ##################################
-    ###### Contract Deployment #######
+    #!#### Contract Deployment #######
     ##################################
 
+    ###############################
     # 1. Copy .env.example to .env, and load .env file for editing
     run_command(["cp", env_example_path, env_path])
+    # load_dotenv(dotenv_path=env_path)
 
+    ###############################
     # 2. Deploy L2 OPControllerOracleLocalTest contracts (ControllerOracle, Adapter, Arpa)
     # # forge script script/OPControllerOracleLocalTest.s.sol:OPControllerOracleLocalTestScript --fork-url http://localhost:9545 --broadcast
     run_command(
@@ -172,8 +175,10 @@ def deploy_contracts():
     set_key(env_path, "OP_ARPA_ADDRESS", l2_addresses["Arpa"])
     set_key(env_path, "OP_CONTROLLER_ORACLE_ADDRESS", l2_addresses["ControllerOracle"])
 
+    ###############################
     # 3. Deploy L1 ControllerLocalTest contracts
     #     (Controller, Controller Relayer, OPChainMessenger, Adapter, Arpa, Staking)
+
     # forge script script/ControllerLocalTest.s.sol:ControllerLocalTestScript --fork-url http://localhost:8545 --broadcast
     run_command(
         [
@@ -195,7 +200,15 @@ def deploy_contracts():
     set_key(env_path, "CONTROLLER_ADDRESS", l1_addresses["Controller"])
     set_key(env_path, "ADAPTER_ADDRESS", l1_addresses["ERC1967Proxy"])
 
+    # reload new .env file
+    # load_dotenv(dotenv_path=env_path)
+    # TODO: This is not working... had to fill in env manually below.
+    # load .env into json
+    # env_json = dotenv_values(env_path)
+
+    ###############################
     # 4. deploy remaining contracts (Controller Oracle Init, StakeNodeLocalTest)
+
     # forge script script/OPControllerOracleInitializationLocalTest.s.sol:OPControllerOracleInitializationLocalTestScript --fork-url http://localhost:9545 --broadcast
     run_command(
         [
@@ -213,6 +226,11 @@ def deploy_contracts():
         },
         cwd=contracts_dir,
     )
+
+    # troubleshooting
+    # pprint(env_json)
+    # pprint(l2_addresses)
+    # pprint(l1_addresses)
 
     # forge script script/InitStakingLocalTest.s.sol:InitStakingLocalTestScript --fork-url http://localhost:8545 --broadcast -g 15
     run_command(
@@ -254,15 +272,13 @@ def deploy_contracts():
         cwd=contracts_dir,
     )
 
-
-def deploy_nodes():
-    ######################################
-    ###### ARPA Network Deployment #######
-    ######################################
+    # ######################################
+    # #!#### ARPA Network Deployment #######
+    # ######################################
 
     # update config.yml files with correect L1 controller and adapter addresses
     l1_addresses = get_addresses_from_json(controller_local_test_broadcast_path)
-    l2_addresses = get_addresses_from_json(op_controller_oracle_broadcast_path)
+    # l2_addresses = get_addresses_from_json(op_controller_oracle_broadcast_path)
 
     config_files = ["config_1.yml", "config_2.yml", "config_3.yml"]
     yaml = ruamel.yaml.YAML()
@@ -273,22 +289,19 @@ def deploy_nodes():
         file_path = os.path.join(arpa_node_config_dir, file)
         with open(file_path, "r") as f:
             data = yaml.load(f)
-        # L1
-        data["adapter_address"] = l1_addresses["ERC1967Proxy"]
+        data["adapter_address"] = l1_addresses["Arpa"]
         data["controller_address"] = l1_addresses["Controller"]
-        data["controller_relayer_address"] = l1_addresses["ControllerRelayer"]
-        # L2
-        data["relayed_chains"][0]["controller_oracle_address"] = l2_addresses[
-            "ControllerOracle"
-        ]
-        data["relayed_chains"][0]["adapter_address"] = l2_addresses["ERC1967Proxy"]
-
         with open(file_path, "w") as f:
             yaml.dump(data, f)
 
     # start randcast nodes
     print("Starting randcast nodes...")
 
+    # ! previous method with docker-compose / containers
+    # run_command(["docker", "compose", "up", "-d"], cwd=script_dir)
+
+    # build node-client ! todo
+    # cargo run --bin node-client -- -c config_1.yml > /dev/null 2>&1 &
     run_command(
         [
             f"cargo run --bin node-client -- -c {arpa_node_config_dir}/config_1.yml > /dev/null 2>&1 &"
@@ -315,6 +328,42 @@ def deploy_nodes():
         shell=True,
     )
     print("Node 3 started!")
+
+    # with open("/dev/null", "w") as devnull:
+    #     process = subprocess.Popen(
+    #         [
+    #             f"{root_dir}/target/debug/node-client",
+    #             "-c",
+    #             f"{arpa_node_config_dir}/config_1.yml",
+    #         ],
+    #         stdout=devnull,
+    #         stderr=devnull,
+    #     )
+    # print("Node 1 started!")
+
+    # with open("/dev/null", "w") as devnull:
+    #     process = subprocess.Popen(
+    #         [
+    #             f"{root_dir}/target/debug/node-client",
+    #             "-c",
+    #             f"{arpa_node_config_dir}/config_2.yml",
+    #         ],
+    #         stdout=devnull,
+    #         stderr=devnull,
+    #     )
+    # print("Node 2 started!")
+
+    # with open("/dev/null", "w") as devnull:
+    #     process = subprocess.Popen(
+    #         [
+    #             f"{root_dir}/target/debug/node-client",
+    #             "-c",
+    #             f"{arpa_node_config_dir}/config_3.yml",
+    #         ],
+    #         stdout=devnull,
+    #         stderr=devnull,
+    #     )
+    # print("Node 3 started!")
 
     # wait for succesful grouping (fail after 1m without grouping)
     print("Waiting for nodes to group...")
@@ -344,108 +393,100 @@ def deploy_nodes():
         )
         sys.exit(1)
 
-    # TODO:  wait for DKG Proccess to Finish
-    # get coordinator. If it returns 0, we know dkg proccess finished and post proccess dkg has been called
-    # function getCoordinator(uint256 groupIndex) public view override(IController) returns (address) {
-    #     return _coordinators[groupIndex];
-    # }
+    # # ! previous method with docker-compose / containers
+    # # cmd = [
+    # #     "docker",
+    # #     "exec",
+    # #     "-it",
+    # #     "node1",
+    # #     "sh",
+    # #     "-c",
+    # #     "cat /var/log/randcast_node_client.log | grep 'available'",
+    # # ]
 
-    # cast call 0x9d4454B023096f34B160D6B654540c56A1F81688 "getCoordinator(uint256)" 0 --rpc-url http://127.0.0.1:8545
-    cmd = [
-        f'''cast call {l1_addresses['Controller']} "getCoordinator(uint256)" 0 --rpc-url http://127.0.0.1:8545"'''
-    ]
-    print(cmd)
+    # # nodes_grouped = wait_command(cmd, wait_time=10, max_attempts=12)
 
+    # # if nodes_grouped:
+    # #     print("Nodes grouped succesfully!")
+    # #     print("Output:\n", nodes_grouped)
+    # # else:
+    # #     print("Nodes failed to group!")
+    # #     run_command(
+    # #         [
+    # #             "docker",
+    # #             "exec",
+    # #             "-it",
+    # #             "node1",
+    # #             "sh",
+    # #             "-c",
+    # #             "cat /var/log/randcast_node_client.log | tail",
+    # #         ]
+    # #     )
+    # #     sys.exit(1)
 
-def test_request_randomness():
-    ############################################
-    ###### L1 Request Randomness Testing #######
-    ############################################
+    # ############################################
+    # #!#### L1 Request Randomness Testing #######
+    # ############################################
 
     l1_addresses = get_addresses_from_json(controller_local_test_broadcast_path)
     l2_addresses = get_addresses_from_json(op_controller_oracle_broadcast_path)
     pprint(l1_addresses)
     pprint(l2_addresses)
 
-    # capture the prev randomness and new randomness and compare. If they are the same, then the randomness was not updated
+    # deploy user contract and request randomness
+    # forge script /usr/src/app/script/GetRandomNumberLocalTest.s.sol:GetRandomNumberLocalTestScript --fork-url $ETH_RPC_URL --broadcast
 
-    print("Helpful view calls:")
+    # forge script script/GetRandomNumberLocalTest.s.sol:GetRandomNumberLocalTestScript --fork-url http://localhost:8545 --broadcast
+    # forge script script/OPGetRandomNumberLocalTest.s.sol:OPGetRandomNumberLocalTestScript --fork-url http://localhost:9545 --broadcast -g 150
+    # cast call 0xE97166C46816d48B2aFFCfFf704B962E88fd0abE "getLastRandomness()(uint256)"
+    # cast call 0x9fE46736679d2D9a65F0992F2272dE9f3c7fa6e0 "getGroup(uint256)" 0 --rpc-url http://127.0.0.1:9545
 
-    print("# Get latest l1 group info")
-    print(
-        f"cast call {l1_addresses['Controller']} \"getGroup(uint256)\" 0 --rpc-url http://127.0.0.1:8545"
+    print("Deploying L1 user contract and requesting randomness...")
+    run_command(
+        [
+            "forge",
+            "script",
+            "script/GetRandomNumberLocalTest.s.sol:GetRandomNumberLocalTestScript",
+            "--fork-url",
+            "http://localhost:8545",
+            "--broadcast",
+        ],
+        env={
+            "ADAPTER_ADDRESS": l1_addresses["ERC1967Proxy"],
+        },
+        cwd=contracts_dir,
     )
 
-    print("# Check if the latest group info is relayed to L2")
-    print(
-        f"cast call {l2_addresses['ControllerOracle']} \"getGroup(uint256)\" 0 --rpc-url http://127.0.0.1:9545"
+    # confirm randomness request suceeded with the adapter
+    # cast call 0xE97166C46816d48B2aFFCfFf704B962E88fd0abE "getLastRandomness()(uint256)" # should not show 0
+
+    print("Check if randomness request succeeded...")
+    cmd = [
+        "cast",
+        "call",
+        l1_addresses["ERC1967Proxy"],
+        "getLastRandomness()(uint256)",
+    ]
+    adapter_randomness_result = wait_command(
+        cmd,
+        cwd=contracts_dir,
+        wait_time=10,
+        max_attempts=12,
+        fail_value="0",
+        shell=True,
     )
+    # if adapter_randomness_result:
+    #     print("Adapter randomness request succeeded!")
+    #     print("Output:\n", adapter_randomness_result)
+    # else:
+    #     print("Adapter randomness request failed!")
+    #     sys.exit(1)
 
-    print("# Check if the randomness is successfully fulfilled on L1")
-    print(
-        f"cast call {l1_addresses['ERC1967Proxy']} \"getLastRandomness()(uint256)\" --rpc-url http://127.0.0.1:8545"
-    )
-
-    print("# Check if the randomness is successfully fulfilled on L2")
-    print(
-        f"cast call {l2_addresses['ERC1967Proxy']} \"getLastRandomness()(uint256)\" --rpc-url http://127.0.0.1:9545"
-    )
-
-    # # deploy L1 user contract and request randomness
-    # print("Deploying L1 user contract and requesting randomness...")
-    # run_command(
-    #     [
-    #         "forge",
-    #         "script",
-    #         "script/GetRandomNumberLocalTest.s.sol:GetRandomNumberLocalTestScript",
-    #         "--fork-url",
-    #         "http://localhost:8545",
-    #         "--broadcast",
-    #     ],
-    #     env={
-    #         "ADAPTER_ADDRESS": l1_addresses["ERC1967Proxy"],
-    #     },
-    #     cwd=contracts_dir,
-    # )
-
-    # # confirm randomness request suceeded with the adapter
-    # # cast call 0xE97166C46816d48B2aFFCfFf704B962E88fd0abE "getLastRandomness()(uint256)" # should not show 0
-
-    # print("Check if randomness request succeeded...")
-    # cmd = [
-    #     "cast",
-    #     "call",
-    #     l1_addresses["ERC1967Proxy"],
-    #     "getLastRandomness()(uint256)",
-    # ]
-    # adapter_randomness_result = wait_command(
-    #     cmd,
-    #     cwd=contracts_dir,
-    #     wait_time=10,
-    #     max_attempts=12,
-    #     fail_value="0",
-    #     shell=True,
-    # )
-    # # if adapter_randomness_result:
-    # #     print("Adapter randomness request succeeded!")
-    # #     print("Output:\n", adapter_randomness_result)
-    # # else:
-    # #     print("Adapter randomness request failed!")
-    # #     sys.exit(1)
-
-    # # # # cast call 0x6379ebD504941f50D5BfDE9348B37593bd29C835 "lastRandomnessResult()(uint256)" # should match above
+    # # # cast call 0x6379ebD504941f50D5BfDE9348B37593bd29C835 "lastRandomnessResult()(uint256)" # should match above
 
     # # ############################################
     # # #!#### L2 Request Randomness Testing #######
     # # ############################################
-
-
-def main():
-    deploy_contracts()
-    deploy_nodes()
-    test_request_randomness()
-
-    # if testnet.. comment out the following
 
 
 if __name__ == "__main__":
