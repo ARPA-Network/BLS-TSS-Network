@@ -10,8 +10,9 @@ import {IAdapterOwner} from "./interfaces/IAdapterOwner.sol";
 import {IController} from "./interfaces/IController.sol";
 import {IBasicRandcastConsumerBase} from "./interfaces/IBasicRandcastConsumerBase.sol";
 import {RequestIdBase} from "./utils/RequestIdBase.sol";
-import "./utils/ChainHelper.sol" as ChainHelper;
 import {BLS} from "./libraries/BLS.sol";
+// solhint-disable-next-line no-global-import
+import "./utils/ChainHelper.sol" as ChainHelper;
 // solhint-disable-next-line no-global-import
 import "./utils/Utils.sol" as Utils;
 
