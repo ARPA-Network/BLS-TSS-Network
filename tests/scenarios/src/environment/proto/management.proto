@@ -1,0 +1,207 @@
+syntax = "proto3";
+
+package management;
+
+service ManagementService {
+  rpc ListFixedTasks(ListFixedTasksRequest) returns (ListFixedTasksReply);
+
+  rpc StartListener(StartListenerRequest) returns (StartListenerReply);
+
+  rpc ShutdownListener(ShutdownListenerRequest) returns (ShutdownListenerReply);
+
+  rpc NodeRegister(NodeRegisterRequest) returns (NodeRegisterReply);
+
+  rpc NodeActivate(NodeActivateRequest) returns (NodeActivateReply);
+
+  rpc NodeQuit(NodeQuitRequest) returns (NodeQuitReply);
+
+  rpc ShutdownNode(ShutdownNodeRequest) returns (ShutdownNodeReply);
+
+  rpc GetNodeInfo(GetNodeInfoRequest) returns (GetNodeInfoReply);
+
+  rpc GetGroupInfo(GetGroupInfoRequest) returns (GetGroupInfoReply);
+
+  rpc PostProcessDkg(PostProcessDkgRequest) returns (PostProcessDkgReply);
+
+  rpc PartialSign(PartialSignRequest) returns (PartialSignReply);
+
+  rpc AggregatePartialSigs(AggregatePartialSigsRequest)
+      returns (AggregatePartialSigsReply);
+
+  rpc VerifySig(VerifySigRequest) returns (VerifySigReply);
+
+  rpc VerifyPartialSigs(VerifyPartialSigsRequest)
+      returns (VerifyPartialSigsReply);
+
+  rpc SendPartialSig(SendPartialSigRequest) returns (SendPartialSigReply);
+
+  rpc FulfillRandomness(FulfillRandomnessRequest)
+      returns (FulfillRandomnessReply);
+}
+
+enum ListenerType {
+  Block = 0;
+  PreGrouping = 1;
+  PostCommitGrouping = 2;
+  PostGrouping = 3;
+  NewRandomnessTask = 4;
+  ReadyToHandleRandomnessTask = 5;
+  RandomnessSignatureAggregation = 6;
+}
+
+message ListFixedTasksRequest {}
+
+message ListFixedTasksReply {
+  repeated string fixed_tasks = 1;
+}
+
+message StartListenerRequest {
+  ListenerType task_type = 1;
+}
+
+message StartListenerReply {
+  bool res = 1;
+}
+
+message ShutdownListenerRequest {
+  ListenerType task_type = 1;
+}
+
+message ShutdownListenerReply {
+  bool res = 1;
+}
+
+message NodeRegisterRequest {}
+
+message NodeRegisterReply {
+  bool res = 1;
+}
+
+message NodeActivateRequest {}
+
+message NodeActivateReply {
+  bool res = 1;
+}
+
+message NodeQuitRequest {}
+
+message NodeQuitReply {
+  bool res = 1;
+}
+
+message ShutdownNodeRequest {}
+
+message ShutdownNodeReply {
+  bool res = 1;
+}
+
+message GetNodeInfoRequest {}
+
+message GetNodeInfoReply {
+  string id_address = 1;
+  string node_rpc_endpoint = 2;
+  bytes dkg_private_key = 3;
+  bytes dkg_public_key = 4;
+}
+
+message GetGroupInfoRequest {}
+
+message GetGroupInfoReply {
+  bytes share = 1;
+  Group group = 2;
+  DKGStatus dkg_status = 3;
+  uint32 self_index = 4;
+  uint32 dkg_start_block_height = 5;
+}
+
+enum DKGStatus {
+  None = 0;
+  InPhase = 1;
+  CommitSuccess = 2;
+  WaitForPostProcess = 3;
+}
+
+message Group {
+  uint32 index = 1;
+  uint32 epoch = 2;
+  uint32 size = 3;
+  uint32 threshold = 4;
+  bool state = 5;
+  bytes public_key = 6;
+  map<string, Member> members = 7;
+  repeated string committers = 8;
+}
+
+message Member {
+  uint32 index = 1;
+  string id_address = 2;
+  string rpc_endpoint = 3;
+  bytes partial_public_key = 4;
+}
+
+message PostProcessDkgRequest {}
+
+message PostProcessDkgReply {
+  bool res = 1;
+}
+
+message PartialSignRequest {
+  bytes request_id = 1;
+  uint32 threshold = 2;
+  bytes msg = 3;
+}
+
+message PartialSignReply {
+  bytes partial_sig = 1;
+}
+
+message AggregatePartialSigsRequest {
+  uint32 threshold = 1;
+  repeated bytes partial_sigs = 2;
+}
+
+message AggregatePartialSigsReply {
+  bytes sig = 1;
+}
+
+message VerifySigRequest {
+  bytes public = 1;
+  bytes msg = 2;
+  bytes sig = 3;
+}
+
+message VerifySigReply {
+  bool res = 1;
+}
+
+message VerifyPartialSigsRequest {
+  repeated bytes publics = 1;
+  bytes msg = 2;
+  repeated bytes partial_sigs = 3;
+}
+
+message VerifyPartialSigsReply {
+  bool res = 1;
+}
+
+message SendPartialSigRequest {
+  string member_id_address = 1;
+  bytes msg = 2;
+  bytes request_id = 3;
+  bytes partial_sig = 4;
+}
+
+message SendPartialSigReply {
+  bool res = 1;
+}
+
+message FulfillRandomnessRequest {
+  uint32 group_index = 1;
+  bytes request_id = 2;
+  bytes sig = 3;
+  map<string, bytes> partial_sigs = 4;
+}
+
+message FulfillRandomnessReply {
+  bool res = 1;
+}
