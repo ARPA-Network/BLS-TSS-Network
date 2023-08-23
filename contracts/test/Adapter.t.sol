@@ -250,11 +250,14 @@ contract AdapterTest is RandcastTestHelper {
         vm.roll(block.number + 7200);
         vm.prank(_user);
         IAdapter(address(_adapter)).cancelOvertimeRequest(requestId, rd);
+
         pendingRequest = IAdapter(address(_adapter)).getPendingRequestCommitment(requestId);
         assertEq(pendingRequest, bytes32(0));
-
         (,,, inflightCost,,,,,) = IAdapter(address(_adapter)).getSubscription(_subId);
         assertEq(inflightCost, 0);
+
+        uint256 inflightPayment = AdapterForTest(address(_adapter)).getInflightCost(_subId, requestId);
+        assertEq(inflightPayment, 0);
 
         vm.prank(_user);
         IAdapter(address(_adapter)).cancelSubscription(_subId, _user);
