@@ -131,8 +131,8 @@ Some view calls:
 ```bash
 
 # to check if the latest group info is relayed to L2
-cast call <L1ControllerAddress> "getGroup(uint256)" 0 --rpc-url http://127.0.0.1:9545
-cast call <L2ControllerOracleAddress> "getGroup(uint256)" 0 --rpc-url http://127.0.0.1:8545
+cast call <L1ControllerAddress> "getGroup(uint256)" 0 --rpc-url http://127.0.0.1:8545
+cast call <L2ControllerOracleAddress> "getGroup(uint256)" 0 --rpc-url http://127.0.0.1:9545
 
 # to check if the randomness is successfully fulfilled on L2
 cast call <L2AdapterAddress> "getLastRandomness()(uint256)" --rpc-url http://127.0.0.1:9545
