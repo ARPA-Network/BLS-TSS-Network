@@ -2,7 +2,7 @@ use crate::{ExponentialBackoffRetryDescriptor, RelayedChainIdentity};
 
 use super::{ChainIdentity, MainChainIdentity};
 use async_trait::async_trait;
-use ethers_core::types::{Address, U256};
+use ethers_core::types::{Address, BlockNumber, U256};
 use ethers_middleware::{NonceManagerMiddleware, SignerMiddleware};
 use ethers_providers::{Http, Middleware, Provider, ProviderError};
 use ethers_signers::{LocalWallet, Signer};
@@ -93,6 +93,16 @@ impl ChainIdentity for GeneralMainChainIdentity {
 
     async fn get_current_gas_price(&self) -> Result<U256, ProviderError> {
         self.provider.get_gas_price().await
+    }
+
+    async fn get_block_timestamp(
+        &self,
+        block_number: BlockNumber,
+    ) -> Result<Option<U256>, ProviderError> {
+        self.provider
+            .get_block(block_number)
+            .await
+            .map(|o| o.map(|b| b.timestamp))
     }
 }
 
@@ -187,6 +197,16 @@ impl ChainIdentity for GeneralRelayedChainIdentity {
 
     async fn get_current_gas_price(&self) -> Result<U256, ProviderError> {
         self.provider.get_gas_price().await
+    }
+
+    async fn get_block_timestamp(
+        &self,
+        block_number: BlockNumber,
+    ) -> Result<Option<U256>, ProviderError> {
+        self.provider
+            .get_block(block_number)
+            .await
+            .map(|o| o.map(|b| b.timestamp))
     }
 }
 

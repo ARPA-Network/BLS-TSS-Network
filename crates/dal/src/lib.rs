@@ -136,6 +136,7 @@ pub enum BLSResultCacheState {
     Committing,
     Committed,
     CommittedByOthers,
+    Expired,
 }
 
 impl BLSResultCacheState {
@@ -145,6 +146,7 @@ impl BLSResultCacheState {
             BLSResultCacheState::Committing => 1,
             BLSResultCacheState::Committed => 2,
             BLSResultCacheState::CommittedByOthers => 3,
+            BLSResultCacheState::Expired => 4,
         }
     }
 }
@@ -156,6 +158,7 @@ impl From<i32> for BLSResultCacheState {
             1 => BLSResultCacheState::Committing,
             2 => BLSResultCacheState::Committed,
             3 => BLSResultCacheState::CommittedByOthers,
+            4 => BLSResultCacheState::Expired,
             _ => panic!("Invalid BLSResultCacheState"),
         }
     }

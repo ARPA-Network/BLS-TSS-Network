@@ -30,6 +30,9 @@ pub enum NodeError {
     #[error("the node is not the committer of the group")]
     NotCommitter,
 
+    #[error("the block_number: {0} is invalid")]
+    InvalidBlockNumber(usize),
+
     #[error("the chain id: {0} is not supported in the group")]
     InvalidChainId(usize),
 

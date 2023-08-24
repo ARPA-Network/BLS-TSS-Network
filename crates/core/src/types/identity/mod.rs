@@ -1,5 +1,5 @@
 use async_trait::async_trait;
-use ethers_core::types::{Address, U256};
+use ethers_core::types::{Address, BlockNumber, U256};
 use ethers_providers::{Http, Provider, ProviderError};
 use std::sync::Arc;
 
@@ -25,6 +25,11 @@ pub trait ChainIdentity {
     fn get_contract_view_retry_descriptor(&self) -> ExponentialBackoffRetryDescriptor;
 
     async fn get_current_gas_price(&self) -> Result<U256, ProviderError>;
+
+    async fn get_block_timestamp(
+        &self,
+        block_number: BlockNumber,
+    ) -> Result<Option<U256>, ProviderError>;
 }
 
 pub trait MainChainIdentity: ChainIdentity {
