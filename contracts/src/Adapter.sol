@@ -12,9 +12,8 @@ import {IBasicRandcastConsumerBase} from "./interfaces/IBasicRandcastConsumerBas
 import {RequestIdBase} from "./utils/RequestIdBase.sol";
 import {BLS} from "./libraries/BLS.sol";
 // solhint-disable-next-line no-global-import
-import "./utils/ChainHelper.sol" as ChainHelper;
-// solhint-disable-next-line no-global-import
 import "./utils/Utils.sol" as Utils;
+import {ChainHelper} from "./libraries/ChainHelper.sol";
 
 contract Adapter is UUPSUpgradeable, IAdapter, IAdapterOwner, RequestIdBase, OwnableUpgradeable {
     using SafeERC20 for IERC20;
@@ -140,7 +139,6 @@ contract Adapter is UUPSUpgradeable, IAdapter, IAdapterOwner, RequestIdBase, Own
     error IdenticalSubscription();
     error AtLeastOneRequestIsRequired();
     error MustBeSubOwner(address owner);
-    error PaymentTooLarge();
     error NoAvailableGroups();
     error NoCorrespondingRequest();
     error IncorrectCommitment();
@@ -761,9 +759,13 @@ contract Adapter is UUPSUpgradeable, IAdapter, IAdapterOwner, RequestIdBase, Own
         uint32 callbackGasLimit,
         uint32 gasExceptCallback,
         uint32 fulfillmentFlatFeeEthPPM,
-        uint256 weiPerUnitGas
-    ) public pure override(IAdapter) returns (uint256) {
-        uint256 paymentNoFee = weiPerUnitGas * (gasExceptCallback + callbackGasLimit);
+        uint256 weiPerUnitGas,
+        uint32 groupSize
+    ) public view override(IAdapter) returns (uint256) {
+        // we estimate 1.5x the cost of the fulfillment calldata
+        uint256 estimatedFulfillmentL1CostWei =
+            ChainHelper.getTxL1GasFees(ChainHelper.getFulfillmentTxL1GasUsed(groupSize)) * 3 / 2;
+        uint256 paymentNoFee = weiPerUnitGas * (gasExceptCallback + callbackGasLimit) + estimatedFulfillmentL1CostWei;
         return (paymentNoFee + 1e12 * uint256(fulfillmentFlatFeeEthPPM));
     }
 
@@ -845,7 +847,8 @@ contract Adapter is UUPSUpgradeable, IAdapter, IAdapterOwner, RequestIdBase, Own
             sub.freeRequestCount > 0
                 ? 0
                 : (getFeeTier(reqCount) * _flatFeeConfig.flatFeePromotionGlobalPercentage / 100),
-            callbackMaxGasPrice
+            callbackMaxGasPrice,
+            groupSize
         );
 
         if (sub.balance - sub.inflightCost < payment) {
@@ -932,10 +935,8 @@ contract Adapter is UUPSUpgradeable, IAdapter, IAdapterOwner, RequestIdBase, Own
         uint256 flatFee,
         uint256 weiPerUnitGas
     ) internal view returns (uint256) {
-        uint256 paymentNoFee = weiPerUnitGas * (gasAfterPaymentCalculation + startGas - gasleft());
-        if (paymentNoFee > (12e25 - flatFee)) {
-            revert PaymentTooLarge(); // Payment + flatFee cannot be more than all of the ETH in existence.
-        }
+        uint256 paymentNoFee =
+            weiPerUnitGas * (gasAfterPaymentCalculation + startGas - gasleft()) + ChainHelper.getCurrentTxL1GasFees();
         return paymentNoFee + flatFee;
     }
 

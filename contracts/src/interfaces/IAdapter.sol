@@ -143,6 +143,7 @@ interface IAdapter is IRequestTypeBase {
         uint32 callbackGasLimit,
         uint32 gasExceptCallback,
         uint32 fulfillmentFlatFeeEthPPM,
-        uint256 weiPerUnitGas
+        uint256 weiPerUnitGas,
+        uint32 groupSize
     ) external view returns (uint256);
 }
