@@ -39,6 +39,17 @@ docker kill $(docker ps -q -f ancestxor=arpachainio/node:latest); docker rm -f $
 pkill -f 'node-client -c'
 rm -rf /home/ubuntu/BLS-TSS-Network/crates/arpa-node/log
 rm /home/ubuntu/BLS-TSS-Network/crates/arpa-node/*.sqlite
+
+# delete the node logs
+rm -rf /home/ubuntu/BLS-TSS-Network/crates/arpa-node/log
+```
+
+Clean and redploy OP devnet
+
+```bash
+cd optimism
+make devnet-clean
+make devnet-up-deploy
 ```
 
 ## View Calls

@@ -12,6 +12,9 @@ from dotenv import load_dotenv, set_key, dotenv_values
 l1_chain_id = "900"
 l2_chain_id = "901"
 
+l1_rpc = "http://localhost:8545"
+l2_rpc = "http://localhost:9545"
+
 # prep directories
 script_dir = os.getcwd()
 root_dir = os.path.abspath(os.path.join(script_dir, os.pardir))
@@ -93,9 +96,10 @@ def wait_command(
     shell=False,
     env=None,
     cwd=None,
-    wait_time=10,
-    max_attempts=12,
+    wait_time=1,
+    max_attempts=1,
     fail_value=None,
+    success_value=None,
 ) -> str:
     """Checks for the success of a command after a set interval.
         Returns the stdout if successful or None if it fails.
@@ -107,7 +111,8 @@ def wait_command(
         shell (bool): whether to use shell or not
         env (dict): the environment variables dictionary
         cwd (str): the current working directory
-        fail_value (str): value that indicates an unsuccessful command even if it executes without raising an exception
+        fail_value (str): value that when provided, must not match the output in order to succeed
+        success_value (str): value that when provided, must match the output in order to succeed
 
     Returns:
         str: stdout if the command finishes successfully, None otherwise
@@ -124,23 +129,50 @@ def wait_command(
             capture_output=True,
             text=True,
         )
-        # If the command is successful but stdout matches fail_value increase fail_counter
+        # If command_output.stdout is not None, strip it
+        stdout = command_output.stdout.strip() if command_output.stdout else None
+
+        # # Debugging
+        # print("command_output.returncode: ", command_output.returncode)
+        # print("command_output.stdout: ", command_output.stdout)
+        # print("stdout: ", stdout)
+        # print("fail_value: ", fail_value)
+        # print("success_value: ", success_value)
+
+        # Judge whether the command is successful
         if (
-            command_output.returncode == 0
-            and command_output.stdout.strip() != fail_value
+            command_output.returncode == 0  # If the command is successful
+            and stdout is not None  # If stdout is not None
         ):
-            return command_output.stdout
-        else:
-            print("...")
-            fail_counter += 1
+            # If neither success_value or fail_value is set, return stdout
+            if success_value is None and fail_value is None:
+                return stdout
+            # If success_value is set, but fail_value is not, return stdout if stdout == success_value
+            if success_value is not None and fail_value is None:
+                if stdout == success_value:
+                    return stdout
+            # If fail_value is set, but success_value is not, return stdout if stdout != fail_value
+            if success_value is None and fail_value is not None:
+                if stdout != fail_value:
+                    return stdout
+            # If both success_value and fail_value are set, return stdout if stdout == success_value and stdout != fail_value
+            if success_value is not None and fail_value is not None:
+                if (stdout == success_value) and (stdout != fail_value):
+                    return stdout
+
+        # If the command fails, print a dot and increment the fail_counter
+        print(".", end="", flush=True)
+        fail_counter += 1
 
         # If the command fails for max_attempts consecutive times, return None
         if fail_counter >= max_attempts:
             print(
-                f"Error: Command did not finish after {wait_time*max_attempts} seconds. Exiting..."
+                f"\nError: Command did not finish after {wait_time*max_attempts} seconds. Exiting..."
             )
             return None
+            # sys.exit(1)
 
+        # Wait for wait_time seconds before trying again
         time.sleep(wait_time)
 
 
@@ -154,17 +186,19 @@ def deploy_contracts():
 
     # 2. Deploy L2 OPControllerOracleLocalTest contracts (ControllerOracle, Adapter, Arpa)
     # # forge script script/OPControllerOracleLocalTest.s.sol:OPControllerOracleLocalTestScript --fork-url http://localhost:9545 --broadcast
+    print("Running Solidity Script: OPControllerOracleLocalTest on L1...")
     run_command(
         [
             "forge",
             "script",
             "script/OPControllerOracleLocalTest.s.sol:OPControllerOracleLocalTestScript",
             "--fork-url",
-            "http://localhost:9545",
+            l2_rpc,
             "--broadcast",
         ],
         env={},
         cwd=contracts_dir,
+        # capture_output=True,  # hide output
     )
     # get L2 contract addresses from broadcast and update .env file
     l2_addresses = get_addresses_from_json(op_controller_oracle_broadcast_path)
@@ -175,17 +209,19 @@ def deploy_contracts():
     # 3. Deploy L1 ControllerLocalTest contracts
     #     (Controller, Controller Relayer, OPChainMessenger, Adapter, Arpa, Staking)
     # forge script script/ControllerLocalTest.s.sol:ControllerLocalTestScript --fork-url http://localhost:8545 --broadcast
+    print("Running Solidity Script: ControllerLocalTest on L1...")
     run_command(
         [
             "forge",
             "script",
             "script/ControllerLocalTest.s.sol:ControllerLocalTestScript",
             "--fork-url",
-            "http://localhost:8545",
+            l1_rpc,
             "--broadcast",
         ],
         env={},
         cwd=contracts_dir,
+        # capture_output=True,  # hide output
     )
 
     # get L1 contract addresses from broadcast and update .env file
@@ -197,13 +233,16 @@ def deploy_contracts():
 
     # 4. deploy remaining contracts (Controller Oracle Init, StakeNodeLocalTest)
     # forge script script/OPControllerOracleInitializationLocalTest.s.sol:OPControllerOracleInitializationLocalTestScript --fork-url http://localhost:9545 --broadcast
+    print(
+        "Running Solidity Script: OPControllerOracleInitializationLocalTestScript on L2..."
+    )
     run_command(
         [
             "forge",
             "script",
             "script/OPControllerOracleInitializationLocalTest.s.sol:OPControllerOracleInitializationLocalTestScript",
             "--fork-url",
-            "http://localhost:9545",
+            l2_rpc,
             "--broadcast",
         ],
         env={
@@ -212,16 +251,18 @@ def deploy_contracts():
             "OP_CONTROLLER_ORACLE_ADDRESS": l2_addresses["ControllerOracle"],
         },
         cwd=contracts_dir,
+        # capture_output=True,  # hide output
     )
 
     # forge script script/InitStakingLocalTest.s.sol:InitStakingLocalTestScript --fork-url http://localhost:8545 --broadcast -g 15
+    print("Running Solidity Script: InitStakingLocalTestScript on L1...")
     run_command(
         [
             "forge",
             "script",
             "script/InitStakingLocalTest.s.sol:InitStakingLocalTestScript",
             "--fork-url",
-            "http://localhost:8545",
+            l1_rpc,
             "--broadcast",
             "-g",
             "150",
@@ -231,16 +272,18 @@ def deploy_contracts():
             "STAKING_ADDRESS": l1_addresses["Staking"],
         },
         cwd=contracts_dir,
+        # capture_output=True,  # hide output
     )
 
     # forge script script/StakeNodeLocalTest.s.sol:StakeNodeLocalTestScript --fork-url http://localhost:8545 --broadcast
+    print("Running Solidity Script: StakeNodeLocalTestScript on L1...")
     run_command(
         [
             "forge",
             "script",
             "script/StakeNodeLocalTest.s.sol:StakeNodeLocalTestScript",
             "--fork-url",
-            "http://localhost:8545",
+            l1_rpc,
             "--broadcast",
             "-g",
             "150",
@@ -252,18 +295,19 @@ def deploy_contracts():
             "ADAPTER_ADDRESS": l1_addresses["ERC1967Proxy"],
         },
         cwd=contracts_dir,
+        # capture_output=True,  # hide output
     )
 
 
-def deploy_nodes():
+def deploy_nodes():  # ! Deploy Nodes
+    l1_addresses = get_addresses_from_json(controller_local_test_broadcast_path)
+    l2_addresses = get_addresses_from_json(op_controller_oracle_broadcast_path)
+
     ######################################
     ###### ARPA Network Deployment #######
     ######################################
 
     # update config.yml files with correect L1 controller and adapter addresses
-    l1_addresses = get_addresses_from_json(controller_local_test_broadcast_path)
-    l2_addresses = get_addresses_from_json(op_controller_oracle_broadcast_path)
-
     config_files = ["config_1.yml", "config_2.yml", "config_3.yml"]
     yaml = ruamel.yaml.YAML()
     yaml.preserve_quotes = True  # preserves quotes
@@ -318,21 +362,18 @@ def deploy_nodes():
 
     # wait for succesful grouping (fail after 1m without grouping)
     print("Waiting for nodes to group...")
-    # cat /home/ubuntu/BLS-TSS-Network/crates/arpa-node/log/1/node.log | grep 'available'
-    cmd = [
-        # "cat",
-        # f"{arpa_node_dir}/log/1/node.log",  # TODO: fix this. Need to edit log path in config file to be relative
-        # "|",
-        # "grep",
-        # "'available'",
-        f"cat {arpa_node_dir}/log/1/node.log | grep 'available'"
-    ]
+    time.sleep(5)  # wait for node.log file to be created
 
-    nodes_grouped = wait_command(cmd, wait_time=10, max_attempts=12, shell=True)
+    nodes_grouped = wait_command(
+        [f"cat {arpa_node_dir}/log/1/node.log | grep 'available'"],
+        wait_time=10,
+        max_attempts=12,
+        shell=True,
+    )
 
     if nodes_grouped:
-        print("Nodes grouped succesfully!")
-        print("Output:\n", nodes_grouped)
+        print("\nNodes grouped succesfully!")
+        print("Output:\n", nodes_grouped, "\n")
     else:
         print("Nodes failed to group!")
         # print out logs
@@ -342,102 +383,158 @@ def deploy_nodes():
             ],
             shell=True,
         )
+        print("Quitting...")
         sys.exit(1)
 
-    # TODO:  wait for DKG Proccess to Finish
-    # get coordinator. If it returns 0, we know dkg proccess finished and post proccess dkg has been called
+    # Wait for DKG Proccess to Finish
+    print("Waiting for DKG Proccess to complete")
+    # call controller.getCoordinator(). If it returns 0, we know dkg proccess finished and post proccess dkg has been called
     # function getCoordinator(uint256 groupIndex) public view override(IController) returns (address) {
     #     return _coordinators[groupIndex];
     # }
+    print(
+        f"cast call {l1_addresses['Controller']} 'getCoordinator(uint256)' 0 --rpc-url {l1_rpc}"
+    )
 
-    # cast call 0x9d4454B023096f34B160D6B654540c56A1F81688 "getCoordinator(uint256)" 0 --rpc-url http://127.0.0.1:8545
-    cmd = [
-        f'''cast call {l1_addresses['Controller']} "getCoordinator(uint256)" 0 --rpc-url http://127.0.0.1:8545"'''
-    ]
-    print(cmd)
+    coordinator = wait_command(
+        [
+            f"cast call {l1_addresses['Controller']} 'getCoordinator(uint256)' 0 --rpc-url {l1_rpc}"
+        ],
+        wait_time=10,
+        max_attempts=12,
+        shell=True,
+        success_value="0x0000000000000000000000000000000000000000000000000000000000000000",
+    )
+
+    print("DKG Proccess Completed Succesfully!")
+    print(f"Coordinator Value: {coordinator}")
 
 
-def test_request_randomness():
+def get_last_randomness(address: str, rpc: str) -> str:
+    last_randomness_l1 = wait_command(
+        [f'cast call {address} "getLastRandomness()(uint256)" --rpc-url {rpc}'],
+        wait_time=1,
+        max_attempts=1,
+        shell=True,
+    ).strip()
+    return last_randomness_l1
+
+
+def test_request_randomness():  # ! Integration Testing
+    l1_addresses = get_addresses_from_json(controller_local_test_broadcast_path)
+    l2_addresses = get_addresses_from_json(op_controller_oracle_broadcast_path)
+    # pprint(l1_addresses)
+    # pprint(l2_addresses)
+
+    # Check group state
+    print("L1 Group Info:")
+    l1_group_into = run_command(
+        [
+            f"cast call {l1_addresses['Controller']} \"getGroup(uint256)\" 0 --rpc-url {l1_rpc}"
+        ],
+        shell=True,
+    )
+    print(l1_group_into)
+
+    print("L2 Group Info:")
+    l2_group_into = run_command(
+        [
+            f"cast call {l2_addresses['ControllerOracle']} \"getGroup(uint256)\" 0 --rpc-url {l2_rpc}"
+        ],
+        shell=True,
+    )
+    print(l2_group_into)
+
     ############################################
     ###### L1 Request Randomness Testing #######
     ############################################
 
-    l1_addresses = get_addresses_from_json(controller_local_test_broadcast_path)
-    l2_addresses = get_addresses_from_json(op_controller_oracle_broadcast_path)
-    pprint(l1_addresses)
-    pprint(l2_addresses)
+    # 1. Get last randomness
 
-    # capture the prev randomness and new randomness and compare. If they are the same, then the randomness was not updated
+    # get L1 previous randomness
+    l1_prev_randomness = get_last_randomness(l1_addresses["ERC1967Proxy"], l1_rpc)
 
-    print("Helpful view calls:")
+    # 2. Deploy L1 user contract and request randomness
+    print("Deploying L1 user contract and requesting randomness...")
+    run_command(
+        [
+            "forge",
+            "script",
+            "script/GetRandomNumberLocalTest.s.sol:GetRandomNumberLocalTestScript",
+            "--fork-url",
+            l1_rpc,
+            "--broadcast",
+        ],
+        env={
+            "ADAPTER_ADDRESS": l1_addresses["ERC1967Proxy"],
+        },
+        cwd=contracts_dir,
+        # capture_output=True,  # hide output
+    )
+    l1_cur_randomness = get_last_randomness(l1_addresses["ERC1967Proxy"], l1_rpc)
 
-    print("# Get latest l1 group info")
-    print(
-        f"cast call {l1_addresses['Controller']} \"getGroup(uint256)\" 0 --rpc-url http://127.0.0.1:8545"
+    # 3. Check if randomness is updated
+
+    print("Waiting for randomness to be updated...")
+    l1_cur_randomness = wait_command(
+        [
+            f'cast call {l1_addresses["ERC1967Proxy"]} "getLastRandomness()(uint256)" --rpc-url {l1_rpc}'
+        ],
+        wait_time=5,
+        max_attempts=10,
+        shell=True,
+        fail_value=l1_prev_randomness,
     )
 
-    print("# Check if the latest group info is relayed to L2")
-    print(
-        f"cast call {l2_addresses['ControllerOracle']} \"getGroup(uint256)\" 0 --rpc-url http://127.0.0.1:9545"
+    print(f"\nOld L1 randomness: {l1_prev_randomness}")
+    print(f"New L1 randomness: {l1_cur_randomness}")
+    print("L1 Requested Randomness succesfully!\n")
+
+    ############################################
+    ###### L2 Request Randomness Testing #######
+    ############################################
+
+    # 1. Get last randomness
+    # get l2 previous randomness
+    l2_prev_randomness = get_last_randomness(l2_addresses["ERC1967Proxy"], l2_rpc)
+
+    # 2. Deploy l2 user contract and request randomness
+    print("Deploying l2 user contract and requesting randomness...")
+
+    # forge script script/OPGetRandomNumberLocalTest.s.sol:OPGetRandomNumberLocalTestScript --fork-url http://localhost:9545 --broadcast
+    run_command(
+        [
+            "forge",
+            "script",
+            "script/OPGetRandomNumberLocalTest.s.sol:OPGetRandomNumberLocalTestScript",
+            "--fork-url",
+            l2_rpc,
+            "--broadcast",
+        ],
+        env={
+            "OP_ADAPTER_ADDRESS": l2_addresses["ERC1967Proxy"],
+        },
+        cwd=contracts_dir,
+        # capture_output=True,  # hide output
+    )
+    l2_cur_randomness = get_last_randomness(l2_addresses["ERC1967Proxy"], l2_rpc)
+
+    # 3. Check if randomness is updated
+
+    print("Waiting for randomness to be updated...")
+    l2_cur_randomness = wait_command(
+        [
+            f'cast call {l2_addresses["ERC1967Proxy"]} "getLastRandomness()(uint256)" --rpc-url {l2_rpc}'
+        ],
+        wait_time=5,
+        max_attempts=10,
+        shell=True,
+        fail_value=l2_prev_randomness,
     )
 
-    print("# Check if the randomness is successfully fulfilled on L1")
-    print(
-        f"cast call {l1_addresses['ERC1967Proxy']} \"getLastRandomness()(uint256)\" --rpc-url http://127.0.0.1:8545"
-    )
-
-    print("# Check if the randomness is successfully fulfilled on L2")
-    print(
-        f"cast call {l2_addresses['ERC1967Proxy']} \"getLastRandomness()(uint256)\" --rpc-url http://127.0.0.1:9545"
-    )
-
-    # # deploy L1 user contract and request randomness
-    # print("Deploying L1 user contract and requesting randomness...")
-    # run_command(
-    #     [
-    #         "forge",
-    #         "script",
-    #         "script/GetRandomNumberLocalTest.s.sol:GetRandomNumberLocalTestScript",
-    #         "--fork-url",
-    #         "http://localhost:8545",
-    #         "--broadcast",
-    #     ],
-    #     env={
-    #         "ADAPTER_ADDRESS": l1_addresses["ERC1967Proxy"],
-    #     },
-    #     cwd=contracts_dir,
-    # )
-
-    # # confirm randomness request suceeded with the adapter
-    # # cast call 0xE97166C46816d48B2aFFCfFf704B962E88fd0abE "getLastRandomness()(uint256)" # should not show 0
-
-    # print("Check if randomness request succeeded...")
-    # cmd = [
-    #     "cast",
-    #     "call",
-    #     l1_addresses["ERC1967Proxy"],
-    #     "getLastRandomness()(uint256)",
-    # ]
-    # adapter_randomness_result = wait_command(
-    #     cmd,
-    #     cwd=contracts_dir,
-    #     wait_time=10,
-    #     max_attempts=12,
-    #     fail_value="0",
-    #     shell=True,
-    # )
-    # # if adapter_randomness_result:
-    # #     print("Adapter randomness request succeeded!")
-    # #     print("Output:\n", adapter_randomness_result)
-    # # else:
-    # #     print("Adapter randomness request failed!")
-    # #     sys.exit(1)
-
-    # # # # cast call 0x6379ebD504941f50D5BfDE9348B37593bd29C835 "lastRandomnessResult()(uint256)" # should match above
-
-    # # ############################################
-    # # #!#### L2 Request Randomness Testing #######
-    # # ############################################
+    print(f"\nOld L2 randomness: {l2_prev_randomness}")
+    print(f"New L2 randomness: {l2_cur_randomness}")
+    print("L2 Requested Randomness succesfully!\n")
 
 
 def main():
