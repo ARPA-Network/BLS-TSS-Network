@@ -4,7 +4,7 @@ node_management_rpc_endpoint: "[::1]:50091"
 
 node_management_rpc_token: "for_test"
 
-provider_endpoint: "http://127.0.0.1:8545"
+provider_endpoint: "http://localhost:8545"
 
 chain_id: 900
 
@@ -73,7 +73,7 @@ time_limits:
 relayed_chains:
   - chain_id: 901
     description: "OP"
-    provider_endpoint: "http://127.0.0.1:9545"
+    provider_endpoint: "http://localhost:9545"
     controller_oracle_address: "0x9fE46736679d2D9a65F0992F2272dE9f3c7fa6e0"
     adapter_address: "0xDc64a140Aa3E981100a9becA4E685f962f0cF6C9"
     listeners:

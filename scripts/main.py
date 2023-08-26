@@ -5,38 +5,53 @@ import sys
 import time
 from pprint import pprint
 
+import termcolor
 import ruamel.yaml
 from dotenv import load_dotenv, set_key, dotenv_values
 
-# Global Variables
-l1_chain_id = "900"
-l2_chain_id = "901"
+####################
+# Global Variables #
+####################
+L1_CHAIN_ID = "900"
+L2_CHAIN_ID = "901"
 
-l1_rpc = "http://localhost:8545"
-l2_rpc = "http://localhost:9545"
+L1_RPC = "http://localhost:8545"
+L2_RPC = "http://localhost:9545"
+
+HIDE_OUTPUT = True  # supress output
 
 # prep directories
-script_dir = os.getcwd()
-root_dir = os.path.abspath(os.path.join(script_dir, os.pardir))
-arpa_node_dir = os.path.join(root_dir, "crates/arpa-node")
-arpa_node_config_dir = os.path.join(arpa_node_dir, "test/conf")
-contracts_dir = os.path.join(root_dir, "contracts")
-env_example_path = os.path.join(contracts_dir, ".env.example")
-env_path = os.path.join(contracts_dir, ".env")
-op_controller_oracle_broadcast_path = os.path.join(
-    contracts_dir,
+SCRIPT_DIR = os.getcwd()
+ROOT_DIR = os.path.abspath(os.path.join(SCRIPT_DIR, os.pardir))
+ARPA_NODE_DIR = os.path.join(ROOT_DIR, "crates/arpa-node")
+ARPA_NODE_CONFIG_DIR = os.path.join(ARPA_NODE_DIR, "test/conf")
+CONTRACTS_DIR = os.path.join(ROOT_DIR, "contracts")
+ENV_EXAMPLE_PATH = os.path.join(CONTRACTS_DIR, ".env.example")
+ENV_PATH = os.path.join(CONTRACTS_DIR, ".env")
+OP_CONTROLLER_ORACLE_BROADCAST_PATH = os.path.join(
+    CONTRACTS_DIR,
     "broadcast",
     "OPControllerOracleLocalTest.s.sol",
-    l2_chain_id,
+    L2_CHAIN_ID,
     "run-latest.json",
 )
-controller_local_test_broadcast_path = os.path.join(
-    contracts_dir,
+CONTROLLER_LOCAL_TEST_BROADCAST_PATH = os.path.join(
+    CONTRACTS_DIR,
     "broadcast",
     "ControllerLocalTest.s.sol",
-    l1_chain_id,
+    L1_CHAIN_ID,
     "run-latest.json",
 )
+
+
+def cprint(text: str, color: str = "green"):
+    """Prints text in color
+
+    Args:
+        text (str): the text to be printed
+        color (str): the color to be used
+    """
+    termcolor.cprint(text, color)
 
 
 def get_addresses_from_json(path: str) -> dict:
@@ -72,13 +87,13 @@ def run_command(
     shell=False,
     cwd=None,
     env=None,
-    capture_output=False,
+    capture_output=False,  # default to not capturing output (printing directly to stdout).
+    # Set to true if you want to suppress output / need to set output to a variable.
     text=False,
 ):
     """
     Run a command in a subprocess, raising an exception if it fails.
     """
-
     env = env if env else {}
     return subprocess.run(
         cmd,
@@ -126,7 +141,7 @@ def wait_command(
             env=env,
             check=False,
             cwd=cwd,
-            capture_output=True,
+            capture_output=True,  # ALWAYS TRUE as output is needed to check for success
             text=True,
         )
         # If command_output.stdout is not None, strip it
@@ -182,126 +197,97 @@ def deploy_contracts():
     ##################################
 
     # 1. Copy .env.example to .env, and load .env file for editing
-    run_command(["cp", env_example_path, env_path])
+    run_command(["cp", ENV_EXAMPLE_PATH, ENV_PATH])
 
     # 2. Deploy L2 OPControllerOracleLocalTest contracts (ControllerOracle, Adapter, Arpa)
     # # forge script script/OPControllerOracleLocalTest.s.sol:OPControllerOracleLocalTestScript --fork-url http://localhost:9545 --broadcast
     print("Running Solidity Script: OPControllerOracleLocalTest on L1...")
+    cmd = f"forge script script/OPControllerOracleLocalTest.s.sol:OPControllerOracleLocalTestScript --fork-url {L2_RPC} --broadcast"
+    cprint(cmd)
     run_command(
-        [
-            "forge",
-            "script",
-            "script/OPControllerOracleLocalTest.s.sol:OPControllerOracleLocalTestScript",
-            "--fork-url",
-            l2_rpc,
-            "--broadcast",
-        ],
-        env={},
-        cwd=contracts_dir,
-        # capture_output=True,  # hide output
+        [cmd], env={}, cwd=CONTRACTS_DIR, capture_output=HIDE_OUTPUT, shell=True
     )
     # get L2 contract addresses from broadcast and update .env file
-    l2_addresses = get_addresses_from_json(op_controller_oracle_broadcast_path)
-    set_key(env_path, "OP_ADAPTER_ADDRESS", l2_addresses["ERC1967Proxy"])
-    set_key(env_path, "OP_ARPA_ADDRESS", l2_addresses["Arpa"])
-    set_key(env_path, "OP_CONTROLLER_ORACLE_ADDRESS", l2_addresses["ControllerOracle"])
+    l2_addresses = get_addresses_from_json(OP_CONTROLLER_ORACLE_BROADCAST_PATH)
+    set_key(ENV_PATH, "OP_ADAPTER_ADDRESS", l2_addresses["ERC1967Proxy"])
+    set_key(ENV_PATH, "OP_ARPA_ADDRESS", l2_addresses["Arpa"])
+    set_key(ENV_PATH, "OP_CONTROLLER_ORACLE_ADDRESS", l2_addresses["ControllerOracle"])
 
     # 3. Deploy L1 ControllerLocalTest contracts
     #     (Controller, Controller Relayer, OPChainMessenger, Adapter, Arpa, Staking)
     # forge script script/ControllerLocalTest.s.sol:ControllerLocalTestScript --fork-url http://localhost:8545 --broadcast
     print("Running Solidity Script: ControllerLocalTest on L1...")
+    cmd = f"forge script script/ControllerLocalTest.s.sol:ControllerLocalTestScript --fork-url {L1_RPC} --broadcast"
+    cprint(cmd)
     run_command(
-        [
-            "forge",
-            "script",
-            "script/ControllerLocalTest.s.sol:ControllerLocalTestScript",
-            "--fork-url",
-            l1_rpc,
-            "--broadcast",
-        ],
+        [cmd],
         env={},
-        cwd=contracts_dir,
-        # capture_output=True,  # hide output
+        cwd=CONTRACTS_DIR,
+        capture_output=HIDE_OUTPUT,
+        shell=True,
     )
 
     # get L1 contract addresses from broadcast and update .env file
-    l1_addresses = get_addresses_from_json(controller_local_test_broadcast_path)
-    set_key(env_path, "ARPA_ADDRESS", l1_addresses["Arpa"])
-    set_key(env_path, "STAKING_ADDRESS", l1_addresses["Staking"])
-    set_key(env_path, "CONTROLLER_ADDRESS", l1_addresses["Controller"])
-    set_key(env_path, "ADAPTER_ADDRESS", l1_addresses["ERC1967Proxy"])
+    l1_addresses = get_addresses_from_json(CONTROLLER_LOCAL_TEST_BROADCAST_PATH)
+    set_key(ENV_PATH, "ARPA_ADDRESS", l1_addresses["Arpa"])
+    set_key(ENV_PATH, "STAKING_ADDRESS", l1_addresses["Staking"])
+    set_key(ENV_PATH, "CONTROLLER_ADDRESS", l1_addresses["Controller"])
+    set_key(ENV_PATH, "ADAPTER_ADDRESS", l1_addresses["ERC1967Proxy"])
 
     # 4. deploy remaining contracts (Controller Oracle Init, StakeNodeLocalTest)
     # forge script script/OPControllerOracleInitializationLocalTest.s.sol:OPControllerOracleInitializationLocalTestScript --fork-url http://localhost:9545 --broadcast
     print(
         "Running Solidity Script: OPControllerOracleInitializationLocalTestScript on L2..."
     )
+    cmd = f"forge script script/OPControllerOracleInitializationLocalTest.s.sol:OPControllerOracleInitializationLocalTestScript --fork-url {L2_RPC} --broadcast"
+    cprint(cmd)
     run_command(
-        [
-            "forge",
-            "script",
-            "script/OPControllerOracleInitializationLocalTest.s.sol:OPControllerOracleInitializationLocalTestScript",
-            "--fork-url",
-            l2_rpc,
-            "--broadcast",
-        ],
+        [cmd],
         env={
             "OP_ADAPTER_ADDRESS": l2_addresses["ERC1967Proxy"],
             "OP_ARPA_ADDRESS": l2_addresses["Arpa"],
             "OP_CONTROLLER_ORACLE_ADDRESS": l2_addresses["ControllerOracle"],
         },
-        cwd=contracts_dir,
-        # capture_output=True,  # hide output
+        cwd=CONTRACTS_DIR,
+        capture_output=HIDE_OUTPUT,
+        shell=True,
     )
 
     # forge script script/InitStakingLocalTest.s.sol:InitStakingLocalTestScript --fork-url http://localhost:8545 --broadcast -g 15
     print("Running Solidity Script: InitStakingLocalTestScript on L1...")
+    cmd = f"forge script script/InitStakingLocalTest.s.sol:InitStakingLocalTestScript --fork-url {L1_RPC} --broadcast -g 150"
+    cprint(cmd)
     run_command(
-        [
-            "forge",
-            "script",
-            "script/InitStakingLocalTest.s.sol:InitStakingLocalTestScript",
-            "--fork-url",
-            l1_rpc,
-            "--broadcast",
-            "-g",
-            "150",
-        ],
+        [cmd],
         env={
             "ARPA_ADDRESS": l1_addresses["Arpa"],
             "STAKING_ADDRESS": l1_addresses["Staking"],
         },
-        cwd=contracts_dir,
-        # capture_output=True,  # hide output
+        cwd=CONTRACTS_DIR,
+        capture_output=HIDE_OUTPUT,
+        shell=True,
     )
 
     # forge script script/StakeNodeLocalTest.s.sol:StakeNodeLocalTestScript --fork-url http://localhost:8545 --broadcast
     print("Running Solidity Script: StakeNodeLocalTestScript on L1...")
+    cmd = f"forge script script/StakeNodeLocalTest.s.sol:StakeNodeLocalTestScript --fork-url {L1_RPC} --broadcast -g 150"
+    cprint(cmd)
     run_command(
-        [
-            "forge",
-            "script",
-            "script/StakeNodeLocalTest.s.sol:StakeNodeLocalTestScript",
-            "--fork-url",
-            l1_rpc,
-            "--broadcast",
-            "-g",
-            "150",
-            # "--slow",  # important
-        ],
+        [cmd],
         env={
             "ARPA_ADDRESS": l1_addresses["Arpa"],
             "STAKING_ADDRESS": l1_addresses["Staking"],
             "ADAPTER_ADDRESS": l1_addresses["ERC1967Proxy"],
         },
-        cwd=contracts_dir,
-        # capture_output=True,  # hide output
+        cwd=CONTRACTS_DIR,
+        capture_output=HIDE_OUTPUT,
+        shell=True,
     )
 
 
 def deploy_nodes():  # ! Deploy Nodes
-    l1_addresses = get_addresses_from_json(controller_local_test_broadcast_path)
-    l2_addresses = get_addresses_from_json(op_controller_oracle_broadcast_path)
+    l1_addresses = get_addresses_from_json(CONTROLLER_LOCAL_TEST_BROADCAST_PATH)
+    l2_addresses = get_addresses_from_json(OP_CONTROLLER_ORACLE_BROADCAST_PATH)
 
     ######################################
     ###### ARPA Network Deployment #######
@@ -314,7 +300,7 @@ def deploy_nodes():  # ! Deploy Nodes
     yaml.indent(sequence=4, offset=2)  # set indentation
 
     for file in config_files:
-        file_path = os.path.join(arpa_node_config_dir, file)
+        file_path = os.path.join(ARPA_NODE_CONFIG_DIR, file)
         with open(file_path, "r") as f:
             data = yaml.load(f)
         # L1
@@ -327,45 +313,50 @@ def deploy_nodes():  # ! Deploy Nodes
         ]
         data["relayed_chains"][0]["adapter_address"] = l2_addresses["ERC1967Proxy"]
 
+        # # update rpc endpoints # Todo: Looks like this breaks things... we need to use 127.0.0.1 for the node config???
+        data["provider_endpoint"] = L1_RPC
+        data["relayed_chains"][0]["provider_endpoint"] = L2_RPC
+
         with open(file_path, "w") as f:
             yaml.dump(data, f)
 
     # start randcast nodes
     print("Starting randcast nodes...")
+    print("Starting Node 1!")
+    cmd = f"cargo run --bin node-client -- -c {ARPA_NODE_CONFIG_DIR}/config_1.yml > /dev/null 2>&1 &"
+    cprint(cmd)
 
     run_command(
-        [
-            f"cargo run --bin node-client -- -c {arpa_node_config_dir}/config_1.yml > /dev/null 2>&1 &"
-        ],
-        cwd=arpa_node_dir,
+        [cmd],
+        cwd=ARPA_NODE_DIR,
         shell=True,
     )
-    print("Node 1 started!")
 
+    print("Starting Node 2!")
+    cmd = f"cargo run --bin node-client -- -c {ARPA_NODE_CONFIG_DIR}/config_2.yml > /dev/null 2>&1 &"
+    cprint(cmd)
     run_command(
-        [
-            f"cargo run --bin node-client -- -c {arpa_node_config_dir}/config_2.yml > /dev/null 2>&1 &"
-        ],
-        cwd=arpa_node_dir,
+        [cmd],
+        cwd=ARPA_NODE_DIR,
         shell=True,
     )
-    print("Node 2 started!")
 
+    print("Starting Node 3!")
+    cmd = f"cargo run --bin node-client -- -c {ARPA_NODE_CONFIG_DIR}/config_3.yml > /dev/null 2>&1 &"
+    cprint(cmd)
     run_command(
-        [
-            f"cargo run --bin node-client -- -c {arpa_node_config_dir}/config_3.yml > /dev/null 2>&1 &"
-        ],
-        cwd=arpa_node_dir,
+        [cmd],
+        cwd=ARPA_NODE_DIR,
         shell=True,
     )
-    print("Node 3 started!")
 
     # wait for succesful grouping (fail after 1m without grouping)
-    print("Waiting for nodes to group...")
+    print("Waiting for nodes to group... ")
     time.sleep(5)  # wait for node.log file to be created
-
+    cmd = f"cat {ARPA_NODE_DIR}/log/1/node.log | grep 'available'"
+    cprint(cmd)
     nodes_grouped = wait_command(
-        [f"cat {arpa_node_dir}/log/1/node.log | grep 'available'"],
+        [cmd],
         wait_time=10,
         max_attempts=12,
         shell=True,
@@ -379,7 +370,7 @@ def deploy_nodes():  # ! Deploy Nodes
         # print out logs
         run_command(
             [
-                f"cat {script_dir}/log/1/node.log | tail",
+                f"cat {ARPA_NODE_DIR}/log/1/node.log | tail",
             ],
             shell=True,
         )
@@ -387,27 +378,27 @@ def deploy_nodes():  # ! Deploy Nodes
         sys.exit(1)
 
     # Wait for DKG Proccess to Finish
-    print("Waiting for DKG Proccess to complete")
+    print(
+        "Waiting for DKG Proccess to complete (group 0 coordinator should zero out)..."
+    )
     # call controller.getCoordinator(). If it returns 0, we know dkg proccess finished and post proccess dkg has been called
     # function getCoordinator(uint256 groupIndex) public view override(IController) returns (address) {
     #     return _coordinators[groupIndex];
     # }
-    print(
-        f"cast call {l1_addresses['Controller']} 'getCoordinator(uint256)' 0 --rpc-url {l1_rpc}"
-    )
+    cmd = f"cast call {l1_addresses['Controller']} 'getCoordinator(uint256)' 0 --rpc-url {L1_RPC}"
+    cprint(cmd)
 
     coordinator = wait_command(
-        [
-            f"cast call {l1_addresses['Controller']} 'getCoordinator(uint256)' 0 --rpc-url {l1_rpc}"
-        ],
+        [cmd],
         wait_time=10,
         max_attempts=12,
         shell=True,
         success_value="0x0000000000000000000000000000000000000000000000000000000000000000",
     )
+    print("\nDKG Proccess Completed Succesfully!")
+    print(f"Coordinator Value: {coordinator}\n")
 
-    print("DKG Proccess Completed Succesfully!")
-    print(f"Coordinator Value: {coordinator}")
+    time.sleep(10)  # wait for group info to propogate from L1 to L2
 
 
 def get_last_randomness(address: str, rpc: str) -> str:
@@ -421,29 +412,28 @@ def get_last_randomness(address: str, rpc: str) -> str:
 
 
 def test_request_randomness():  # ! Integration Testing
-    l1_addresses = get_addresses_from_json(controller_local_test_broadcast_path)
-    l2_addresses = get_addresses_from_json(op_controller_oracle_broadcast_path)
+    l1_addresses = get_addresses_from_json(CONTROLLER_LOCAL_TEST_BROADCAST_PATH)
+    l2_addresses = get_addresses_from_json(OP_CONTROLLER_ORACLE_BROADCAST_PATH)
     # pprint(l1_addresses)
     # pprint(l2_addresses)
 
     # Check group state
     print("L1 Group Info:")
+    cmd = f"cast call {l1_addresses['Controller']} \"getGroup(uint256)\" 0 --rpc-url {L1_RPC}"
     l1_group_into = run_command(
-        [
-            f"cast call {l1_addresses['Controller']} \"getGroup(uint256)\" 0 --rpc-url {l1_rpc}"
-        ],
+        [cmd],
         shell=True,
     )
-    print(l1_group_into)
+    # print(l1_group_into)
 
     print("L2 Group Info:")
+    cmd = f"cast call {l2_addresses['ControllerOracle']} \"getGroup(uint256)\" 0 --rpc-url {L2_RPC}"
+    cprint(cmd)
     l2_group_into = run_command(
-        [
-            f"cast call {l2_addresses['ControllerOracle']} \"getGroup(uint256)\" 0 --rpc-url {l2_rpc}"
-        ],
+        [cmd],
         shell=True,
     )
-    print(l2_group_into)
+    # print(l2_group_into)
 
     ############################################
     ###### L1 Request Randomness Testing #######
@@ -452,40 +442,35 @@ def test_request_randomness():  # ! Integration Testing
     # 1. Get last randomness
 
     # get L1 previous randomness
-    l1_prev_randomness = get_last_randomness(l1_addresses["ERC1967Proxy"], l1_rpc)
+    l1_prev_randomness = get_last_randomness(l1_addresses["ERC1967Proxy"], L1_RPC)
 
     # 2. Deploy L1 user contract and request randomness
     print("Deploying L1 user contract and requesting randomness...")
+    cmd = f"forge script script/GetRandomNumberLocalTest.s.sol:GetRandomNumberLocalTestScript --fork-url {L1_RPC} --broadcast"
+    cprint(cmd)
     run_command(
-        [
-            "forge",
-            "script",
-            "script/GetRandomNumberLocalTest.s.sol:GetRandomNumberLocalTestScript",
-            "--fork-url",
-            l1_rpc,
-            "--broadcast",
-        ],
+        [cmd],
         env={
             "ADAPTER_ADDRESS": l1_addresses["ERC1967Proxy"],
         },
-        cwd=contracts_dir,
-        # capture_output=True,  # hide output
+        cwd=CONTRACTS_DIR,
+        capture_output=HIDE_OUTPUT,
+        shell=True,
     )
-    l1_cur_randomness = get_last_randomness(l1_addresses["ERC1967Proxy"], l1_rpc)
+    l1_cur_randomness = get_last_randomness(l1_addresses["ERC1967Proxy"], L1_RPC)
 
     # 3. Check if randomness is updated
 
     print("Waiting for randomness to be updated...")
+    cmd = f'cast call {l1_addresses["ERC1967Proxy"]} "getLastRandomness()(uint256)" --rpc-url {L1_RPC}'
+    cprint(cmd)
     l1_cur_randomness = wait_command(
-        [
-            f'cast call {l1_addresses["ERC1967Proxy"]} "getLastRandomness()(uint256)" --rpc-url {l1_rpc}'
-        ],
+        [cmd],
         wait_time=5,
         max_attempts=10,
-        shell=True,
         fail_value=l1_prev_randomness,
+        shell=True,
     )
-
     print(f"\nOld L1 randomness: {l1_prev_randomness}")
     print(f"New L1 randomness: {l1_cur_randomness}")
     print("L1 Requested Randomness succesfully!\n")
@@ -496,51 +481,57 @@ def test_request_randomness():  # ! Integration Testing
 
     # 1. Get last randomness
     # get l2 previous randomness
-    l2_prev_randomness = get_last_randomness(l2_addresses["ERC1967Proxy"], l2_rpc)
+    l2_prev_randomness = get_last_randomness(l2_addresses["ERC1967Proxy"], L2_RPC)
 
     # 2. Deploy l2 user contract and request randomness
     print("Deploying l2 user contract and requesting randomness...")
 
     # forge script script/OPGetRandomNumberLocalTest.s.sol:OPGetRandomNumberLocalTestScript --fork-url http://localhost:9545 --broadcast
+    cmd = f"forge script script/OPGetRandomNumberLocalTest.s.sol:OPGetRandomNumberLocalTestScript --fork-url {L2_RPC} --broadcast"
+    cprint(cmd)
     run_command(
-        [
-            "forge",
-            "script",
-            "script/OPGetRandomNumberLocalTest.s.sol:OPGetRandomNumberLocalTestScript",
-            "--fork-url",
-            l2_rpc,
-            "--broadcast",
-        ],
+        [cmd],
         env={
             "OP_ADAPTER_ADDRESS": l2_addresses["ERC1967Proxy"],
         },
-        cwd=contracts_dir,
-        # capture_output=True,  # hide output
+        cwd=CONTRACTS_DIR,
+        capture_output=HIDE_OUTPUT,
+        shell=True,
     )
-    l2_cur_randomness = get_last_randomness(l2_addresses["ERC1967Proxy"], l2_rpc)
+    l2_cur_randomness = get_last_randomness(l2_addresses["ERC1967Proxy"], L2_RPC)
 
     # 3. Check if randomness is updated
 
     print("Waiting for randomness to be updated...")
+    cmd = f'cast call {l2_addresses["ERC1967Proxy"]} "getLastRandomness()(uint256)" --rpc-url {L2_RPC}'
+    cprint(cmd)
     l2_cur_randomness = wait_command(
-        [
-            f'cast call {l2_addresses["ERC1967Proxy"]} "getLastRandomness()(uint256)" --rpc-url {l2_rpc}'
-        ],
+        [cmd],
         wait_time=5,
         max_attempts=10,
-        shell=True,
         fail_value=l2_prev_randomness,
+        shell=True,
     )
-
     print(f"\nOld L2 randomness: {l2_prev_randomness}")
     print(f"New L2 randomness: {l2_cur_randomness}")
     print("L2 Requested Randomness succesfully!\n")
+
+
+def print_addresses():
+    l1_addresses = get_addresses_from_json(CONTROLLER_LOCAL_TEST_BROADCAST_PATH)
+    l2_addresses = get_addresses_from_json(OP_CONTROLLER_ORACLE_BROADCAST_PATH)
+    print("L1 Addresses:")
+    pprint(l1_addresses)
+    print("L2 Addresses:")
+    pprint(l2_addresses)
 
 
 def main():
     deploy_contracts()
     deploy_nodes()
     test_request_randomness()
+
+    # print_addresses()
 
     # if testnet.. comment out the following
 
