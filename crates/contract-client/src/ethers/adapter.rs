@@ -9,10 +9,10 @@ use crate::{
     ServiceClient, TransactionCaller, ViewCaller,
 };
 use arpa_core::{
-    pad_to_bytes32, ChainIdentity, ExponentialBackoffRetryDescriptor, GeneralChainIdentity,
-    PartialSignature, RandomnessRequestType, RandomnessTask, WalletSigner,
-    DEFAULT_MINIMUM_THRESHOLD, FULFILL_RANDOMNESS_GAS_EXCEPT_CALLBACK, RANDOMNESS_REWARD_GAS,
-    VERIFICATION_GAS_OVER_MINIMUM_THRESHOLD,
+    pad_to_bytes32, ChainIdentity, ExponentialBackoffRetryDescriptor, GeneralMainChainIdentity,
+    GeneralRelayedChainIdentity, PartialSignature, RandomnessRequestType, RandomnessTask,
+    WalletSigner, DEFAULT_MINIMUM_THRESHOLD, FULFILL_RANDOMNESS_GAS_EXCEPT_CALLBACK,
+    RANDOMNESS_REWARD_GAS, VERIFICATION_GAS_OVER_MINIMUM_THRESHOLD,
 };
 use async_trait::async_trait;
 use ethers::{prelude::*, utils::hex};
@@ -21,6 +21,7 @@ use std::{collections::HashMap, future::Future, sync::Arc};
 
 #[allow(dead_code)]
 pub struct AdapterClient {
+    chain_id: usize,
     main_id_address: Address,
     adapter_address: Address,
     signer: Arc<WalletSigner>,
@@ -30,30 +31,48 @@ pub struct AdapterClient {
 
 impl AdapterClient {
     pub fn new(
+        chain_id: usize,
         main_id_address: Address,
         adapter_address: Address,
-        identity: &GeneralChainIdentity,
+        signer: Arc<WalletSigner>,
         contract_transaction_retry_descriptor: ExponentialBackoffRetryDescriptor,
         contract_view_retry_descriptor: ExponentialBackoffRetryDescriptor,
     ) -> Self {
         AdapterClient {
+            chain_id,
             main_id_address,
             adapter_address,
-            signer: identity.get_signer(),
+            signer,
             contract_transaction_retry_descriptor,
             contract_view_retry_descriptor,
         }
     }
 }
 
-impl AdapterClientBuilder for GeneralChainIdentity {
-    type Service = AdapterClient;
+impl AdapterClientBuilder for GeneralMainChainIdentity {
+    type AdapterService = AdapterClient;
 
     fn build_adapter_client(&self, main_id_address: Address) -> AdapterClient {
         AdapterClient::new(
+            self.get_chain_id(),
             main_id_address,
             self.get_adapter_address(),
-            self,
+            self.get_signer(),
+            self.get_contract_transaction_retry_descriptor(),
+            self.get_contract_view_retry_descriptor(),
+        )
+    }
+}
+
+impl AdapterClientBuilder for GeneralRelayedChainIdentity {
+    type AdapterService = AdapterClient;
+
+    fn build_adapter_client(&self, main_id_address: Address) -> AdapterClient {
+        AdapterClient::new(
+            self.get_chain_id(),
+            main_id_address,
+            self.get_adapter_address(),
+            self.get_signer(),
             self.get_contract_transaction_retry_descriptor(),
             self.get_contract_view_retry_descriptor(),
         )
@@ -131,6 +150,7 @@ impl AdapterTransactions for AdapterClient {
         let extra_add_reward_gas = partial_signers_count * RANDOMNESS_REWARD_GAS;
 
         AdapterClient::call_contract_transaction(
+            self.chain_id,
             "fulfill_randomness",
             call.gas(
                 task.callback_gas_limit
@@ -152,6 +172,7 @@ impl AdapterViews for AdapterClient {
             ServiceClient::<AdapterContract>::prepare_service_client(self).await?;
 
         AdapterClient::call_contract_view(
+            self.chain_id,
             "get_last_randomness",
             adapter_contract.get_last_randomness(),
             self.contract_view_retry_descriptor,
@@ -165,6 +186,7 @@ impl AdapterViews for AdapterClient {
 
         let r_id = pad_to_bytes32(request_id).unwrap();
         AdapterClient::call_contract_view(
+            self.chain_id,
             "get_pending_request",
             adapter_contract.get_pending_request_commitment(r_id),
             self.contract_view_retry_descriptor,
@@ -213,8 +235,8 @@ impl AdapterLogs for AdapterClient {
                 meta,
             ) = evt;
 
-            info!( "Received randomness task: group_index: {}, request_id: {}, sender: {:?}, sub_id: {}, seed: {}, request_confirmations: {}, callback_gas_limit: {}, callback_max_gas_price: {}, block_number: {}",
-                group_index, hex::encode(request_id), sender, sub_id, seed, request_confirmations, callback_gas_limit, callback_max_gas_price, meta.block_number);
+            info!( "Received randomness task: chain_id: {}, group_index: {}, request_id: {}, sender: {:?}, sub_id: {}, seed: {}, request_confirmations: {}, callback_gas_limit: {}, callback_max_gas_price: {}, block_number: {}",
+                self.chain_id, group_index, hex::encode(request_id), sender, sub_id, seed, request_confirmations, callback_gas_limit, callback_max_gas_price, meta.block_number);
 
             let task = RandomnessTask {
                 request_id: request_id.to_vec(),

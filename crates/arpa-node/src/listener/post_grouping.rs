@@ -1,31 +1,29 @@
 use super::Listener;
 use crate::{
+    context::{BlockInfoHandler, GroupInfoHandler},
     error::NodeResult,
     event::dkg_post_process::DKGPostProcess,
     queue::{event_queue::EventQueue, EventPublisher},
 };
 use arpa_core::DKGStatus;
-use arpa_dal::{BlockInfoFetcher, GroupInfoFetcher};
 use async_trait::async_trait;
 use log::info;
 use std::{marker::PhantomData, sync::Arc};
-use threshold_bls::group::PairingCurve;
+use threshold_bls::group::Curve;
 use tokio::sync::RwLock;
 
-pub struct PostGroupingListener<B: BlockInfoFetcher, G: GroupInfoFetcher<PC>, PC: PairingCurve> {
-    block_cache: Arc<RwLock<B>>,
-    group_cache: Arc<RwLock<G>>,
+pub struct PostGroupingListener<PC: Curve> {
+    block_cache: Arc<RwLock<Box<dyn BlockInfoHandler>>>,
+    group_cache: Arc<RwLock<Box<dyn GroupInfoHandler<PC>>>>,
     eq: Arc<RwLock<EventQueue>>,
     pc: PhantomData<PC>,
     dkg_timeout_duration: usize,
 }
 
-impl<B: BlockInfoFetcher, G: GroupInfoFetcher<PC>, PC: PairingCurve>
-    PostGroupingListener<B, G, PC>
-{
+impl<PC: Curve> PostGroupingListener<PC> {
     pub fn new(
-        block_cache: Arc<RwLock<B>>,
-        group_cache: Arc<RwLock<G>>,
+        block_cache: Arc<RwLock<Box<dyn BlockInfoHandler>>>,
+        group_cache: Arc<RwLock<Box<dyn GroupInfoHandler<PC>>>>,
         eq: Arc<RwLock<EventQueue>>,
         dkg_timeout_duration: usize,
     ) -> Self {
@@ -40,24 +38,14 @@ impl<B: BlockInfoFetcher, G: GroupInfoFetcher<PC>, PC: PairingCurve>
 }
 
 #[async_trait]
-impl<
-        B: BlockInfoFetcher + Sync + Send,
-        G: GroupInfoFetcher<PC> + Sync + Send,
-        PC: PairingCurve + Sync + Send,
-    > EventPublisher<DKGPostProcess> for PostGroupingListener<B, G, PC>
-{
+impl<PC: Curve + Sync + Send> EventPublisher<DKGPostProcess> for PostGroupingListener<PC> {
     async fn publish(&self, event: DKGPostProcess) {
         self.eq.read().await.publish(event).await;
     }
 }
 
 #[async_trait]
-impl<
-        B: BlockInfoFetcher + Sync + Send,
-        G: GroupInfoFetcher<PC> + Sync + Send,
-        PC: PairingCurve + Sync + Send,
-    > Listener for PostGroupingListener<B, G, PC>
-{
+impl<PC: Curve + Sync + Send> Listener for PostGroupingListener<PC> {
     async fn listen(&self) -> NodeResult<()> {
         let dkg_status = self.group_cache.read().await.get_dkg_status();
 

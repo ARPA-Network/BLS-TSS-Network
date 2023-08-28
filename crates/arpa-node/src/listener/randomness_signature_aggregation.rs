@@ -1,46 +1,37 @@
 use super::Listener;
 use crate::{
+    context::{BlockInfoHandler, GroupInfoHandler, SignatureResultCacheHandler},
     error::NodeResult,
     event::ready_to_fulfill_randomness_task::ReadyToFulfillRandomnessTask,
     queue::{event_queue::EventQueue, EventPublisher},
 };
-use arpa_dal::{
-    cache::RandomnessResultCache, BlockInfoFetcher, GroupInfoFetcher, SignatureResultCacheUpdater,
-};
+use arpa_dal::cache::RandomnessResultCache;
 use async_trait::async_trait;
 use ethers::types::Address;
 use std::{marker::PhantomData, sync::Arc};
-use threshold_bls::group::PairingCurve;
+use threshold_bls::group::Curve;
 use tokio::sync::RwLock;
 
-pub struct RandomnessSignatureAggregationListener<
-    B: BlockInfoFetcher,
-    G: GroupInfoFetcher<PC>,
-    C: SignatureResultCacheUpdater<RandomnessResultCache>,
-    PC: PairingCurve,
-> {
+pub struct RandomnessSignatureAggregationListener<PC: Curve> {
     chain_id: usize,
     id_address: Address,
-    block_cache: Arc<RwLock<B>>,
-    group_cache: Arc<RwLock<G>>,
-    randomness_signature_cache: Arc<RwLock<C>>,
+    block_cache: Arc<RwLock<Box<dyn BlockInfoHandler>>>,
+    group_cache: Arc<RwLock<Box<dyn GroupInfoHandler<PC>>>>,
+    randomness_signature_cache:
+        Arc<RwLock<Box<dyn SignatureResultCacheHandler<RandomnessResultCache>>>>,
     eq: Arc<RwLock<EventQueue>>,
     pc: PhantomData<PC>,
 }
 
-impl<
-        B: BlockInfoFetcher,
-        G: GroupInfoFetcher<PC>,
-        C: SignatureResultCacheUpdater<RandomnessResultCache>,
-        PC: PairingCurve,
-    > RandomnessSignatureAggregationListener<B, G, C, PC>
-{
+impl<PC: Curve> RandomnessSignatureAggregationListener<PC> {
     pub fn new(
         chain_id: usize,
         id_address: Address,
-        block_cache: Arc<RwLock<B>>,
-        group_cache: Arc<RwLock<G>>,
-        randomness_signature_cache: Arc<RwLock<C>>,
+        block_cache: Arc<RwLock<Box<dyn BlockInfoHandler>>>,
+        group_cache: Arc<RwLock<Box<dyn GroupInfoHandler<PC>>>>,
+        randomness_signature_cache: Arc<
+            RwLock<Box<dyn SignatureResultCacheHandler<RandomnessResultCache>>>,
+        >,
         eq: Arc<RwLock<EventQueue>>,
     ) -> Self {
         RandomnessSignatureAggregationListener {
@@ -56,13 +47,8 @@ impl<
 }
 
 #[async_trait]
-impl<
-        B: BlockInfoFetcher + Sync + Send,
-        G: GroupInfoFetcher<PC> + Sync + Send,
-        C: SignatureResultCacheUpdater<RandomnessResultCache> + Sync + Send,
-        PC: PairingCurve + Sync + Send,
-    > EventPublisher<ReadyToFulfillRandomnessTask>
-    for RandomnessSignatureAggregationListener<B, G, C, PC>
+impl<PC: Curve + Sync + Send> EventPublisher<ReadyToFulfillRandomnessTask>
+    for RandomnessSignatureAggregationListener<PC>
 {
     async fn publish(&self, event: ReadyToFulfillRandomnessTask) {
         self.eq.read().await.publish(event).await;
@@ -70,13 +56,7 @@ impl<
 }
 
 #[async_trait]
-impl<
-        B: BlockInfoFetcher + Sync + Send,
-        G: GroupInfoFetcher<PC> + Sync + Send,
-        C: SignatureResultCacheUpdater<RandomnessResultCache> + Sync + Send,
-        PC: PairingCurve + Sync + Send,
-    > Listener for RandomnessSignatureAggregationListener<B, G, C, PC>
-{
+impl<PC: Curve + Sync + Send> Listener for RandomnessSignatureAggregationListener<PC> {
     async fn listen(&self) -> NodeResult<()> {
         let is_committer = self.group_cache.read().await.is_committer(self.id_address);
 

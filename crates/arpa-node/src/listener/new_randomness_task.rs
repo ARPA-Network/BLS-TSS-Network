@@ -1,39 +1,34 @@
 use super::Listener;
 use crate::{
+    context::{BLSTasksHandler, ChainIdentityHandlerType},
     error::NodeResult,
     event::new_randomness_task::NewRandomnessTask,
     queue::{event_queue::EventQueue, EventPublisher},
 };
-use arpa_contract_client::adapter::{AdapterClientBuilder, AdapterLogs};
-use arpa_core::{ChainIdentity, RandomnessTask};
-use arpa_dal::{BLSTasksFetcher, BLSTasksUpdater};
+use arpa_contract_client::adapter::AdapterLogs;
+use arpa_core::RandomnessTask;
 use async_trait::async_trait;
 use ethers::types::Address;
 use log::info;
-use std::sync::Arc;
+use std::{marker::PhantomData, sync::Arc};
+use threshold_bls::group::Curve;
 use tokio::sync::RwLock;
 
-pub struct NewRandomnessTaskListener<
-    T: BLSTasksFetcher<RandomnessTask> + BLSTasksUpdater<RandomnessTask>,
-    I: ChainIdentity + AdapterClientBuilder,
-> {
+pub struct NewRandomnessTaskListener<PC: Curve> {
     chain_id: usize,
     id_address: Address,
-    chain_identity: Arc<RwLock<I>>,
-    randomness_tasks_cache: Arc<RwLock<T>>,
+    chain_identity: Arc<RwLock<ChainIdentityHandlerType<PC>>>,
+    randomness_tasks_cache: Arc<RwLock<Box<dyn BLSTasksHandler<RandomnessTask>>>>,
     eq: Arc<RwLock<EventQueue>>,
+    pc: PhantomData<PC>,
 }
 
-impl<
-        T: BLSTasksFetcher<RandomnessTask> + BLSTasksUpdater<RandomnessTask>,
-        I: ChainIdentity + AdapterClientBuilder,
-    > NewRandomnessTaskListener<T, I>
-{
+impl<PC: Curve> NewRandomnessTaskListener<PC> {
     pub fn new(
         chain_id: usize,
         id_address: Address,
-        chain_identity: Arc<RwLock<I>>,
-        randomness_tasks_cache: Arc<RwLock<T>>,
+        chain_identity: Arc<RwLock<ChainIdentityHandlerType<PC>>>,
+        randomness_tasks_cache: Arc<RwLock<Box<dyn BLSTasksHandler<RandomnessTask>>>>,
         eq: Arc<RwLock<EventQueue>>,
     ) -> Self {
         NewRandomnessTaskListener {
@@ -42,27 +37,20 @@ impl<
             chain_identity,
             randomness_tasks_cache,
             eq,
+            pc: PhantomData,
         }
     }
 }
 
 #[async_trait]
-impl<
-        T: BLSTasksFetcher<RandomnessTask> + BLSTasksUpdater<RandomnessTask> + Sync + Send,
-        I: ChainIdentity + AdapterClientBuilder + Sync + Send,
-    > EventPublisher<NewRandomnessTask> for NewRandomnessTaskListener<T, I>
-{
+impl<PC: Curve + Sync + Send> EventPublisher<NewRandomnessTask> for NewRandomnessTaskListener<PC> {
     async fn publish(&self, event: NewRandomnessTask) {
         self.eq.read().await.publish(event).await;
     }
 }
 
 #[async_trait]
-impl<
-        T: BLSTasksFetcher<RandomnessTask> + BLSTasksUpdater<RandomnessTask> + Sync + Send + 'static,
-        I: ChainIdentity + AdapterClientBuilder + Sync + Send,
-    > Listener for NewRandomnessTaskListener<T, I>
-{
+impl<PC: Curve + Sync + Send> Listener for NewRandomnessTaskListener<PC> {
     async fn listen(&self) -> NodeResult<()> {
         let client = self
             .chain_identity

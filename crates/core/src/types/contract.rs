@@ -5,7 +5,7 @@ use ethers_core::utils::hex;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use std::hash::{Hash, Hasher};
-use threshold_bls::group::PairingCurve;
+use threshold_bls::group::Curve;
 
 pub struct Node {
     pub id_address: Address,
@@ -25,7 +25,7 @@ impl std::fmt::Debug for Node {
     }
 }
 
-impl<C: PairingCurve> From<NodeGroup<C>> for ContractGroup {
+impl<C: Curve> From<NodeGroup<C>> for ContractGroup {
     fn from(g: NodeGroup<C>) -> Self {
         let public_key = if let Some(k) = g.public_key {
             bincode::serialize(&k).unwrap()
@@ -55,7 +55,7 @@ impl<C: PairingCurve> From<NodeGroup<C>> for ContractGroup {
     }
 }
 
-impl<C: PairingCurve> From<NodeMember<C>> for ContractMember {
+impl<C: Curve> From<NodeMember<C>> for ContractMember {
     fn from(m: NodeMember<C>) -> Self {
         let partial_public_key = if let Some(k) = m.partial_public_key {
             bincode::serialize(&k).unwrap()

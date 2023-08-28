@@ -3,6 +3,10 @@ use crate::core::GroupMutation;
 use crate::core::GroupQuery;
 use crate::core::NodeMutation;
 use crate::core::NodeQuery;
+use crate::core::OPRandomnessResultMutation;
+use crate::core::OPRandomnessResultQuery;
+use crate::core::OPRandomnessTaskMutation;
+use crate::core::OPRandomnessTaskQuery;
 use crate::core::RandomnessResultMutation;
 use crate::core::RandomnessResultQuery;
 use crate::core::RandomnessTaskMutation;
@@ -32,6 +36,7 @@ use arpa_dal::{
     GroupInfoUpdater, NodeInfoFetcher,
 };
 use async_trait::async_trait;
+
 use entity::group_info;
 use entity::node_info;
 use ethers_core::types::Address;
@@ -49,7 +54,6 @@ use sea_orm::{ConnectOptions, DatabaseConnection, DbErr};
 use std::collections::BTreeMap;
 use std::{marker::PhantomData, sync::Arc, time::Duration};
 use threshold_bls::group::Curve;
-use threshold_bls::group::PairingCurve;
 use threshold_bls::serialize::point_to_hex;
 use threshold_bls::sig::Share;
 mod test_helper;
@@ -111,7 +115,7 @@ impl SqliteDB {
         SqliteDB { connection }
     }
 
-    pub fn get_node_info_client<C: PairingCurve>(&self) -> NodeInfoDBClient<C> {
+    pub fn get_node_info_client<C: Curve>(&self) -> NodeInfoDBClient<C> {
         NodeInfoDBClient {
             db_client: Arc::new(self.clone()),
             node_info_cache: None,
@@ -119,7 +123,7 @@ impl SqliteDB {
         }
     }
 
-    pub fn get_group_info_client<C: PairingCurve>(&self) -> GroupInfoDBClient<C> {
+    pub fn get_group_info_client<C: Curve>(&self) -> GroupInfoDBClient<C> {
         GroupInfoDBClient {
             db_client: Arc::new(self.clone()),
             group_info_cache: None,
@@ -226,6 +230,105 @@ impl SqliteDB {
         })
     }
 
+    pub fn get_op_bls_tasks_client<T: Task>(&self) -> OPBLSTasksDBClient<T> {
+        OPBLSTasksDBClient {
+            db_client: Arc::new(self.clone()),
+            bls_tasks: PhantomData,
+        }
+    }
+
+    pub async fn get_op_randomness_result_client(
+        &self,
+    ) -> DataAccessResult<OPSignatureResultDBClient<RandomnessResultCache>> {
+        // set commit result of committing records(if any) to not committed
+        let committing_models = OPRandomnessResultQuery::select_by_state(
+            &self.connection,
+            BLSResultCacheState::Committing.to_i32(),
+        )
+        .await
+        .map_err(|e| {
+            let e: DBError = e.into();
+            e
+        })?;
+
+        for committing_model in committing_models {
+            OPRandomnessResultMutation::update_commit_result(
+                &self.connection,
+                committing_model,
+                BLSResultCacheState::NotCommitted.to_i32(),
+            )
+            .await
+            .map_err(|e| {
+                let e: DBError = e.into();
+                e
+            })?;
+        }
+
+        // load all not committed records
+        let models = OPRandomnessResultQuery::select_by_state(
+            &self.connection,
+            BLSResultCacheState::NotCommitted.to_i32(),
+        )
+        .await
+        .map_err(|e| {
+            let e: DBError = e.into();
+            e
+        })?;
+
+        let mut results = vec![];
+
+        for model in models {
+            let task =
+                OPRandomnessTaskQuery::select_by_request_id(&self.connection, &model.request_id)
+                    .await
+                    .map_err(|e| {
+                        let e: DBError = e.into();
+                        e
+                    })?
+                    .map(|model| RandomnessTask {
+                        request_id: model.request_id,
+                        subscription_id: model.subscription_id as u64,
+                        group_index: model.group_index as u32,
+                        request_type: RandomnessRequestType::from(model.request_type as u8),
+                        params: model.params,
+                        requester: model.requester.parse::<Address>().unwrap(),
+                        seed: U256::from_big_endian(&model.seed),
+                        request_confirmations: model.request_confirmations as u16,
+                        callback_gas_limit: model.callback_gas_limit as u32,
+                        callback_max_gas_price: U256::from_big_endian(
+                            &model.callback_max_gas_price,
+                        ),
+                        assignment_block_height: model.assignment_block_height as usize,
+                    })
+                    .ok_or_else(|| {
+                        RandomnessTaskError::NoRandomnessTask(format!("{:?}", &model.request_id))
+                    })?;
+
+            let partial_signatures: BTreeMap<Address, Vec<u8>> =
+                serde_json::from_str(&model.partial_signatures).unwrap();
+
+            let signature_result_cache = RandomnessResultCache {
+                group_index: model.group_index as usize,
+                randomness_task: task,
+                message: model.message,
+                threshold: model.threshold as usize,
+                partial_signatures,
+            };
+
+            results.push(BLSResultCache {
+                result_cache: signature_result_cache,
+                state: BLSResultCacheState::from(model.state),
+            });
+        }
+
+        Ok(OPSignatureResultDBClient {
+            db_client: Arc::new(self.clone()),
+            signature_results_cache: InMemorySignatureResultCache::<RandomnessResultCache>::rebuild(
+                results,
+            ),
+        })
+    }
+
     pub async fn integrity_check(&self) -> DBResult<String> {
         let query_res: Option<QueryResult> = self
             .connection
@@ -243,13 +346,13 @@ impl SqliteDB {
 }
 
 #[derive(Clone)]
-pub struct NodeInfoDBClient<C: PairingCurve> {
+pub struct NodeInfoDBClient<C: Curve> {
     db_client: Arc<SqliteDB>,
     node_info_cache_model: Option<node_info::Model>,
     node_info_cache: Option<InMemoryNodeInfoCache<C>>,
 }
 
-impl<C: PairingCurve> std::fmt::Debug for NodeInfoDBClient<C> {
+impl<C: Curve> std::fmt::Debug for NodeInfoDBClient<C> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("NodeInfo")
             .field(
@@ -275,7 +378,7 @@ impl<C: PairingCurve> std::fmt::Debug for NodeInfoDBClient<C> {
     }
 }
 
-impl<C: PairingCurve> NodeInfoDBClient<C> {
+impl<C: Curve> NodeInfoDBClient<C> {
     pub async fn refresh_current_node_info(&mut self) -> DBResult<bool> {
         let conn = &self.db_client.connection;
         match NodeQuery::find_current_node_info(conn).await? {
@@ -304,7 +407,7 @@ impl<C: PairingCurve> NodeInfoDBClient<C> {
         id_address: Address,
         node_rpc_endpoint: String,
         dkg_private_key: C::Scalar,
-        dkg_public_key: C::G2,
+        dkg_public_key: C::Point,
     ) -> DBResult<()> {
         let conn = self.get_connection();
 
@@ -330,7 +433,7 @@ impl<C: PairingCurve> NodeInfoDBClient<C> {
     }
 }
 
-impl<C: PairingCurve> ContextInfoUpdater for NodeInfoDBClient<C> {
+impl<C: Curve> ContextInfoUpdater for NodeInfoDBClient<C> {
     fn refresh_context_entry(&self) {
         if let Some(cache) = &self.node_info_cache {
             cache.refresh_context_entry();
@@ -339,13 +442,13 @@ impl<C: PairingCurve> ContextInfoUpdater for NodeInfoDBClient<C> {
 }
 
 #[derive(Clone)]
-pub struct GroupInfoDBClient<C: PairingCurve> {
+pub struct GroupInfoDBClient<C: Curve> {
     db_client: Arc<SqliteDB>,
     group_info_cache_model: Option<group_info::Model>,
     group_info_cache: Option<InMemoryGroupInfoCache<C>>,
 }
 
-impl<C: PairingCurve> std::fmt::Debug for GroupInfoDBClient<C> {
+impl<C: Curve> std::fmt::Debug for GroupInfoDBClient<C> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("GroupInfo")
             .field("share", &"ignored")
@@ -372,7 +475,7 @@ impl<C: PairingCurve> std::fmt::Debug for GroupInfoDBClient<C> {
     }
 }
 
-impl<C: PairingCurve> GroupInfoDBClient<C> {
+impl<C: Curve> GroupInfoDBClient<C> {
     pub async fn refresh_current_group_info(&mut self) -> DBResult<bool> {
         let conn = &self.db_client.connection;
 
@@ -431,7 +534,7 @@ impl<C: PairingCurve> GroupInfoDBClient<C> {
     }
 }
 
-impl<C: PairingCurve> ContextInfoUpdater for GroupInfoDBClient<C> {
+impl<C: Curve> ContextInfoUpdater for GroupInfoDBClient<C> {
     fn refresh_context_entry(&self) {
         if let Some(cache) = &self.group_info_cache {
             cache.refresh_context_entry();
@@ -463,7 +566,31 @@ impl SignatureResultDBClient<RandomnessResultCache> {
     }
 }
 
-impl<C: PairingCurve> NodeInfoFetcher<C> for NodeInfoDBClient<C> {
+#[derive(Debug, Clone)]
+pub struct OPBLSTasksDBClient<T: Task> {
+    db_client: Arc<SqliteDB>,
+    bls_tasks: PhantomData<T>,
+}
+
+impl OPBLSTasksDBClient<RandomnessTask> {
+    pub fn get_connection(&self) -> &DbConn {
+        &self.db_client.connection
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct OPSignatureResultDBClient<C: ResultCache> {
+    db_client: Arc<SqliteDB>,
+    signature_results_cache: InMemorySignatureResultCache<C>,
+}
+
+impl OPSignatureResultDBClient<RandomnessResultCache> {
+    pub fn get_connection(&self) -> &DbConn {
+        &self.db_client.connection
+    }
+}
+
+impl<C: Curve> NodeInfoFetcher<C> for NodeInfoDBClient<C> {
     fn get_id_address(&self) -> DataAccessResult<Address> {
         self.node_info_cache.as_ref().unwrap().get_id_address()
     }
@@ -479,13 +606,13 @@ impl<C: PairingCurve> NodeInfoFetcher<C> for NodeInfoDBClient<C> {
         self.node_info_cache.as_ref().unwrap().get_dkg_private_key()
     }
 
-    fn get_dkg_public_key(&self) -> DataAccessResult<&C::G2> {
+    fn get_dkg_public_key(&self) -> DataAccessResult<&C::Point> {
         self.node_info_cache.as_ref().unwrap().get_dkg_public_key()
     }
 }
 
 #[async_trait]
-impl<C: PairingCurve + Sync + Send> NodeInfoUpdater<C> for NodeInfoDBClient<C> {
+impl<C: Curve + Sync + Send> NodeInfoUpdater<C> for NodeInfoDBClient<C> {
     async fn set_node_rpc_endpoint(&mut self, node_rpc_endpoint: String) -> DataAccessResult<()> {
         NodeMutation::update_node_rpc_endpoint(
             self.get_connection(),
@@ -506,7 +633,7 @@ impl<C: PairingCurve + Sync + Send> NodeInfoUpdater<C> for NodeInfoDBClient<C> {
     async fn set_dkg_key_pair(
         &mut self,
         dkg_private_key: C::Scalar,
-        dkg_public_key: C::G2,
+        dkg_public_key: C::Point,
     ) -> DataAccessResult<()> {
         NodeMutation::update_node_dkg_key_pair(
             self.get_connection(),
@@ -526,7 +653,7 @@ impl<C: PairingCurve + Sync + Send> NodeInfoUpdater<C> for NodeInfoDBClient<C> {
     }
 }
 
-impl<C: PairingCurve> GroupInfoFetcher<C> for GroupInfoDBClient<C> {
+impl<C: Curve> GroupInfoFetcher<C> for GroupInfoDBClient<C> {
     fn get_group(&self) -> DataAccessResult<&Group<C>> {
         self.only_has_group_task()?;
 
@@ -583,7 +710,7 @@ impl<C: PairingCurve> GroupInfoFetcher<C> for GroupInfoDBClient<C> {
         group_info.get_self_index()
     }
 
-    fn get_public_key(&self) -> DataAccessResult<&C::G2> {
+    fn get_public_key(&self) -> DataAccessResult<&C::Point> {
         self.only_has_group_task()?;
 
         let group_info = self.group_info_cache.as_ref().unwrap();
@@ -649,13 +776,13 @@ impl<C: PairingCurve> GroupInfoFetcher<C> for GroupInfoDBClient<C> {
 }
 
 #[async_trait]
-impl<PC: PairingCurve + Sync + Send> GroupInfoUpdater<PC> for GroupInfoDBClient<PC> {
+impl<C: Curve + Sync + Send> GroupInfoUpdater<C> for GroupInfoDBClient<C> {
     async fn save_task_info(
         &mut self,
         self_index: usize,
         task: arpa_core::DKGTask,
     ) -> DataAccessResult<()> {
-        let members: BTreeMap<Address, Member<PC>> = task
+        let members: BTreeMap<Address, Member<C>> = task
             .members
             .iter()
             .enumerate()
@@ -691,12 +818,12 @@ impl<PC: PairingCurve + Sync + Send> GroupInfoUpdater<PC> for GroupInfoDBClient<
         Ok(())
     }
 
-    async fn save_output<C: Curve>(
+    async fn save_output(
         &mut self,
         index: usize,
         epoch: usize,
         output: DKGOutput<C>,
-    ) -> DataAccessResult<(PC::G2, PC::G2, Vec<Address>)> {
+    ) -> DataAccessResult<(C::Point, C::Point, Vec<Address>)> {
         self.only_has_group_task()?;
 
         let self_index = self.group_info_cache.as_ref().unwrap().get_self_index()?;
@@ -732,10 +859,9 @@ impl<PC: PairingCurve + Sync + Send> GroupInfoUpdater<PC> for GroupInfoDBClient<
 
         group.remove_disqualified_nodes(&disqualified_nodes);
 
-        let public_key: PC::G2 =
-            bincode::deserialize(&bincode::serialize(&output.public.public_key())?)?;
+        let public_key = output.public.public_key().clone();
 
-        let mut partial_public_key = PC::G2::new();
+        let mut partial_public_key = C::Point::new();
 
         for (_, member) in group.members.iter_mut() {
             if let Some(node) = output
@@ -1185,6 +1311,334 @@ impl SignatureResultCacheUpdater<RandomnessResultCache>
     }
 }
 
+#[async_trait]
+impl BLSTasksFetcher<RandomnessTask> for OPBLSTasksDBClient<RandomnessTask> {
+    async fn contains(&self, task_request_id: &[u8]) -> DataAccessResult<bool> {
+        let conn: &Arc<DatabaseConnection> = &self.db_client.connection;
+        let task = OPRandomnessTaskQuery::select_by_request_id(conn, task_request_id)
+            .await
+            .map_err(|e| {
+                let e: DBError = e.into();
+                e
+            })?;
+        Ok(task.is_some())
+    }
+
+    async fn get(&self, task_request_id: &[u8]) -> DataAccessResult<RandomnessTask> {
+        let conn = &self.db_client.connection;
+        let task = OPRandomnessTaskQuery::select_by_request_id(conn, task_request_id)
+            .await
+            .map_err(|e| {
+                let e: DBError = e.into();
+                e
+            })?;
+
+        task.map(|model| RandomnessTask {
+            request_id: model.request_id,
+            subscription_id: model.subscription_id as u64,
+            group_index: model.group_index as u32,
+            request_type: RandomnessRequestType::from(model.request_type as u8),
+            params: model.params,
+            requester: model.requester.parse::<Address>().unwrap(),
+            seed: U256::from_big_endian(&model.seed),
+            request_confirmations: model.request_confirmations as u16,
+            callback_gas_limit: model.callback_gas_limit as u32,
+            callback_max_gas_price: U256::from_big_endian(&model.callback_max_gas_price),
+            assignment_block_height: model.assignment_block_height as usize,
+        })
+        .ok_or_else(|| {
+            RandomnessTaskError::NoRandomnessTask(format!("{:?}", task_request_id)).into()
+        })
+    }
+
+    async fn is_handled(&self, task_request_id: &[u8]) -> DataAccessResult<bool> {
+        let conn = &self.db_client.connection;
+        let task = OPRandomnessTaskQuery::select_by_request_id(conn, task_request_id)
+            .await
+            .map_err(|e| {
+                let e: DBError = e.into();
+                e
+            })?;
+
+        Ok(task.is_some() && task.unwrap().state == 1)
+    }
+}
+
+#[async_trait]
+impl BLSTasksUpdater<RandomnessTask> for OPBLSTasksDBClient<RandomnessTask> {
+    async fn add(&mut self, task: RandomnessTask) -> DataAccessResult<()> {
+        let seed_bytes = u256_to_vec(&task.seed);
+
+        OPRandomnessTaskMutation::add_task(
+            self.get_connection(),
+            task.request_id,
+            task.subscription_id as i32,
+            task.group_index as i32,
+            task.request_type as i32,
+            task.params,
+            address_to_string(task.requester),
+            seed_bytes,
+            task.request_confirmations as i32,
+            task.callback_gas_limit as i32,
+            u256_to_vec(&task.callback_max_gas_price),
+            task.assignment_block_height as i32,
+        )
+        .await
+        .map_err(|e| {
+            let e: DBError = e.into();
+            e
+        })?;
+
+        Ok(())
+    }
+
+    async fn check_and_get_available_tasks(
+        &mut self,
+        current_block_height: usize,
+        current_group_index: usize,
+        randomness_task_exclusive_window: usize,
+    ) -> DataAccessResult<Vec<RandomnessTask>> {
+        let before_assignment_block_height =
+            if current_block_height > randomness_task_exclusive_window {
+                current_block_height - randomness_task_exclusive_window
+            } else {
+                0
+            };
+        OPRandomnessTaskMutation::fetch_available_tasks(
+            self.get_connection(),
+            current_group_index as i32,
+            before_assignment_block_height as i32,
+        )
+        .await
+        .map(|models| {
+            models
+                .into_iter()
+                .map(|model| RandomnessTask {
+                    request_id: model.request_id,
+                    subscription_id: model.subscription_id as u64,
+                    group_index: model.group_index as u32,
+                    request_type: RandomnessRequestType::from(model.request_type as u8),
+                    params: model.params,
+                    requester: model.requester.parse::<Address>().unwrap(),
+                    seed: U256::from_big_endian(&model.seed),
+                    request_confirmations: model.request_confirmations as u16,
+                    callback_gas_limit: model.callback_gas_limit as u32,
+                    callback_max_gas_price: U256::from_big_endian(&model.callback_max_gas_price),
+                    assignment_block_height: model.assignment_block_height as usize,
+                })
+                .collect::<Vec<_>>()
+        })
+        .map_err(|e| {
+            let e: DBError = e.into();
+            let e: DataAccessError = e.into();
+            e
+        })
+    }
+}
+
+#[async_trait]
+impl SignatureResultCacheFetcher<RandomnessResultCache>
+    for OPSignatureResultDBClient<RandomnessResultCache>
+{
+    async fn contains(&self, task_request_id: &[u8]) -> DataAccessResult<bool> {
+        let model =
+            OPRandomnessResultQuery::select_by_request_id(self.get_connection(), task_request_id)
+                .await
+                .map_err(|e| {
+                    let e: DBError = e.into();
+                    e
+                })?;
+
+        Ok(model.is_some())
+    }
+
+    async fn get(
+        &self,
+        task_request_id: &[u8],
+    ) -> DataAccessResult<BLSResultCache<RandomnessResultCache>> {
+        let model =
+            OPRandomnessResultQuery::select_by_request_id(self.get_connection(), task_request_id)
+                .await
+                .map_err(|e| {
+                    let e: DBError = e.into();
+                    e
+                })?
+                .ok_or(BLSTaskError::CommitterCacheNotExisted)?;
+
+        let task =
+            OPRandomnessTaskQuery::select_by_request_id(self.get_connection(), task_request_id)
+                .await
+                .map_err(|e| {
+                    let e: DBError = e.into();
+                    e
+                })?
+                .map(|model| RandomnessTask {
+                    request_id: model.request_id,
+                    subscription_id: model.subscription_id as u64,
+                    group_index: model.group_index as u32,
+                    request_type: RandomnessRequestType::from(model.request_type as u8),
+                    params: model.params,
+                    requester: model.requester.parse::<Address>().unwrap(),
+                    seed: U256::from_big_endian(&model.seed),
+                    request_confirmations: model.request_confirmations as u16,
+                    callback_gas_limit: model.callback_gas_limit as u32,
+                    callback_max_gas_price: U256::from_big_endian(&model.callback_max_gas_price),
+                    assignment_block_height: model.assignment_block_height as usize,
+                })
+                .ok_or_else(|| {
+                    RandomnessTaskError::NoRandomnessTask(format!("{:?}", task_request_id))
+                })?;
+
+        let partial_signatures: BTreeMap<Address, Vec<u8>> =
+            serde_json::from_str(&model.partial_signatures).unwrap();
+
+        Ok(BLSResultCache {
+            result_cache: RandomnessResultCache {
+                group_index: model.group_index as usize,
+                message: model.message,
+                randomness_task: task,
+                partial_signatures,
+                threshold: model.threshold as usize,
+            },
+            state: BLSResultCacheState::from(model.state),
+        })
+    }
+}
+
+#[async_trait]
+impl SignatureResultCacheUpdater<RandomnessResultCache>
+    for OPSignatureResultDBClient<RandomnessResultCache>
+{
+    async fn get_ready_to_commit_signatures(
+        &mut self,
+        current_block_height: usize,
+    ) -> DataAccessResult<Vec<RandomnessResultCache>> {
+        let ready_to_commit_signatures = self
+            .signature_results_cache
+            .get_ready_to_commit_signatures(current_block_height)
+            .await?;
+
+        for signature in ready_to_commit_signatures.iter() {
+            let model = OPRandomnessResultQuery::select_by_request_id(
+                self.get_connection(),
+                signature.request_id(),
+            )
+            .await
+            .map_err(|e| {
+                let e: DBError = e.into();
+                e
+            })?
+            .ok_or(BLSTaskError::CommitterCacheNotExisted)?;
+
+            OPRandomnessResultMutation::update_commit_result(
+                self.get_connection(),
+                model,
+                BLSResultCacheState::Committing.to_i32(),
+            )
+            .await
+            .map_err(|e| {
+                let e: DBError = e.into();
+                e
+            })?;
+        }
+
+        Ok(ready_to_commit_signatures)
+    }
+
+    async fn update_commit_result(
+        &mut self,
+        task_request_id: &[u8],
+        status: BLSResultCacheState,
+    ) -> DataAccessResult<()> {
+        let model =
+            OPRandomnessResultQuery::select_by_request_id(self.get_connection(), task_request_id)
+                .await
+                .map_err(|e| {
+                    let e: DBError = e.into();
+                    e
+                })?
+                .ok_or(BLSTaskError::CommitterCacheNotExisted)?;
+
+        OPRandomnessResultMutation::update_commit_result(
+            self.get_connection(),
+            model,
+            status.to_i32(),
+        )
+        .await
+        .map_err(|e| {
+            let e: DBError = e.into();
+            e
+        })?;
+
+        self.signature_results_cache
+            .update_commit_result(task_request_id, status)
+            .await?;
+
+        Ok(())
+    }
+
+    async fn add(
+        &mut self,
+        group_index: usize,
+        task: RandomnessTask,
+        message: Vec<u8>,
+        threshold: usize,
+    ) -> DataAccessResult<bool> {
+        OPRandomnessResultMutation::add(
+            self.get_connection(),
+            task.request_id.clone(),
+            group_index as i32,
+            message.clone(),
+            threshold as i32,
+        )
+        .await
+        .map_err(|e| {
+            let e: DBError = e.into();
+            e
+        })?;
+
+        self.signature_results_cache
+            .add(group_index, task, message, threshold)
+            .await?;
+
+        Ok(true)
+    }
+
+    async fn add_partial_signature(
+        &mut self,
+        task_request_id: Vec<u8>,
+        member_address: Address,
+        partial_signature: Vec<u8>,
+    ) -> DataAccessResult<bool> {
+        let model =
+            OPRandomnessResultQuery::select_by_request_id(self.get_connection(), &task_request_id)
+                .await
+                .map_err(|e| {
+                    let e: DBError = e.into();
+                    e
+                })?
+                .ok_or(BLSTaskError::CommitterCacheNotExisted)?;
+
+        OPRandomnessResultMutation::add_partial_signature(
+            self.get_connection(),
+            model,
+            member_address,
+            partial_signature.clone(),
+        )
+        .await
+        .map_err(|e| {
+            let e: DBError = e.into();
+            e
+        })?;
+
+        self.signature_results_cache
+            .add_partial_signature(task_request_id, member_address, partial_signature)
+            .await?;
+
+        Ok(true)
+    }
+}
+
 #[cfg(test)]
 pub mod sqlite_tests {
     use crate::test_helper;
@@ -1204,8 +1658,7 @@ pub mod sqlite_tests {
     use ethers_core::types::Address;
     use ethers_core::types::U256;
     use std::{fs, path::PathBuf};
-    use threshold_bls::curve::bn254::PairingCurve;
-    use threshold_bls::schemes::bn254::G2Curve;
+    use threshold_bls::curve::bn254::G2Curve;
     use threshold_bls::schemes::bn254::G2Scheme;
     use threshold_bls::sig::Scheme;
 
@@ -1257,7 +1710,7 @@ pub mod sqlite_tests {
 
         let db = build_sqlite_db().await.unwrap();
 
-        let mut db = db.get_node_info_client::<PairingCurve>();
+        let mut db = db.get_node_info_client::<G2Curve>();
 
         let id_address = "0x0000000000000000000000000000000000000001"
             .parse()
@@ -1287,7 +1740,7 @@ pub mod sqlite_tests {
 
         let db = build_sqlite_db().await.unwrap();
 
-        let mut db = db.get_node_info_client::<PairingCurve>();
+        let mut db = db.get_node_info_client::<G2Curve>();
 
         let id_address = "0x0000000000000000000000000000000000000001"
             .parse()
@@ -1322,7 +1775,7 @@ pub mod sqlite_tests {
 
         let db = build_sqlite_db().await.unwrap();
 
-        let mut db = db.get_node_info_client::<PairingCurve>();
+        let mut db = db.get_node_info_client::<G2Curve>();
 
         let id_address = "0x0000000000000000000000000000000000000001"
             .parse()
@@ -1360,7 +1813,7 @@ pub mod sqlite_tests {
 
         let db = build_sqlite_db().await.unwrap();
 
-        let mut db = db.get_group_info_client::<PairingCurve>();
+        let mut db = db.get_group_info_client::<G2Curve>();
 
         if let Ok(res) = db.refresh_current_group_info().await {
             assert_eq!(res, false);
@@ -1376,7 +1829,7 @@ pub mod sqlite_tests {
         setup();
         let db = build_sqlite_db().await.unwrap();
 
-        let mut db = db.get_group_info_client::<PairingCurve>();
+        let mut db = db.get_group_info_client::<G2Curve>();
         let member_1 = "0x0000000000000000000000000000000000000001"
             .parse()
             .unwrap();
@@ -1421,7 +1874,7 @@ pub mod sqlite_tests {
         setup();
         let db = build_sqlite_db().await.unwrap();
 
-        let mut db = db.get_group_info_client::<PairingCurve>();
+        let mut db = db.get_group_info_client::<G2Curve>();
         let member_1 = "0x0000000000000000000000000000000000000001"
             .parse()
             .unwrap();
@@ -1466,7 +1919,7 @@ pub mod sqlite_tests {
         setup();
         let db = build_sqlite_db().await.unwrap();
 
-        let mut db = db.get_group_info_client::<PairingCurve>();
+        let mut db = db.get_group_info_client::<G2Curve>();
         let member_1 = "0x0000000000000000000000000000000000000001"
             .parse()
             .unwrap();

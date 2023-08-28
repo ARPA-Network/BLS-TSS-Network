@@ -4,7 +4,7 @@ use ethers_core::{
 };
 use serde::{Deserialize, Serialize};
 use std::{collections::BTreeMap, marker::PhantomData};
-use threshold_bls::{group::PairingCurve, serialize::point_to_hex};
+use threshold_bls::{group::Curve, serialize::point_to_hex};
 
 pub trait Task {
     fn request_id(&self) -> &[u8];
@@ -78,19 +78,19 @@ pub struct GroupRelayConfirmationTask {
 }
 
 #[derive(Default, Clone, Serialize, Deserialize)]
-pub struct Group<C: PairingCurve> {
+pub struct Group<C: Curve> {
     pub index: usize,
     pub epoch: usize,
     pub size: usize,
     pub threshold: usize,
     pub state: bool,
-    pub public_key: Option<C::G2>,
+    pub public_key: Option<C::Point>,
     pub members: BTreeMap<Address, Member<C>>,
     pub committers: Vec<Address>,
     pub c: PhantomData<C>,
 }
 
-impl<C: PairingCurve> std::fmt::Debug for Group<C> {
+impl<C: Curve> std::fmt::Debug for Group<C> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("Group")
             .field("index", &self.index)
@@ -105,7 +105,7 @@ impl<C: PairingCurve> std::fmt::Debug for Group<C> {
     }
 }
 
-impl<C: PairingCurve> Group<C> {
+impl<C: Curve> Group<C> {
     pub fn new() -> Group<C> {
         Group {
             index: 0,
@@ -127,14 +127,14 @@ impl<C: PairingCurve> Group<C> {
 }
 
 #[derive(Clone, Serialize, Deserialize)]
-pub struct Member<C: PairingCurve> {
+pub struct Member<C: Curve> {
     pub index: usize,
     pub id_address: Address,
     pub rpc_endpoint: Option<String>,
-    pub partial_public_key: Option<C::G2>,
+    pub partial_public_key: Option<C::Point>,
 }
 
-impl<C: PairingCurve> std::fmt::Debug for Member<C> {
+impl<C: Curve> std::fmt::Debug for Member<C> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("Member")
             .field("index", &self.index)

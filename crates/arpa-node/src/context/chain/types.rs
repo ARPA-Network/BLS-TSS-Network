@@ -1,5 +1,8 @@
 use crate::{
-    context::types::GeneralContext,
+    context::{
+        BLSTasksHandler, BlockInfoHandler, ChainIdentityHandler, ChainIdentityHandlerType,
+        ContextFetcher, GroupInfoHandler, NodeInfoHandler, SignatureResultCacheHandler,
+    },
     listener::{
         block::BlockListener, new_randomness_task::NewRandomnessTaskListener,
         post_commit_grouping::PostCommitGroupingListener, post_grouping::PostGroupingListener,
@@ -17,84 +20,84 @@ use crate::{
         ready_to_handle_randomness_task::ReadyToHandleRandomnessTaskSubscriber, Subscriber,
     },
 };
-use arpa_contract_client::{
-    adapter::AdapterClientBuilder, controller::ControllerClientBuilder,
-    coordinator::CoordinatorClientBuilder, provider::ChainProviderBuilder,
+use arpa_contract_client::ethers::{
+    adapter::AdapterClient, controller::ControllerClient,
+    controller_relayer::ControllerRelayerClient, coordinator::CoordinatorClient,
+    provider::ChainProvider,
 };
 use arpa_core::{
-    ChainIdentity, GeneralChainIdentity, ListenerDescriptor, ListenerType, RandomnessTask,
-    SchedulerResult, TaskType, TimeLimitDescriptor,
+    ChainIdentity, GeneralMainChainIdentity, GeneralRelayedChainIdentity, ListenerDescriptor,
+    ListenerType, RandomnessTask, SchedulerError, SchedulerResult, TaskType, TimeLimitDescriptor,
 };
-use arpa_dal::{
-    cache::{InMemoryBlockInfoCache, RandomnessResultCache},
-    ContextInfoUpdater, NodeInfoUpdater, SignatureResultCacheFetcher, SignatureResultCacheUpdater,
-    {BLSTasksFetcher, BLSTasksUpdater, GroupInfoFetcher, GroupInfoUpdater, NodeInfoFetcher},
-};
+use arpa_dal::cache::{InMemoryBlockInfoCache, RandomnessResultCache};
 use arpa_sqlite_db::{
-    BLSTasksDBClient, GroupInfoDBClient, NodeInfoDBClient, SignatureResultDBClient,
+    BLSTasksDBClient, OPBLSTasksDBClient, OPSignatureResultDBClient, SignatureResultDBClient,
 };
 use async_trait::async_trait;
 use log::error;
 use std::{marker::PhantomData, sync::Arc};
-use threshold_bls::group::PairingCurve;
+use threshold_bls::{
+    group::Curve,
+    sig::{SignatureScheme, ThresholdScheme},
+};
 use tokio::sync::RwLock;
 
-use super::{Chain, ChainFetcher, ContextFetcher, MainChain, MainChainFetcher};
+use super::{Chain, MainChain, RelayedChain};
 
 #[derive(Debug)]
 pub struct GeneralMainChain<
-    N: NodeInfoFetcher<PC> + NodeInfoUpdater<PC> + ContextInfoUpdater,
-    G: GroupInfoFetcher<PC> + GroupInfoUpdater<PC> + ContextInfoUpdater,
-    T: BLSTasksFetcher<RandomnessTask> + BLSTasksUpdater<RandomnessTask>,
-    C: SignatureResultCacheFetcher<RandomnessResultCache>
-        + SignatureResultCacheUpdater<RandomnessResultCache>,
-    I: ChainIdentity + ControllerClientBuilder<PC> + CoordinatorClientBuilder + AdapterClientBuilder,
-    PC: PairingCurve,
+    PC: Curve,
+    S: SignatureScheme + ThresholdScheme<Public = PC::Point, Private = PC::Scalar>,
 > {
     id: usize,
     description: String,
-    chain_identity: Arc<RwLock<I>>,
-    node_cache: Arc<RwLock<N>>,
-    group_cache: Arc<RwLock<G>>,
-    block_cache: Arc<RwLock<InMemoryBlockInfoCache>>,
-    randomness_tasks_cache: Arc<RwLock<T>>,
-    committer_randomness_result_cache: Arc<RwLock<C>>,
+    chain_identity: Arc<RwLock<ChainIdentityHandlerType<PC>>>,
+    node_cache: Arc<RwLock<Box<dyn NodeInfoHandler<PC>>>>,
+    group_cache: Arc<RwLock<Box<dyn GroupInfoHandler<PC>>>>,
+    block_cache: Arc<RwLock<Box<dyn BlockInfoHandler>>>,
+    randomness_tasks_cache: Arc<RwLock<Box<dyn BLSTasksHandler<RandomnessTask>>>>,
+    committer_randomness_result_cache:
+        Arc<RwLock<Box<dyn SignatureResultCacheHandler<RandomnessResultCache>>>>,
     c: PhantomData<PC>,
+    s: PhantomData<S>,
     time_limits: TimeLimitDescriptor,
     listener_descriptors: Option<Vec<ListenerDescriptor>>,
 }
 
-impl<PC: PairingCurve + Send + Sync + 'static>
-    GeneralMainChain<
-        NodeInfoDBClient<PC>,
-        GroupInfoDBClient<PC>,
-        BLSTasksDBClient<RandomnessTask>,
-        SignatureResultDBClient<RandomnessResultCache>,
-        GeneralChainIdentity,
-        PC,
-    >
+impl<
+        PC: Curve + Send + Sync + 'static,
+        S: SignatureScheme
+            + ThresholdScheme<Public = PC::Point, Private = PC::Scalar>
+            + Clone
+            + Send
+            + Sync
+            + 'static,
+    > GeneralMainChain<PC, S>
 {
     #[allow(clippy::too_many_arguments)]
     pub fn new(
         description: String,
-        chain_identity: GeneralChainIdentity,
-        node_cache: NodeInfoDBClient<PC>,
-        group_cache: GroupInfoDBClient<PC>,
+        chain_identity: GeneralMainChainIdentity,
+        node_cache: Arc<RwLock<Box<dyn NodeInfoHandler<PC>>>>,
+        group_cache: Arc<RwLock<Box<dyn GroupInfoHandler<PC>>>>,
         randomness_tasks_cache: BLSTasksDBClient<RandomnessTask>,
-        randomness_result_cache: SignatureResultDBClient<RandomnessResultCache>,
+        committer_randomness_result_cache: SignatureResultDBClient<RandomnessResultCache>,
         time_limits: TimeLimitDescriptor,
         listener_descriptors: Option<Vec<ListenerDescriptor>>,
     ) -> Self {
         GeneralMainChain {
             id: chain_identity.get_chain_id(),
             description,
-            chain_identity: Arc::new(RwLock::new(chain_identity)),
-            block_cache: Arc::new(RwLock::new(InMemoryBlockInfoCache::new())),
-            randomness_tasks_cache: Arc::new(RwLock::new(randomness_tasks_cache)),
-            committer_randomness_result_cache: Arc::new(RwLock::new(randomness_result_cache)),
-            node_cache: Arc::new(RwLock::new(node_cache)),
-            group_cache: Arc::new(RwLock::new(group_cache)),
+            chain_identity: Arc::new(RwLock::new(Box::new(chain_identity))),
+            block_cache: Arc::new(RwLock::new(Box::new(InMemoryBlockInfoCache::new()))),
+            randomness_tasks_cache: Arc::new(RwLock::new(Box::new(randomness_tasks_cache))),
+            committer_randomness_result_cache: Arc::new(RwLock::new(Box::new(
+                committer_randomness_result_cache,
+            ))),
+            node_cache,
+            group_cache,
             c: PhantomData,
+            s: PhantomData,
             time_limits,
             listener_descriptors,
         }
@@ -103,58 +106,72 @@ impl<PC: PairingCurve + Send + Sync + 'static>
 
 #[async_trait]
 impl<
-        N: NodeInfoFetcher<PC>
-            + NodeInfoUpdater<PC>
-            + ContextInfoUpdater
-            + std::fmt::Debug
+        PC: Curve + std::fmt::Debug + Clone + Sync + Send + 'static,
+        S: SignatureScheme
+            + ThresholdScheme<Public = PC::Point, Private = PC::Scalar>
             + Clone
-            + Sync
             + Send
-            + 'static,
-        G: GroupInfoFetcher<PC>
-            + GroupInfoUpdater<PC>
-            + ContextInfoUpdater
-            + std::fmt::Debug
-            + Clone
             + Sync
-            + Send
             + 'static,
-        T: BLSTasksFetcher<RandomnessTask>
-            + BLSTasksUpdater<RandomnessTask>
-            + std::fmt::Debug
-            + Clone
-            + Sync
-            + Send
-            + 'static,
-        C: SignatureResultCacheFetcher<RandomnessResultCache>
-            + SignatureResultCacheUpdater<RandomnessResultCache>
-            + std::fmt::Debug
-            + Clone
-            + Sync
-            + Send
-            + 'static,
-        I: ChainIdentity
-            + ControllerClientBuilder<PC>
-            + CoordinatorClientBuilder
-            + AdapterClientBuilder
-            + ChainProviderBuilder
-            + std::fmt::Debug
-            + Clone
-            + Sync
-            + Send
-            + 'static,
-        PC: PairingCurve + std::fmt::Debug + Clone + Sync + Send + 'static,
-    > Chain for GeneralMainChain<N, G, T, C, I, PC>
+    > Chain<PC, S> for GeneralMainChain<PC, S>
+where
+    <S as ThresholdScheme>::Error: Sync + Send,
+    <S as SignatureScheme>::Error: Sync + Send,
 {
-    type BlockInfoCache = InMemoryBlockInfoCache;
+    type NodeInfoCache = Box<dyn NodeInfoHandler<PC>>;
 
-    type RandomnessTasksQueue = T;
+    type GroupInfoCache = Box<dyn GroupInfoHandler<PC>>;
 
-    type RandomnessResultCaches = C;
+    type BlockInfoCache = Box<dyn BlockInfoHandler>;
 
-    type Context = GeneralContext<N, G, T, C, I, PC>;
+    type RandomnessTasksQueue = Box<dyn BLSTasksHandler<RandomnessTask>>;
 
-    type ChainIdentity = I;
+    type RandomnessResultCaches = Box<dyn SignatureResultCacheHandler<RandomnessResultCache>>;
+
+    type ChainIdentity = Box<
+        dyn ChainIdentityHandler<
+            PC,
+            ControllerService = ControllerClient,
+            ControllerRelayerService = ControllerRelayerClient,
+            CoordinatorService = CoordinatorClient,
+            AdapterService = AdapterClient,
+            ProviderService = ChainProvider,
+        >,
+    >;
+
+    fn id(&self) -> usize {
+        self.id
+    }
+
+    fn description(&self) -> &str {
+        &self.description
+    }
+
+    fn get_chain_identity(&self) -> Arc<RwLock<ChainIdentityHandlerType<PC>>> {
+        self.chain_identity.clone()
+    }
+
+    fn get_node_cache(&self) -> Arc<RwLock<Box<dyn NodeInfoHandler<PC>>>> {
+        self.node_cache.clone()
+    }
+
+    fn get_group_cache(&self) -> Arc<RwLock<Box<dyn GroupInfoHandler<PC>>>> {
+        self.group_cache.clone()
+    }
+
+    fn get_block_cache(&self) -> Arc<RwLock<Box<dyn BlockInfoHandler>>> {
+        self.block_cache.clone()
+    }
+
+    fn get_randomness_tasks_cache(&self) -> Arc<RwLock<Box<dyn BLSTasksHandler<RandomnessTask>>>> {
+        self.randomness_tasks_cache.clone()
+    }
+
+    fn get_randomness_result_cache(
+        &self,
+    ) -> Arc<RwLock<Box<dyn SignatureResultCacheHandler<RandomnessResultCache>>>> {
+        self.committer_randomness_result_cache.clone()
+    }
 
     async fn init_listener(
         &self,
@@ -166,23 +183,24 @@ impl<
             ListenerType::Block => {
                 let p_block = BlockListener::new(self.id(), self.get_chain_identity(), eq);
 
-                fs.write()
-                    .await
-                    .add_task(TaskType::Listener(ListenerType::Block), async move {
+                fs.write().await.add_task(
+                    TaskType::Listener(self.id, ListenerType::Block),
+                    async move {
                         if let Err(e) = p_block
                             .start(listener.interval_millis, listener.use_jitter)
                             .await
                         {
                             error!("{:?}", e);
                         };
-                    })
+                    },
+                )
             }
             ListenerType::PreGrouping => {
                 let p_pre_grouping =
                     PreGroupingListener::new(self.get_chain_identity(), self.get_group_cache(), eq);
 
                 fs.write().await.add_task(
-                    TaskType::Listener(ListenerType::PreGrouping),
+                    TaskType::Listener(self.id, ListenerType::PreGrouping),
                     async move {
                         if let Err(e) = p_pre_grouping
                             .start(listener.interval_millis, listener.use_jitter)
@@ -201,7 +219,7 @@ impl<
                 );
 
                 fs.write().await.add_task(
-                    TaskType::Listener(ListenerType::PostCommitGrouping),
+                    TaskType::Listener(self.id, ListenerType::PostCommitGrouping),
                     async move {
                         if let Err(e) = p_post_commit_grouping
                             .start(listener.interval_millis, listener.use_jitter)
@@ -217,11 +235,11 @@ impl<
                     self.get_block_cache(),
                     self.get_group_cache(),
                     eq,
-                    self.time_limits.dkg_timeout_duration,
+                    self.time_limits.dkg_timeout_duration.unwrap(),
                 );
 
                 fs.write().await.add_task(
-                    TaskType::Listener(ListenerType::PostGrouping),
+                    TaskType::Listener(self.id, ListenerType::PostGrouping),
                     async move {
                         if let Err(e) = p_post_grouping
                             .start(listener.interval_millis, listener.use_jitter)
@@ -244,7 +262,7 @@ impl<
                 );
 
                 fs.write().await.add_task(
-                    TaskType::Listener(ListenerType::NewRandomnessTask),
+                    TaskType::Listener(self.id, ListenerType::NewRandomnessTask),
                     async move {
                         if let Err(e) = p_new_randomness_task
                             .start(listener.interval_millis, listener.use_jitter)
@@ -270,7 +288,7 @@ impl<
                 );
 
                 fs.write().await.add_task(
-                    TaskType::Listener(ListenerType::ReadyToHandleRandomnessTask),
+                    TaskType::Listener(self.id, ListenerType::ReadyToHandleRandomnessTask),
                     async move {
                         if let Err(e) = p_ready_to_handle_randomness_task
                             .start(listener.interval_millis, listener.use_jitter)
@@ -295,7 +313,7 @@ impl<
                     );
 
                 fs.write().await.add_task(
-                    TaskType::Listener(ListenerType::RandomnessSignatureAggregation),
+                    TaskType::Listener(self.id, ListenerType::RandomnessSignatureAggregation),
                     async move {
                         if let Err(e) = p_randomness_signature_aggregation
                             .start(listener.interval_millis, listener.use_jitter)
@@ -311,7 +329,7 @@ impl<
 
     async fn init_listeners(
         &self,
-        context: &GeneralContext<N, G, T, C, I, PC>,
+        context: &(dyn ContextFetcher + Sync + Send),
     ) -> SchedulerResult<()> {
         match &self.listener_descriptors {
             Some(listeners) => {
@@ -336,65 +354,44 @@ impl<
         Ok(())
     }
 
-    async fn init_subscribers(&self, context: &GeneralContext<N, G, T, C, I, PC>) {
+    async fn init_subscribers(&self, context: &(dyn ContextFetcher + Sync + Send)) {
         self.init_block_subscribers(context).await;
 
         self.init_dkg_subscribers(context).await;
 
         self.init_randomness_subscribers(context).await;
     }
+
+    async fn init_components(
+        &self,
+        context: &(dyn ContextFetcher + Sync + Send),
+    ) -> SchedulerResult<()> {
+        self.init_listeners(context).await?;
+
+        self.init_subscribers(context).await;
+
+        Ok(())
+    }
 }
 
 #[async_trait]
 impl<
-        N: NodeInfoFetcher<PC>
-            + NodeInfoUpdater<PC>
-            + ContextInfoUpdater
-            + std::fmt::Debug
+        PC: Curve + std::fmt::Debug + Clone + Sync + Send + 'static,
+        S: SignatureScheme
+            + ThresholdScheme<Public = PC::Point, Private = PC::Scalar>
             + Clone
-            + Sync
             + Send
-            + 'static,
-        G: GroupInfoFetcher<PC>
-            + GroupInfoUpdater<PC>
-            + ContextInfoUpdater
-            + std::fmt::Debug
-            + Clone
             + Sync
-            + Send
             + 'static,
-        T: BLSTasksFetcher<RandomnessTask>
-            + BLSTasksUpdater<RandomnessTask>
-            + std::fmt::Debug
-            + Clone
-            + Sync
-            + Send
-            + 'static,
-        C: SignatureResultCacheFetcher<RandomnessResultCache>
-            + SignatureResultCacheUpdater<RandomnessResultCache>
-            + std::fmt::Debug
-            + Clone
-            + Sync
-            + Send
-            + 'static,
-        I: ChainIdentity
-            + ControllerClientBuilder<PC>
-            + CoordinatorClientBuilder
-            + AdapterClientBuilder
-            + ChainProviderBuilder
-            + std::fmt::Debug
-            + Clone
-            + Sync
-            + Send
-            + 'static,
-        PC: PairingCurve + std::fmt::Debug + Clone + Sync + Send + 'static,
-    > MainChain for GeneralMainChain<N, G, T, C, I, PC>
+    > MainChain<PC, S> for GeneralMainChain<PC, S>
+where
+    <S as ThresholdScheme>::Error: Sync + Send,
+    <S as SignatureScheme>::Error: Sync + Send,
 {
-    type NodeInfoCache = N;
-
-    type GroupInfoCache = G;
-
-    async fn init_block_listeners(&self, context: &Self::Context) -> SchedulerResult<()> {
+    async fn init_block_listeners(
+        &self,
+        context: &(dyn ContextFetcher + Sync + Send),
+    ) -> SchedulerResult<()> {
         self.init_listener(
             context.get_event_queue(),
             context.get_fixed_task_handler(),
@@ -408,7 +405,10 @@ impl<
         Ok(())
     }
 
-    async fn init_dkg_listeners(&self, context: &Self::Context) -> SchedulerResult<()> {
+    async fn init_dkg_listeners(
+        &self,
+        context: &(dyn ContextFetcher + Sync + Send),
+    ) -> SchedulerResult<()> {
         self.init_listener(
             context.get_event_queue(),
             context.get_fixed_task_handler(),
@@ -440,7 +440,10 @@ impl<
         Ok(())
     }
 
-    async fn init_randomness_listeners(&self, context: &Self::Context) -> SchedulerResult<()> {
+    async fn init_randomness_listeners(
+        &self,
+        context: &(dyn ContextFetcher + Sync + Send),
+    ) -> SchedulerResult<()> {
         self.init_listener(
             context.get_event_queue(),
             context.get_fixed_task_handler(),
@@ -472,14 +475,14 @@ impl<
         Ok(())
     }
 
-    async fn init_block_subscribers(&self, context: &Self::Context) {
+    async fn init_block_subscribers(&self, context: &(dyn ContextFetcher + Sync + Send)) {
         let s_block =
             BlockSubscriber::new(self.id(), self.get_block_cache(), context.get_event_queue());
 
         s_block.subscribe().await;
     }
 
-    async fn init_dkg_subscribers(&self, context: &Self::Context) {
+    async fn init_dkg_subscribers(&self, context: &(dyn ContextFetcher + Sync + Send)) {
         let s_pre_grouping =
             PreGroupingSubscriber::new(self.get_group_cache(), context.get_event_queue());
 
@@ -491,7 +494,7 @@ impl<
             self.get_group_cache(),
             context.get_event_queue(),
             context.get_dynamic_task_handler(),
-            self.time_limits.dkg_wait_for_phase_interval_millis,
+            self.time_limits.dkg_wait_for_phase_interval_millis.unwrap(),
         );
 
         s_in_grouping.subscribe().await;
@@ -503,6 +506,7 @@ impl<
 
         let s_post_grouping = PostGroupingSubscriber::new(
             self.get_chain_identity(),
+            context.get_supported_relayed_chains(),
             self.get_group_cache(),
             context.get_event_queue(),
             context.get_dynamic_task_handler(),
@@ -511,25 +515,24 @@ impl<
         s_post_grouping.subscribe().await;
     }
 
-    async fn init_randomness_subscribers(&self, context: &Self::Context) {
+    async fn init_randomness_subscribers(&self, context: &(dyn ContextFetcher + Sync + Send)) {
         let id_address = self.get_node_cache().read().await.get_id_address().unwrap();
 
-        let s_ready_to_handle_randomness_task =
-            ReadyToHandleRandomnessTaskSubscriber::<G, T, C, PC>::new(
-                self.id(),
-                id_address,
-                self.get_group_cache(),
-                self.get_randomness_tasks_cache(),
-                self.get_randomness_result_cache(),
-                context.get_event_queue(),
-                context.get_dynamic_task_handler(),
-                self.time_limits.commit_partial_signature_retry_descriptor,
-            );
+        let s_ready_to_handle_randomness_task = ReadyToHandleRandomnessTaskSubscriber::<PC, S>::new(
+            self.id(),
+            id_address,
+            self.get_group_cache(),
+            self.get_randomness_tasks_cache(),
+            self.get_randomness_result_cache(),
+            context.get_event_queue(),
+            context.get_dynamic_task_handler(),
+            self.time_limits.commit_partial_signature_retry_descriptor,
+        );
 
         s_ready_to_handle_randomness_task.subscribe().await;
 
         let s_randomness_signature_aggregation =
-            RandomnessSignatureAggregationSubscriber::<I, C, PC>::new(
+            RandomnessSignatureAggregationSubscriber::<PC, S>::new(
                 self.id(),
                 id_address,
                 self.get_chain_identity(),
@@ -542,50 +545,101 @@ impl<
     }
 }
 
+#[derive(Debug)]
+pub struct GeneralRelayedChain<
+    PC: Curve,
+    S: SignatureScheme + ThresholdScheme<Public = PC::Point, Private = PC::Scalar>,
+> {
+    id: usize,
+    description: String,
+    chain_identity: Arc<RwLock<ChainIdentityHandlerType<PC>>>,
+    node_cache: Arc<RwLock<Box<dyn NodeInfoHandler<PC>>>>,
+    group_cache: Arc<RwLock<Box<dyn GroupInfoHandler<PC>>>>,
+    block_cache: Arc<RwLock<Box<dyn BlockInfoHandler>>>,
+    randomness_tasks_cache: Arc<RwLock<Box<dyn BLSTasksHandler<RandomnessTask>>>>,
+    committer_randomness_result_cache:
+        Arc<RwLock<Box<dyn SignatureResultCacheHandler<RandomnessResultCache>>>>,
+    c: PhantomData<PC>,
+    s: PhantomData<S>,
+    time_limits: TimeLimitDescriptor,
+    listener_descriptors: Option<Vec<ListenerDescriptor>>,
+}
+
 impl<
-        N: NodeInfoFetcher<PC>
-            + NodeInfoUpdater<PC>
-            + ContextInfoUpdater
-            + std::fmt::Debug
+        PC: Curve + Send + Sync + 'static,
+        S: SignatureScheme
+            + ThresholdScheme<Public = PC::Point, Private = PC::Scalar>
             + Clone
             + Sync
             + Send
             + 'static,
-        G: GroupInfoFetcher<PC>
-            + GroupInfoUpdater<PC>
-            + ContextInfoUpdater
-            + std::fmt::Debug
-            + Clone
-            + Sync
-            + Send
-            + 'static,
-        T: BLSTasksFetcher<RandomnessTask>
-            + BLSTasksUpdater<RandomnessTask>
-            + std::fmt::Debug
-            + Clone
-            + Sync
-            + Send
-            + 'static,
-        C: SignatureResultCacheFetcher<RandomnessResultCache>
-            + SignatureResultCacheUpdater<RandomnessResultCache>
-            + std::fmt::Debug
-            + Clone
-            + Sync
-            + Send
-            + 'static,
-        I: ChainIdentity
-            + ControllerClientBuilder<PC>
-            + CoordinatorClientBuilder
-            + AdapterClientBuilder
-            + ChainProviderBuilder
-            + std::fmt::Debug
-            + Clone
-            + Sync
-            + Send
-            + 'static,
-        PC: PairingCurve + std::fmt::Debug + Clone + Sync + Send + 'static,
-    > ChainFetcher<GeneralMainChain<N, G, T, C, I, PC>> for GeneralMainChain<N, G, T, C, I, PC>
+    > GeneralRelayedChain<PC, S>
 {
+    #[allow(clippy::too_many_arguments)]
+    pub fn new(
+        description: String,
+        chain_identity: GeneralRelayedChainIdentity,
+        node_cache: Arc<RwLock<Box<dyn NodeInfoHandler<PC>>>>,
+        group_cache: Arc<RwLock<Box<dyn GroupInfoHandler<PC>>>>,
+        randomness_tasks_cache: OPBLSTasksDBClient<RandomnessTask>,
+        committer_randomness_result_cache: OPSignatureResultDBClient<RandomnessResultCache>,
+        time_limits: TimeLimitDescriptor,
+        listener_descriptors: Option<Vec<ListenerDescriptor>>,
+    ) -> Self {
+        GeneralRelayedChain {
+            id: chain_identity.get_chain_id(),
+            description,
+            chain_identity: Arc::new(RwLock::new(Box::new(chain_identity))),
+            block_cache: Arc::new(RwLock::new(Box::new(InMemoryBlockInfoCache::new()))),
+            randomness_tasks_cache: Arc::new(RwLock::new(Box::new(randomness_tasks_cache))),
+            committer_randomness_result_cache: Arc::new(RwLock::new(Box::new(
+                committer_randomness_result_cache,
+            ))),
+            node_cache,
+            group_cache,
+            c: PhantomData,
+            s: PhantomData,
+            time_limits,
+            listener_descriptors,
+        }
+    }
+}
+
+#[async_trait]
+impl<
+        PC: Curve + std::fmt::Debug + Clone + Sync + Send + 'static,
+        S: SignatureScheme
+            + ThresholdScheme<Public = PC::Point, Private = PC::Scalar>
+            + Clone
+            + Sync
+            + Send
+            + 'static,
+    > Chain<PC, S> for GeneralRelayedChain<PC, S>
+where
+    <S as ThresholdScheme>::Error: Sync + Send,
+    <S as SignatureScheme>::Error: Sync + Send,
+{
+    type NodeInfoCache = Box<dyn NodeInfoHandler<PC>>;
+
+    type GroupInfoCache = Box<dyn GroupInfoHandler<PC>>;
+
+    type BlockInfoCache = Box<dyn BlockInfoHandler>;
+
+    type RandomnessTasksQueue = Box<dyn BLSTasksHandler<RandomnessTask>>;
+
+    type RandomnessResultCaches = Box<dyn SignatureResultCacheHandler<RandomnessResultCache>>;
+
+    type ChainIdentity = Box<
+        dyn ChainIdentityHandler<
+            PC,
+            ControllerService = ControllerClient,
+            ControllerRelayerService = ControllerRelayerClient,
+            CoordinatorService = CoordinatorClient,
+            AdapterService = AdapterClient,
+            ProviderService = ChainProvider,
+        >,
+    >;
+
     fn id(&self) -> usize {
         self.id
     }
@@ -593,86 +647,279 @@ impl<
     fn description(&self) -> &str {
         &self.description
     }
-
-    fn get_chain_identity(
-        &self,
-    ) -> Arc<RwLock<<GeneralMainChain<N, G, T, C, I, PC> as Chain>::ChainIdentity>> {
+    fn get_chain_identity(&self) -> Arc<RwLock<ChainIdentityHandlerType<PC>>> {
         self.chain_identity.clone()
     }
 
-    fn get_block_cache(
-        &self,
-    ) -> Arc<RwLock<<GeneralMainChain<N, G, T, C, I, PC> as Chain>::BlockInfoCache>> {
+    fn get_node_cache(&self) -> Arc<RwLock<Box<dyn NodeInfoHandler<PC>>>> {
+        self.node_cache.clone()
+    }
+
+    fn get_group_cache(&self) -> Arc<RwLock<Box<dyn GroupInfoHandler<PC>>>> {
+        self.group_cache.clone()
+    }
+
+    fn get_block_cache(&self) -> Arc<RwLock<Box<dyn BlockInfoHandler>>> {
         self.block_cache.clone()
     }
 
-    fn get_randomness_tasks_cache(
-        &self,
-    ) -> Arc<RwLock<<GeneralMainChain<N, G, T, C, I, PC> as Chain>::RandomnessTasksQueue>> {
+    fn get_randomness_tasks_cache(&self) -> Arc<RwLock<Box<dyn BLSTasksHandler<RandomnessTask>>>> {
         self.randomness_tasks_cache.clone()
     }
 
     fn get_randomness_result_cache(
         &self,
-    ) -> Arc<RwLock<<GeneralMainChain<N, G, T, C, I, PC> as Chain>::RandomnessResultCaches>> {
+    ) -> Arc<RwLock<Box<dyn SignatureResultCacheHandler<RandomnessResultCache>>>> {
         self.committer_randomness_result_cache.clone()
+    }
+
+    async fn init_listener(
+        &self,
+        eq: Arc<RwLock<EventQueue>>,
+        fs: Arc<RwLock<SimpleFixedTaskScheduler>>,
+        listener: ListenerDescriptor,
+    ) -> SchedulerResult<()> {
+        match listener.l_type {
+            ListenerType::Block => {
+                let p_block = BlockListener::new(self.id(), self.get_chain_identity(), eq);
+
+                fs.write().await.add_task(
+                    TaskType::Listener(self.id, ListenerType::Block),
+                    async move {
+                        if let Err(e) = p_block
+                            .start(listener.interval_millis, listener.use_jitter)
+                            .await
+                        {
+                            error!("{:?}", e);
+                        };
+                    },
+                )
+            }
+            ListenerType::NewRandomnessTask => {
+                let id_address = self.get_node_cache().read().await.get_id_address().unwrap();
+
+                let p_new_randomness_task = NewRandomnessTaskListener::new(
+                    self.id(),
+                    id_address,
+                    self.get_chain_identity(),
+                    self.get_randomness_tasks_cache(),
+                    eq,
+                );
+
+                fs.write().await.add_task(
+                    TaskType::Listener(self.id, ListenerType::NewRandomnessTask),
+                    async move {
+                        if let Err(e) = p_new_randomness_task
+                            .start(listener.interval_millis, listener.use_jitter)
+                            .await
+                        {
+                            error!("{:?}", e);
+                        };
+                    },
+                )
+            }
+            ListenerType::ReadyToHandleRandomnessTask => {
+                let id_address = self.get_node_cache().read().await.get_id_address().unwrap();
+
+                let p_ready_to_handle_randomness_task = ReadyToHandleRandomnessTaskListener::new(
+                    self.id(),
+                    id_address,
+                    self.get_chain_identity(),
+                    self.get_block_cache(),
+                    self.get_group_cache(),
+                    self.get_randomness_tasks_cache(),
+                    eq,
+                    self.time_limits.randomness_task_exclusive_window,
+                );
+
+                fs.write().await.add_task(
+                    TaskType::Listener(self.id, ListenerType::ReadyToHandleRandomnessTask),
+                    async move {
+                        if let Err(e) = p_ready_to_handle_randomness_task
+                            .start(listener.interval_millis, listener.use_jitter)
+                            .await
+                        {
+                            error!("{:?}", e);
+                        };
+                    },
+                )
+            }
+            ListenerType::RandomnessSignatureAggregation => {
+                let id_address = self.get_node_cache().read().await.get_id_address().unwrap();
+
+                let p_randomness_signature_aggregation =
+                    RandomnessSignatureAggregationListener::new(
+                        self.id(),
+                        id_address,
+                        self.get_block_cache(),
+                        self.get_group_cache(),
+                        self.get_randomness_result_cache(),
+                        eq,
+                    );
+
+                fs.write().await.add_task(
+                    TaskType::Listener(self.id, ListenerType::RandomnessSignatureAggregation),
+                    async move {
+                        if let Err(e) = p_randomness_signature_aggregation
+                            .start(listener.interval_millis, listener.use_jitter)
+                            .await
+                        {
+                            error!("{:?}", e);
+                        };
+                    },
+                )
+            }
+            _ => {
+                return Err(SchedulerError::UnsupportedListenerType(
+                    self.id(),
+                    listener.l_type.to_string(),
+                ))
+            }
+        }
+    }
+
+    async fn init_listeners(
+        &self,
+        context: &(dyn ContextFetcher + Sync + Send),
+    ) -> SchedulerResult<()> {
+        match &self.listener_descriptors {
+            Some(listeners) => {
+                for listener in listeners {
+                    self.init_listener(
+                        context.get_event_queue(),
+                        context.get_fixed_task_handler(),
+                        *listener,
+                    )
+                    .await?;
+                }
+            }
+            None => {
+                self.init_block_listeners(context).await?;
+
+                self.init_randomness_listeners(context).await?;
+            }
+        }
+
+        Ok(())
+    }
+
+    async fn init_subscribers(&self, context: &(dyn ContextFetcher + Sync + Send)) {
+        self.init_block_subscribers(context).await;
+
+        self.init_randomness_subscribers(context).await;
+    }
+
+    async fn init_components(
+        &self,
+        context: &(dyn ContextFetcher + Sync + Send),
+    ) -> SchedulerResult<()> {
+        self.init_listeners(context).await?;
+
+        self.init_subscribers(context).await;
+
+        Ok(())
     }
 }
 
+#[async_trait]
 impl<
-        N: NodeInfoFetcher<PC>
-            + NodeInfoUpdater<PC>
-            + ContextInfoUpdater
-            + std::fmt::Debug
+        PC: Curve + std::fmt::Debug + Clone + Sync + Send + 'static,
+        S: SignatureScheme
+            + ThresholdScheme<Public = PC::Point, Private = PC::Scalar>
             + Clone
-            + Sync
             + Send
-            + 'static,
-        G: GroupInfoFetcher<PC>
-            + GroupInfoUpdater<PC>
-            + ContextInfoUpdater
-            + Clone
-            + std::fmt::Debug
             + Sync
-            + Send
             + 'static,
-        T: BLSTasksFetcher<RandomnessTask>
-            + BLSTasksUpdater<RandomnessTask>
-            + std::fmt::Debug
-            + Clone
-            + Sync
-            + Send
-            + 'static,
-        C: SignatureResultCacheFetcher<RandomnessResultCache>
-            + SignatureResultCacheUpdater<RandomnessResultCache>
-            + std::fmt::Debug
-            + Clone
-            + Sync
-            + Send
-            + 'static,
-        I: ChainIdentity
-            + ControllerClientBuilder<PC>
-            + CoordinatorClientBuilder
-            + AdapterClientBuilder
-            + ChainProviderBuilder
-            + std::fmt::Debug
-            + Clone
-            + Sync
-            + Send
-            + 'static,
-        PC: PairingCurve + std::fmt::Debug + Clone + Sync + Send + 'static,
-    > MainChainFetcher<GeneralMainChain<N, G, T, C, I, PC>>
-    for GeneralMainChain<N, G, T, C, I, PC>
+    > RelayedChain<PC, S> for GeneralRelayedChain<PC, S>
+where
+    <S as ThresholdScheme>::Error: Sync + Send,
+    <S as SignatureScheme>::Error: Sync + Send,
 {
-    fn get_node_cache(
+    async fn init_block_listeners(
         &self,
-    ) -> Arc<RwLock<<GeneralMainChain<N, G, T, C, I, PC> as MainChain>::NodeInfoCache>> {
-        self.node_cache.clone()
+        context: &(dyn ContextFetcher + Sync + Send),
+    ) -> SchedulerResult<()> {
+        self.init_listener(
+            context.get_event_queue(),
+            context.get_fixed_task_handler(),
+            ListenerDescriptor::build(
+                ListenerType::Block,
+                self.time_limits.listener_interval_millis,
+            ),
+        )
+        .await?;
+
+        Ok(())
     }
 
-    fn get_group_cache(
+    async fn init_randomness_listeners(
         &self,
-    ) -> Arc<RwLock<<GeneralMainChain<N, G, T, C, I, PC> as MainChain>::GroupInfoCache>> {
-        self.group_cache.clone()
+        context: &(dyn ContextFetcher + Sync + Send),
+    ) -> SchedulerResult<()> {
+        self.init_listener(
+            context.get_event_queue(),
+            context.get_fixed_task_handler(),
+            ListenerDescriptor::build(
+                ListenerType::NewRandomnessTask,
+                self.time_limits.listener_interval_millis,
+            ),
+        )
+        .await?;
+        self.init_listener(
+            context.get_event_queue(),
+            context.get_fixed_task_handler(),
+            ListenerDescriptor::build(
+                ListenerType::ReadyToHandleRandomnessTask,
+                self.time_limits.listener_interval_millis,
+            ),
+        )
+        .await?;
+        self.init_listener(
+            context.get_event_queue(),
+            context.get_fixed_task_handler(),
+            ListenerDescriptor::build(
+                ListenerType::RandomnessSignatureAggregation,
+                self.time_limits.listener_interval_millis,
+            ),
+        )
+        .await?;
+
+        Ok(())
+    }
+
+    async fn init_block_subscribers(&self, context: &(dyn ContextFetcher + Sync + Send)) {
+        let s_block =
+            BlockSubscriber::new(self.id(), self.get_block_cache(), context.get_event_queue());
+
+        s_block.subscribe().await;
+    }
+
+    async fn init_randomness_subscribers(&self, context: &(dyn ContextFetcher + Sync + Send)) {
+        let id_address = self.get_node_cache().read().await.get_id_address().unwrap();
+
+        let s_ready_to_handle_randomness_task = ReadyToHandleRandomnessTaskSubscriber::<PC, S>::new(
+            self.id(),
+            id_address,
+            self.get_group_cache(),
+            self.get_randomness_tasks_cache(),
+            self.get_randomness_result_cache(),
+            context.get_event_queue(),
+            context.get_dynamic_task_handler(),
+            self.time_limits.commit_partial_signature_retry_descriptor,
+        );
+
+        s_ready_to_handle_randomness_task.subscribe().await;
+
+        let s_randomness_signature_aggregation =
+            RandomnessSignatureAggregationSubscriber::<PC, S>::new(
+                self.id(),
+                id_address,
+                self.get_chain_identity(),
+                self.get_randomness_result_cache(),
+                context.get_event_queue(),
+                context.get_dynamic_task_handler(),
+            );
+
+        s_randomness_signature_aggregation.subscribe().await;
     }
 }

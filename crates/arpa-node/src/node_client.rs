@@ -1,17 +1,17 @@
 use arpa_contract_client::controller::{ControllerClientBuilder, ControllerTransactions};
 use arpa_core::log::encoder::JsonEncoder;
 use arpa_core::Config;
-use arpa_core::GeneralChainIdentity;
+use arpa_core::GeneralMainChainIdentity;
+use arpa_core::GeneralRelayedChainIdentity;
 use arpa_core::{build_wallet_from_config, RandomnessTask};
-use arpa_dal::cache::RandomnessResultCache;
 use arpa_dal::{NodeInfoFetcher, NodeInfoUpdater};
 use arpa_node::context::chain::types::GeneralMainChain;
+use arpa_node::context::chain::types::GeneralRelayedChain;
 use arpa_node::context::types::GeneralContext;
+use arpa_node::context::GroupInfoHandler;
+use arpa_node::context::NodeInfoHandler;
 use arpa_node::context::{Context, TaskWaiter};
-use arpa_sqlite_db::GroupInfoDBClient;
-use arpa_sqlite_db::NodeInfoDBClient;
 use arpa_sqlite_db::SqliteDB;
-use arpa_sqlite_db::{BLSTasksDBClient, SignatureResultDBClient};
 use ethers::signers::Signer;
 use log::{info, LevelFilter};
 use log4rs::append::console::ConsoleAppender;
@@ -23,11 +23,13 @@ use log4rs::config::{Appender, Root};
 use log4rs::filter::threshold::ThresholdFilter;
 use log4rs::Config as LogConfig;
 use std::path::PathBuf;
+use std::sync::Arc;
 use structopt::StructOpt;
-use threshold_bls::curve::bn254::PairingCurve as BN254;
+use threshold_bls::schemes::bn254::G2Curve;
 use threshold_bls::schemes::bn254::G2Scheme;
 use threshold_bls::serialize::point_to_hex;
 use threshold_bls::sig::Scheme;
+use tokio::sync::RwLock;
 
 #[derive(StructOpt, Debug)]
 #[structopt(name = "Arpa Node")]
@@ -178,19 +180,29 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         group_cache.refresh_current_group_info().await?;
     }
 
+    let node_cache: Arc<RwLock<Box<dyn NodeInfoHandler<G2Curve>>>> =
+        Arc::new(RwLock::new(Box::new(node_cache)));
+
+    let group_cache: Arc<RwLock<Box<dyn GroupInfoHandler<G2Curve>>>> =
+        Arc::new(RwLock::new(Box::new(group_cache)));
+
     let randomness_tasks_cache = db.get_bls_tasks_client::<RandomnessTask>();
 
     let randomness_result_cache = db.get_randomness_result_client().await?;
 
-    let main_chain_identity = GeneralChainIdentity::new(
+    let main_chain_identity = GeneralMainChainIdentity::new(
         config.chain_id,
-        wallet,
+        wallet.clone(),
         config.provider_endpoint.clone(),
         config.time_limits.unwrap().provider_polling_interval_millis,
         config
             .controller_address
             .parse()
             .expect("bad format of controller_address"),
+        config
+            .controller_relayer_address
+            .parse()
+            .expect("bad format of controller_relayer_address"),
         config
             .adapter_address
             .parse()
@@ -202,31 +214,72 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         config.time_limits.unwrap().contract_view_retry_descriptor,
     );
 
-    let main_chain = GeneralMainChain::<
-        NodeInfoDBClient<BN254>,
-        GroupInfoDBClient<BN254>,
-        BLSTasksDBClient<RandomnessTask>,
-        SignatureResultDBClient<RandomnessResultCache>,
-        GeneralChainIdentity,
-        BN254,
-    >::new(
+    let main_chain = GeneralMainChain::<G2Curve, G2Scheme>::new(
         "main chain".to_string(),
         main_chain_identity.clone(),
-        node_cache,
-        group_cache,
+        node_cache.clone(),
+        group_cache.clone(),
         randomness_tasks_cache,
         randomness_result_cache,
         config.time_limits.unwrap(),
         config.listeners.clone(),
     );
 
-    let context = GeneralContext::new(main_chain, config);
+    let relayed_chains_config = config.relayed_chains.clone();
+
+    let mut context = GeneralContext::new(main_chain, config);
+
+    for relayed_chain_config in relayed_chains_config {
+        let relayed_chain_identity = GeneralRelayedChainIdentity::new(
+            relayed_chain_config.chain_id,
+            wallet.clone(),
+            relayed_chain_config.provider_endpoint.clone(),
+            relayed_chain_config
+                .time_limits
+                .unwrap()
+                .provider_polling_interval_millis,
+            relayed_chain_config
+                .controller_oracle_address
+                .parse()
+                .expect("bad format of controller_oracle_address"),
+            relayed_chain_config
+                .adapter_address
+                .parse()
+                .expect("bad format of adapter_address"),
+            relayed_chain_config
+                .time_limits
+                .unwrap()
+                .contract_transaction_retry_descriptor,
+            relayed_chain_config
+                .time_limits
+                .unwrap()
+                .contract_view_retry_descriptor,
+        );
+
+        // TODO use op db client for now, replace to factory later
+        let op_randomness_tasks_cache = db.get_op_bls_tasks_client::<RandomnessTask>();
+
+        let op_randomness_result_cache = db.get_op_randomness_result_client().await?;
+
+        let relayed_chain = GeneralRelayedChain::<G2Curve, G2Scheme>::new(
+            relayed_chain_config.description,
+            relayed_chain_identity,
+            node_cache.clone(),
+            group_cache.clone(),
+            op_randomness_tasks_cache,
+            op_randomness_result_cache,
+            relayed_chain_config.time_limits.unwrap(),
+            relayed_chain_config.listeners.clone(),
+        );
+
+        context.add_relayed_chain(Box::new(relayed_chain))?;
+    }
 
     let handle = context.deploy().await?;
 
     if is_new_run {
         let client =
-            ControllerClientBuilder::<BN254>::build_controller_client(&main_chain_identity);
+            ControllerClientBuilder::<G2Curve>::build_controller_client(&main_chain_identity);
 
         client
             .node_register(dkg_public_key_to_register.unwrap())
