@@ -233,6 +233,9 @@ def deploy_contracts():
     set_key(ENV_PATH, "STAKING_ADDRESS", l1_addresses["Staking"])
     set_key(ENV_PATH, "CONTROLLER_ADDRESS", l1_addresses["Controller"])
     set_key(ENV_PATH, "ADAPTER_ADDRESS", l1_addresses["ERC1967Proxy"])
+    set_key(
+        ENV_PATH, "OP_CHAIN_MESSENGER_ADDRESS", l1_addresses["OPChainMessenger"]
+    )  # ! This is set by controller local test
 
     # 4. deploy remaining contracts (Controller Oracle Init, StakeNodeLocalTest)
     # forge script script/OPControllerOracleInitializationLocalTest.s.sol:OPControllerOracleInitializationLocalTestScript --fork-url http://localhost:9545 --broadcast
@@ -247,6 +250,7 @@ def deploy_contracts():
             "OP_ADAPTER_ADDRESS": l2_addresses["ERC1967Proxy"],
             "OP_ARPA_ADDRESS": l2_addresses["Arpa"],
             "OP_CONTROLLER_ORACLE_ADDRESS": l2_addresses["ControllerOracle"],
+            "OP_CHAIN_MESSENGER_ADDRESS": l1_addresses["OPChainMessenger"],  # new
         },
         cwd=CONTRACTS_DIR,
         capture_output=HIDE_OUTPUT,

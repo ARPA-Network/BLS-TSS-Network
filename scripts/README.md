@@ -5,7 +5,9 @@
 Start Optimism Devnet
 
 ```bash
+git clone https://github.com/wrinkledeth/optimism
 cd optimism
+git submodule update --init --recursive
 make devnet-up-deploy
 ```
 
@@ -44,7 +46,20 @@ rm /home/ubuntu/BLS-TSS-Network/crates/arpa-node/*.sqlite
 cd optimism
 make devnet-clean
 make devnet-up-deploy
+
+# Helpful alias
+alias nodekill='pkill -f "node-client -c"; rm -rf /home/ubuntu/BLS-TSS-Network/crates/arpa-node/log; rm /home/ubuntu/BLS-TSS-Network/crates/arpa-node/*.sqlite'
+
 ```
+
+Todo 
+
+- [ ] Computer the 3 derived keys at runtime and place into config file
+- [ ] Testnet changes
+  - [ ] Argparse: (testnet/localnet, silent)
+  - [ ] If testnet, don't copy .env.example over .env
+  - [ ] Need to add alchemny to .envexample
+  - [ ] Need to transfer Eth to nodes
 
 ## Sample Output
 
