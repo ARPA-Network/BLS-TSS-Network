@@ -132,28 +132,7 @@ contract RandcastSDKExampleTest is RandcastTestHelper {
         _prepareSubscription(_admin, address(_pickPropertyExample), plentyOfEthBalance);
         _prepareSubscription(_admin, address(_pickWinnerExample), plentyOfEthBalance);
 
-        address[] memory _nodesGroup = new address[](5);
-        _nodesGroup[0] = _node1;
-        _nodesGroup[1] = _node2;
-        _nodesGroup[2] = _node3;
-        _nodesGroup[3] = _node4;
-        _nodesGroup[4] = _node5;
-
-        bytes[] memory _dkgPartialPubKeysGroup = new bytes[](5);
-        _dkgPartialPubKeysGroup[0] = _partialPublicKey32;
-        _dkgPartialPubKeysGroup[1] = _partialPublicKey33;
-        _dkgPartialPubKeysGroup[2] = _partialPublicKey34;
-        _dkgPartialPubKeysGroup[3] = _partialPublicKey35;
-        _dkgPartialPubKeysGroup[4] = _partialPublicKey36;
-
-        bytes[] memory _publicKeys = new bytes[](5);
-        _publicKeys[0] = _dkgPubkey1;
-        _publicKeys[1] = _dkgPubkey2;
-        _publicKeys[2] = _dkgPubkey3;
-        _publicKeys[3] = _dkgPubkey4;
-        _publicKeys[4] = _dkgPubkey5;
-
-        prepareAnAvailableGroupByKeys(_nodesGroup, _dkgPartialPubKeysGroup, _publicKeys, _publicKey2, 0);
+        prepareAnAvailableGroup();
     }
 
     function testDrawLottery() public {

@@ -172,7 +172,8 @@ contract AdapterTest is RandcastTestHelper {
                         * (uint32(groupSize) - Adapter(address(_adapter)).DEFAULT_MINIMUM_THRESHOLD()),
                 _gasExceptCallback,
                 0,
-                tx.gasprice * 3
+                tx.gasprice * 3,
+                uint32(groupSize)
             );
 
             _inflightCost += payment;

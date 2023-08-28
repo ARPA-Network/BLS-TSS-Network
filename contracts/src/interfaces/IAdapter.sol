@@ -59,6 +59,9 @@ interface IAdapter is IRequestTypeBase {
 
     function removeConsumer(uint64 subId, address consumer) external;
 
+    // delete the request that cannot be fulfilled, triggered by user themselves
+    function cancelOvertimeRequest(bytes32 requestId, RequestDetail calldata requestDetail) external;
+
     // view
     function getLastSubscription(address consumer) external view returns (uint64);
 
@@ -140,9 +143,7 @@ interface IAdapter is IRequestTypeBase {
         uint32 callbackGasLimit,
         uint32 gasExceptCallback,
         uint32 fulfillmentFlatFeeEthPPM,
-        uint256 weiPerUnitGas
+        uint256 weiPerUnitGas,
+        uint32 groupSize
     ) external view returns (uint256);
-
-    // delete the request that cannot be fulfilled, triggered by user themselves
-    function cancelOvertimeRequest(bytes32 requestId, RequestDetail calldata requestDetail) external;
 }
