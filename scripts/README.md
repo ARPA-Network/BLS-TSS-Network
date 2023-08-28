@@ -58,7 +58,7 @@ Todo
 - [ ] Testnet changes
   - [ ] Argparse: (testnet/localnet, silent)
   - [ ] If testnet, don't copy .env.example over .env
-  - [ ] Need to add alchemny to .envexample
+  - [ ] Need to add alchemny to .env example
   - [ ] Need to transfer Eth to nodes
 
 ## Sample Output
