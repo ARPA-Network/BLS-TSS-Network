@@ -7,16 +7,15 @@ from pprint import pprint
 
 import termcolor
 import ruamel.yaml
-from dotenv import load_dotenv, set_key, dotenv_values
+import binascii
+
+from dotenv import load_dotenv, set_key, dotenv_values, get_key
+
+from pk_util import print_keypair
 
 ####################
 # Global Variables #
 ####################
-L1_CHAIN_ID = "900"
-L2_CHAIN_ID = "901"
-
-L1_RPC = "http://localhost:8545"
-L2_RPC = "http://localhost:9545"
 
 HIDE_OUTPUT = True  # supress output
 
@@ -28,6 +27,19 @@ ARPA_NODE_CONFIG_DIR = os.path.join(ARPA_NODE_DIR, "test/conf")
 CONTRACTS_DIR = os.path.join(ROOT_DIR, "contracts")
 ENV_EXAMPLE_PATH = os.path.join(CONTRACTS_DIR, ".env.example")
 ENV_PATH = os.path.join(CONTRACTS_DIR, ".env")
+
+# RPC INFO
+L2_CHAIN_ID = get_key(ENV_PATH, "OP_CHAIN_ID")
+L2_RPC = get_key(ENV_PATH, "OP_RPC")
+L1_CHAIN_ID = get_key(ENV_PATH, "L1_CHAIN_ID")
+L1_RPC = get_key(ENV_PATH, "L1_RPC")
+
+
+print(f"L1_CHAIN_ID: {L1_CHAIN_ID}")
+print(f"L1_RPC: {L1_RPC}")
+print(f"L2_CHAIN_ID: {L2_CHAIN_ID}")
+print(f"L2_RPC: {L2_RPC}")
+
 OP_CONTROLLER_ORACLE_BROADCAST_PATH = os.path.join(
     CONTRACTS_DIR,
     "broadcast",
@@ -191,13 +203,22 @@ def wait_command(
         time.sleep(wait_time)
 
 
+def print_node_key_info():
+    mnemonic = get_key(ENV_PATH, "STAKING_NODES_MNEMONIC")
+    for index in [10, 11, 12]:
+        private_key, public_key = print_keypair(mnemonic, index)
+        print("\nIndex: {}".format(index))
+        print("Public key: {}".format(public_key))
+        print("Private key: {}".format(private_key))
+
+
 def deploy_contracts():
     ##################################
     ###### Contract Deployment #######
     ##################################
 
     # 1. Copy .env.example to .env, and load .env file for editing
-    run_command(["cp", ENV_EXAMPLE_PATH, ENV_PATH])
+    # run_command(["cp", ENV_EXAMPLE_PATH, ENV_PATH])
 
     # 2. Deploy L2 OPControllerOracleLocalTest contracts (ControllerOracle, Adapter, Arpa)
     # # forge script script/OPControllerOracleLocalTest.s.sol:OPControllerOracleLocalTestScript --fork-url http://localhost:9545 --broadcast
@@ -297,11 +318,23 @@ def deploy_nodes():  # ! Deploy Nodes
 
     # update config.yml files with correect L1 controller and adapter addresses
     config_files = ["config_1.yml", "config_2.yml", "config_3.yml"]
+
+    # computer node private key sfrom staking node mnemonic
+    mnemonic = get_key(ENV_PATH, "STAKING_NODES_MNEMONIC")
+    node_private_keys = []
+    for index in [10, 11, 12]:
+        private_key, public_key = print_keypair(mnemonic, index)
+        node_private_keys.append(private_key)
+        # print("\nIndex: {}".format(index))
+        # print("Public key: {}".format(public_key))
+        # print("Private key: {}".format(private_key))
+
+    # update config files
     yaml = ruamel.yaml.YAML()
     yaml.preserve_quotes = True  # preserves quotes
     yaml.indent(sequence=4, offset=2)  # set indentation
 
-    for file in config_files:
+    for i, file in enumerate(config_files):
         file_path = os.path.join(ARPA_NODE_CONFIG_DIR, file)
         with open(file_path, "r") as f:
             data = yaml.load(f)
@@ -315,9 +348,12 @@ def deploy_nodes():  # ! Deploy Nodes
         ]
         data["relayed_chains"][0]["adapter_address"] = l2_addresses["ERC1967Proxy"]
 
-        # # update rpc endpoints # Todo: Looks like this breaks things... we need to use 127.0.0.1 for the node config???
+        # # update rpc endpoints
         data["provider_endpoint"] = L1_RPC
         data["relayed_chains"][0]["provider_endpoint"] = L2_RPC
+
+        # node private key
+        data["account"]["private_key"] = node_private_keys[i]
 
         with open(file_path, "w") as f:
             yaml.dump(data, f)
@@ -360,7 +396,7 @@ def deploy_nodes():  # ! Deploy Nodes
     nodes_grouped = wait_command(
         [cmd],
         wait_time=10,
-        max_attempts=12,
+        max_attempts=15,
         shell=True,
     )
 
@@ -533,9 +569,8 @@ def main():
     deploy_nodes()
     test_request_randomness()
 
+    # print_node_key_info()
     # print_addresses()
-
-    # if testnet.. comment out the following
 
 
 if __name__ == "__main__":
