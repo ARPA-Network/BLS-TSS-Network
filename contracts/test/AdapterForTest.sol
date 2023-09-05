@@ -29,4 +29,8 @@ contract AdapterForTest is Adapter {
     function getPendingRequest(bytes32 requestId) public view returns (RequestDetail memory) {
         return _requestDetails[requestId];
     }
+
+    function getInflightCost(uint64 subId, bytes32 requestId) public view returns (uint256) {
+        return _subscriptions[subId].inflightPayments[requestId];
+    }
 }

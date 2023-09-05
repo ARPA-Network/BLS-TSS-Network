@@ -13,6 +13,7 @@ import {RequestIdBase} from "./utils/RequestIdBase.sol";
 import {BLS} from "./libraries/BLS.sol";
 // solhint-disable-next-line no-global-import
 import "./utils/Utils.sol" as Utils;
+import {ChainHelper} from "./libraries/ChainHelper.sol";
 
 contract Adapter is UUPSUpgradeable, IAdapter, IAdapterOwner, RequestIdBase, OwnableUpgradeable {
     using SafeERC20 for IERC20;
@@ -123,6 +124,8 @@ contract Adapter is UUPSUpgradeable, IAdapter, IAdapterOwner, RequestIdBase, Own
         bool success
     );
 
+    event OvertimeRequestCanceled(bytes32 indexed requestId, uint64 indexed subId);
+
     // *Errors*
     error Reentrant();
     error InvalidRequestConfirmations(uint16 have, uint16 min, uint16 max);
@@ -136,7 +139,6 @@ contract Adapter is UUPSUpgradeable, IAdapter, IAdapterOwner, RequestIdBase, Own
     error IdenticalSubscription();
     error AtLeastOneRequestIsRequired();
     error MustBeSubOwner(address owner);
-    error PaymentTooLarge();
     error NoAvailableGroups();
     error NoCorrespondingRequest();
     error IncorrectCommitment();
@@ -149,6 +151,7 @@ contract Adapter is UUPSUpgradeable, IAdapter, IAdapterOwner, RequestIdBase, Own
     error PendingRequestExists();
     error InvalidZeroAddress();
     error GasLimitTooBig(uint32 have, uint32 want);
+    error RequestNotExpired();
 
     // *Modifiers*
     modifier onlySubOwner(uint64 subId) {
@@ -280,7 +283,7 @@ contract Adapter is UUPSUpgradeable, IAdapter, IAdapterOwner, RequestIdBase, Own
     // =============
     // IAdapter
     // =============
-    function nodeWithdrawETH(address recipient, uint256 ethAmount) external {
+    function nodeWithdrawETH(address recipient, uint256 ethAmount) external override(IAdapter) {
         if (msg.sender != address(_controller)) {
             revert SenderNotController();
         }
@@ -316,7 +319,12 @@ contract Adapter is UUPSUpgradeable, IAdapter, IAdapterOwner, RequestIdBase, Own
         emit SubscriptionConsumerAdded(subId, consumer);
     }
 
-    function removeConsumer(uint64 subId, address consumer) external override onlySubOwner(subId) nonReentrant {
+    function removeConsumer(uint64 subId, address consumer)
+        external
+        override(IAdapter)
+        onlySubOwner(subId)
+        nonReentrant
+    {
         if (_subscriptions[subId].inflightCost != 0) {
             revert PendingRequestExists();
         }
@@ -349,7 +357,12 @@ contract Adapter is UUPSUpgradeable, IAdapter, IAdapterOwner, RequestIdBase, Own
         emit SubscriptionFunded(subId, oldBalance, oldBalance + msg.value);
     }
 
-    function setReferral(uint64 subId, uint64 referralSubId) external onlySubOwner(subId) nonReentrant {
+    function setReferral(uint64 subId, uint64 referralSubId)
+        external
+        override(IAdapter)
+        onlySubOwner(subId)
+        nonReentrant
+    {
         if (!_referralConfig.isReferralEnabled) {
             revert ReferralPromotionDisabled();
         }
@@ -369,7 +382,12 @@ contract Adapter is UUPSUpgradeable, IAdapter, IAdapterOwner, RequestIdBase, Own
         emit SubscriptionReferralSet(subId, referralSubId);
     }
 
-    function cancelSubscription(uint64 subId, address to) external override onlySubOwner(subId) nonReentrant {
+    function cancelSubscription(uint64 subId, address to)
+        external
+        override(IAdapter)
+        onlySubOwner(subId)
+        nonReentrant
+    {
         if (to == address(0)) {
             revert InvalidZeroAddress();
         }
@@ -377,6 +395,45 @@ contract Adapter is UUPSUpgradeable, IAdapter, IAdapterOwner, RequestIdBase, Own
             revert PendingRequestExists();
         }
         _cancelSubscriptionHelper(subId, to);
+    }
+
+    function cancelOvertimeRequest(bytes32 requestId, RequestDetail calldata requestDetail)
+        external
+        override(IAdapter)
+        onlySubOwner(requestDetail.subId)
+    {
+        if (_requestCommitments[requestId] == 0) {
+            revert NoCorrespondingRequest();
+        }
+        if (
+            _requestCommitments[requestId]
+                != keccak256(
+                    abi.encode(
+                        requestId,
+                        requestDetail.subId,
+                        requestDetail.groupIndex,
+                        requestDetail.requestType,
+                        requestDetail.params,
+                        requestDetail.callbackContract,
+                        requestDetail.seed,
+                        requestDetail.requestConfirmations,
+                        requestDetail.callbackGasLimit,
+                        requestDetail.callbackMaxGasPrice,
+                        requestDetail.blockNum
+                    )
+                )
+        ) {
+            revert IncorrectCommitment();
+        }
+        uint256 blockNum24H = 1 days / ChainHelper.getBlockTime();
+        if (block.number < requestDetail.blockNum + blockNum24H) {
+            revert RequestNotExpired();
+        }
+        delete _requestCommitments[requestId];
+        _subscriptions[requestDetail.subId].inflightCost -=
+            _subscriptions[requestDetail.subId].inflightPayments[requestId];
+        delete _subscriptions[requestDetail.subId].inflightPayments[requestId];
+        emit OvertimeRequestCanceled(requestId, requestDetail.subId);
     }
 
     function requestRandomness(RandomnessRequestParams calldata params)
@@ -547,6 +604,7 @@ contract Adapter is UUPSUpgradeable, IAdapter, IAdapterOwner, RequestIdBase, Own
     function getSubscription(uint64 subId)
         external
         view
+        override(IAdapter)
         returns (
             address owner,
             address[] memory consumers,
@@ -580,7 +638,7 @@ contract Adapter is UUPSUpgradeable, IAdapter, IAdapterOwner, RequestIdBase, Own
         return _requestCommitments[requestId];
     }
 
-    function getLastAssignedGroupIndex() external view returns (uint256) {
+    function getLastAssignedGroupIndex() external view override(IAdapter) returns (uint256) {
         return _lastAssignedGroupIndex;
     }
 
@@ -592,21 +650,22 @@ contract Adapter is UUPSUpgradeable, IAdapter, IAdapterOwner, RequestIdBase, Own
         return _randomnessCount;
     }
 
-    function getCurrentSubId() external view returns (uint64) {
+    function getCurrentSubId() external view override(IAdapter) returns (uint64) {
         return _currentSubId;
     }
 
-    function getCumulativeData() external view returns (uint256, uint256, uint256) {
+    function getCumulativeData() external view override(IAdapter) returns (uint256, uint256, uint256) {
         return (_cumulativeFlatFee, _cumulativeCommitterReward, _cumulativePartialSignatureReward);
     }
 
-    function getController() external view returns (address) {
+    function getController() external view override(IAdapter) returns (address) {
         return address(_controller);
     }
 
     function getAdapterConfig()
         external
         view
+        override(IAdapter)
         returns (
             uint16 minimumRequestConfirmations,
             uint32 maxGasLimit,
@@ -631,6 +690,7 @@ contract Adapter is UUPSUpgradeable, IAdapter, IAdapterOwner, RequestIdBase, Own
     function getFlatFeeConfig()
         external
         view
+        override(IAdapter)
         returns (
             uint32 fulfillmentFlatFeeLinkPPMTier1,
             uint32 fulfillmentFlatFeeLinkPPMTier2,
@@ -668,6 +728,7 @@ contract Adapter is UUPSUpgradeable, IAdapter, IAdapterOwner, RequestIdBase, Own
     function getReferralConfig()
         external
         view
+        override(IAdapter)
         returns (bool isReferralEnabled, uint16 freeRequestCountForReferrer, uint16 freeRequestCountForReferee)
     {
         return (
@@ -698,9 +759,13 @@ contract Adapter is UUPSUpgradeable, IAdapter, IAdapterOwner, RequestIdBase, Own
         uint32 callbackGasLimit,
         uint32 gasExceptCallback,
         uint32 fulfillmentFlatFeeEthPPM,
-        uint256 weiPerUnitGas
-    ) public pure override(IAdapter) returns (uint256) {
-        uint256 paymentNoFee = weiPerUnitGas * (gasExceptCallback + callbackGasLimit);
+        uint256 weiPerUnitGas,
+        uint32 groupSize
+    ) public view override(IAdapter) returns (uint256) {
+        // we estimate 1.5x the cost of the fulfillment calldata
+        uint256 estimatedFulfillmentL1CostWei =
+            ChainHelper.getTxL1GasFees(ChainHelper.getFulfillmentTxL1GasUsed(groupSize)) * 3 / 2;
+        uint256 paymentNoFee = weiPerUnitGas * (gasExceptCallback + callbackGasLimit) + estimatedFulfillmentL1CostWei;
         return (paymentNoFee + 1e12 * uint256(fulfillmentFlatFeeEthPPM));
     }
 
@@ -782,7 +847,8 @@ contract Adapter is UUPSUpgradeable, IAdapter, IAdapterOwner, RequestIdBase, Own
             sub.freeRequestCount > 0
                 ? 0
                 : (getFeeTier(reqCount) * _flatFeeConfig.flatFeePromotionGlobalPercentage / 100),
-            callbackMaxGasPrice
+            callbackMaxGasPrice,
+            groupSize
         );
 
         if (sub.balance - sub.inflightCost < payment) {
@@ -869,10 +935,8 @@ contract Adapter is UUPSUpgradeable, IAdapter, IAdapterOwner, RequestIdBase, Own
         uint256 flatFee,
         uint256 weiPerUnitGas
     ) internal view returns (uint256) {
-        uint256 paymentNoFee = weiPerUnitGas * (gasAfterPaymentCalculation + startGas - gasleft());
-        if (paymentNoFee > (12e25 - flatFee)) {
-            revert PaymentTooLarge(); // Payment + flatFee cannot be more than all of the ETH in existence.
-        }
+        uint256 paymentNoFee =
+            weiPerUnitGas * (gasAfterPaymentCalculation + startGas - gasleft()) + ChainHelper.getCurrentTxL1GasFees();
         return paymentNoFee + flatFee;
     }
 

@@ -743,6 +743,7 @@ async fn randcast(args: ArgMatches, context: &mut Context) -> anyhow::Result<Opt
                     GAS_EXCEPT_CALLBACK,
                     0,
                     gas_price * 3,
+                    DEFAULT_MINIMUM_THRESHOLD,
                 ),
                 context.config.contract_view_retry_descriptor,
             )

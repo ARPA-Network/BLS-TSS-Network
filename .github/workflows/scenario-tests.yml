@@ -1,0 +1,20 @@
+name: scenario-test
+
+on:
+  pull_request:
+
+jobs:
+  scenario-test:
+    runs-on: ubuntu-latest
+    steps:     
+    - name: Pull Docker image
+      run: docker pull andlyn/arpanetwork-test:latest
+  
+    - name: Run Docker container
+      run: |
+        docker run --name=scenario \
+          andlyn/arpanetwork-test:latest \
+          /bin/bash -c "git config --global url."https://".insteadOf git://; \
+          git clone ${{ github.repositoryUrl }}; \
+          cd BLS-TSS-Network; git fetch origin pull/${{ github.event.pull_request.number }}/head:${{ github.head_ref }}; git checkout ${{ github.head_ref }}; \
+          robot ./"

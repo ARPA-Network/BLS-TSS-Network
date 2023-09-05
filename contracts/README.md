@@ -135,10 +135,10 @@ Some view calls:
 ```bash
 
 # to check if the latest group info is relayed to L2
-cast call 0x9fE46736679d2D9a65F0992F2272dE9f3c7fa6e0 "getGroup(uint256)" 0 --rpc-url http://127.0.0.1:9545
-cast call 0x9d4454B023096f34B160D6B654540c56A1F81688 "getGroup(uint256)" 0 --rpc-url http://127.0.0.1:8545
+cast call <L1ControllerAddress> "getGroup(uint256)" 0 --rpc-url http://127.0.0.1:8545
+cast call <L2ControllerOracleAddress> "getGroup(uint256)" 0 --rpc-url http://127.0.0.1:9545
 
 # to check if the randomness is successfully fulfilled on L2
-cast call 0xDc64a140Aa3E981100a9becA4E685f962f0cF6C9 "getLastRandomness()(uint256)" --rpc-url http://127.0.0.1:9545
+cast call <L2AdapterAddress> "getLastRandomness()(uint256)" --rpc-url http://127.0.0.1:9545
 
 ```

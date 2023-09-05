@@ -4,6 +4,7 @@ pragma solidity ^0.8.18;
 import {GeneralRandcastConsumerBase, BasicRandcastConsumerBase} from "../GeneralRandcastConsumerBase.sol";
 // solhint-disable-next-line no-global-import
 import "src/user/RandcastSDK.sol" as RandcastSDK;
+
 contract DrawLotteryExample is GeneralRandcastConsumerBase {
     /* requestId -> randomness */
     mapping(bytes32 => uint256[]) public randomResults;
@@ -13,10 +14,12 @@ contract DrawLotteryExample is GeneralRandcastConsumerBase {
 
     // solhint-disable-next-line no-empty-blocks
     constructor(address adapter) BasicRandcastConsumerBase(adapter) {}
+
     event LotteryTicketGenerated(uint256[] ticketResults);
     /**
      * Requests randomness
      */
+
     function getTickets(uint32 ticketNum, uint32 winnerNum) external returns (bytes32) {
         ticketNumber = ticketNum;
         winnerNumber = winnerNum;

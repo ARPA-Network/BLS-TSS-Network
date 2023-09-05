@@ -11,7 +11,8 @@ use arpa_contract_client::adapter::{AdapterTransactions, AdapterViews};
 use arpa_core::{PartialSignature, RandomnessTask, SubscriberType, TaskType};
 use arpa_dal::{cache::RandomnessResultCache, BLSResultCacheState};
 use async_trait::async_trait;
-use ethers::types::Address;
+use chrono::Local;
+use ethers::types::{Address, BlockNumber};
 use log::{debug, error, info};
 use std::{collections::HashMap, marker::PhantomData, sync::Arc};
 use threshold_bls::{
@@ -100,6 +101,33 @@ impl<PC: Curve> FulfillRandomnessHandler for GeneralFulfillRandomnessHandler<PC>
         let randomness_task_request_id = randomness_task.request_id.clone();
 
         if client.is_task_pending(&randomness_task_request_id).await? {
+            let assignment_timestamp = self
+                .chain_identity
+                .read()
+                .await
+                .get_block_timestamp(BlockNumber::Number(
+                    randomness_task.assignment_block_height.into(),
+                ))
+                .await?
+                .ok_or(NodeError::InvalidBlockNumber(
+                    randomness_task.assignment_block_height,
+                ))?;
+
+            let dt = Local::now();
+
+            if dt.timestamp() as u64 - assignment_timestamp.as_u64() > 86400 {
+                self.randomness_signature_cache
+                    .write()
+                    .await
+                    .update_commit_result(&randomness_task_request_id, BLSResultCacheState::Expired)
+                    .await?;
+
+                info!("mark randomness task as expired. task request id: {}, assignment_block_height:{:?}",
+                    format!("{:?}",hex::encode(randomness_task_request_id)), randomness_task.assignment_block_height);
+
+                return Ok(());
+            }
+
             let wei_per_gas = self
                 .chain_identity
                 .read()

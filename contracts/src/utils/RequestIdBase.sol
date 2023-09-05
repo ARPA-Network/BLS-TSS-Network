@@ -2,12 +2,12 @@
 pragma solidity ^0.8.18;
 
 contract RequestIdBase {
-    function _makeRandcastInputSeed(uint256 _userSeed, address _requester, uint256 _nonce)
+    function _makeRandcastInputSeed(uint256 userSeed, address requester, uint256 nonce)
         internal
-        pure
+        view
         returns (uint256)
     {
-        return uint256(keccak256(abi.encode(_userSeed, _requester, _nonce)));
+        return uint256(keccak256(abi.encode(block.chainid, userSeed, requester, nonce)));
     }
 
     function _makeRequestId(uint256 inputSeed) internal pure returns (bytes32) {

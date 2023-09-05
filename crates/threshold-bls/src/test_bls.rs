@@ -18,22 +18,28 @@ pub mod tests {
     #[test]
     fn test_dkg_bls_over_bn254() {
         let seed_arr = [
-            "de7c516e867a427226866fa41566ad0eb0ff69f54e4408babd2f59c54238fa86",
-            "d33ade962639dfbe2c2cb144c8b81b9b41426183f4a8f9d97a3797267085e3e9",
-            "d43a01309e5ce06f563855ea4d63bfd19566144d62073344ca66a52fe459fcd2",
-            "edea6587954fc90bf55a2e710f2edda6d40cbc59050201e7e04b44af906eb1dc",
-            "3884a5de852ba49a376e504abed8501ce14c9fd7d0a8a4aaca2a81d9d87b35da",
-            "5e834c9e0ee3c1df597ce48258054d49ed258ecb6d31fbce6a78be9daf9afaa1",
-            "e0ab0f3bc77b9c2b203d07aaa5af51280d8bba6c5bb1cd54763959c1b8770854",
-            "428874369318654d220b552cd69526384de1a9854b9a194f3ee725424d32e4bd",
-            "640670d5370a0b1142d202dd8d733cdc5317af68692ed48653ec348d2432c6f6",
-            "1e049c83faf1abc374ad113f0e50995b4ed8a5be475156a346e773bb0d5cea7d",
-            "912879b65da7afad27afb740fed587019e3aac62a0731fcdb33a38a5e04a9dbc",
-            "34fa9bc41a34b4a1fb4dc01764f8f0cc61f6fc90284a603c49e393c220213552",
-            "a4371e17c84d644e0823a95223011a30b995e36afd180b719769ad6ce88ceeae",
+            "381336e809b17f1073ab04bc3ec7f42467eecd3deb2cf2131afc144f3d7e3460",
+            "b21e7b73da061425eaf25194a5948b8eb7de4b48bbb2d2e9288ae5ee6fca7f98",
+            "b6341502d010740f87b23ef2726c0e20884c3f32013ba6905b22597c56118242",
+            "38dde2f18019cfd2160a9efabe48fed1bf6c3224f055da89b50e2ca71c4bbc9a",
+            "51f4382ec948c5ba7e06815ad3a20a45404f6035b602f5dfa39915765393d157",
+            "fe4334e130fd43b7ad1f25d8c62cc345f9b9940c578ceb85421b58fb8d0a78dd",
+            "9a30cc4ff58a5e8a12572ce431dc681f5bb03d9443816093dbd39d98b7a2264e",
+            "adc74caff81ece16321a09d27b394c0f287db98851edb5219105e30a6b8b919f",
+            "ce4b662b812b4166e4cf522b4322a7492c71222c2548db916c31de45470fce20",
+            "d58a2946ea20724bdf25841dcc9f40da9353578fe4c917982d9d414a9306225e",
+            "574d19ba255ab559ce104ba2f58150e9be94f7d40f7a482007b5953b8967629f",
+            "e90f06a218986b04c8fcabf05d647937bdb828dd443bd70cffde5d0b2dbaa24d",
+            "6bfff7ae4ac5e8c53e806d5377a559d40294301a8e5ae2fa462c176432d96c22",
+            "381336e809b17f1073ab04bc3ec7f42467eecd3deb2cf2131afc144f3d7e3460",
+            "e90f06a218986b04c8fcabf05d647937bdb828dd443bd70cffde5d0b2dbaa24d",
+            "574d19ba255ab559ce104ba2f58150e9be94f7d40f7a482007b5953b8967629f",
+            "612f9f32f1a2a5ffb5aa3ac2aa34e097bd2e8208940fa8feed3617b28b69a495",
         ];
 
-        let block_num_arr = [1, 18, 35, 52, 69, 86, 103, 120, 137, 154, 1, 1, 1];
+        let block_num_arr = [
+            1, 18, 35, 52, 69, 86, 103, 120, 137, 154, 1, 1, 1, 1, 1, 1, 1,
+        ];
 
         let (n, t) = (5, 3);
         // create the private key polynomial
@@ -58,7 +64,7 @@ pub mod tests {
         (0..n).for_each(|i| {
             let eval = public_poly.eval(i as Idx);
             println!(
-                "bytes partialPublicKey{} = hex{:?};",
+                "bytes internal _partialPublicKey{} = hex{:?};",
                 i + 1,
                 hex::encode(bincode::serialize(&eval.value).unwrap())
             );
@@ -71,7 +77,7 @@ pub mod tests {
 
         println!("// Group Public Key");
         println!(
-            "bytes publicKey = hex{:?};",
+            "bytes internal _publicKey = hex{:?};",
             hex::encode(bincode::serialize(threshold_public_key).unwrap())
         );
         // print_g2_point(threshold_public_key);
@@ -99,7 +105,7 @@ pub mod tests {
             partials.iter().enumerate().for_each(|(j, partial)| {
                 let eval: Eval<Vec<u8>> = bincode::deserialize(partial).unwrap();
                 println!(
-                    "uint256 partial{}_{} = 0x{};",
+                    "uint256 internal _partialG{}I{} = 0x{};",
                     i + 1,
                     j + 1,
                     hex::encode(&eval.value)
@@ -113,12 +119,12 @@ pub mod tests {
             SigScheme::verify(&threshold_public_key, &msg[..], &threshold_sig).unwrap();
 
             println!(
-                "uint256 signature{} = 0x{};",
+                "uint256 internal _signature{} = 0x{};",
                 i + 1,
                 hex::encode(&threshold_sig)
             );
             println!(
-                "uint256[] sig{} = [signature{}, partial{}_1, partial{}_2, partial{}_3, partial{}_4, partial{}_5];",i + 1,i + 1,i + 1,i + 1,i + 1,i + 1,i + 1
+                "uint256[] internal _sig{} = [_signature{}, _partialG{}I1, _partialG{}I2, _partialG{}I3, _partialG{}I4, _partialG{}I5];",i + 1,i + 1,i + 1,i + 1,i + 1,i + 1,i + 1
             );
             // let sig_point: G1 = bincode::deserialize(&threshold_sig).unwrap();
             // print_g1_point(&sig_point);
