@@ -128,20 +128,6 @@ class EC2InstanceStack(Stack):
             },
         )
 
-        # Userdata script
-        ubuntu_asset = Asset(
-            self, "UbuntuAsset", path=os.path.join(dirname, "configure_ubuntu.sh")
-        )
-
-        ubuntu_local_path = ubuntu_ec2.user_data.add_s3_download_command(
-            bucket=ubuntu_asset.bucket, bucket_key=ubuntu_asset.s3_object_key
-        )
-
-        # Execute userdata scripts
-        ubuntu_ec2.user_data.add_execute_file_command(file_path=ubuntu_local_path)
-
-        ubuntu_asset.grant_read(ubuntu_ec2.role)
-
         # Useful Outputs
         useful_outputs = CfnOutput(
             self,
