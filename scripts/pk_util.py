@@ -10,6 +10,8 @@ import struct
 from base58 import b58encode_check
 from ecdsa.curves import SECP256k1
 
+from eth_keys import keys
+
 
 BIP39_PBKDF2_ROUNDS = 2048
 BIP39_SALT_MODIFIER = "mnemonic"
@@ -170,14 +172,18 @@ def print_keypair(mnemonic, index, passphrase=""):
     private_key_str = str(binascii.hexlify(private_key), "utf-8")
     public_key_str = str(binascii.hexlify(public_key), "utf-8")
 
-    return private_key_str, public_key_str
+    # convert public key to address format
+    pk = keys.PrivateKey(private_key)
+    address = pk.public_key.to_checksum_address()
+
+    return private_key_str, address
 
 
 if __name__ == "__main__":
     mnemonic = "test test test test test test test test test test test junk"
 
     # get the 10th, 11th, and 12th, private key and corresponding public key
-    for index in [10, 11, 12]:
+    for index in [0, 1, 10, 11, 12]:
         private_key, public_key = print_keypair(mnemonic, index)
         print("\nIndex: {}".format(index))
         print("Public key: {}".format(public_key))
