@@ -17,7 +17,7 @@ from pk_util import print_keypair
 # Global Variables #
 ####################
 
-HIDE_OUTPUT = True  # supress output
+HIDE_OUTPUT = False  # supress output
 
 # prep directories
 SCRIPT_DIR = os.getcwd()
@@ -223,7 +223,7 @@ def deploy_contracts():
     # 2. Deploy L2 OPControllerOracleLocalTest contracts (ControllerOracle, Adapter, Arpa)
     # # forge script script/OPControllerOracleLocalTest.s.sol:OPControllerOracleLocalTestScript --fork-url http://localhost:9545 --broadcast
     print("Running Solidity Script: OPControllerOracleLocalTest on L1...")
-    cmd = f"forge script script/OPControllerOracleLocalTest.s.sol:OPControllerOracleLocalTestScript --fork-url {L2_RPC} --broadcast"
+    cmd = f"forge script script/OPControllerOracleLocalTest.s.sol:OPControllerOracleLocalTestScript --fork-url {L2_RPC} --broadcast --slow"
     cprint(cmd)
     run_command(
         [cmd], env={}, cwd=CONTRACTS_DIR, capture_output=HIDE_OUTPUT, shell=True
@@ -238,7 +238,7 @@ def deploy_contracts():
     #     (Controller, Controller Relayer, OPChainMessenger, Adapter, Arpa, Staking)
     # forge script script/ControllerLocalTest.s.sol:ControllerLocalTestScript --fork-url http://localhost:8545 --broadcast
     print("Running Solidity Script: ControllerLocalTest on L1...")
-    cmd = f"forge script script/ControllerLocalTest.s.sol:ControllerLocalTestScript --fork-url {L1_RPC} --broadcast"
+    cmd = f"forge script script/ControllerLocalTest.s.sol:ControllerLocalTestScript --fork-url {L1_RPC} --broadcast --slow"
     cprint(cmd)
     run_command(
         [cmd],
@@ -261,7 +261,7 @@ def deploy_contracts():
     print(
         "Running Solidity Script: OPControllerOracleInitializationLocalTestScript on L2..."
     )
-    cmd = f"forge script script/OPControllerOracleInitializationLocalTest.s.sol:OPControllerOracleInitializationLocalTestScript --fork-url {L2_RPC} --broadcast"
+    cmd = f"forge script script/OPControllerOracleInitializationLocalTest.s.sol:OPControllerOracleInitializationLocalTestScript --fork-url {L2_RPC} --broadcast --slow"
     cprint(cmd)
     run_command(
         [cmd],
@@ -278,7 +278,7 @@ def deploy_contracts():
 
     # forge script script/InitStakingLocalTest.s.sol:InitStakingLocalTestScript --fork-url http://localhost:8545 --broadcast -g 15
     print("Running Solidity Script: InitStakingLocalTestScript on L1...")
-    cmd = f"forge script script/InitStakingLocalTest.s.sol:InitStakingLocalTestScript --fork-url {L1_RPC} --broadcast -g 150"
+    cmd = f"forge script script/InitStakingLocalTest.s.sol:InitStakingLocalTestScript --fork-url {L1_RPC} --broadcast -g 150 --slow"
     cprint(cmd)
     run_command(
         [cmd],
@@ -293,7 +293,7 @@ def deploy_contracts():
 
     # forge script script/StakeNodeLocalTest.s.sol:StakeNodeLocalTestScript --fork-url http://localhost:8545 --broadcast
     print("Running Solidity Script: StakeNodeLocalTestScript on L1...")
-    cmd = f"forge script script/StakeNodeLocalTest.s.sol:StakeNodeLocalTestScript --fork-url {L1_RPC} --broadcast -g 150"
+    cmd = f"forge script script/StakeNodeLocalTest.s.sol:StakeNodeLocalTestScript --fork-url {L1_RPC} --broadcast -g 150 --slow"
     cprint(cmd)
     run_command(
         [cmd],
@@ -348,9 +348,13 @@ def deploy_nodes():  # ! Deploy Nodes
         ]
         data["relayed_chains"][0]["adapter_address"] = l2_addresses["ERC1967Proxy"]
 
-        # # update rpc endpoints
+        # update rpc endpoints
         data["provider_endpoint"] = L1_RPC
         data["relayed_chains"][0]["provider_endpoint"] = L2_RPC
+
+        # Update Chain ID
+        data["chain_id"] = int(L1_CHAIN_ID)
+        data["relayed_chains"][0]["chain_id"] = int(L2_CHAIN_ID)
 
         # node private key
         data["account"]["private_key"] = node_private_keys[i]
@@ -395,8 +399,8 @@ def deploy_nodes():  # ! Deploy Nodes
     cprint(cmd)
     nodes_grouped = wait_command(
         [cmd],
-        wait_time=10,
-        max_attempts=15,
+        wait_time=12,
+        max_attempts=25,
         shell=True,
     )
 
@@ -428,15 +432,15 @@ def deploy_nodes():  # ! Deploy Nodes
 
     coordinator = wait_command(
         [cmd],
-        wait_time=10,
-        max_attempts=12,
+        wait_time=12,
+        max_attempts=42,
         shell=True,
         success_value="0x0000000000000000000000000000000000000000000000000000000000000000",
     )
     print("\nDKG Proccess Completed Succesfully!")
     print(f"Coordinator Value: {coordinator}\n")
 
-    time.sleep(10)  # wait for group info to propogate from L1 to L2
+    time.sleep(30)  # wait for group info to propogate from L1 to L2
 
 
 def get_last_randomness(address: str, rpc: str) -> str:
@@ -484,7 +488,7 @@ def test_request_randomness():  # ! Integration Testing
 
     # 2. Deploy L1 user contract and request randomness
     print("Deploying L1 user contract and requesting randomness...")
-    cmd = f"forge script script/GetRandomNumberLocalTest.s.sol:GetRandomNumberLocalTestScript --fork-url {L1_RPC} --broadcast"
+    cmd = f"forge script script/GetRandomNumberLocalTest.s.sol:GetRandomNumberLocalTestScript --fork-url {L1_RPC} --broadcast --slow"
     cprint(cmd)
     run_command(
         [cmd],
@@ -504,8 +508,8 @@ def test_request_randomness():  # ! Integration Testing
     cprint(cmd)
     l1_cur_randomness = wait_command(
         [cmd],
-        wait_time=5,
-        max_attempts=10,
+        wait_time=15,
+        max_attempts=20,
         fail_value=l1_prev_randomness,
         shell=True,
     )
@@ -525,7 +529,7 @@ def test_request_randomness():  # ! Integration Testing
     print("Deploying l2 user contract and requesting randomness...")
 
     # forge script script/OPGetRandomNumberLocalTest.s.sol:OPGetRandomNumberLocalTestScript --fork-url http://localhost:9545 --broadcast
-    cmd = f"forge script script/OPGetRandomNumberLocalTest.s.sol:OPGetRandomNumberLocalTestScript --fork-url {L2_RPC} --broadcast"
+    cmd = f"forge script script/OPGetRandomNumberLocalTest.s.sol:OPGetRandomNumberLocalTestScript --fork-url {L2_RPC} --broadcast --slow"
     cprint(cmd)
     run_command(
         [cmd],
@@ -545,8 +549,8 @@ def test_request_randomness():  # ! Integration Testing
     cprint(cmd)
     l2_cur_randomness = wait_command(
         [cmd],
-        wait_time=5,
-        max_attempts=10,
+        wait_time=15,
+        max_attempts=20,
         fail_value=l2_prev_randomness,
         shell=True,
     )
