@@ -3,7 +3,7 @@ pragma solidity ^0.8.18;
 
 import {Script} from "forge-std/Script.sol";
 import {IAdapter} from "../src/interfaces/IAdapter.sol";
-import {GetRandomNumberExample} from "../src/user/examples/GetRandomNumberExample.sol";
+import {GetRandomNumberExample} from "Randcast-User-Contract/user/examples/GetRandomNumberExample.sol";
 
 contract GetRandomNumberScenarioTestScript is Script {
     function run() external {
@@ -25,8 +25,7 @@ contract GetRandomNumberScenarioTestScript is Script {
         adapter.fundSubscription{value: plentyOfEthBalance}(subId);
 
         adapter.addConsumer(subId, address(getRandomNumberExample));
-        
-        getRandomNumberExample.setCallbackGasConfig(2000000, 1500000000);
 
+        getRandomNumberExample.setCallbackGasConfig(2000000, 1500000000);
     }
 }

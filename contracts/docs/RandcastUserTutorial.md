@@ -10,16 +10,15 @@
   - [7. Request Randomness](#7-request-randomness)
   - [8. Check Last Randomness](#8-check-last-randomness)
 
-
-The below instructions outline the steps needed for a user to start requesting randomness from ARPA Randcast. 
+The below instructions outline the steps needed for a user to start requesting randomness from ARPA Randcast.
 
 ## 1. Export your Environment Variables
 
-You will need to export several environment variables to streamline the execution of the subsequent commands. 
+You will need to export several environment variables to streamline the execution of the subsequent commands.
 
-Mainnet Exports 
+Mainnet Exports
 
-``` bash
+```bash
 export ADAPTER_CONTRACT=0xbd57b868bb3374faa88722d2ee7ba3023c744e05 # mainnet adapter contract
 export RPC_URL= # Mainnet Alchemy / Infura RPC URL Here
 export USER_PUBLIC_KEY= # Eth User You are using to deploy consumer / user contract
@@ -48,9 +47,9 @@ cast send $ADAPTER_CONTRACT "createSubscription()(uint64)" --private-key $USER_P
 
 ## 3. Gather Subscription Details
 
-The subscription id is then retrieved from the contract event logs to be used in subsequent steps. 
+The subscription id is then retrieved from the contract event logs to be used in subsequent steps.
 
-You can provide the block number from step 2 in order to speed up the event search. 
+You can provide the block number from step 2 in order to speed up the event search.
 
 Reference: [cast logs](https://book.getfoundry.sh/reference/cast/cast-logs)
 
@@ -67,7 +66,7 @@ export SUB_ID= # export subid for your newly created subsciption
 
 ## 4. Fund the Subscription
 
-Next, fund your subscription with Ethereum. These funds will be used to pay for your subsequent randomness requests. 
+Next, fund your subscription with Ethereum. These funds will be used to pay for your subsequent randomness requests.
 
 ```bash
 cast send $ADAPTER_CONTRACT "fundSubscription(uint64)" $SUB_ID --value 1ether --private-key $USER_PRIVATE_KEY --rpc-url $RPC_URL
@@ -77,7 +76,7 @@ cast send $ADAPTER_CONTRACT "fundSubscription(uint64)" $SUB_ID --value 1ether --
 
 The user must now deploy a contract that will consume the randomness provided by randcast. "forge create" is used to compile and deploy the contract.
 
-A sample is provided here: [GetRandomNumberLocalTest.sol](../src/user/examples/GetRandomNumberExample.sol)
+A sample is provided here: [GetRandomNumberLocalTest.sol](https://github.com/ARPA-Network/Randcast-User-Contract/tree/main/contracts/user/examples/GetRandomNumberExample.sol)
 
 Reference: [forge create](https://book.getfoundry.sh/forge/deploying)
 

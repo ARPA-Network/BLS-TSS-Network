@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.18;
 
-import {DrawLotteryExample} from "../../src/user/examples/DrawLotteryExample.sol";
-import {PickRarityExample} from "../../src/user/examples/PickRarityExample.sol";
-import {PickPropertyExample} from "../../src/user/examples/PickPropertyExample.sol";
-import {PickWinnerExample} from "../../src/user/examples/PickWinnerExample.sol";
+import {DrawLotteryExample} from "Randcast-User-Contract/user/examples/DrawLotteryExample.sol";
+import {PickRarityExample} from "Randcast-User-Contract/user/examples/PickRarityExample.sol";
+import {PickPropertyExample} from "Randcast-User-Contract/user/examples/PickPropertyExample.sol";
+import {PickWinnerExample} from "Randcast-User-Contract/user/examples/PickWinnerExample.sol";
 
 import {
     IAdapter,
@@ -33,7 +33,7 @@ contract RandcastSDKExampleTest is RandcastTestHelper {
     uint256 internal _dkgPostProcessReward = 100;
     uint256 internal _lastOutput = 2222222222222222;
 
-    uint16 internal _minimumRequestConfirmations = 3;
+    uint16 internal _minimumRequestConfirmations = 6;
     uint32 internal _maxGasLimit = 2000000;
     uint32 internal _gasAfterPaymentCalculation = 50000;
     uint32 internal _gasExceptCallback = 550000;
