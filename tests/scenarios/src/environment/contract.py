@@ -56,16 +56,16 @@ def contract_function_transact(contract, function_name, *args):
     """
     function = getattr(contract.functions, function_name)
     # Call the function with the provided parameters
-    result = function(*args).transact()
+    result = function(*args).transact({'gas': 500000})
     return result
 
-def exec_script(script_name):
+def exec_script(script_name, url='http://localhost:8545'):
     """
     Executes a script from the "contracts/script" directory.
     """
     os.chdir("contracts")
     cmd = ("forge script script/" + script_name
-        + " --fork-url http://localhost:8545 --broadcast --slow")
+        + " --fork-url " + url + " --broadcast --slow")
     os.system(cmd)
     os.chdir("..")
 
@@ -73,16 +73,28 @@ def get_contract_address_from_file(file_name):
     """
     Get contract address from receipt file.
     file_name: the receipt file name.
+    returns: dictionary mapping contract names to their addresses
     """
     with open(file_name, 'r', encoding='UTF-8') as file:
         data = json.load(file)
+
     transactions = data.get('transactions')
-    contract_addresses = []
+
+    # initialize an empty dictionary to hold the mapping
+    contract_addresses = {}
+
     for transaction in transactions:
-        contract_address = transaction.get('contractAddress')
-        if contract_address is not None:
-            contract_addresses.append(contract_address)
+        if transaction.get('transactionType') == 'CREATE':
+            contract_address = transaction.get('contractAddress')
+            contract_name = transaction.get('contractName')
+            if contract_address is not None and contract_name is not None:
+                # create a mapping between the contract name and its address
+                contract_addresses[contract_name] = contract_address
+            if contract_name is None:
+                contract_addresses['default'] = contract_address
+
     return contract_addresses
+
 
 def get_event(contract, event_name, from_block=0):
     """

@@ -4,6 +4,8 @@ pragma solidity ^0.8.13;
 import {Script} from "forge-std/Script.sol";
 import {Controller} from "../src/Controller.sol";
 import {ControllerProxy} from "../src/ControllerProxy.sol";
+import {ControllerRelayer} from "../src/ControllerRelayer.sol";
+import {OPChainMessenger} from "../src/OPChainMessenger.sol";
 import {IControllerOwner} from "../src/interfaces/IControllerOwner.sol";
 import {Adapter} from "../src/Adapter.sol";
 import {IAdapterOwner} from "../src/interfaces/IAdapterOwner.sol";
@@ -58,8 +60,14 @@ contract ControllerScenarioTest is Script {
     uint256 internal _delegationRateDenominator = vm.envUint("DELEGATION_RATE_DENOMINATOR");
     uint256 internal _unstakeFreezingDuration = vm.envUint("UNSTAKE_FREEZING_DURATION");
 
+    uint256 internal _opChainId = vm.envUint("OP_CHAIN_ID");
+    address internal _opControllerOracleAddress = vm.envAddress("OP_CONTROLLER_ORACLE_ADDRESS");
+    address internal _opL1CrossDomainMessengerAddress = vm.envAddress("OP_L1_CROSS_DOMAIN_MESSENGER_ADDRESS");
+
     function run() external {
         Controller controller;
+        ControllerRelayer controllerRelayer;
+        OPChainMessenger opChainMessenger;
         ControllerProxy proxy;
         ERC1967Proxy adapter;
         Adapter adapterImpl;
@@ -113,6 +121,7 @@ contract ControllerScenarioTest is Script {
         );
 
         vm.broadcast(_deployerPrivateKey);
+        
         IAdapterOwner(address(adapter)).setAdapterConfig(
             _minimumRequestConfirmations,
             _maxGasLimit,
@@ -144,5 +153,15 @@ contract ControllerScenarioTest is Script {
 
         vm.broadcast(_deployerPrivateKey);
         staking.setController(address(proxy));
+        
+        vm.broadcast(_deployerPrivateKey);
+        controllerRelayer = new ControllerRelayer(address(proxy));
+
+        vm.broadcast(_deployerPrivateKey);
+        opChainMessenger =
+        new OPChainMessenger(address(controllerRelayer), _opControllerOracleAddress, _opL1CrossDomainMessengerAddress);
+
+        vm.broadcast(_deployerPrivateKey);
+        controllerRelayer.setChainMessenger(_opChainId, address(opChainMessenger));
     }
 }

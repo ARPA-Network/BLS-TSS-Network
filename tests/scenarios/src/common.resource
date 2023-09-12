@@ -70,14 +70,13 @@ Start Local Ethereum Chain
     Process Should Be Running    ${anvil_process_handle}
     Set Global Variable    $LOCAL_ETHEREUM_CHAIN_PROCESS_HANDLE    ${anvil_process_handle}
     Sleep    2s
-    ${result} =    Parse Chain Result To Account List
-    Set Global Variable    $NODE_ACCOUNT_LIST    ${result}
 
 Stop Local Ethereum Chain
     [Documentation]    Stops the local Ethereum blockchain child process running in the backgroud of Anvil
     ...    by grabbing the previously saved process handle during the suite setup process
     Terminate Process    ${LOCAL_ETHEREUM_CHAIN_PROCESS_HANDLE}
     Process Should Be Stopped    ${LOCAL_ETHEREUM_CHAIN_PROCESS_HANDLE}
+    Set Global Variable    $LOCAL_ETHEREUM_CHAIN_PROCESS_HANDLE    ''
 
 Get Chain ID
     [Documentation]    Tests the local Ethereum chain is up and running
@@ -180,3 +179,7 @@ Source Environment Variables
     [Documentation]    Source environment variables
     ${result} =    Run    source ${ENV_PATH}
     ${result} =    Run    cp ${ENV_PATH} ${CONTRACT_PATH}.env
+
+Parse Node
+    ${result} =    Parse Chain Result To Account List
+    Set Global Variable    $NODE_ACCOUNT_LIST    ${result}

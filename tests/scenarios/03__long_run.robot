@@ -27,7 +27,7 @@ Long Running Request Randomness
 
     ${log_group_available} =       All Nodes Have Keyword    Group index:    ${NODE_PROCESS_LIST}
     Wait For Process    timeout=20s
-    Group Node Number Should Be    0    1
+    Group Node Number Should Be    0    3
     ${current_randomness} =    Set Variable    1
     ${last_randomness} =    Set Variable    0
     Deploy User Contract
@@ -77,5 +77,5 @@ Test Log Size
 
 *** Test Cases ***
 Run Long Running Case
-    Repeat Keyword    0    Long Running Request Randomness
+    Repeat Keyword    1    Long Running Request Randomness
     Repeat Keyword    0    Test Log Size

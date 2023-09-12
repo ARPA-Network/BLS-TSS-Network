@@ -34,9 +34,9 @@ Test Rebalance
     Group Node Number Should Be    0    5
 
     ${node6} =    Stake And Run Node    6
-    ${result} =        Get Keyword From Log    6    Transaction successful(node_register)
+    ${result} =        Get Keyword From Node Log    6    Transaction successful(node_register)
     ${get_share} =    All Nodes Have Keyword    Calling contract view get_shares    ${NODE_PROCESS_LIST}
-    ${group_result} =    Get Keyword From Log    6    is available
+    ${group_result} =    Get Keyword From Node Log    6    is available
 
     Group Node Number Should Be    0    3
     Group Node Number Should Be    1    3
@@ -71,9 +71,9 @@ DKG Happy Path1
 
     ${log_phase_1} =    All Nodes Have Keyword    Waiting for Phase 1 to start    ${NODE_PROCESS_LIST}
     Mine Blocks    8
-    ${log_phase_2} =   Get Keyword From Log    2    Waiting for Phase 2 to start
+    ${log_phase_2} =   Get Keyword From Node Log    2    Waiting for Phase 2 to start
     Mine Blocks    9
-    ${log_group_available} =   Get Keyword From Log    2    Group index:
+    ${log_group_available} =   Get Keyword From Node Log    2    Group index:
     Group Node Number Should Be    0    3
     
     ${slash_event} =    Get Event    ${CONTROLLER_CONTRACT}    NodeSlashed
@@ -108,7 +108,7 @@ DKG Happy Path2
 
     ${log_phase_1} =    All Nodes Have Keyword    Waiting for Phase 1 to start    ${NODE_PROCESS_LIST}
     Mine Blocks    8
-    ${log_phase_2} =   Get Keyword From Log    2    Waiting for Phase 2 to start
+    ${log_phase_2} =   Get Keyword From Node Log    2    Waiting for Phase 2 to start
     Mine Blocks    9
     ${log_group_available} =       All Nodes Have Keyword    Group index:    ${NODE_PROCESS_LIST}
     Group Node Number Should Be    0    4

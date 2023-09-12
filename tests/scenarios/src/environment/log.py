@@ -24,7 +24,7 @@ def get_log_info(log, keyword):
     return None
 
 
-def get_keyword_from_log(node_idx, keyword, retry_time=30):
+def get_keyword_from_node_log(node_idx, keyword, retry_time=30):
     """
     Run a command as a sub-process and check the logs for a given keyword
     :param process: sub-process object
@@ -53,22 +53,22 @@ def have_node_got_keyword(keyword, node_process_list, retry_time=10):
         retry_time = retry_time - 1
         node_idx = 1
         while node_idx <= len(node_process_list):
-            log_info = get_keyword_from_log(node_idx, keyword, 30)
+            log_info = get_keyword_from_node_log(node_idx, keyword, 30)
             if log_info is not None:
                 return True
             node_idx = node_idx + 1
     return False
 
 
-def all_nodes_have_keyword(keyword, node_process_list, retry_time=300):
+def all_nodes_have_keyword(keyword, node_process_list, retry_time=300, node_idx=1):
     """
     Check if all nodes have a keyword in their logs
     :param keyword: keyword to look for in the log
     :return: dictionary with the relevant information found for the keyword
     """
-    node_idx = 1
+    
     while node_idx <= len(node_process_list):
-        log_info = get_keyword_from_log(node_idx, keyword, retry_time)
+        log_info = get_keyword_from_node_log(node_idx, keyword, retry_time)
         if log_info is None:
             return False
         node_idx = node_idx + 1
@@ -87,6 +87,13 @@ def clear_log(path='crates/arpa-node/log/running/'):
             open(open_path, 'w', encoding='UTF-8').close()
         node_idx = node_idx + 1
     open(path + 'anvil-chain.log', 'w', encoding='UTF-8').close()
+    open(path + 'op.log', 'w', encoding='UTF-8').close()
+
+def clear_one_log(path):
+    """
+    Clear a log file
+    """
+    open(path, 'w', encoding='UTF-8').close()
 
 def get_err_log_from_chain():
     """
@@ -98,3 +105,26 @@ def get_err_log_from_chain():
             if line.upper().find('ERROR') != -1:
                 return line
     return None
+
+def wait_for_keyword_from_log(path, keyword, max_retry_time=300):
+    '''
+    Wait for a keyword from a log file
+    '''
+
+    retry_time = 0
+    while retry_time < max_retry_time:
+        with open(path, 'r', encoding='UTF-8') as log_file:
+            lines = log_file.readlines()
+
+            # check if keyword exists in any line
+            for line in lines:
+                if keyword in line:
+                    print(f'Keyword: {keyword} found in file.')
+                    return True
+
+            print('Keyword not found. Retrying...')
+            time.sleep(1)
+            retry_time += 1
+
+    print('Reached max retry time. Keyword not found.')
+    return False

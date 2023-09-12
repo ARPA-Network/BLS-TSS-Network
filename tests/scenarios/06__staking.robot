@@ -221,14 +221,14 @@ Test Staking With Node
 
     Test Staking One Account    ${userA}    3000000000000000000000
     ${result} =    Stake And Run Node    ${nodeA}
-    ${result} =        Get Keyword From Log    ${nodeA}    Transaction successful(node_register)
+    ${result} =        Get Keyword From Node Log    ${nodeA}    Transaction successful(node_register)
 
     #T5
     Add Timestamp Days    5
 
     Test Staking One Account    ${userB}    10000000000000000000000
     ${result} =    Stake And Run Node    ${nodeB}
-    ${result} =        Get Keyword From Log    ${nodeB}    Transaction successful(node_register)                        
+    ${result} =        Get Keyword From Node Log    ${nodeB}    Transaction successful(node_register)                        
 
     ${total_community_stake} =    Get Community Stake Count
     Should Be Equal As Integers    ${total_community_stake}    13000000000000000000000
@@ -290,7 +290,7 @@ Test Staking With Node
 
     ${result} =    Unstake ARPA    ${userC}    50000000000000000000000
     ${result} =    Stake And Run Node    ${nodeC}
-    ${result} =        Get Keyword From Log    ${nodeC}    Transaction successful(node_register)
+    ${result} =        Get Keyword From Node Log    ${nodeC}    Transaction successful(node_register)
     ${total_community_stake} =    Get Community Stake Count
     Should Be Equal As Integers    ${total_community_stake}    269000000000000000000000
     #T26

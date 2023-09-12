@@ -53,7 +53,6 @@ BLS Happy Path1
         ${cur_block} =    Convert To Integer    ${cur_block}
     END
 
-    Set Global Variable    ${NODE_PROCESS_LIST}    ${EMPTY_LIST}
     Teardown Scenario Testing Environment
 
 BLS Happy Path2
@@ -85,13 +84,13 @@ BLS Happy Path2
     ${count} =    Convert To Integer    0
     ${final_committer} =    Set Variable    0
     WHILE    ${index} < 5
-        ${log_calling_commit} =    Get Keyword From Log    ${index}    Calling contract transaction fulfill_randomnes
+        ${log_calling_commit} =    Get Keyword From Node Log    ${index}    Calling contract transaction fulfill_randomnes
         IF  ${log_calling_commit != None}
             ${count} =    Set Variable    ${count + 1}
             ${node_address} =    Get Address By Index    ${index}
             ${is_committer} =    Is Committer    0    ${node_address}
             Should Be True    ${is_committer}
-            ${commit_success} =    Get Keyword From Log    ${index}    Transaction successful(fulfill_randomness)
+            ${commit_success} =    Get Keyword From Node Log    ${index}    Transaction successful(fulfill_randomness)
             IF  ${commit_success != None}
                 ${final_committer} =    Set Variable    ${node_address}
             END 
@@ -106,7 +105,6 @@ BLS Happy Path2
     Log    ${node_rewards}
     ${final_committer_reward} =    Get Amount Count From Reward Events    ${node_rewards}    ${final_committer}
 
-    Set Global Variable    ${NODE_PROCESS_LIST}    ${EMPTY_LIST}
     Teardown Scenario Testing Environment
 
 Corner Case1
@@ -150,6 +148,11 @@ Corner Case1
 Corner Case2
     [Documentation]
     ...    1. Given Adapter think group0 group1 work well
+    ...    2. Given group1 size = 3, threshold = 3
+    ...    3. Given group2 size = 3, threshold = 3
+    ...    4. Given Adapter assign BLS task to group1, group1 can not finish in time
+    ...    5. Group2 committer call fulfill randomness
+
     Compile Proto
     Set Global Variable    $BLOCK_TIME    1
     Set Enviorment And Deploy Contract
@@ -165,16 +168,18 @@ Corner Case2
     ${log_group_0} =    Have Node Got Keyword    Group index:0 epoch:4 is available    ${NODE_PROCESS_LIST}
     ${log_grouo_1} =    Have Node Got Keyword    Group index:1 epoch:1 is available    ${NODE_PROCESS_LIST}
 
+    Clear Log
     Mine Blocks    20
     Sleep    3s
     Deploy User Contract
     Request Randomness
     Mine Blocks    10
-    Sleep    3s
-    Clear Log
+    
     ${task_type} =    Convert To Integer    6
     ${group1} =    Get Group    1
     ${group1_nodes} =    Set Variable    ${group1[5]}
+    ${log_task_received} =       All Nodes Have Keyword    received new randomness task    ${group1_nodes}
+
     ${group1_index_0} =    Get Index By Address    ${group1_nodes[0]}
     Shutdown Listener    ${group1_index_0}    ${task_type}
     ${group1_index_1} =    Get Index By Address    ${group1_nodes[1]}
@@ -189,7 +194,7 @@ Corner Case2
     ${cur_block} =    Get Latest Block Number
     Deploy User Contract
     ${request_id} =    Request Randomness
-    Get Keyword From Log    ${node_index}    send partial signature to committer
+    Get Keyword From Node Log    ${node_index}    send partial signature to committer
 
     Start Listener    ${group1_index_0}    ${task_type}
     Start Listener    ${group1_index_1}    ${task_type}
@@ -203,7 +208,7 @@ Corner Case2
 *** Test Cases ***
 
 Run BLS Test Cases
-    Repeat Keyword    1    BLS Happy Path1
-    Repeat Keyword    1    BLS Happy Path2
-    Repeat Keyword    1    Corner Case1
+    Repeat Keyword    0    BLS Happy Path1
+    Repeat Keyword    0    BLS Happy Path2
+    Repeat Keyword    0    Corner Case1
     Repeat Keyword    1    Corner Case2
