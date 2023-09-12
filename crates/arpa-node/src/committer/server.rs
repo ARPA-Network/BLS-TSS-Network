@@ -10,7 +10,7 @@ use crate::{
         CommitPartialSignatureReply, CommitPartialSignatureRequest,
     },
 };
-use arpa_core::{BLSTaskError, BLSTaskType};
+use arpa_core::{BLSTaskError, BLSTaskType, SchedulerError};
 use ethers::types::Address;
 use futures::Future;
 use std::{marker::PhantomData, sync::Arc};
@@ -119,7 +119,7 @@ where
                     } else {
                         if !self.context.read().await.contains_relayed_chain(chain_id) {
                             return Err(Status::invalid_argument(
-                                NodeError::InvalidChainId(chain_id).to_string(),
+                                SchedulerError::InvalidChainId(chain_id).to_string(),
                             ));
                         }
                         self.context

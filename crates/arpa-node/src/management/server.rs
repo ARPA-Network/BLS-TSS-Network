@@ -101,7 +101,7 @@ where
         self.context
             .write()
             .await
-            .start_listener(task_type)
+            .start_listener(req.chain_id as usize, task_type)
             .await
             .map_err(|e: SchedulerError| Status::already_exists(e.to_string()))?;
 
@@ -118,11 +118,10 @@ where
             .try_into()
             .map_err(|e: SchedulerError| Status::invalid_argument(e.to_string()))?;
 
-        //TODO
         self.context
             .write()
             .await
-            .shutdown_listener(0, task_type)
+            .shutdown_listener(req.chain_id as usize, task_type)
             .await
             .map_err(|e: SchedulerError| Status::not_found(e.to_string()))?;
 
@@ -312,7 +311,13 @@ where
         self.context
             .write()
             .await
-            .send_partial_sig(member_id_address, msg, request_id, partial)
+            .send_partial_sig(
+                req.chain_id as usize,
+                member_id_address,
+                msg,
+                request_id,
+                partial,
+            )
             .await
             .map_err(|e: anyhow::Error| Status::unavailable(e.to_string()))?;
         return Ok(Response::new(SendPartialSigReply { res: true }));
@@ -334,7 +339,13 @@ where
         self.context
             .write()
             .await
-            .fulfill_randomness(group_index, request_id, sig, partial_sigs)
+            .fulfill_randomness(
+                req.chain_id as usize,
+                group_index,
+                request_id,
+                sig,
+                partial_sigs,
+            )
             .await
             .map_err(|e: anyhow::Error| Status::failed_precondition(e.to_string()))?;
         return Ok(Response::new(FulfillRandomnessReply { res: true }));
