@@ -20,17 +20,25 @@ use threshold_bls::sig::Share;
 #[derive(Debug, Default)]
 pub struct InMemoryBlockInfoCache {
     block_height: usize,
+    block_time: usize,
 }
 
 impl InMemoryBlockInfoCache {
-    pub fn new() -> Self {
-        InMemoryBlockInfoCache { block_height: 0 }
+    pub fn new(block_time: usize) -> Self {
+        InMemoryBlockInfoCache {
+            block_height: 0,
+            block_time,
+        }
     }
 }
 
 impl BlockInfoFetcher for InMemoryBlockInfoCache {
     fn get_block_height(&self) -> usize {
         self.block_height
+    }
+
+    fn get_block_time(&self) -> usize {
+        self.block_time
     }
 }
 
@@ -609,6 +617,7 @@ pub struct RandomnessResultCache {
     pub message: Vec<u8>,
     pub threshold: usize,
     pub partial_signatures: BTreeMap<Address, Vec<u8>>,
+    pub committed_times: usize,
 }
 
 #[async_trait]
@@ -644,6 +653,7 @@ impl SignatureResultCacheUpdater<RandomnessResultCache>
             message,
             threshold,
             partial_signatures: BTreeMap::new(),
+            committed_times: 0,
         };
 
         if self
@@ -725,6 +735,17 @@ impl SignatureResultCacheUpdater<RandomnessResultCache>
             .ok_or(BLSTaskError::CommitterCacheNotExisted)?;
 
         signature_result_cache.state = status;
+
+        Ok(())
+    }
+
+    async fn incr_committed_times(&mut self, task_request_id: &[u8]) -> DataAccessResult<()> {
+        let signature_result_cache = self
+            .signature_result_caches
+            .get_mut(task_request_id)
+            .ok_or(BLSTaskError::CommitterCacheNotExisted)?;
+
+        signature_result_cache.result_cache.committed_times += 1;
 
         Ok(())
     }

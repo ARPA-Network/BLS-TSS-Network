@@ -89,7 +89,9 @@ impl<
             id: chain_identity.get_chain_id(),
             description,
             chain_identity: Arc::new(RwLock::new(Box::new(chain_identity))),
-            block_cache: Arc::new(RwLock::new(Box::new(InMemoryBlockInfoCache::new()))),
+            block_cache: Arc::new(RwLock::new(Box::new(InMemoryBlockInfoCache::new(
+                time_limits.block_time,
+            )))),
             randomness_tasks_cache: Arc::new(RwLock::new(Box::new(randomness_tasks_cache))),
             committer_randomness_result_cache: Arc::new(RwLock::new(Box::new(
                 committer_randomness_result_cache,
@@ -536,6 +538,7 @@ where
                 self.id(),
                 id_address,
                 self.get_chain_identity(),
+                self.get_block_cache(),
                 self.get_randomness_result_cache(),
                 context.get_event_queue(),
                 context.get_dynamic_task_handler(),
@@ -590,7 +593,9 @@ impl<
             id: chain_identity.get_chain_id(),
             description,
             chain_identity: Arc::new(RwLock::new(Box::new(chain_identity))),
-            block_cache: Arc::new(RwLock::new(Box::new(InMemoryBlockInfoCache::new()))),
+            block_cache: Arc::new(RwLock::new(Box::new(InMemoryBlockInfoCache::new(
+                time_limits.block_time,
+            )))),
             randomness_tasks_cache: Arc::new(RwLock::new(Box::new(randomness_tasks_cache))),
             committer_randomness_result_cache: Arc::new(RwLock::new(Box::new(
                 committer_randomness_result_cache,
@@ -915,6 +920,7 @@ where
                 self.id(),
                 id_address,
                 self.get_chain_identity(),
+                self.get_block_cache(),
                 self.get_randomness_result_cache(),
                 context.get_event_queue(),
                 context.get_dynamic_task_handler(),

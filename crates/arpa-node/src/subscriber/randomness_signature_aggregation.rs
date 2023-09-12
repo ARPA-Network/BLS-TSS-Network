@@ -1,18 +1,20 @@
 use super::{DebuggableEvent, DebuggableSubscriber, Subscriber};
 use crate::{
     algorithm::bls::{BLSCore, SimpleBLSCore},
-    context::{ChainIdentityHandlerType, SignatureResultCacheHandler},
+    context::{BlockInfoHandler, ChainIdentityHandlerType, SignatureResultCacheHandler},
     error::{NodeError, NodeResult},
     event::{ready_to_fulfill_randomness_task::ReadyToFulfillRandomnessTask, types::Topic},
     queue::{event_queue::EventQueue, EventSubscriber},
     scheduler::{dynamic::SimpleDynamicTaskScheduler, TaskScheduler},
 };
 use arpa_contract_client::adapter::{AdapterTransactions, AdapterViews};
-use arpa_core::{PartialSignature, RandomnessTask, SubscriberType, TaskType};
+use arpa_core::{
+    PartialSignature, RandomnessTask, SubscriberType, TaskType,
+    DEFAULT_MAX_RANDOMNESS_FULFILLMENT_ATTEMPTS,
+};
 use arpa_dal::{cache::RandomnessResultCache, BLSResultCacheState};
 use async_trait::async_trait;
-use chrono::Local;
-use ethers::types::{Address, BlockNumber};
+use ethers::types::Address;
 use log::{debug, error, info};
 use std::{collections::HashMap, marker::PhantomData, sync::Arc};
 use threshold_bls::{
@@ -27,9 +29,10 @@ pub struct RandomnessSignatureAggregationSubscriber<
     PC: Curve,
     S: SignatureScheme + ThresholdScheme<Public = PC::Point, Private = PC::Scalar>,
 > {
-    pub chain_id: usize,
+    chain_id: usize,
     id_address: Address,
     chain_identity: Arc<RwLock<ChainIdentityHandlerType<PC>>>,
+    block_cache: Arc<RwLock<Box<dyn BlockInfoHandler>>>,
     randomness_signature_cache:
         Arc<RwLock<Box<dyn SignatureResultCacheHandler<RandomnessResultCache>>>>,
     eq: Arc<RwLock<EventQueue>>,
@@ -45,6 +48,7 @@ impl<PC: Curve, S: SignatureScheme + ThresholdScheme<Public = PC::Point, Private
         chain_id: usize,
         id_address: Address,
         chain_identity: Arc<RwLock<ChainIdentityHandlerType<PC>>>,
+        block_cache: Arc<RwLock<Box<dyn BlockInfoHandler>>>,
         randomness_signature_cache: Arc<
             RwLock<Box<dyn SignatureResultCacheHandler<RandomnessResultCache>>>,
         >,
@@ -55,6 +59,7 @@ impl<PC: Curve, S: SignatureScheme + ThresholdScheme<Public = PC::Point, Private
             chain_id,
             id_address,
             chain_identity,
+            block_cache,
             randomness_signature_cache,
             eq,
             ts,
@@ -78,6 +83,7 @@ pub trait FulfillRandomnessHandler {
 pub struct GeneralFulfillRandomnessHandler<PC: Curve> {
     id_address: Address,
     chain_identity: Arc<RwLock<ChainIdentityHandlerType<PC>>>,
+    block_cache: Arc<RwLock<Box<dyn BlockInfoHandler>>>,
     randomness_signature_cache:
         Arc<RwLock<Box<dyn SignatureResultCacheHandler<RandomnessResultCache>>>>,
     pc: PhantomData<PC>,
@@ -101,21 +107,10 @@ impl<PC: Curve> FulfillRandomnessHandler for GeneralFulfillRandomnessHandler<PC>
         let randomness_task_request_id = randomness_task.request_id.clone();
 
         if client.is_task_pending(&randomness_task_request_id).await? {
-            let assignment_timestamp = self
-                .chain_identity
-                .read()
-                .await
-                .get_block_timestamp(BlockNumber::Number(
-                    randomness_task.assignment_block_height.into(),
-                ))
-                .await?
-                .ok_or(NodeError::InvalidBlockNumber(
-                    randomness_task.assignment_block_height,
-                ))?;
-
-            let dt = Local::now();
-
-            if dt.timestamp() as u64 - assignment_timestamp.as_u64() > 86400 {
+            if self.block_cache.read().await.get_block_height()
+                - randomness_task.assignment_block_height
+                > 86400 / self.block_cache.read().await.get_block_time()
+            {
                 self.randomness_signature_cache
                     .write()
                     .await
@@ -171,7 +166,7 @@ impl<PC: Curve> FulfillRandomnessHandler for GeneralFulfillRandomnessHandler<PC>
                         .await?;
 
                     info!("fulfill randomness successfully! tx_hash:{:?}, task request id: {}, group_index: {}, signature: {}",
-                    tx_hash, format!("{:?}",hex::encode(randomness_task_request_id)), group_index, hex::encode(signature));
+                    tx_hash, format!("{:?}",hex::encode(randomness_task_request_id.clone())), group_index, hex::encode(signature));
                 }
                 Err(e) => {
                     self.randomness_signature_cache
@@ -185,6 +180,12 @@ impl<PC: Curve> FulfillRandomnessHandler for GeneralFulfillRandomnessHandler<PC>
                     error!("{:?}", e);
                 }
             }
+
+            self.randomness_signature_cache
+                .write()
+                .await
+                .incr_committed_times(&randomness_task_request_id)
+                .await?;
         } else {
             self.randomness_signature_cache
                 .write()
@@ -232,7 +233,21 @@ where
                 message: _,
                 threshold,
                 partial_signatures,
+                committed_times,
             } = signature.clone();
+
+            if committed_times >= DEFAULT_MAX_RANDOMNESS_FULFILLMENT_ATTEMPTS {
+                self.randomness_signature_cache
+                    .write()
+                    .await
+                    .update_commit_result(&randomness_task.request_id, BLSResultCacheState::FAULTY)
+                    .await?;
+
+                error!("mark randomness task as faulty for too many failed fulfillment attempts. task request id: {}",
+                    format!("{:?}",hex::encode(&randomness_task.request_id)));
+
+                continue;
+            }
 
             let partials = partial_signatures
                 .values()
@@ -255,6 +270,8 @@ where
 
             let id_address = self.id_address;
 
+            let block_cache = self.block_cache.clone();
+
             let chain_identity = self.chain_identity.clone();
 
             let randomness_signature_cache = self.randomness_signature_cache.clone();
@@ -268,6 +285,7 @@ where
                     let handler = GeneralFulfillRandomnessHandler {
                         id_address,
                         chain_identity,
+                        block_cache,
                         randomness_signature_cache,
                         pc: PhantomData,
                     };

@@ -294,6 +294,7 @@ Configuration items in [`conf/config.yml`](conf/config.yml) are listed here:
   - example:
     ```
     time_limits:
+      block_time: 3
       dkg_timeout_duration: 40
       randomness_task_exclusive_window: 10
       listener_interval_millis: 10000
@@ -315,6 +316,7 @@ Configuration items in [`conf/config.yml`](conf/config.yml) are listed here:
         max_attempts: 5
         use_jitter: false
     ```
+  - block_time: Block time of the chain. This value is used to calculate the max pending time of a randomness task. (example: 3)
   - These values need to be set according to config of on-chain Controller contract.
 
     - dkg_timeout_duration: Block numbers between DKG start and timeout. (example: 40)
@@ -396,6 +398,7 @@ Configuration items in [`conf/config.yml`](conf/config.yml) are listed here:
         interval_millis: 2000
         use_jitter: false
     time_limits:
+      block_time: 2
       randomness_task_exclusive_window: 10
       listener_interval_millis: 1000
       provider_polling_interval_millis: 1000

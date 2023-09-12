@@ -17,6 +17,7 @@ pub struct Model {
     pub state: i32,
     pub create_at: String,
     pub update_at: String,
+    pub committed_times: i32,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
