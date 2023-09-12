@@ -9,7 +9,7 @@ use arpa_core::{address_to_string, pad_to_bytes32, WalletSigner};
 use arpa_user_cli::config::{Config, ConfigError};
 use ethers::abi::AbiEncode;
 use ethers::prelude::{NonceManagerMiddleware, SignerMiddleware};
-use ethers::providers::{Http, Provider, Middleware};
+use ethers::providers::{Http, Middleware, Provider};
 use ethers::signers::Signer;
 use ethers::types::{Address, BlockId, BlockNumber, Topic, H256, U256, U64};
 use ethers::utils::Anvil;
@@ -708,8 +708,10 @@ async fn call(args: ArgMatches, context: &mut Context) -> anyhow::Result<Option<
         }
         Some(("balance-of-arpa", sub_matches)) => {
             let chain_id = sub_matches.get_one::<u32>("chain-id").unwrap();
-            let arpa_contract =
-                ArpaContract::new(context.config.arpa_address(*chain_id)?, context.signer(*chain_id)?);
+            let arpa_contract = ArpaContract::new(
+                context.config.arpa_address(*chain_id)?,
+                context.signer(*chain_id)?,
+            );
 
             let balance = ArpaClient::call_contract_view(
                 *chain_id as usize,
@@ -755,12 +757,7 @@ async fn randcast(args: ArgMatches, context: &mut Context) -> anyhow::Result<Opt
             let consumer = sub_matches.get_one::<String>("consumer").unwrap();
             let sub_id = sub_matches.get_one::<String>("sub-id").unwrap();
 
-            let nonce_args = vec![
-                "call",
-                consumer,
-                "getNonce(uint64)(uint256)",
-                sub_id,
-            ];
+            let nonce_args = vec!["call", consumer, "getNonce(uint64)(uint256)", sub_id];
             let nonce_res = call_cast(&context.config.provider_endpoint(*chain_id)?, &nonce_args);
 
             Ok(Some(format!("consumer_nonce: {}", nonce_res)))
@@ -770,8 +767,10 @@ async fn randcast(args: ArgMatches, context: &mut Context) -> anyhow::Result<Opt
             let consumer = sub_matches.get_one::<String>("consumer").unwrap();
 
             let callback_gas_limit_args = vec!["call", consumer, "callbackGasLimit()(uint32)"];
-            let callback_gas_limit_res =
-                call_cast(&context.config.provider_endpoint(*chain_id)?, &callback_gas_limit_args);
+            let callback_gas_limit_res = call_cast(
+                &context.config.provider_endpoint(*chain_id)?,
+                &callback_gas_limit_args,
+            );
 
             Ok(Some(format!(
                 "callback_gas_limit: {}",
@@ -882,11 +881,13 @@ async fn randcast(args: ArgMatches, context: &mut Context) -> anyhow::Result<Opt
 
             let gas_price = context.provider(*chain_id)?.get_gas_price().await?;
 
-            let adapter_contract =
-                AdapterContract::new(context.config.adapter_address(*chain_id)?, context.signer(*chain_id)?);
+            let adapter_contract = AdapterContract::new(
+                context.config.adapter_address(*chain_id)?,
+                context.signer(*chain_id)?,
+            );
 
             let payment_amount_in_eth = AdapterClient::call_contract_view(
-               *chain_id as usize,
+                *chain_id as usize,
                 "estimate_payment_amount",
                 adapter_contract.estimate_payment_amount_in_eth(
                     *callback_gas_limit,
@@ -906,8 +907,10 @@ async fn randcast(args: ArgMatches, context: &mut Context) -> anyhow::Result<Opt
         }
         Some(("adapter-config", sub_matches)) => {
             let chain_id = sub_matches.get_one::<u32>("chain-id").unwrap();
-            let adapter_contract =
-                AdapterContract::new(context.config.adapter_address(*chain_id)?, context.signer(*chain_id)?);
+            let adapter_contract = AdapterContract::new(
+                context.config.adapter_address(*chain_id)?,
+                context.signer(*chain_id)?,
+            );
 
             let (
                 minimum_request_confirmations,
@@ -939,8 +942,10 @@ async fn randcast(args: ArgMatches, context: &mut Context) -> anyhow::Result<Opt
         }
         Some(("flat-fee-config", sub_matches)) => {
             let chain_id = sub_matches.get_one::<u32>("chain-id").unwrap();
-            let adapter_contract =
-                AdapterContract::new(context.config.adapter_address(*chain_id)?, context.signer(*chain_id)?);
+            let adapter_contract = AdapterContract::new(
+                context.config.adapter_address(*chain_id)?,
+                context.signer(*chain_id)?,
+            );
 
             let (
                 fulfillment_flat_fee_link_ppm_tier1,
@@ -982,8 +987,10 @@ async fn randcast(args: ArgMatches, context: &mut Context) -> anyhow::Result<Opt
         }
         Some(("referral-config", sub_matches)) => {
             let chain_id = sub_matches.get_one::<u32>("chain-id").unwrap();
-            let adapter_contract =
-                AdapterContract::new(context.config.adapter_address(*chain_id)?, context.signer(*chain_id)?);
+            let adapter_contract = AdapterContract::new(
+                context.config.adapter_address(*chain_id)?,
+                context.signer(*chain_id)?,
+            );
 
             let (
                 is_referral_enabled,
@@ -1007,8 +1014,10 @@ async fn randcast(args: ArgMatches, context: &mut Context) -> anyhow::Result<Opt
         Some(("fee-tier", sub_matches)) => {
             let chain_id = sub_matches.get_one::<u32>("chain-id").unwrap();
             let req_count = sub_matches.get_one::<u64>("req-count").unwrap();
-            let adapter_contract =
-                AdapterContract::new(context.config.adapter_address(*chain_id)?, context.signer(*chain_id)?);
+            let adapter_contract = AdapterContract::new(
+                context.config.adapter_address(*chain_id)?,
+                context.signer(*chain_id)?,
+            );
 
             let fee_ppm = AdapterClient::call_contract_view(
                 *chain_id as usize,
@@ -1023,8 +1032,10 @@ async fn randcast(args: ArgMatches, context: &mut Context) -> anyhow::Result<Opt
         Some(("subscription", sub_matches)) => {
             let chain_id = sub_matches.get_one::<u32>("chain-id").unwrap();
             let sub_id = sub_matches.get_one::<u64>("sub-id").unwrap();
-            let adapter_contract =
-                AdapterContract::new(context.config.adapter_address(*chain_id)?, context.signer(*chain_id)?);
+            let adapter_contract = AdapterContract::new(
+                context.config.adapter_address(*chain_id)?,
+                context.signer(*chain_id)?,
+            );
 
             let (
                 owner,
@@ -1059,8 +1070,10 @@ async fn randcast(args: ArgMatches, context: &mut Context) -> anyhow::Result<Opt
         }
         Some(("my-subscriptions", sub_matches)) => {
             let chain_id = sub_matches.get_one::<u32>("chain-id").unwrap();
-            let adapter_contract =
-                AdapterContract::new(context.config.adapter_address(*chain_id)?, context.signer(*chain_id)?);
+            let adapter_contract = AdapterContract::new(
+                context.config.adapter_address(*chain_id)?,
+                context.signer(*chain_id)?,
+            );
 
             let created_filter = adapter_contract
                 .subscription_created_filter()
@@ -1104,8 +1117,10 @@ async fn randcast(args: ArgMatches, context: &mut Context) -> anyhow::Result<Opt
         Some(("consumers", sub_matches)) => {
             let chain_id = sub_matches.get_one::<u32>("chain-id").unwrap();
             let sub_id = sub_matches.get_one::<u64>("sub-id").unwrap();
-            let adapter_contract =
-                AdapterContract::new(context.config.adapter_address(*chain_id)?, context.signer(*chain_id)?);
+            let adapter_contract = AdapterContract::new(
+                context.config.adapter_address(*chain_id)?,
+                context.signer(*chain_id)?,
+            );
 
             let (
                 _owner,
@@ -1165,7 +1180,10 @@ async fn randcast(args: ArgMatches, context: &mut Context) -> anyhow::Result<Opt
             for log in logs {
                 let consumer = consumers.get_mut(&log.sender).unwrap();
                 // incr nonces by sub_id
-                consumer.nonces.insert(log.sub_id, consumer.nonces.get(&log.sub_id).unwrap_or(&1) + 1);
+                consumer.nonces.insert(
+                    log.sub_id,
+                    consumer.nonces.get(&log.sub_id).unwrap_or(&1) + 1,
+                );
             }
 
             Ok(Some(format!("consumers: {:#?}", consumers)))
@@ -1178,8 +1196,10 @@ async fn randcast(args: ArgMatches, context: &mut Context) -> anyhow::Result<Opt
             let is_success = sub_matches.get_flag("success");
             let is_failed = sub_matches.get_flag("failed");
 
-            let adapter_contract =
-                AdapterContract::new(context.config.adapter_address(*chain_id)?, context.signer(*chain_id)?);
+            let adapter_contract = AdapterContract::new(
+                context.config.adapter_address(*chain_id)?,
+                context.signer(*chain_id)?,
+            );
 
             let filter = adapter_contract
                 .randomness_request_filter()
@@ -1274,8 +1294,10 @@ async fn randcast(args: ArgMatches, context: &mut Context) -> anyhow::Result<Opt
         }
         Some(("last-assigned-group-index", sub_matches)) => {
             let chain_id = sub_matches.get_one::<u32>("chain-id").unwrap();
-            let adapter_contract =
-                AdapterContract::new(context.config.adapter_address(*chain_id)?, context.signer(*chain_id)?);
+            let adapter_contract = AdapterContract::new(
+                context.config.adapter_address(*chain_id)?,
+                context.signer(*chain_id)?,
+            );
 
             let last_assigned_group_index = AdapterClient::call_contract_view(
                 *chain_id as usize,
@@ -1292,8 +1314,10 @@ async fn randcast(args: ArgMatches, context: &mut Context) -> anyhow::Result<Opt
         }
         Some(("randomness-count", sub_matches)) => {
             let chain_id = sub_matches.get_one::<u32>("chain-id").unwrap();
-            let adapter_contract =
-                AdapterContract::new(context.config.adapter_address(*chain_id)?, context.signer(*chain_id)?);
+            let adapter_contract = AdapterContract::new(
+                context.config.adapter_address(*chain_id)?,
+                context.signer(*chain_id)?,
+            );
 
             let randomness_count = AdapterClient::call_contract_view(
                 *chain_id as usize,
@@ -1307,8 +1331,10 @@ async fn randcast(args: ArgMatches, context: &mut Context) -> anyhow::Result<Opt
         }
         Some(("cumulative-data", sub_matches)) => {
             let chain_id = sub_matches.get_one::<u32>("chain-id").unwrap();
-            let adapter_contract =
-                AdapterContract::new(context.config.adapter_address(*chain_id)?, context.signer(*chain_id)?);
+            let adapter_contract = AdapterContract::new(
+                context.config.adapter_address(*chain_id)?,
+                context.signer(*chain_id)?,
+            );
 
             let (
                 cumulative_flat_fee,
@@ -1327,8 +1353,10 @@ async fn randcast(args: ArgMatches, context: &mut Context) -> anyhow::Result<Opt
         }
         Some(("last-randomness", sub_matches)) => {
             let chain_id = sub_matches.get_one::<u32>("chain-id").unwrap();
-            let adapter_contract =
-                AdapterContract::new(context.config.adapter_address(*chain_id)?, context.signer(*chain_id)?);
+            let adapter_contract = AdapterContract::new(
+                context.config.adapter_address(*chain_id)?,
+                context.signer(*chain_id)?,
+            );
 
             let last_randomness = AdapterClient::call_contract_view(
                 *chain_id as usize,
@@ -1342,8 +1370,10 @@ async fn randcast(args: ArgMatches, context: &mut Context) -> anyhow::Result<Opt
         }
         Some(("pending-request-commitment", sub_matches)) => {
             let chain_id = sub_matches.get_one::<u32>("chain-id").unwrap();
-            let adapter_contract =
-                AdapterContract::new(context.config.adapter_address(*chain_id)?, context.signer(*chain_id)?);
+            let adapter_contract = AdapterContract::new(
+                context.config.adapter_address(*chain_id)?,
+                context.signer(*chain_id)?,
+            );
 
             let r_id = sub_matches.get_one::<String>("request-id").unwrap();
 
@@ -1362,14 +1392,18 @@ async fn stake(args: ArgMatches, context: &mut Context) -> anyhow::Result<Option
     match args.subcommand() {
         Some(("stake", _sub_matches)) => {
             let main_chain_id = context.config.main_chain_id();
-            let staking_contract =
-                StakingContract::new(context.config.staking_address(), context.signer(main_chain_id)?);
+            let staking_contract = StakingContract::new(
+                context.config.staking_address(),
+                context.signer(main_chain_id)?,
+            );
 
             let amount = StakingClient::call_contract_view(
                 main_chain_id as usize,
                 "get_stake",
                 staking_contract.get_stake(context.signer(main_chain_id)?.address()),
-                context.config.contract_view_retry_descriptor(main_chain_id)?,
+                context
+                    .config
+                    .contract_view_retry_descriptor(main_chain_id)?,
             )
             .await?;
 
@@ -1377,14 +1411,18 @@ async fn stake(args: ArgMatches, context: &mut Context) -> anyhow::Result<Option
         }
         Some(("base-reward", _sub_matches)) => {
             let main_chain_id = context.config.main_chain_id();
-            let staking_contract =
-                StakingContract::new(context.config.staking_address(), context.signer(main_chain_id)?);
+            let staking_contract = StakingContract::new(
+                context.config.staking_address(),
+                context.signer(main_chain_id)?,
+            );
 
             let base_reward = StakingClient::call_contract_view(
                 main_chain_id as usize,
                 "get_base_reward",
                 staking_contract.get_base_reward(context.signer(main_chain_id)?.address()),
-                context.config.contract_view_retry_descriptor(main_chain_id)?,
+                context
+                    .config
+                    .contract_view_retry_descriptor(main_chain_id)?,
             )
             .await?;
 
@@ -1397,14 +1435,18 @@ async fn stake(args: ArgMatches, context: &mut Context) -> anyhow::Result<Option
                 .unwrap()
                 .parse::<Address>()?;
 
-            let staking_contract =
-                StakingContract::new(context.config.staking_address(), context.signer(main_chain_id)?);
+            let staking_contract = StakingContract::new(
+                context.config.staking_address(),
+                context.signer(main_chain_id)?,
+            );
 
             let delegation_reward = StakingClient::call_contract_view(
                 main_chain_id as usize,
                 "get_delegation_reward",
                 staking_contract.get_delegation_reward(delegator_address),
-                context.config.contract_view_retry_descriptor(main_chain_id)?,
+                context
+                    .config
+                    .contract_view_retry_descriptor(main_chain_id)?,
             )
             .await?;
 
@@ -1412,14 +1454,18 @@ async fn stake(args: ArgMatches, context: &mut Context) -> anyhow::Result<Option
         }
         Some(("total-delegated-amount", _sub_matches)) => {
             let main_chain_id = context.config.main_chain_id();
-            let staking_contract =
-                StakingContract::new(context.config.staking_address(), context.signer(main_chain_id)?);
+            let staking_contract = StakingContract::new(
+                context.config.staking_address(),
+                context.signer(main_chain_id)?,
+            );
 
             let total_delegated_amount = StakingClient::call_contract_view(
                 main_chain_id as usize,
                 "get_total_delegated_amount",
                 staking_contract.get_total_delegated_amount(),
-                context.config.contract_view_retry_descriptor(main_chain_id)?,
+                context
+                    .config
+                    .contract_view_retry_descriptor(main_chain_id)?,
             )
             .await?;
 
@@ -1430,14 +1476,18 @@ async fn stake(args: ArgMatches, context: &mut Context) -> anyhow::Result<Option
         }
         Some(("delegates-count", _sub_matches)) => {
             let main_chain_id = context.config.main_chain_id();
-            let staking_contract =
-                StakingContract::new(context.config.staking_address(), context.signer(main_chain_id)?);
+            let staking_contract = StakingContract::new(
+                context.config.staking_address(),
+                context.signer(main_chain_id)?,
+            );
 
             let delegates_count = StakingClient::call_contract_view(
                 main_chain_id as usize,
                 "get_delegates_count",
                 staking_contract.get_delegates_count(),
-                context.config.contract_view_retry_descriptor(main_chain_id)?,
+                context
+                    .config
+                    .contract_view_retry_descriptor(main_chain_id)?,
             )
             .await?;
 
@@ -1445,14 +1495,18 @@ async fn stake(args: ArgMatches, context: &mut Context) -> anyhow::Result<Option
         }
         Some(("community-stakers-count", _sub_matches)) => {
             let main_chain_id = context.config.main_chain_id();
-            let staking_contract =
-                StakingContract::new(context.config.staking_address(), context.signer(main_chain_id)?);
+            let staking_contract = StakingContract::new(
+                context.config.staking_address(),
+                context.signer(main_chain_id)?,
+            );
 
             let community_stakers_count = StakingClient::call_contract_view(
                 main_chain_id as usize,
                 "get_community_stakers_count",
                 staking_contract.get_community_stakers_count(),
-                context.config.contract_view_retry_descriptor(main_chain_id)?,
+                context
+                    .config
+                    .contract_view_retry_descriptor(main_chain_id)?,
             )
             .await?;
 
@@ -1463,14 +1517,18 @@ async fn stake(args: ArgMatches, context: &mut Context) -> anyhow::Result<Option
         }
         Some(("total-staked-amount", _sub_matches)) => {
             let main_chain_id = context.config.main_chain_id();
-            let staking_contract =
-                StakingContract::new(context.config.staking_address(), context.signer(main_chain_id)?);
+            let staking_contract = StakingContract::new(
+                context.config.staking_address(),
+                context.signer(main_chain_id)?,
+            );
 
             let total_staked_amount = StakingClient::call_contract_view(
                 main_chain_id as usize,
                 "get_total_staked_amount",
                 staking_contract.get_total_staked_amount(),
-                context.config.contract_view_retry_descriptor(main_chain_id)?,
+                context
+                    .config
+                    .contract_view_retry_descriptor(main_chain_id)?,
             )
             .await?;
 
@@ -1481,14 +1539,18 @@ async fn stake(args: ArgMatches, context: &mut Context) -> anyhow::Result<Option
         }
         Some(("total-community-staked-amount", _sub_matches)) => {
             let main_chain_id = context.config.main_chain_id();
-            let staking_contract =
-                StakingContract::new(context.config.staking_address(), context.signer(main_chain_id)?);
+            let staking_contract = StakingContract::new(
+                context.config.staking_address(),
+                context.signer(main_chain_id)?,
+            );
 
             let total_community_staked_amount = StakingClient::call_contract_view(
                 main_chain_id as usize,
                 "get_total_community_staked_amount",
                 staking_contract.get_total_community_staked_amount(),
-                context.config.contract_view_retry_descriptor(main_chain_id)?,
+                context
+                    .config
+                    .contract_view_retry_descriptor(main_chain_id)?,
             )
             .await?;
 
@@ -1499,14 +1561,18 @@ async fn stake(args: ArgMatches, context: &mut Context) -> anyhow::Result<Option
         }
         Some(("total-frozen-amount", _sub_matches)) => {
             let main_chain_id = context.config.main_chain_id();
-            let staking_contract =
-                StakingContract::new(context.config.staking_address(), context.signer(main_chain_id)?);
+            let staking_contract = StakingContract::new(
+                context.config.staking_address(),
+                context.signer(main_chain_id)?,
+            );
 
             let total_frozen_amount = StakingClient::call_contract_view(
                 main_chain_id as usize,
                 "get_total_frozen_amount",
                 staking_contract.get_total_frozen_amount(),
-                context.config.contract_view_retry_descriptor(main_chain_id)?,
+                context
+                    .config
+                    .contract_view_retry_descriptor(main_chain_id)?,
             )
             .await?;
 
@@ -1517,14 +1583,18 @@ async fn stake(args: ArgMatches, context: &mut Context) -> anyhow::Result<Option
         }
         Some(("max-pool-size", _sub_matches)) => {
             let main_chain_id = context.config.main_chain_id();
-            let staking_contract =
-                StakingContract::new(context.config.staking_address(), context.signer(main_chain_id)?);
+            let staking_contract = StakingContract::new(
+                context.config.staking_address(),
+                context.signer(main_chain_id)?,
+            );
 
             let max_pool_size = StakingClient::call_contract_view(
                 main_chain_id as usize,
                 "get_max_pool_size",
                 staking_contract.get_max_pool_size(),
-                context.config.contract_view_retry_descriptor(main_chain_id)?,
+                context
+                    .config
+                    .contract_view_retry_descriptor(main_chain_id)?,
             )
             .await?;
 
@@ -1532,14 +1602,18 @@ async fn stake(args: ArgMatches, context: &mut Context) -> anyhow::Result<Option
         }
         Some(("community-staker-limits", _sub_matches)) => {
             let main_chain_id = context.config.main_chain_id();
-            let staking_contract =
-                StakingContract::new(context.config.staking_address(), context.signer(main_chain_id)?);
+            let staking_contract = StakingContract::new(
+                context.config.staking_address(),
+                context.signer(main_chain_id)?,
+            );
 
             let (min, max) = StakingClient::call_contract_view(
                 main_chain_id as usize,
                 "get_community_staker_limits",
                 staking_contract.get_community_staker_limits(),
-                context.config.contract_view_retry_descriptor(main_chain_id)?,
+                context
+                    .config
+                    .contract_view_retry_descriptor(main_chain_id)?,
             )
             .await?;
 
@@ -1547,14 +1621,18 @@ async fn stake(args: ArgMatches, context: &mut Context) -> anyhow::Result<Option
         }
         Some(("operator-limit", _sub_matches)) => {
             let main_chain_id = context.config.main_chain_id();
-            let staking_contract =
-                StakingContract::new(context.config.staking_address(), context.signer(main_chain_id)?);
+            let staking_contract = StakingContract::new(
+                context.config.staking_address(),
+                context.signer(main_chain_id)?,
+            );
 
             let limit = StakingClient::call_contract_view(
                 main_chain_id as usize,
                 "get_operator_limit",
                 staking_contract.get_operator_limit(),
-                context.config.contract_view_retry_descriptor(main_chain_id)?,
+                context
+                    .config
+                    .contract_view_retry_descriptor(main_chain_id)?,
             )
             .await?;
 
@@ -1562,14 +1640,18 @@ async fn stake(args: ArgMatches, context: &mut Context) -> anyhow::Result<Option
         }
         Some(("reward-timestamps", _sub_matches)) => {
             let main_chain_id = context.config.main_chain_id();
-            let staking_contract =
-                StakingContract::new(context.config.staking_address(), context.signer(main_chain_id)?);
+            let staking_contract = StakingContract::new(
+                context.config.staking_address(),
+                context.signer(main_chain_id)?,
+            );
 
             let (init, expiry) = StakingClient::call_contract_view(
                 main_chain_id as usize,
                 "get_reward_timestamps",
                 staking_contract.get_reward_timestamps(),
-                context.config.contract_view_retry_descriptor(main_chain_id)?,
+                context
+                    .config
+                    .contract_view_retry_descriptor(main_chain_id)?,
             )
             .await?;
 
@@ -1577,14 +1659,18 @@ async fn stake(args: ArgMatches, context: &mut Context) -> anyhow::Result<Option
         }
         Some(("reward-rate", _sub_matches)) => {
             let main_chain_id = context.config.main_chain_id();
-            let staking_contract =
-                StakingContract::new(context.config.staking_address(), context.signer(main_chain_id)?);
+            let staking_contract = StakingContract::new(
+                context.config.staking_address(),
+                context.signer(main_chain_id)?,
+            );
 
             let rate = StakingClient::call_contract_view(
                 main_chain_id as usize,
                 "get_reward_rate",
                 staking_contract.get_reward_rate(),
-                context.config.contract_view_retry_descriptor(main_chain_id)?,
+                context
+                    .config
+                    .contract_view_retry_descriptor(main_chain_id)?,
             )
             .await?;
 
@@ -1592,14 +1678,18 @@ async fn stake(args: ArgMatches, context: &mut Context) -> anyhow::Result<Option
         }
         Some(("reward-apy", _sub_matches)) => {
             let main_chain_id = context.config.main_chain_id();
-            let staking_contract =
-                StakingContract::new(context.config.staking_address(), context.signer(main_chain_id)?);
+            let staking_contract = StakingContract::new(
+                context.config.staking_address(),
+                context.signer(main_chain_id)?,
+            );
 
             let rate = StakingClient::call_contract_view(
                 main_chain_id as usize,
                 "get_reward_rate",
                 staking_contract.get_reward_rate(),
-                context.config.contract_view_retry_descriptor(main_chain_id)?,
+                context
+                    .config
+                    .contract_view_retry_descriptor(main_chain_id)?,
             )
             .await?;
 
@@ -1607,7 +1697,9 @@ async fn stake(args: ArgMatches, context: &mut Context) -> anyhow::Result<Option
                 main_chain_id as usize,
                 "get_total_community_staked_amount",
                 staking_contract.get_total_community_staked_amount(),
-                context.config.contract_view_retry_descriptor(main_chain_id)?,
+                context
+                    .config
+                    .contract_view_retry_descriptor(main_chain_id)?,
             )
             .await?;
 
@@ -1621,14 +1713,18 @@ async fn stake(args: ArgMatches, context: &mut Context) -> anyhow::Result<Option
         }
         Some(("delegation-rate-denominator", _sub_matches)) => {
             let main_chain_id = context.config.main_chain_id();
-            let staking_contract =
-                StakingContract::new(context.config.staking_address(), context.signer(main_chain_id)?);
+            let staking_contract = StakingContract::new(
+                context.config.staking_address(),
+                context.signer(main_chain_id)?,
+            );
 
             let rate = StakingClient::call_contract_view(
                 main_chain_id as usize,
                 "get_delegation_rate_denominator",
                 staking_contract.get_delegation_rate_denominator(),
-                context.config.contract_view_retry_descriptor(main_chain_id)?,
+                context
+                    .config
+                    .contract_view_retry_descriptor(main_chain_id)?,
             )
             .await?;
 
@@ -1636,14 +1732,18 @@ async fn stake(args: ArgMatches, context: &mut Context) -> anyhow::Result<Option
         }
         Some(("frozen-principal", _sub_matches)) => {
             let main_chain_id = context.config.main_chain_id();
-            let staking_contract =
-                StakingContract::new(context.config.staking_address(), context.signer(main_chain_id)?);
+            let staking_contract = StakingContract::new(
+                context.config.staking_address(),
+                context.signer(main_chain_id)?,
+            );
 
             let (amounts, timestamps) = StakingClient::call_contract_view(
                 main_chain_id as usize,
                 "frozen_principal",
                 staking_contract.get_frozen_principal(context.signer(main_chain_id)?.address()),
-                context.config.contract_view_retry_descriptor(main_chain_id)?,
+                context
+                    .config
+                    .contract_view_retry_descriptor(main_chain_id)?,
             )
             .await?;
 
@@ -1661,8 +1761,10 @@ async fn show(args: ArgMatches, context: &mut Context) -> anyhow::Result<Option<
     match args.subcommand() {
         Some(("address", sub_matches)) => {
             let chain_id = sub_matches.get_one::<u32>("chain-id").unwrap();
-            Ok(Some(address_to_string(context.signer(*chain_id)?.address())))
-        },
+            Ok(Some(address_to_string(
+                context.signer(*chain_id)?.address(),
+            )))
+        }
         Some(("config", _sub_matches)) => Ok(Some(format!("{:#?}", context.config))),
 
         _ => panic!("Unknown subcommand {:?}", args.subcommand_name()),
@@ -1796,7 +1898,6 @@ async fn main() -> anyhow::Result<()> {
                         .arg(Arg::new("request-signature").required(true).help("function signature of request randomness with a pair of quotation marks"))
                         .arg(Arg::new("request-params").required(true).help("request params split by space"))
                         .arg(Arg::new("request-contract").required(false).help("request contract address in hex format, if not set, will use the consumer contract address"))
-                        
                 ).subcommand(
                     Command::new("estimate-payment-amount").visible_alias("epa")
                         .about("Estimate the amount of gas used for a fulfillment of randomness in 3 times of current gas price, for calculating how much eth is needed for subscription funding")
