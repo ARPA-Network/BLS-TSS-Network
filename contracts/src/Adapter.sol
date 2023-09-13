@@ -123,7 +123,6 @@ contract Adapter is UUPSUpgradeable, IAdapter, IAdapterOwner, RequestIdBase, Own
         uint256 flatFee,
         bool success
     );
-
     event OvertimeRequestCanceled(bytes32 indexed requestId, uint64 indexed subId);
 
     // *Errors*
@@ -482,7 +481,8 @@ contract Adapter is UUPSUpgradeable, IAdapter, IAdapterOwner, RequestIdBase, Own
         _lastAssignedGroupIndex = uint32(_findGroupToAssignTask());
 
         // Calculate requestId for the task
-        uint256 rawSeed = _makeRandcastInputSeed(p.seed, msg.sender, _consumers[msg.sender].nonces[p.subId]);
+        uint256 rawSeed = _makeRandcastInputSeed(p.seed, p.subId, msg.sender, _consumers[msg.sender].nonces[p.subId]);
+        _consumers[msg.sender].lastSubscription = p.subId;
         _consumers[msg.sender].nonces[p.subId] += 1;
         bytes32 requestId = _makeRequestId(rawSeed);
 

@@ -8,7 +8,8 @@ contract AdapterForTest is Adapter {
 
     function requestRandomness(RandomnessRequestParams calldata p) public override returns (bytes32) {
         bytes32 requestId = super.requestRandomness(p);
-        uint256 rawSeed = _makeRandcastInputSeed(p.seed, msg.sender, _consumers[msg.sender].nonces[p.subId] - 1);
+        uint256 rawSeed =
+            _makeRandcastInputSeed(p.seed, p.subId, msg.sender, _consumers[msg.sender].nonces[p.subId] - 1);
 
         // Record RequestDetail struct
         RequestDetail storage rd = _requestDetails[requestId];

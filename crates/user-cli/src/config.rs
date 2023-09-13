@@ -16,14 +16,16 @@ use thiserror::Error;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Config {
-    pub provider_endpoint: String,
-    pub chain_id: usize,
-    pub adapter_address: String,
-    pub staking_address: String,
-    pub arpa_address: String,
-    pub account: Account,
-    pub contract_transaction_retry_descriptor: ExponentialBackoffRetryDescriptor,
-    pub contract_view_retry_descriptor: ExponentialBackoffRetryDescriptor,
+    provider_endpoint: String,
+    chain_id: u32,
+    adapter_address: String,
+    adapter_deployed_block_height: u64,
+    staking_address: String,
+    arpa_address: String,
+    account: Account,
+    contract_transaction_retry_descriptor: ExponentialBackoffRetryDescriptor,
+    contract_view_retry_descriptor: ExponentialBackoffRetryDescriptor,
+    relayed_chains: Vec<RelayedChain>,
 }
 
 impl Default for Config {
@@ -32,6 +34,7 @@ impl Default for Config {
             provider_endpoint: "localhost:8545".to_string(),
             chain_id: 0,
             adapter_address: "0xa513e6e4b8f2a923d98304ec87f64353c4d5c853".to_string(),
+            adapter_deployed_block_height: 0,
             staking_address: "0x5f3b5dfeb7b28cdbd7faba78963ee202a494e2a2".to_string(),
             arpa_address: "0x6f769e65c14ebd1f68817f5f1dcdbd5c5d5f6e6a".to_string(),
             account: Default::default(),
@@ -47,8 +50,21 @@ impl Default for Config {
                 max_attempts: DEFAULT_CONTRACT_VIEW_RETRY_MAX_ATTEMPTS,
                 use_jitter: DEFAULT_CONTRACT_VIEW_RETRY_USE_JITTER,
             },
+            relayed_chains: vec![],
         }
     }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RelayedChain {
+    chain_id: u32,
+    provider_endpoint: String,
+    adapter_address: String,
+    adapter_deployed_block_height: u64,
+    arpa_address: String,
+    account: Account,
+    contract_transaction_retry_descriptor: ExponentialBackoffRetryDescriptor,
+    contract_view_retry_descriptor: ExponentialBackoffRetryDescriptor,
 }
 
 impl Config {
@@ -63,16 +79,106 @@ impl Config {
         serde_yaml::from_str(config_str).expect("Error loading configuration file")
     }
 
-    pub fn adapter_address(&self) -> Address {
-        self.adapter_address.parse().unwrap()
+    pub fn main_chain_id(&self) -> u32 {
+        self.chain_id
+    }
+
+    pub fn relayed_chain_ids(&self) -> Vec<u32> {
+        self.relayed_chains.iter().map(|c| c.chain_id).collect()
+    }
+
+    pub fn provider_endpoint(&self, chain_id: u32) -> anyhow::Result<String> {
+        if chain_id == self.chain_id {
+            Ok(self.provider_endpoint.clone())
+        } else {
+            self.relayed_chains
+                .iter()
+                .find(|c| c.chain_id == chain_id)
+                .map(|c| c.provider_endpoint.clone())
+                .ok_or_else(|| ConfigError::InvalidChainId(chain_id).into())
+        }
+    }
+
+    pub fn account(&self, chain_id: u32) -> anyhow::Result<Wallet<SigningKey>> {
+        if chain_id == self.chain_id {
+            build_wallet_from_config(&self.account)
+        } else {
+            self.relayed_chains
+                .iter()
+                .find(|c| c.chain_id == chain_id)
+                .map(|c| build_wallet_from_config(&c.account))
+                .ok_or_else(|| ConfigError::InvalidChainId(chain_id))?
+        }
+    }
+
+    pub fn adapter_address(&self, chain_id: u32) -> anyhow::Result<Address> {
+        if chain_id == self.chain_id {
+            Ok(self.adapter_address.parse().unwrap())
+        } else {
+            self.relayed_chains
+                .iter()
+                .find(|c| c.chain_id == chain_id)
+                .map(|c| c.adapter_address.parse().unwrap())
+                .ok_or_else(|| ConfigError::InvalidChainId(chain_id).into())
+        }
+    }
+
+    pub fn adapter_deployed_block_height(&self, chain_id: u32) -> anyhow::Result<u64> {
+        if chain_id == self.chain_id {
+            Ok(self.adapter_deployed_block_height)
+        } else {
+            self.relayed_chains
+                .iter()
+                .find(|c| c.chain_id == chain_id)
+                .map(|c| c.adapter_deployed_block_height)
+                .ok_or_else(|| ConfigError::InvalidChainId(chain_id).into())
+        }
     }
 
     pub fn staking_address(&self) -> Address {
         self.staking_address.parse().unwrap()
     }
 
-    pub fn arpa_address(&self) -> Address {
-        self.arpa_address.parse().unwrap()
+    pub fn arpa_address(&self, chain_id: u32) -> anyhow::Result<Address> {
+        if chain_id == self.chain_id {
+            Ok(self.arpa_address.parse().unwrap())
+        } else {
+            self.relayed_chains
+                .iter()
+                .find(|c| c.chain_id == chain_id)
+                .map(|c| c.arpa_address.parse().unwrap())
+                .ok_or_else(|| ConfigError::InvalidChainId(chain_id).into())
+        }
+    }
+
+    pub fn contract_transaction_retry_descriptor(
+        &self,
+        chain_id: u32,
+    ) -> anyhow::Result<ExponentialBackoffRetryDescriptor> {
+        if chain_id == self.chain_id {
+            Ok(self.contract_transaction_retry_descriptor)
+        } else {
+            self.relayed_chains
+                .iter()
+                .find(|c| c.chain_id == chain_id)
+                .map(|c| c.contract_transaction_retry_descriptor)
+                .ok_or_else(|| ConfigError::InvalidChainId(chain_id).into())
+        }
+    }
+
+    pub fn contract_view_retry_descriptor(
+        &self,
+        chain_id: u32,
+    ) -> anyhow::Result<ExponentialBackoffRetryDescriptor> {
+        if chain_id == self.chain_id {
+            Ok(self.contract_view_retry_descriptor)
+        } else {
+            self.relayed_chains
+                .iter()
+                .find(|c| c.chain_id == chain_id)
+                .map(|c| c.contract_view_retry_descriptor)
+                .ok_or_else(|| ConfigError::InvalidChainId(chain_id).into())
+        }
     }
 }
 
@@ -97,7 +203,7 @@ pub struct HDWallet {
     pub index: u32,
     pub passphrase: Option<String>,
 }
-pub fn build_wallet_from_config(account: &Account) -> Result<Wallet<SigningKey>, ConfigError> {
+pub fn build_wallet_from_config(account: &Account) -> anyhow::Result<Wallet<SigningKey>> {
     if account.hdwallet.is_some() {
         let mut hd = account.hdwallet.clone().unwrap();
         if hd.mnemonic.starts_with('$') {
@@ -129,7 +235,7 @@ pub fn build_wallet_from_config(account: &Account) -> Result<Wallet<SigningKey>,
         return Ok(private_key.parse::<Wallet<SigningKey>>()?);
     }
 
-    Err(ConfigError::LackOfAccount)
+    Err(ConfigError::LackOfAccount.into())
 }
 
 #[derive(Debug, Error)]
@@ -142,4 +248,6 @@ pub enum ConfigError {
     EnvVarNotExisted(#[from] VarError),
     #[error(transparent)]
     BuildingAccountError(#[from] WalletError),
+    #[error("the chain id: {0} is not supported")]
+    InvalidChainId(u32),
 }

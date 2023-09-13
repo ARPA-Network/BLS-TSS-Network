@@ -39,12 +39,15 @@ pub const DEFAULT_PROVIDER_POLLING_INTERVAL_MILLIS: u64 = 10000;
 
 pub const DEFAULT_DYNAMIC_TASK_CLEANER_INTERVAL_MILLIS: u64 = 1000;
 
-pub const FULFILL_RANDOMNESS_GAS_EXCEPT_CALLBACK: u32 = 650000;
+pub const FULFILL_RANDOMNESS_GAS_EXCEPT_CALLBACK: u32 = 670000;
 pub const RANDOMNESS_REWARD_GAS: u32 = 9000;
 pub const VERIFICATION_GAS_OVER_MINIMUM_THRESHOLD: u32 = 50000;
 pub const DEFAULT_MINIMUM_THRESHOLD: u32 = 3;
 
 pub const DEFAULT_ROLLING_LOG_FILE_SIZE: u64 = 10 * 1024 * 1024 * 1024;
+
+pub const DEFAULT_BLOCK_TIME: usize = 12;
+pub const DEFAULT_MAX_RANDOMNESS_FULFILLMENT_ATTEMPTS: usize = 3;
 
 pub fn jitter(duration: Duration) -> Duration {
     duration.mul_f64(thread_rng().gen_range(0.5..=1.0))
@@ -227,6 +230,7 @@ impl ListenerDescriptor {
 
 #[derive(Debug, Copy, Clone, Serialize, Deserialize)]
 pub struct TimeLimitDescriptor {
+    pub block_time: usize,
     pub listener_interval_millis: u64,
     pub dkg_wait_for_phase_interval_millis: Option<u64>,
     pub dkg_timeout_duration: Option<usize>,
@@ -323,6 +327,7 @@ impl Config {
             Some(_) => {}
             None => {
                 self.time_limits = Some(TimeLimitDescriptor {
+                    block_time: DEFAULT_BLOCK_TIME,
                     listener_interval_millis: DEFAULT_LISTENER_INTERVAL_MILLIS,
                     dkg_wait_for_phase_interval_millis: Some(
                         DEFAULT_DKG_WAIT_FOR_PHASE_INTERVAL_MILLIS,
@@ -387,6 +392,7 @@ impl RelayedChain {
             Some(_) => {}
             None => {
                 self.time_limits = Some(TimeLimitDescriptor {
+                    block_time: DEFAULT_BLOCK_TIME,
                     listener_interval_millis: DEFAULT_LISTENER_INTERVAL_MILLIS,
                     dkg_wait_for_phase_interval_millis: None,
                     dkg_timeout_duration: None,

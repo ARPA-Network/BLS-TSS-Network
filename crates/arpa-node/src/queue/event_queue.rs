@@ -74,7 +74,7 @@ pub mod tests {
         let chain_id = 1;
 
         let block_cache: Arc<RwLock<Box<dyn BlockInfoHandler>>> =
-            Arc::new(RwLock::new(Box::new(InMemoryBlockInfoCache::new())));
+            Arc::new(RwLock::new(Box::new(InMemoryBlockInfoCache::new(12))));
 
         assert_eq!(0, block_cache.clone().read().await.get_block_height());
 

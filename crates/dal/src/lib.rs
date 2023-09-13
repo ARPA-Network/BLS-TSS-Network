@@ -13,6 +13,8 @@ use threshold_bls::{group::Curve, sig::Share};
 
 pub trait BlockInfoFetcher {
     fn get_block_height(&self) -> usize;
+
+    fn get_block_time(&self) -> usize;
 }
 
 pub trait BlockInfoUpdater {
@@ -137,6 +139,7 @@ pub enum BLSResultCacheState {
     Committed,
     CommittedByOthers,
     Expired,
+    FAULTY,
 }
 
 impl BLSResultCacheState {
@@ -147,6 +150,7 @@ impl BLSResultCacheState {
             BLSResultCacheState::Committed => 2,
             BLSResultCacheState::CommittedByOthers => 3,
             BLSResultCacheState::Expired => 4,
+            BLSResultCacheState::FAULTY => 5,
         }
     }
 }
@@ -159,6 +163,7 @@ impl From<i32> for BLSResultCacheState {
             2 => BLSResultCacheState::Committed,
             3 => BLSResultCacheState::CommittedByOthers,
             4 => BLSResultCacheState::Expired,
+            5 => BLSResultCacheState::FAULTY,
             _ => panic!("Invalid BLSResultCacheState"),
         }
     }
@@ -191,6 +196,8 @@ pub trait SignatureResultCacheUpdater<T: ResultCache> {
         task_request_id: &[u8],
         status: BLSResultCacheState,
     ) -> DataAccessResult<()>;
+
+    async fn incr_committed_times(&mut self, task_request_id: &[u8]) -> DataAccessResult<()>;
 }
 
 pub trait ResultCache: Task + Clone {

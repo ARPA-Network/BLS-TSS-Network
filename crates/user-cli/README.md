@@ -18,7 +18,9 @@ It consists of:
 
 # Dependencies
 
-Install `anvil` and `cast` from [foundry](https://github.com/foundry-rs/foundry#installation), then add them to `PATH` for `randcast estimate-callback-gas <consumer> <request-sender> <request-signature> <request-params>` command.
+Install `anvil` and `cast` from [foundry](https://github.com/foundry-rs/foundry#installation), then add them to `PATH`.
+
+(This is Optional, mainly for running `randcast estimate-callback-gas <consumer> <request-sender> <request-signature> <request-params>` command.)
 
 # Usage
 
@@ -42,6 +44,8 @@ cargo run --bin user-shell -- -H user-shell.history
 
 # Config
 
+Note: Contract addresses on ETH Mainnet, Sepolia Testnet and Optimism can be found [here](https://docs.arpanetwork.io/randcast/supported-networks-and-parameters).
+
 Configuration items in [`conf/user_config.yml`](conf/user_config.yml) are listed here:
 
 - provider_endpoint: Config endpoint to interact with chain provider. (example: "http://127.0.0.1:8545")
@@ -54,9 +58,7 @@ Configuration items in [`conf/user_config.yml`](conf/user_config.yml) are listed
 
 - arpa_address: Config on-chain ARPA token contract address. (example: "0x9fe46736679d2d9a65f0992f2272de9f3c7fa6e0")
 
-```
-Contract addresses on ETH Mainnet and Sepolia Testnet can be found [here](https://docs.arpanetwork.io/).
-```
+- adapter_deployed_block_height: Config the block height when adapter contract is deployed to accelerate the query of events. (example: 100000)
 
 - account: Config the identity of the subscriptions you owned. There are three available account types.
 
@@ -86,7 +88,7 @@ Contract addresses on ETH Mainnet and Sepolia Testnet can be found [here](https:
     - $ARPA_ACCOUNT_KEYSTORE_PASSWORD (account, keystore, password)
     - $ARPA_HD_ACCOUNT_MNEMONIC (account, hdwallet, mnemonic)
 
-- contract_transaction_retry_descriptor(Optional): Config retry strategy for contract transactions. All the time limits are in milliseconds.
+- contract_transaction_retry_descriptor: Config retry strategy for contract transactions. All the time limits are in milliseconds.
 
   - example:
 
@@ -98,7 +100,7 @@ Contract addresses on ETH Mainnet and Sepolia Testnet can be found [here](https:
         use_jitter: true
     ```
 
-- contract_view_retry_descriptor(Optional): Config retry strategy for contract views. All the time limits are in milliseconds.
+- contract_view_retry_descriptor: Config retry strategy for contract views. All the time limits are in milliseconds.
 
   - example:
 
@@ -110,14 +112,39 @@ Contract addresses on ETH Mainnet and Sepolia Testnet can be found [here](https:
         use_jitter: true
     ```
 
-```
-We use exponential backoff to retry when an interaction fails. The interval will be an exponent of base multiplied by factor every time. The interval will be reset when the interaction succeeds.
+    ```
+    We use exponential backoff to retry when an interaction fails. The interval will be an exponent of base multiplied by factor every time. The interval will be reset when the interaction succeeds.
 
-A jitter is added to the interval to avoid the situation that all the tasks are polling at the same time. It will multiply a random number between 0.5 and 1.0 to the interval.
+    A jitter is added to the interval to avoid the situation that all the tasks are polling at the same time. It will multiply a random number between 0.5 and 1.0 to the interval.
 
-contract_transaction_retry_descriptor: (interval sequence without jitter: 2s, 4s, 8s)
-contract_view_retry_descriptor: (interval sequence without jitter: 1s, 2s, 4s, 8s, 16s)
-```
+    contract_transaction_retry_descriptor: (interval sequence without jitter: 2s, 4s, 8s)
+    contract_view_retry_descriptor: (interval sequence without jitter: 1s, 2s, 4s, 8s, 16s)
+    ```
+
+- relayed_chains: Config chain_id, account, contract addresses, provider endpoint, adapter_deployed_block_height, contract_transaction_retry_descriptor and contract_view_retry_descriptor for all relayed chains we support.
+
+  - example:
+
+    ```
+      relayed_chains:
+        - chain_id: 901
+          provider_endpoint: "http://127.0.0.1:9545"
+          adapter_address: "0x5FC8d32690cc91D4c39d9d3abcBD16989F875707"
+          adapter_deployed_block_height: 0
+          arpa_address: "0x9fe46736679d2d9a65f0992f2272de9f3c7fa6e0"
+          account:
+            private_key: $OP_ACCOUNT_PRIVATE_KEY
+          contract_transaction_retry_descriptor:
+            base: 2
+            factor: 1000
+            max_attempts: 3
+            use_jitter: true
+          contract_view_retry_descriptor:
+            base: 2
+            factor: 500
+            max_attempts: 5
+            use_jitter: true
+    ```
 
 # REPL Commands
 
@@ -176,20 +203,21 @@ Send trxs to on-chain contracts
 Usage: send [COMMAND]
 
 Commands:
-  approve-arpa-to-staking  Approve arpa to staking contract [aliases: aats]
-  stake                    Stake arpa to staking contract [aliases: s]
-  unstake                  Unstake(then freeze) arpa from staking contract and claim delegation rewards instantly after exit [aliases: u]
-  claim-frozen-principal   Claim frozen principal from staking after unstake [aliases: cfp]
-  claim                    Claim rewards as well as frozen principal(if any) from staking [aliases: c]
-  claim-reward             Claim rewards from staking [aliases: cr]
-  create-subscription      Create a new subscription as owner [aliases: cs]
-  add-consumer             Add consumer contract to subscription [aliases: ac]
-  fund-subscription        Fund subscription with ETH [aliases: fs]
-  set-referral             Set referral subscription id for your subscription to get referral rewards [aliases: sr]
-  cancel-subscription      Cancel subscription and redeem ETH left to receiver address [aliases: ccs]
-  remove-consumer          Remove consumer contract from subscription [aliases: rc]
-  set-callback-gas-config  Set callback gas config for consumer contract [aliases: scgc]
-  help                     Print this message or the help of the given subcommand(s)
+  approve-arpa-to-staking     Approve arpa to staking contract [aliases: aats]
+  stake                       Stake arpa to staking contract [aliases: s]
+  unstake                     Unstake(then freeze) arpa from staking contract and claim delegation rewards instantly after exit [aliases: u]
+  claim-frozen-principal      Claim frozen principal from staking after unstake [aliases: cfp]
+  claim                       Claim rewards as well as frozen principal(if any) from staking [aliases: c]
+  claim-reward                Claim rewards from staking [aliases: cr]
+  create-subscription         Create a new subscription as owner [aliases: cs]
+  add-consumer                Add consumer contract to subscription [aliases: ac]
+  fund-subscription           Fund subscription with ETH [aliases: fs]
+  set-referral                Set referral subscription id for your subscription to get referral rewards [aliases: sr]
+  cancel-subscription         Cancel subscription and redeem ETH left to receiver address [aliases: ccs]
+  remove-consumer             Remove consumer contract from subscription [aliases: rc]
+  set-callback-gas-config     Set callback gas config for consumer contract [aliases: scgc]
+  set-request-confirmations   Set request confirmations for consumer contract [aliases: src]
+  help                        Print this message or the help of the given subcommand(s)
 
 Options:
   -h, --help  Print help
@@ -209,7 +237,7 @@ Commands:
   estimate-payment-amount     Estimate the amount of gas used for a fulfillment of randomness in 3 times of current gas price, for calculating how much eth is needed for subscription funding [aliases: epa]
   callback-gas-limit          Get callback gas limit of consumer contract [aliases: cgl]
   callback-max-gas-fee        Get callback max gas fee of consumer contract. 0 means auto-estimating CallbackMaxGasFee as 3 times tx.gasprice of the request call, also user can set it manually by calling set-callback-gas-config [aliases: cmgf]
-  nonce                       Get nonce(counting from 1, as there was no request) of consumer contract [aliases: n]
+  nonces                      Get nonce(counting from 1, as there was no request) for a specific subscription id and consumer address [aliases: n]
   last-randomness             Get last randomness [aliases: lr]
   pending-request-commitment  Get pending commitment by request id [aliases: prc]
   adapter-config              Get adapter config [aliases: ac]

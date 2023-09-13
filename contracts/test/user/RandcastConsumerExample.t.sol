@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.18;
 
-import {GetRandomNumberExample} from "../../src/user/examples/GetRandomNumberExample.sol";
-import {GetShuffledArrayExample} from "../../src/user/examples/GetShuffledArrayExample.sol";
-import {RollDiceExample} from "../../src/user/examples/RollDiceExample.sol";
-import {AdvancedGetShuffledArrayExample} from "../../src/user/examples/AdvancedGetShuffledArrayExample.sol";
+import {GetRandomNumberExample} from "Randcast-User-Contract/user/examples/GetRandomNumberExample.sol";
+import {GetShuffledArrayExample} from "Randcast-User-Contract/user/examples/GetShuffledArrayExample.sol";
+import {RollDiceExample} from "Randcast-User-Contract/user/examples/RollDiceExample.sol";
+import {AdvancedGetShuffledArrayExample} from "Randcast-User-Contract/user/examples/AdvancedGetShuffledArrayExample.sol";
 import {
     IAdapter,
     Adapter,
@@ -32,7 +32,7 @@ contract RandcastConsumerExampleTest is RandcastTestHelper {
     uint256 internal _dkgPostProcessReward = 100;
     uint256 internal _lastOutput = 2222222222222222;
 
-    uint16 internal _minimumRequestConfirmations = 3;
+    uint16 internal _minimumRequestConfirmations = 6;
     uint32 internal _maxGasLimit = 2000000;
     uint32 internal _gasAfterPaymentCalculation = 50000;
     uint32 internal _gasExceptCallback = 550000;

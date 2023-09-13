@@ -3,7 +3,7 @@ pragma solidity ^0.8.18;
 
 import {Script} from "forge-std/Script.sol";
 import {IAdapter} from "../src/interfaces/IAdapter.sol";
-import {GetRandomNumberExample} from "../src/user/examples/GetRandomNumberExample.sol";
+import {GetRandomNumberExample} from "Randcast-User-Contract/user/examples/GetRandomNumberExample.sol";
 
 contract GetRandomNumberLocalTestScript is Script {
     function run() external {

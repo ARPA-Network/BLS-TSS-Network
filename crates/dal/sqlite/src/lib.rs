@@ -214,6 +214,7 @@ impl SqliteDB {
                 message: model.message,
                 threshold: model.threshold as usize,
                 partial_signatures,
+                committed_times: model.committed_times as usize,
             };
 
             results.push(BLSResultCache {
@@ -313,6 +314,7 @@ impl SqliteDB {
                 message: model.message,
                 threshold: model.threshold as usize,
                 partial_signatures,
+                committed_times: model.committed_times as usize,
             };
 
             results.push(BLSResultCache {
@@ -1171,6 +1173,7 @@ impl SignatureResultCacheFetcher<RandomnessResultCache>
                 randomness_task: task,
                 partial_signatures,
                 threshold: model.threshold as usize,
+                committed_times: model.committed_times as usize,
             },
             state: BLSResultCacheState::from(model.state),
         })
@@ -1308,6 +1311,30 @@ impl SignatureResultCacheUpdater<RandomnessResultCache>
             .await?;
 
         Ok(true)
+    }
+
+    async fn incr_committed_times(&mut self, task_request_id: &[u8]) -> DataAccessResult<()> {
+        let model =
+            RandomnessResultQuery::select_by_request_id(self.get_connection(), task_request_id)
+                .await
+                .map_err(|e| {
+                    let e: DBError = e.into();
+                    e
+                })?
+                .ok_or(BLSTaskError::CommitterCacheNotExisted)?;
+
+        RandomnessResultMutation::incr_committed_times(self.get_connection(), model)
+            .await
+            .map_err(|e| {
+                let e: DBError = e.into();
+                e
+            })?;
+
+        self.signature_results_cache
+            .incr_committed_times(task_request_id)
+            .await?;
+
+        Ok(())
     }
 }
 
@@ -1499,6 +1526,7 @@ impl SignatureResultCacheFetcher<RandomnessResultCache>
                 randomness_task: task,
                 partial_signatures,
                 threshold: model.threshold as usize,
+                committed_times: model.committed_times as usize,
             },
             state: BLSResultCacheState::from(model.state),
         })
@@ -1636,6 +1664,30 @@ impl SignatureResultCacheUpdater<RandomnessResultCache>
             .await?;
 
         Ok(true)
+    }
+
+    async fn incr_committed_times(&mut self, task_request_id: &[u8]) -> DataAccessResult<()> {
+        let model =
+            OPRandomnessResultQuery::select_by_request_id(self.get_connection(), task_request_id)
+                .await
+                .map_err(|e| {
+                    let e: DBError = e.into();
+                    e
+                })?
+                .ok_or(BLSTaskError::CommitterCacheNotExisted)?;
+
+        OPRandomnessResultMutation::incr_committed_times(self.get_connection(), model)
+            .await
+            .map_err(|e| {
+                let e: DBError = e.into();
+                e
+            })?;
+
+        self.signature_results_cache
+            .incr_committed_times(task_request_id)
+            .await?;
+
+        Ok(())
     }
 }
 
