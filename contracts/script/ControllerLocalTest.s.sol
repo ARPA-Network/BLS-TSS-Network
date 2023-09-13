@@ -63,6 +63,9 @@ contract ControllerLocalTestScript is Script {
     address internal _opControllerOracleAddress = vm.envAddress("OP_CONTROLLER_ORACLE_ADDRESS");
     address internal _opL1CrossDomainMessengerAddress = vm.envAddress("OP_L1_CROSS_DOMAIN_MESSENGER_ADDRESS");
 
+    bool internal _arpa_exists = vm.envBool("ARPA_EXISTS");
+    address internal _existing_arpa_address = vm.envAddress("EXISTING_L1_ARPA_ADDRESS");
+
     function run() external {
         Controller controller;
         ControllerRelayer controllerRelayer;
@@ -72,8 +75,13 @@ contract ControllerLocalTestScript is Script {
         Staking staking;
         IERC20 arpa;
 
-        vm.broadcast(_deployerPrivateKey);
-        arpa = new Arpa();
+        if (_arpa_exists == false) {
+            vm.broadcast(_deployerPrivateKey);
+            arpa = new Arpa();
+        }
+        else {
+            arpa = IERC20(_existing_arpa_address);
+        }
 
         Staking.PoolConstructorParams memory params = Staking.PoolConstructorParams(
             IERC20(address(arpa)),
