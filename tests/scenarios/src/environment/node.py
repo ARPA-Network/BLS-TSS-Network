@@ -149,6 +149,7 @@ listeners:
     use_jitter: true
 
 time_limits:
+  block_time: 3
   dkg_timeout_duration: 40
   randomness_task_exclusive_window: 10
   listener_interval_millis: 1000
@@ -196,6 +197,7 @@ relayed_chains:
         use_jitter: false
     
     time_limits:
+      block_time: 2
       randomness_task_exclusive_window: 10
       listener_interval_millis: 1000
       provider_polling_interval_millis: 1000

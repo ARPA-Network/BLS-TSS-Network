@@ -3,6 +3,7 @@ This module contains functions to retrieve information from the logs
 """
 import json
 import os
+import re
 import time
 
 def get_log_info(log, keyword):
@@ -66,8 +67,8 @@ def all_nodes_have_keyword(keyword, node_process_list, retry_time=300, node_idx=
     :param keyword: keyword to look for in the log
     :return: dictionary with the relevant information found for the keyword
     """
-    
-    while node_idx <= len(node_process_list):
+    start_idx = node_idx
+    while node_idx < start_idx + len(node_process_list):
         log_info = get_keyword_from_node_log(node_idx, keyword, retry_time)
         if log_info is None:
             return False
@@ -128,3 +129,17 @@ def wait_for_keyword_from_log(path, keyword, max_retry_time=300):
 
     print('Reached max retry time. Keyword not found.')
     return False
+
+def get_address_from_file(path, title):
+    '''
+    Get the address from a file.
+    '''
+    pattern = fr"({title} deployed at )((0x)?[0-9a-fA-F]{{40}})"
+    with open(path, 'r', encoding='UTF-8') as log_file:
+        lines = log_file.readlines()
+        for line in lines:
+            result = re.search(pattern, line)
+            if result is not None:
+                # assuming you want to return the address that follows the title
+                return result.group(2)
+    return None

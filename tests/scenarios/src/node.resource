@@ -33,7 +33,7 @@ Start Listener
 Shutdown Listener
     [Arguments]    ${node_index}    ${task_type}
     ${node_port} =    Get Node Port From Index    ${node_index}
-    ${res} =    Call Request    ${node_port}    ShutdownListener    task_type=${task_type}
+zhi    ${res} =    Call Request    ${node_port}    ShutdownListener    task_type=${task_type}
     RETURN    ${res}
 
 

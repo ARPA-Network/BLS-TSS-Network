@@ -24,6 +24,8 @@ Setup OP Devnet
     ${result} =     Run Process     make    devnet-clean    cwd=${OP_DIR}
     ${process_handle} =     Start Process     make    devnet-up-deploy    cwd=${OP_DIR}    stdout=op.log
     Wait For Keyword From Log    ${OP_DIR}/op.log    Devnet ready    max_retry_time=1500
+    ${l1_cross_domain_messager_address} =    Get Address From File    ${OP_DIR}/op.log    L1CrossDomainMessengerProxy
+    Set Environment Variable    OP_L1_CROSS_DOMAIN_MESSENGER_ADDRESS    ${l1_cross_domain_messager_address}
     ${result} =     Run Process     docker    container    ls
     log    ${result.stdout}
     
@@ -34,14 +36,10 @@ Set Op Enviorment And Deploy Contract
     Clear Database
     Set Global Variable    $NODE_PROCESS_LIST    ${EMPTY_LIST}
     Setup OP Devnet
-    Source Environment Variables
-    ${result} =    Exec Script    ControllerLocalTest.s.sol:ControllerLocalTestScript
-    ${contract_addresses} =    Get Contract Address From File    contracts/broadcast/ControllerLocalTest.s.sol/900/run-latest.json
-    Set Global Variable    $CONTRACT_ADDRESSES    ${contract_addresses}
-    ${result} =    Exec Script    StakeOperatorScenarioTest.s.sol:StakeOperatorScenarioTestScript
+
+    Set Op Enviormnet
     Bound OP Contract ABI
     Set ARPA Address
-    Set Op Enviormnet
     Parse Node
     Create Node Config    ${CONTRACT_ADDRESSES['Controller']}    ${CONTRACT_ADDRESSES['ERC1967Proxy']}    ${CONTRACT_ADDRESSES['ControllerRelayer']}    900
 
@@ -51,7 +49,19 @@ Set Op Enviormnet
     Set Environment Variable    OP_ARPA_ADDRESS    ${contract_addresses['Arpa']}
     Set Environment Variable    OP_CONTROLLER_ORACLE_ADDRESS    ${contract_addresses['ControllerOracle']}
     Set Environment Variable    OP_ADAPTER_ADDRESS    ${contract_addresses['ERC1967Proxy']}
+    ${result} =    Exec Script    ControllerLocalTest.s.sol:ControllerLocalTestScript
+    
+    ${contract_addresses} =    Get Contract Address From File    contracts/broadcast/ControllerLocalTest.s.sol/900/run-latest.json
+    Set Global Variable    $CONTRACT_ADDRESSES    ${contract_addresses}
+    Set Environment Variable    ARPA_ADDRESS    ${contract_addresses['Arpa']}
+    Set Environment Variable    CONTROLLER_ADDRESS    ${contract_addresses['Controller']}
+    Set Environment Variable    STAKING_ADDRESS    ${contract_addresses['Staking']}
+    Set Environment Variable   ADAPTER_ADDRESS    ${contract_addresses['ERC1967Proxy']}
+    Set Environment Variable    OP_CHAIN_MESSENGER_ADDRESS    ${contract_addresses['OPChainMessenger']}
+    
     ${result} =    Exec Script    OPControllerOracleInitializationLocalTest.s.sol:OPControllerOracleInitializationLocalTestScript    http://localhost:9545
+    ${result} =    Exec Script    InitStakingLocalTest.s.sol:InitStakingLocalTestScript
+    ${result} =    Exec Script    StakeNodeLocalTest.s.sol:StakeNodeLocalTestScript
 
 Bound OP Contract ABI
     [Documentation]    Bound contract ABI to handle contract function call
@@ -75,6 +85,26 @@ Deploy OP User Contract
     [Documentation]    Deploy user request contract
     ${contract_output} =    Exec Script    OPGetRandomNumberLocalTest.s.sol:OPGetRandomNumberLocalTestScript    http://localhost:9545
     ${contract_address} =    Get Contract Address From File    contracts/broadcast/OPGetRandomNumberLocalTest.s.sol/901/run-latest.json
-    Set Global Variable    $USER_CONTRACT_ADDRESS    ${contract_address['default']}  
-    ${user_contract} =    Get Contract    ${PROXY_OUTPUT}GetRandomNumberExample.sol/GetRandomNumberExample.json    ${user_contract_address}
-    Set Global Variable    $USER_CONTRACT   ${user_contract}
+    Set Global Variable    $USER_CONTRACT_ADDRESS    ${contract_address['GetRandomNumberExample']}
+
+Teardown OP Environment
+    [Documentation]    Tears down the OP scenario testing environment
+    ${result} =     Run Process     make    devnet-clean    cwd=${OP_DIR}
+    ${list_len} =   Get Length    ${NODE_PROCESS_LIST}
+    Kill Previous Node    ${list_len}
+    Set Global Variable    $NODE_PROCESS_LIST    ${EMPTY_LIST}
+    Set Global Variable    $BLOCK_TIME    0
+    Set Global Variable    $USER_CONTRACT_ADDRESS    NULL
+    Clear Database
+    Terminate All Processes
+
+Request Randomness OP
+    [Documentation]    Cast request randomness
+    ${key} =    Get Value From Env    USER_PRIVATE_KEY
+    ${result} =    Run    cast send ${USER_CONTRACT_ADDRESS} "requestRandomness()" --private-key=${key} --rpc-url=http://127.0.0.1:9545 --gas-limit=100000
+
+Check Randomness OP
+    [Documentation]    Check the randomness
+    ${last_output} =    Run    cast call ${USER_CONTRACT_ADDRESS} "lastRandomnessResult()(uint256)" --rpc-url=http://127.0.0.1:9545
+    Log    ${last_output}
+    RETURN    ${last_output}

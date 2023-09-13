@@ -41,6 +41,10 @@ Set Enviorment And Deploy Contract
     ${result} =    Exec Script    ControllerScenarioTest.s.sol:ControllerScenarioTest
     ${contract_addresses} =    Get Contract Address From File    contracts/broadcast/ControllerScenarioTest.s.sol/31337/run-latest.json
     Set Global Variable    $CONTRACT_ADDRESSES    ${contract_addresses}
+    Set Environment Variable    ARPA_ADDRESS    ${contract_addresses['Arpa']}
+    Set Environment Variable    CONTROLLER_ADDRESS    ${contract_addresses['ControllerProxy']}
+    Set Environment Variable    STAKING_ADDRESS    ${contract_addresses['Staking']}
+    Set Environment Variable   ADAPTER_ADDRESS    ${contract_addresses['ERC1967Proxy']}
     ${result} =    Exec Script    StakeOperatorScenarioTest.s.sol:StakeOperatorScenarioTestScript
     Bound Contract ABI
     Set ARPA Address
@@ -78,7 +82,7 @@ Deploy User Contract
     [Documentation]    Deploy user request contract
     ${contract_output} =    Exec Script    GetRandomNumberScenarioTest.s.sol:GetRandomNumberScenarioTestScript
     ${contract_address} =    Get Contract Address From File    contracts/broadcast/GetRandomNumberScenarioTest.s.sol/31337/run-latest.json
-    Set Global Variable    $USER_CONTRACT_ADDRESS    ${contract_address['default']}  
+    Set Global Variable    $USER_CONTRACT_ADDRESS    ${contract_address['GetRandomNumberExample']}
     ${user_contract} =    Get Contract    ${PROXY_OUTPUT}GetRandomNumberExample.sol/GetRandomNumberExample.json    ${user_contract_address}
     Set Global Variable    $USER_CONTRACT   ${user_contract}
 
