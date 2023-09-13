@@ -34,23 +34,45 @@ L2_RPC = get_key(ENV_PATH, "OP_RPC")
 L1_CHAIN_ID = get_key(ENV_PATH, "L1_CHAIN_ID")
 L1_RPC = get_key(ENV_PATH, "L1_RPC")
 
+# Special Cases (arpa exists / l2 only
+ARPA_EXISTS = get_key(ENV_PATH, "ARPA_EXISTS")
+L2_ONLY = get_key(ENV_PATH, "L2_ONLY")
+
+EXISTING_OP_ARPA_ADDRESS=get_key(ENV_PATH, "EXISTING_OP_ARPA_ADDRESS")
+EXISTING_L1_ARPA_ADDRESS=get_key(ENV_PATH, "EXISTING_L1_ARPA_ADDRESS")
+EXISTING_L1_STAKING_ADDRESS=get_key(ENV_PATH, "EXISTING_L1_STAKING_ADDRESS")
+EXISTING_L1_CONTROLLER_ADDRESS=get_key(ENV_PATH, "EXISTING_L1_CONTROLLER_ADDRESS")
+EXISTING_L1_ADAPTER_ADDRESS=get_key(ENV_PATH, "EXISTING_L1_ADAPTER_ADDRESS")
+EXISTING_L1_CONTROLLER_RELAYER=get_key(ENV_PATH, "EXISTING_L1_CONTROLLER_RELAYER")
+OP_L1_CROSS_DOMAIN_MESSENGER_ADDRESS=get_key(ENV_PATH, "OP_L1_CROSS_DOMAIN_MESSENGER_ADDRESS")
+
 
 print(f"L1_CHAIN_ID: {L1_CHAIN_ID}")
 print(f"L1_RPC: {L1_RPC}")
 print(f"L2_CHAIN_ID: {L2_CHAIN_ID}")
 print(f"L2_RPC: {L2_RPC}")
+print(f"ARPA_EXISTS: {ARPA_EXISTS}")
+print(f"L2_ONLY: {L2_ONLY}")
 
-OP_CONTROLLER_ORACLE_BROADCAST_PATH = os.path.join(
+OP_CONTRACTS_DEPLOYMENT_BROADCAST_PATH = os.path.join(
     CONTRACTS_DIR,
     "broadcast",
     "OPControllerOracleLocalTest.s.sol",
     L2_CHAIN_ID,
     "run-latest.json",
 )
-CONTROLLER_LOCAL_TEST_BROADCAST_PATH = os.path.join(
+L1_CONTRACTS_DEPLOYMENT_BROADCAST_PATH = os.path.join(
     CONTRACTS_DIR,
     "broadcast",
     "ControllerLocalTest.s.sol",
+    L1_CHAIN_ID,
+    "run-latest.json",
+)
+
+CREATE_AND_SET_CHAIN_MESSENGER_BROADCAST_PATH = os.path.join(
+    CONTRACTS_DIR,
+    "broadcast",
+    "CreateAndSetChainMessenger.s.sol",
     L1_CHAIN_ID,
     "run-latest.json",
 )
@@ -92,6 +114,29 @@ def get_addresses_from_json(path: str) -> dict:
 
     return contracts_dict
 
+def get_l1_addresses():
+        l1_controller_addresses= {}
+        if L2_ONLY:
+            l1_controller_addresses["Arpa"] = EXISTING_L1_ARPA_ADDRESS
+            l1_controller_addresses["Staking"] = EXISTING_L1_STAKING_ADDRESS
+            l1_controller_addresses["Controller"] = EXISTING_L1_CONTROLLER_ADDRESS
+            l1_controller_addresses["ERC1967Proxy"] = EXISTING_L1_ADAPTER_ADDRESS
+
+            l1_chain_messenger_addresses = get_addresses_from_json(CREATE_AND_SET_CHAIN_MESSENGER_BROADCAST_PATH)
+            
+            l1_addresses = {**l1_controller_addresses, **l1_chain_messenger_addresses}
+
+        else:
+            l1_addresses = get_addresses_from_json(L1_CONTRACTS_DEPLOYMENT_BROADCAST_PATH)
+            if ARPA_EXISTS:
+                l1_addresses["Arpa"] = EXISTING_L1_ARPA_ADDRESS
+        return l1_addresses
+
+def get_l2_addresses():
+    l2_addresses = get_addresses_from_json(OP_CONTRACTS_DEPLOYMENT_BROADCAST_PATH)
+    if ARPA_EXISTS:
+        l2_addresses["Arpa"] = EXISTING_OP_ARPA_ADDRESS
+    return l2_addresses
 
 def run_command(
     cmd: list,
@@ -222,39 +267,79 @@ def deploy_contracts():
 
     # 2. Deploy L2 OPControllerOracleLocalTest contracts (ControllerOracle, Adapter, Arpa)
     # # forge script script/OPControllerOracleLocalTest.s.sol:OPControllerOracleLocalTestScript --fork-url http://localhost:9545 --broadcast
-    print("Running Solidity Script: OPControllerOracleLocalTest on L1...")
+    print("Running Solidity Script: OPControllerOracleLocalTest on L2...")
     cmd = f"forge script script/OPControllerOracleLocalTest.s.sol:OPControllerOracleLocalTestScript --fork-url {L2_RPC} --broadcast --slow"
     cprint(cmd)
     run_command(
         [cmd], env={}, cwd=CONTRACTS_DIR, capture_output=HIDE_OUTPUT, shell=True
     )
     # get L2 contract addresses from broadcast and update .env file
-    l2_addresses = get_addresses_from_json(OP_CONTROLLER_ORACLE_BROADCAST_PATH)
+    l2_addresses = get_addresses_from_json(OP_CONTRACTS_DEPLOYMENT_BROADCAST_PATH)
+    if ARPA_EXISTS:
+        l2_addresses["Arpa"] = EXISTING_OP_ARPA_ADDRESS
+
     set_key(ENV_PATH, "OP_ADAPTER_ADDRESS", l2_addresses["ERC1967Proxy"])
     set_key(ENV_PATH, "OP_ARPA_ADDRESS", l2_addresses["Arpa"])
     set_key(ENV_PATH, "OP_CONTROLLER_ORACLE_ADDRESS", l2_addresses["ControllerOracle"])
 
-    # 3. Deploy L1 ControllerLocalTest contracts
-    #     (Controller, Controller Relayer, OPChainMessenger, Adapter, Arpa, Staking)
-    # forge script script/ControllerLocalTest.s.sol:ControllerLocalTestScript --fork-url http://localhost:8545 --broadcast
-    print("Running Solidity Script: ControllerLocalTest on L1...")
-    cmd = f"forge script script/ControllerLocalTest.s.sol:ControllerLocalTestScript --fork-url {L1_RPC} --broadcast --slow"
-    cprint(cmd)
-    run_command(
-        [cmd],
-        env={},
-        cwd=CONTRACTS_DIR,
-        capture_output=HIDE_OUTPUT,
-        shell=True,
-    )
 
-    # get L1 contract addresses from broadcast and update .env file
-    l1_addresses = get_addresses_from_json(CONTROLLER_LOCAL_TEST_BROADCAST_PATH)
-    set_key(ENV_PATH, "ARPA_ADDRESS", l1_addresses["Arpa"])
-    set_key(ENV_PATH, "STAKING_ADDRESS", l1_addresses["Staking"])
-    set_key(ENV_PATH, "CONTROLLER_ADDRESS", l1_addresses["Controller"])
-    set_key(ENV_PATH, "ADAPTER_ADDRESS", l1_addresses["ERC1967Proxy"])
-    set_key(ENV_PATH, "OP_CHAIN_MESSENGER_ADDRESS", l1_addresses["OPChainMessenger"])
+    if not L2_ONLY: 
+        # 3. Deploy L1 ControllerLocalTest contracts
+        #     (Controller, Controller Relayer, OPChainMessenger, Adapter, Arpa, Staking)
+        # forge script script/ControllerLocalTest.s.sol:ControllerLocalTestScript --fork-url http://localhost:8545 --broadcast
+        print("Running Solidity Script: ControllerLocalTest on L1...")
+        cmd = f"forge script script/ControllerLocalTest.s.sol:ControllerLocalTestScript --fork-url {L1_RPC} --broadcast --slow"
+        cprint(cmd)
+        run_command(
+            [cmd],
+            env={},
+            cwd=CONTRACTS_DIR,
+            capture_output=HIDE_OUTPUT,
+            shell=True,
+        )
+        # get L1 contract addresses from broadcast and update .env file
+        l1_addresses = get_addresses_from_json(L1_CONTRACTS_DEPLOYMENT_BROADCAST_PATH)
+        if ARPA_EXISTS:
+            l1_addresses["Arpa"] = EXISTING_L1_ARPA_ADDRESS
+
+        set_key(ENV_PATH, "ARPA_ADDRESS", l1_addresses["Arpa"])
+        set_key(ENV_PATH, "STAKING_ADDRESS", l1_addresses["Staking"])
+        set_key(ENV_PATH, "CONTROLLER_ADDRESS", l1_addresses["Controller"])
+        set_key(ENV_PATH, "ADAPTER_ADDRESS", l1_addresses["ERC1967Proxy"])
+        set_key(ENV_PATH, "OP_CHAIN_MESSENGER_ADDRESS", l1_addresses["OPChainMessenger"])
+
+
+    else: # l2_only == True
+        l1_controller_addresses= {}
+        l1_controller_addresses["Arpa"] = EXISTING_L1_ARPA_ADDRESS
+        l1_controller_addresses["Staking"] = EXISTING_L1_STAKING_ADDRESS
+        l1_controller_addresses["Controller"] = EXISTING_L1_CONTROLLER_ADDRESS
+        l1_controller_addresses["ERC1967Proxy"] = EXISTING_L1_ADAPTER_ADDRESS
+
+        # Deploy CreateAndSetChainMessenger script
+        print("Running Solidity Script: CreateAndSetChainMessenger on L1...")
+        cmd = f"forge script script/CreateAndSetChainMessenger.s.sol:CreateAndSetChainMessengerScript --fork-url {L1_RPC} --broadcast --slow"
+        cprint(cmd)
+        run_command(
+            [cmd],
+            env={
+                "OP_L1_CROSS_DOMAIN_MESSENGER_ADDRESS": OP_L1_CROSS_DOMAIN_MESSENGER_ADDRESS,
+                "OP_CONTROLLER_ORACLE_ADDRESS": l2_addresses["ControllerOracle"],
+                "EXISTING_L1_CONTROLLER_RELAYER": EXISTING_L1_CONTROLLER_RELAYER,
+            },
+            cwd=CONTRACTS_DIR,
+            capture_output=HIDE_OUTPUT,
+            shell=True,
+        )
+        l1_chain_messenger_addresses = get_addresses_from_json(CREATE_AND_SET_CHAIN_MESSENGER_BROADCAST_PATH)
+
+        l1_addresses = {**l1_controller_addresses, **l1_chain_messenger_addresses}
+        set_key(ENV_PATH, "ARPA_ADDRESS", l1_addresses["Arpa"])
+        set_key(ENV_PATH, "STAKING_ADDRESS", l1_addresses["Staking"])
+        set_key(ENV_PATH, "CONTROLLER_ADDRESS", l1_addresses["Controller"])
+        set_key(ENV_PATH, "ADAPTER_ADDRESS", l1_addresses["ERC1967Proxy"])
+        set_key(ENV_PATH, "OP_CHAIN_MESSENGER_ADDRESS", l1_addresses["OPChainMessenger"])
+
 
     # 4. deploy remaining contracts (Controller Oracle Init, StakeNodeLocalTest)
     # forge script script/OPControllerOracleInitializationLocalTest.s.sol:OPControllerOracleInitializationLocalTestScript --fork-url http://localhost:9545 --broadcast
@@ -276,41 +361,44 @@ def deploy_contracts():
         shell=True,
     )
 
-    # forge script script/InitStakingLocalTest.s.sol:InitStakingLocalTestScript --fork-url http://localhost:8545 --broadcast -g 15
-    print("Running Solidity Script: InitStakingLocalTestScript on L1...")
-    cmd = f"forge script script/InitStakingLocalTest.s.sol:InitStakingLocalTestScript --fork-url {L1_RPC} --broadcast -g 150 --slow"
-    cprint(cmd)
-    run_command(
-        [cmd],
-        env={
-            "ARPA_ADDRESS": l1_addresses["Arpa"],
-            "STAKING_ADDRESS": l1_addresses["Staking"],
-        },
-        cwd=CONTRACTS_DIR,
-        capture_output=HIDE_OUTPUT,
-        shell=True,
-    )
+    if not L2_ONLY:
+        # forge script script/InitStakingLocalTest.s.sol:InitStakingLocalTestScript --fork-url http://localhost:8545 --broadcast -g 15
+        print("Running Solidity Script: InitStakingLocalTestScript on L1...")
+        cmd = f"forge script script/InitStakingLocalTest.s.sol:InitStakingLocalTestScript --fork-url {L1_RPC} --broadcast -g 150 --slow"
+        cprint(cmd)
+        run_command(
+            [cmd],
+            env={
+                "ARPA_ADDRESS": l1_addresses["Arpa"],
+                "STAKING_ADDRESS": l1_addresses["Staking"],
+            },
+            cwd=CONTRACTS_DIR,
+            capture_output=HIDE_OUTPUT,
+            shell=True,
+        )
 
-    # forge script script/StakeNodeLocalTest.s.sol:StakeNodeLocalTestScript --fork-url http://localhost:8545 --broadcast
-    print("Running Solidity Script: StakeNodeLocalTestScript on L1...")
-    cmd = f"forge script script/StakeNodeLocalTest.s.sol:StakeNodeLocalTestScript --fork-url {L1_RPC} --broadcast -g 150 --slow"
-    cprint(cmd)
-    run_command(
-        [cmd],
-        env={
-            "ARPA_ADDRESS": l1_addresses["Arpa"],
-            "STAKING_ADDRESS": l1_addresses["Staking"],
-            "ADAPTER_ADDRESS": l1_addresses["ERC1967Proxy"],
-        },
-        cwd=CONTRACTS_DIR,
-        capture_output=HIDE_OUTPUT,
-        shell=True,
-    )
+        # forge script script/StakeNodeLocalTest.s.sol:StakeNodeLocalTestScript --fork-url http://localhost:8545 --broadcast
+        print("Running Solidity Script: StakeNodeLocalTestScript on L1...")
+        cmd = f"forge script script/StakeNodeLocalTest.s.sol:StakeNodeLocalTestScript --fork-url {L1_RPC} --broadcast -g 150 --slow"
+        cprint(cmd)
+        run_command(
+            [cmd],
+            env={
+                "ARPA_ADDRESS": l1_addresses["Arpa"],
+                "STAKING_ADDRESS": l1_addresses["Staking"],
+                "ADAPTER_ADDRESS": l1_addresses["ERC1967Proxy"],
+            },
+            cwd=CONTRACTS_DIR,
+            capture_output=HIDE_OUTPUT,
+            shell=True,
+        )
 
 
 def deploy_nodes():  # ! Deploy Nodes
-    l1_addresses = get_addresses_from_json(CONTROLLER_LOCAL_TEST_BROADCAST_PATH)
-    l2_addresses = get_addresses_from_json(OP_CONTROLLER_ORACLE_BROADCAST_PATH)
+
+    # this is only true if --l2-only config 
+    l1_addresses = get_addresses_from_json(L1_CONTRACTS_DEPLOYMENT_BROADCAST_PATH)
+    l2_addresses = get_addresses_from_json(OP_CONTRACTS_DEPLOYMENT_BROADCAST_PATH)
 
     ######################################
     ###### ARPA Network Deployment #######
@@ -454,8 +542,8 @@ def get_last_randomness(address: str, rpc: str) -> str:
 
 
 def test_request_randomness():  # ! Integration Testing
-    l1_addresses = get_addresses_from_json(CONTROLLER_LOCAL_TEST_BROADCAST_PATH)
-    l2_addresses = get_addresses_from_json(OP_CONTROLLER_ORACLE_BROADCAST_PATH)
+    l1_addresses = get_addresses_from_json(L1_CONTRACTS_DEPLOYMENT_BROADCAST_PATH)
+    l2_addresses = get_addresses_from_json(OP_CONTRACTS_DEPLOYMENT_BROADCAST_PATH)
     # pprint(l1_addresses)
     # pprint(l2_addresses)
 
@@ -560,8 +648,8 @@ def test_request_randomness():  # ! Integration Testing
 
 
 def print_addresses():
-    l1_addresses = get_addresses_from_json(CONTROLLER_LOCAL_TEST_BROADCAST_PATH)
-    l2_addresses = get_addresses_from_json(OP_CONTROLLER_ORACLE_BROADCAST_PATH)
+    l1_addresses = get_addresses_from_json(L1_CONTRACTS_DEPLOYMENT_BROADCAST_PATH)
+    l2_addresses = get_addresses_from_json(OP_CONTRACTS_DEPLOYMENT_BROADCAST_PATH)
     print("L1 Addresses:")
     pprint(l1_addresses)
     print("L2 Addresses:")

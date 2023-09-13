@@ -39,14 +39,18 @@ contract OPControllerOracleLocalTestScript is Script {
     uint256 internal _flatFeePromotionStartTimestamp = vm.envUint("FLAT_FEE_PROMOTION_START_TIMESTAMP");
     uint256 internal _flatFeePromotionEndTimestamp = vm.envUint("FLAT_FEE_PROMOTION_END_TIMESTAMP");
 
+    bool internal _arpa_exists = vm.envBool("arpa_exists");
+
     function run() external {
         ControllerOracle controllerOracle;
         ERC1967Proxy adapter;
         Adapter adapterImpl;
-        IERC20 arpa;
 
-        vm.broadcast(_deployerPrivateKey);
-        arpa = new Arpa();
+        if (_arpa_exists == false) {
+            IERC20 arpa;
+            vm.broadcast(_deployerPrivateKey);
+            arpa = new Arpa();
+        }
 
         vm.broadcast(_deployerPrivateKey);
         controllerOracle = new ControllerOracle();
