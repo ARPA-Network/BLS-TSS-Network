@@ -97,7 +97,7 @@ Test Referral
     Sleep    10s
     
     ${contract_address} =    Get Contract Address From File    contracts/broadcast/GetRandomNumberScenarioTest.s.sol/31337/run-latest.json
-    ${new_user_contract} =    Get Contract    ${PROXY_OUTPUT}GetRandomNumberExample.sol/GetRandomNumberExample.json    ${contract_address['default']}
+    ${new_user_contract} =    Get Contract    ${PROXY_OUTPUT}GetRandomNumberExample.sol/GetRandomNumberExample.json    ${contract_address['GetRandomNumberExample']}
     ${result} =    Contract Function Transact    ${new_user_contract}    getRandomNumber
     Mine Blocks    10
     Sleep    10s

@@ -208,7 +208,7 @@ Corner Case2
 *** Test Cases ***
 
 Run BLS Test Cases
-    Repeat Keyword    0    BLS Happy Path1
-    Repeat Keyword    0    BLS Happy Path2
-    Repeat Keyword    0    Corner Case1
+    Repeat Keyword    1    BLS Happy Path1
+    Repeat Keyword    1    BLS Happy Path2
+    Repeat Keyword    1    Corner Case1
     Repeat Keyword    1    Corner Case2

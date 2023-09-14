@@ -56,7 +56,8 @@ message ListFixedTasksReply {
 }
 
 message StartListenerRequest {
-  ListenerType task_type = 1;
+  uint32 chain_id = 1;
+  ListenerType task_type = 2;
 }
 
 message StartListenerReply {
@@ -64,7 +65,8 @@ message StartListenerReply {
 }
 
 message ShutdownListenerRequest {
-  ListenerType task_type = 1;
+  uint32 chain_id = 1;
+  ListenerType task_type = 2;
 }
 
 message ShutdownListenerReply {
@@ -185,10 +187,11 @@ message VerifyPartialSigsReply {
 }
 
 message SendPartialSigRequest {
-  string member_id_address = 1;
-  bytes msg = 2;
-  bytes request_id = 3;
-  bytes partial_sig = 4;
+  uint32 chain_id = 1;
+  string member_id_address = 2;
+  bytes msg = 3;
+  bytes request_id = 4;
+  bytes partial_sig = 5;
 }
 
 message SendPartialSigReply {
@@ -196,10 +199,11 @@ message SendPartialSigReply {
 }
 
 message FulfillRandomnessRequest {
-  uint32 group_index = 1;
-  bytes request_id = 2;
-  bytes sig = 3;
-  map<string, bytes> partial_sigs = 4;
+  uint32 chain_id = 1;
+  uint32 group_index = 2;
+  bytes request_id = 3;
+  bytes sig = 4;
+  map<string, bytes> partial_sigs = 5;
 }
 
 message FulfillRandomnessReply {

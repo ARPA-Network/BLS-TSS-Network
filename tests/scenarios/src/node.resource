@@ -27,13 +27,15 @@ List Fixed Tasks
 Start Listener
     [Arguments]    ${node_index}    ${task_type}
     ${node_port} =    Get Node Port From Index    ${node_index}
-    ${res} =    Call Request    ${node_port}    StartListener    task_type=${task_type}
+    ${chain_id} =    Convert To Integer    31337
+    ${res} =    Call Request    ${node_port}    StartListener    chain_id=${chain_id}    task_type=${task_type}
     RETURN    ${res}
 
 Shutdown Listener
     [Arguments]    ${node_index}    ${task_type}
     ${node_port} =    Get Node Port From Index    ${node_index}
-zhi    ${res} =    Call Request    ${node_port}    ShutdownListener    task_type=${task_type}
+    ${chain_id} =    Convert To Integer    31337
+    ${res} =    Call Request    ${node_port}    ShutdownListener    chain_id=${chain_id}    task_type=${task_type}
     RETURN    ${res}
 
 
