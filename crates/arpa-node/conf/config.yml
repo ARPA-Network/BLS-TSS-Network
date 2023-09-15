@@ -14,6 +14,10 @@ controller_relayer_address: "0x82e01223d51Eb87e16A03E24687EDF0F294da6f1"
 
 adapter_address: "0x5FC8d32690cc91D4c39d9d3abcBD16989F875707"
 
+adapter_deployed_block_height: 9600000
+
+arpa_address: "0xa4F59C4Caf15641F32f5756E37d93912E7F96203"
+
 data_path: "./data0.sqlite"
 
 logger:
@@ -88,6 +92,8 @@ relayed_chains:
     provider_endpoint: "http://127.0.0.1:9545"
     controller_oracle_address: "0xCf7Ed3AccA5a467e9e704C703E8D87F634fB0Fc9"
     adapter_address: "0x5FC8d32690cc91D4c39d9d3abcBD16989F875707"
+    adapter_deployed_block_height: 14224644
+    arpa_address: "0xA129BEA1a5d9E37Eb2C505c8D302231A28B0A82b"
     listeners:
       - l_type: Block
         interval_millis: 0

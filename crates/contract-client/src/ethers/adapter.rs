@@ -1,9 +1,8 @@
 use crate::{
     adapter::{AdapterClientBuilder, AdapterLogs, AdapterTransactions, AdapterViews},
-    contract_stub::{
-        adapter::{Adapter, RandomnessRequestFilter},
-        i_controller::RequestDetail,
-        shared_types::PartialSignature as ContractPartialSignature,
+    contract_stub::adapter::{
+        Adapter, PartialSignature as ContractPartialSignature, RandomnessRequestFilter,
+        RequestDetail,
     },
     error::{ContractClientError, ContractClientResult},
     ServiceClient, TransactionCaller, ViewCaller,

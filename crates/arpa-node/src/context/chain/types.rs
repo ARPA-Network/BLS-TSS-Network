@@ -1,7 +1,7 @@
 use crate::{
     context::{
-        BLSTasksHandler, BlockInfoHandler, ChainIdentityHandler, ChainIdentityHandlerType,
-        ContextFetcher, GroupInfoHandler, NodeInfoHandler, SignatureResultCacheHandler,
+        BLSTasksHandler, BlockInfoHandler, ChainIdentityHandlerType, ContextFetcher,
+        GroupInfoHandler, NodeInfoHandler, SignatureResultCacheHandler,
     },
     listener::{
         block::BlockListener, new_randomness_task::NewRandomnessTaskListener,
@@ -19,11 +19,6 @@ use crate::{
         randomness_signature_aggregation::RandomnessSignatureAggregationSubscriber,
         ready_to_handle_randomness_task::ReadyToHandleRandomnessTaskSubscriber, Subscriber,
     },
-};
-use arpa_contract_client::ethers::{
-    adapter::AdapterClient, controller::ControllerClient,
-    controller_relayer::ControllerRelayerClient, coordinator::CoordinatorClient,
-    provider::ChainProvider,
 };
 use arpa_core::{
     ChainIdentity, GeneralMainChainIdentity, GeneralRelayedChainIdentity, ListenerDescriptor,
@@ -130,16 +125,7 @@ where
 
     type RandomnessResultCaches = Box<dyn SignatureResultCacheHandler<RandomnessResultCache>>;
 
-    type ChainIdentity = Box<
-        dyn ChainIdentityHandler<
-            PC,
-            ControllerService = ControllerClient,
-            ControllerRelayerService = ControllerRelayerClient,
-            CoordinatorService = CoordinatorClient,
-            AdapterService = AdapterClient,
-            ProviderService = ChainProvider,
-        >,
-    >;
+    type ChainIdentity = ChainIdentityHandlerType<PC>;
 
     fn id(&self) -> usize {
         self.id
@@ -634,16 +620,7 @@ where
 
     type RandomnessResultCaches = Box<dyn SignatureResultCacheHandler<RandomnessResultCache>>;
 
-    type ChainIdentity = Box<
-        dyn ChainIdentityHandler<
-            PC,
-            ControllerService = ControllerClient,
-            ControllerRelayerService = ControllerRelayerClient,
-            CoordinatorService = CoordinatorClient,
-            AdapterService = AdapterClient,
-            ProviderService = ChainProvider,
-        >,
-    >;
+    type ChainIdentity = ChainIdentityHandlerType<PC>;
 
     fn id(&self) -> usize {
         self.id

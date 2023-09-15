@@ -47,16 +47,11 @@ impl<E: DebuggableEvent + Clone + Send + Sync + 'static> EventPublisher<E> for E
 pub mod tests {
     use super::EventPublisher;
     use crate::{
-        context::{BlockInfoHandler, ChainIdentityHandler},
+        context::{BlockInfoHandler, ChainIdentityHandlerType},
         event::new_block::NewBlock,
         listener::block::BlockListener,
         queue::event_queue::EventQueue,
         subscriber::{block::BlockSubscriber, Subscriber},
-    };
-    use arpa_contract_client::ethers::{
-        adapter::AdapterClient, controller::ControllerClient,
-        controller_relayer::ControllerRelayerClient, coordinator::CoordinatorClient,
-        provider::ChainProvider,
     };
     use arpa_core::{Config, GeneralMainChainIdentity};
     use arpa_dal::cache::InMemoryBlockInfoCache;
@@ -106,20 +101,8 @@ pub mod tests {
             contract_view_retry_descriptor,
         );
 
-        let chain_identity: Arc<
-            RwLock<
-                Box<
-                    dyn ChainIdentityHandler<
-                        G2Curve,
-                        ControllerService = ControllerClient,
-                        ControllerRelayerService = ControllerRelayerClient,
-                        CoordinatorService = CoordinatorClient,
-                        AdapterService = AdapterClient,
-                        ProviderService = ChainProvider,
-                    >,
-                >,
-            >,
-        > = Arc::new(RwLock::new(Box::new(chain_identity)));
+        let chain_identity: Arc<RwLock<ChainIdentityHandlerType<G2Curve>>> =
+            Arc::new(RwLock::new(Box::new(chain_identity)));
 
         let p = BlockListener::new(chain_id, chain_identity, eq);
 

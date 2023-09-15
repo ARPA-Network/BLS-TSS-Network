@@ -241,6 +241,10 @@ Configuration items in [`conf/config.yml`](conf/config.yml) are listed here:
 
 - adapter_address: Config Adapter contract address to request and fulfill randomness task. (example: "0x0000000000000000000000000000000000000001")
 
+- adapter_deployed_block_height(Optional, used for ARPA Node CLI): Config the block height when adapter contract is deployed to accelerate the query of events. (example: 100000)
+
+- arpa_address(Optional, used for ARPA Node CLI): Config on-chain ARPA token contract address. (example: "0x9fe46736679d2d9a65f0992f2272de9f3c7fa6e0")
+
 - data_path(Optional): Config DB file for persistence. (example: "data.sqlite")
 
 - logger(Optional): Config logger settings.
@@ -384,6 +388,8 @@ Configuration items in [`conf/config.yml`](conf/config.yml) are listed here:
     provider_endpoint: "http://127.0.0.1:9545"
     controller_oracle_address: "0xCf7Ed3AccA5a467e9e704C703E8D87F634fB0Fc9"
     adapter_address: "0x5FC8d32690cc91D4c39d9d3abcBD16989F875707"
+    adapter_deployed_block_height: 14224644
+    arpa_address: "0xA129BEA1a5d9E37Eb2C505c8D302231A28B0A82b"
     listeners:
       - l_type: Block
         interval_millis: 0

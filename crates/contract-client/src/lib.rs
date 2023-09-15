@@ -213,6 +213,30 @@ pub mod controller {
     }
 }
 
+pub mod controller_oracle {
+    use crate::error::ContractClientResult;
+    use arpa_core::Group;
+    use async_trait::async_trait;
+    use ethers::types::{Address, H256};
+    use threshold_bls::group::Curve;
+
+    #[async_trait]
+    pub trait ControllerOracleTransactions {
+        async fn node_withdraw(&self, recipient: Address) -> ContractClientResult<H256>;
+    }
+
+    #[async_trait]
+    pub trait ControllerOracleViews<C: Curve> {
+        async fn get_group(&self, group_index: usize) -> ContractClientResult<Group<C>>;
+    }
+
+    pub trait ControllerOracleClientBuilder<C: Curve> {
+        type ControllerOracleService: ControllerOracleViews<C> + Send + Sync;
+
+        fn build_controller_oracle_client(&self) -> Self::ControllerOracleService;
+    }
+}
+
 pub mod controller_relayer {
     use crate::error::ContractClientResult;
     use async_trait::async_trait;

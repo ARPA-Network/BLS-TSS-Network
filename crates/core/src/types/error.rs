@@ -45,4 +45,8 @@ pub enum ConfigError {
     EnvVarNotExisted(#[from] VarError),
     #[error(transparent)]
     BuildingAccountError(#[from] WalletError),
+    #[error("the chain id: {0} is not supported")]
+    InvalidChainId(usize),
+    #[error("lack of ARPA contract address")]
+    LackOfARPAContractAddress,
 }
