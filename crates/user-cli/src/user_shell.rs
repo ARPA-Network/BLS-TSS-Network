@@ -3,9 +3,9 @@ use arpa_contract_client::contract_stub::ierc20::IERC20 as ArpaContract;
 use arpa_contract_client::contract_stub::staking::Staking as StakingContract;
 use arpa_contract_client::ethers::adapter::AdapterClient;
 use arpa_contract_client::{TransactionCaller, ViewCaller};
-use arpa_core::u256_to_vec;
 use arpa_core::RandomnessRequestType;
-use arpa_core::{address_to_string, pad_to_bytes32, WalletSigner};
+use arpa_core::{address_to_string, pad_to_bytes32};
+use arpa_core::{u256_to_vec, HttpWalletSigner};
 use arpa_user_cli::config::{Config, ConfigError};
 use ethers::abi::AbiEncode;
 use ethers::prelude::{NonceManagerMiddleware, SignerMiddleware};
@@ -57,11 +57,11 @@ struct Context {
     config: Config,
     history_file_path: PathBuf,
     providers: BTreeMap<u32, Arc<Provider<Http>>>,
-    signers: BTreeMap<u32, Arc<WalletSigner>>,
+    signers: BTreeMap<u32, Arc<HttpWalletSigner>>,
 }
 
 impl Context {
-    fn build_signer(config: &Config, chain_id: u32) -> anyhow::Result<Arc<WalletSigner>> {
+    fn build_signer(config: &Config, chain_id: u32) -> anyhow::Result<Arc<HttpWalletSigner>> {
         let wallet = config.account(chain_id)?.with_chain_id(chain_id);
 
         let nonce_manager =
@@ -84,7 +84,7 @@ impl Context {
         Ok(self.providers.get(&chain_id).unwrap().clone())
     }
 
-    pub fn signer(&mut self, chain_id: u32) -> anyhow::Result<Arc<WalletSigner>> {
+    pub fn signer(&mut self, chain_id: u32) -> anyhow::Result<Arc<HttpWalletSigner>> {
         if !self.signers.contains_key(&chain_id) {
             return Err(ConfigError::InvalidChainId(chain_id).into());
         }
@@ -813,14 +813,14 @@ async fn randcast(args: ArgMatches, context: &mut Context) -> anyhow::Result<Opt
                 .port(8544u16)
                 .spawn();
 
+            let get_owner_args = vec!["call", consumer, "owner()(address)"];
+            let owner = call_cast(&anvil.endpoint(), &get_owner_args);
+
             if existed_callback_gas_limit != "0" {
                 println!(
                     "callbackGasLimit is already set: {}",
                     existed_callback_gas_limit
                 );
-
-                let get_owner_args = vec!["call", consumer, "owner()(address)"];
-                let owner = call_cast(&anvil.endpoint(), &get_owner_args);
 
                 let impersonate_account_args = vec!["rpc", "anvil_impersonateAccount", &owner];
                 call_cast(&anvil.endpoint(), &impersonate_account_args);
@@ -856,6 +856,17 @@ async fn randcast(args: ArgMatches, context: &mut Context) -> anyhow::Result<Opt
                 None => consumer,
             };
 
+            let set_request_confirmations_args = vec![
+                "send",
+                consumer,
+                "setRequestConfirmations(uint16)",
+                "3",
+                "--from",
+                &owner,
+                "--unlocked",
+            ];
+            call_cast(&anvil.endpoint(), &set_request_confirmations_args);
+
             let request_randomness_args = vec![
                 "send",
                 request_contract,
@@ -871,7 +882,7 @@ async fn randcast(args: ArgMatches, context: &mut Context) -> anyhow::Result<Opt
             let callback_gas_limit_res = call_cast(&anvil.endpoint(), &callback_gas_limit_args);
 
             Ok(Some(format!(
-                "estimate-callback-gas_limit_res: {}",
+                "estimate_callback_gas_limit_res: {}",
                 callback_gas_limit_res
             )))
         }

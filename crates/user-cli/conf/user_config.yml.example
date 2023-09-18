@@ -1,14 +1,14 @@
 provider_endpoint: "http://127.0.0.1:8545"
 
-chain_id: 31337
+chain_id: 900
 
-adapter_address: "0xa513e6e4b8f2a923d98304ec87f64353c4d5c853"
+adapter_address: "0x4c5859f0F772848b2D91F1D83E2Fe57935348029"
 
 adapter_deployed_block_height: 0
 
-staking_address: "0xcf7ed3acca5a467e9e704c703e8d87f634fb0fc9"
+staking_address: "0x9d4454B023096f34B160D6B654540c56A1F81688"
 
-arpa_address: "0x9fe46736679d2d9a65f0992f2272de9f3c7fa6e0"
+arpa_address: "0x8f86403A4DE0BB5791fa46B8e795C547942fE4Cf"
 
 account:
   private_key: $ACCOUNT_PRIVATE_KEY
