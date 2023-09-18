@@ -1,8 +1,10 @@
 use crate::error::ContractClientError;
 use ::ethers::abi::Detokenize;
+use ::ethers::prelude::ContractError;
+use ::ethers::providers::Middleware;
 use ::ethers::types::U64;
 use ::ethers::{prelude::builders::ContractCall, types::H256};
-use arpa_core::{jitter, ExponentialBackoffRetryDescriptor, WalletSigner};
+use arpa_core::{jitter, ExponentialBackoffRetryDescriptor};
 use async_trait::async_trait;
 use error::ContractClientResult;
 use log::{error, info};
@@ -20,13 +22,19 @@ pub trait ServiceClient<C> {
 
 #[async_trait]
 pub trait TransactionCaller {
-    async fn call_contract_transaction<D: Detokenize + std::fmt::Debug + Send + Sync + 'static>(
+    async fn call_contract_transaction<
+        M: Middleware,
+        D: Detokenize + std::fmt::Debug + Send + Sync + 'static,
+    >(
         chain_id: usize,
         info: &str,
-        call: ContractCall<WalletSigner, D>,
+        call: ContractCall<M, D>,
         contract_transaction_retry_descriptor: ExponentialBackoffRetryDescriptor,
         retry_on_transaction_fail: bool,
-    ) -> ContractClientResult<H256> {
+    ) -> ContractClientResult<H256>
+    where
+        ContractClientError: From<ContractError<M>>,
+    {
         let retry_strategy =
             ExponentialBackoff::from_millis(contract_transaction_retry_descriptor.base)
                 .factor(contract_transaction_retry_descriptor.factor)
@@ -89,12 +97,18 @@ pub trait TransactionCaller {
 
 #[async_trait]
 pub trait ViewCaller {
-    async fn call_contract_view<D: Detokenize + std::fmt::Debug + Send + Sync + 'static>(
+    async fn call_contract_view<
+        M: Middleware,
+        D: Detokenize + std::fmt::Debug + Send + Sync + 'static,
+    >(
         chain_id: usize,
         info: &str,
-        call: ContractCall<WalletSigner, D>,
+        call: ContractCall<M, D>,
         contract_view_retry_descriptor: ExponentialBackoffRetryDescriptor,
-    ) -> ContractClientResult<D> {
+    ) -> ContractClientResult<D>
+    where
+        ContractClientError: From<ContractError<M>>,
+    {
         let retry_strategy = ExponentialBackoff::from_millis(contract_view_retry_descriptor.base)
             .factor(contract_view_retry_descriptor.factor)
             .map(|e| {
@@ -113,8 +127,11 @@ pub trait ViewCaller {
             })?;
 
             info!(
-                "Calling contract view {} with chain_id({}): {:?}",
-                info, chain_id, result
+                "Calling contract view {} with chain_id({}), calldata: {:?}, result: {:?}",
+                info,
+                chain_id,
+                call.calldata(),
+                result
             );
 
             Result::<D, ContractClientError>::Ok(result)
@@ -124,10 +141,13 @@ pub trait ViewCaller {
         Ok(res)
     }
 
-    async fn call_contract_view_without_log<D: Detokenize + Send + Sync + 'static>(
-        call: ContractCall<WalletSigner, D>,
+    async fn call_contract_view_without_log<M: Middleware, D: Detokenize + Send + Sync + 'static>(
+        call: ContractCall<M, D>,
         contract_view_retry_descriptor: ExponentialBackoffRetryDescriptor,
-    ) -> ContractClientResult<D> {
+    ) -> ContractClientResult<D>
+    where
+        ContractClientError: From<ContractError<M>>,
+    {
         let retry_strategy = ExponentialBackoff::from_millis(contract_view_retry_descriptor.base)
             .factor(contract_view_retry_descriptor.factor)
             .map(|e| {

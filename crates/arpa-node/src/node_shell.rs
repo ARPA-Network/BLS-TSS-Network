@@ -16,7 +16,7 @@ use arpa_node::context::ChainIdentityHandlerType;
 use arpa_node::management::client::GeneralManagementClient;
 use arpa_sqlite_db::SqliteDB;
 use ethers::prelude::k256::ecdsa::SigningKey;
-use ethers::providers::Middleware;
+use ethers::providers::{Middleware, Provider, Ws};
 use ethers::signers::coins_bip39::English;
 use ethers::signers::Signer;
 use ethers::signers::{LocalWallet, MnemonicBuilder};
@@ -27,6 +27,8 @@ use std::collections::BTreeMap;
 use std::fs::File;
 use std::io::{BufRead, BufReader};
 use std::path::PathBuf;
+use std::sync::Arc;
+use std::time::Duration;
 use structopt::StructOpt;
 use threshold_bls::curve::bn254::G2Curve;
 use threshold_bls::group::Curve;
@@ -1476,11 +1478,18 @@ async fn main() -> anyhow::Result<()> {
 
     let mut chain_identities = BTreeMap::new();
 
+    let provider = Arc::new(
+        Provider::<Ws>::connect(config.provider_endpoint.clone())
+            .await?
+            .interval(Duration::from_millis(
+                config.time_limits.unwrap().provider_polling_interval_millis,
+            )),
+    );
+
     let main_chain_identity = GeneralMainChainIdentity::new(
         config.chain_id,
         wallet.clone().with_chain_id(config.chain_id as u64),
-        config.provider_endpoint.clone(),
-        config.time_limits.unwrap().provider_polling_interval_millis,
+        provider,
         config
             .controller_address
             .parse()
@@ -1505,14 +1514,21 @@ async fn main() -> anyhow::Result<()> {
     chain_identities.insert(config.chain_id, boxed_main_chain_identity);
 
     for relayed_chain in config.relayed_chains.iter() {
+        let provider = Arc::new(
+            Provider::<Ws>::connect(relayed_chain.provider_endpoint.clone())
+                .await?
+                .interval(Duration::from_millis(
+                    relayed_chain
+                        .time_limits
+                        .unwrap()
+                        .provider_polling_interval_millis,
+                )),
+        );
+
         let relayed_chain_identity = GeneralRelayedChainIdentity::new(
             relayed_chain.chain_id,
             wallet.clone().with_chain_id(relayed_chain.chain_id as u64),
-            relayed_chain.provider_endpoint.clone(),
-            relayed_chain
-                .time_limits
-                .unwrap()
-                .provider_polling_interval_millis,
+            provider,
             relayed_chain
                 .controller_oracle_address
                 .parse()

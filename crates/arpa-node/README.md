@@ -231,7 +231,7 @@ Configuration items in [`conf/config.yml`](conf/config.yml) are listed here:
 
 - node_management_rpc_token: Config token phrase for authenticaing management grpc requests by `authorization` header. (example: "arpa_network")
 
-- provider_endpoint: Config endpoint to interact with chain provider. (example: "http://127.0.0.1:8545")
+- provider_endpoint: Config websocket endpoint to interact with chain provider. (example: "ws://127.0.0.1:8546")
 
 - chain_id: Config chain id of main chain. (example: 31337)
 
@@ -328,9 +328,9 @@ Configuration items in [`conf/config.yml`](conf/config.yml) are listed here:
 
   - These values can be set by node owner or administrator according to the rate limitation of the provider. Setting a small value would be to node's advantage in responding tasks. It's recommended to set a value no larger than the block time of the chain.
 
-    - listener_interval_millis: Milliseconds between two rounds of listeners. (example: 10000)
+    - listener_interval_millis: Milliseconds between two rounds of re-trying when a listener fails. (example: 10000)
     - dkg_wait_for_phase_interval_millis: Milliseconds between two rounds of polling for the next DKG phase. (example: 10000)
-    - provider_polling_interval_millis: Milliseconds between two rounds of polling events from provider. (example: 10000)
+    - provider_polling_interval_millis: Milliseconds between two rounds of polling pending transactions. (example: 10000)
 
   - We use exponential backoff to retry when an interaction fails. The interval will be an exponent of base multiplied by factor every time. The interval will be reset when the interaction succeeds.
 
@@ -385,7 +385,7 @@ Configuration items in [`conf/config.yml`](conf/config.yml) are listed here:
   relayed_chains:
   - chain_id: 901
     description: "OP"
-    provider_endpoint: "http://127.0.0.1:9545"
+    provider_endpoint: "ws://127.0.0.1:9546"
     controller_oracle_address: "0xCf7Ed3AccA5a467e9e704C703E8D87F634fB0Fc9"
     adapter_address: "0x5FC8d32690cc91D4c39d9d3abcBD16989F875707"
     adapter_deployed_block_height: 14224644

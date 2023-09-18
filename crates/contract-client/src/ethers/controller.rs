@@ -219,8 +219,7 @@ impl ControllerLogs for ControllerClient {
             .event::<DkgTaskFilter>()
             .from_block(BlockNumber::Latest);
 
-        // turn the stream into a stream of events
-        let mut stream = events.stream().await?.with_meta();
+        let mut stream = events.subscribe().await?.with_meta();
 
         while let Some(Ok(evt)) = stream.next().await {
             let (

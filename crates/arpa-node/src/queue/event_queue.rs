@@ -55,8 +55,12 @@ pub mod tests {
     };
     use arpa_core::{Config, GeneralMainChainIdentity};
     use arpa_dal::cache::InMemoryBlockInfoCache;
-    use ethers::types::Address;
-    use std::sync::Arc;
+    use ethers::{
+        providers::{Provider, Ws},
+        types::Address,
+        utils::Anvil,
+    };
+    use std::{sync::Arc, time::Duration};
     use threshold_bls::schemes::bn254::G2Curve;
     use tokio::sync::RwLock;
 
@@ -89,11 +93,19 @@ pub mod tests {
         let contract_view_retry_descriptor =
             config.time_limits.unwrap().contract_view_retry_descriptor;
 
+        let avnil = Anvil::new().spawn();
+
+        let provider = Arc::new(
+            Provider::<Ws>::connect(avnil.ws_endpoint())
+                .await
+                .unwrap()
+                .interval(Duration::from_millis(3000)),
+        );
+
         let chain_identity = GeneralMainChainIdentity::new(
             0,
             fake_wallet,
-            "localhost:8545".to_string(),
-            3000,
+            provider,
             Address::random(),
             Address::random(),
             Address::random(),
