@@ -21,7 +21,7 @@ contract CreateAndSetChainMessengerScript is Script {
     address internal _opControllerOracleAddress = vm.envAddress("OP_CONTROLLER_ORACLE_ADDRESS");
     address internal _opL1CrossDomainMessengerAddress = vm.envAddress("OP_L1_CROSS_DOMAIN_MESSENGER_ADDRESS");
     address internal _controllerRelayer = vm.envAddress("EXISTING_L1_CONTROLLER_RELAYER");
-
+    uint256 internal _opChainId = vm.envUint("OP_CHAIN_ID");
 
     function run() external {
         ControllerRelayer controllerRelayer;
@@ -29,7 +29,7 @@ contract CreateAndSetChainMessengerScript is Script {
 
         vm.broadcast(_deployerPrivateKey);
         opChainMessenger =
-        new OPChainMessenger(_controllerRelayer, _opControllerOracleAddress, _opL1CrossDomainMessengerAddress);
+            new OPChainMessenger(_controllerRelayer, _opControllerOracleAddress, _opL1CrossDomainMessengerAddress);
 
         vm.broadcast(_deployerPrivateKey);
         controllerRelayer.setChainMessenger(_opChainId, address(opChainMessenger));
