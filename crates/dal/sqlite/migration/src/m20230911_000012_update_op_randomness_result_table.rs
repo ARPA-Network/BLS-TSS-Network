@@ -15,7 +15,8 @@ impl MigrationTrait for Migration {
                     .add_column_if_not_exists(
                         ColumnDef::new(OPRandomnessResultNewColumn::CommittedTimes)
                             .integer()
-                            .not_null(),
+                            .not_null()
+                            .default(0),
                     )
                     .to_owned(),
             )
