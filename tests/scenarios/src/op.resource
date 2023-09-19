@@ -17,10 +17,7 @@ ${OP_DIR}        ../optimism/
 
 Setup OP Devnet
     Clear One Log    ${OP_DIR}/op.log
-    IF    ${LOCAL_ETHEREUM_CHAIN_PROCESS_HANDLE != ''}
-        Terminate Process    ${LOCAL_ETHEREUM_CHAIN_PROCESS_HANDLE}
-    END
-
+    Kill Process By Name    anvil
     ${result} =     Run Process     make    devnet-clean    cwd=${OP_DIR}
     ${process_handle} =     Start Process     make    devnet-up-deploy    cwd=${OP_DIR}    stdout=op.log
     Wait For Keyword From Log    ${OP_DIR}/op.log    Devnet ready    max_retry_time=1500

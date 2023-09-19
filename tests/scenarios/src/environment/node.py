@@ -184,16 +184,16 @@ relayed_chains:
     
     listeners:
       - l_type: Block
-        interval_millis: 0
+        interval_millis: 10000
         use_jitter: true
       - l_type: NewRandomnessTask
-        interval_millis: 0
+        interval_millis: 10000
         use_jitter: true
       - l_type: ReadyToHandleRandomnessTask
-        interval_millis: 1000
+        interval_millis: 10000
         use_jitter: true
       - l_type: RandomnessSignatureAggregation
-        interval_millis: 2000
+        interval_millis: 20000
         use_jitter: false
     
     time_limits:

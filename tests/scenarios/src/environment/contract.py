@@ -4,7 +4,7 @@ This module contains necessary packages to interact with web3 and blockchain
 import json
 import os
 
-from web3 import Web3
+from web3 import Web3, Account
 
 def get_abi(file_name):
     """
@@ -156,3 +156,41 @@ def clac_reward(amount, reward_ratio, ):
     Calculate the reward amount.
     """
     return amount * reward_ratio / 100
+
+
+def call_cancel_overtime_request_by_event(contract, event):
+    """
+    Call cancel overtime request by event.
+    """
+    web3 = Web3(Web3.HTTPProvider('http://127.0.0.1:8545'))
+    private_key = os.environ.get('USER_PRIVATE_KEY')
+    if not private_key:
+        print("Private key is not found!")
+        return None
+    try:
+        contract_function = contract.functions.cancelOvertimeRequest(
+            event['args']['requestId'],
+            (
+                event['args']['subId'],event['args']['groupIndex'],
+                event['args']['requestType'],event['args']['params'],
+                event['args']['sender'],event['args']['seed'],
+                event['args']['requestConfirmations'],
+                event['args']['callbackGasLimit'],
+                event['args']['callbackMaxGasPrice'],
+                event['blockNumber']
+            )
+        )
+    except Exception as exception:
+        print(f"Contract function error: {str(exception)}")
+        return None
+    transaction = contract_function.build_transaction({
+        'chainId': 31337,
+        'gas': 10000000,
+        'nonce': web3.eth.get_transaction_count(Account.from_key(private_key).address),
+    })
+
+    signed_transaction = web3.eth.account.sign_transaction(transaction, private_key)
+
+    result = web3.eth.send_raw_transaction(signed_transaction.rawTransaction)
+
+    return result

@@ -181,5 +181,6 @@ Source Environment Variables
     ${result} =    Run    cp ${ENV_PATH} ${CONTRACT_PATH}.env
 
 Parse Node
+    [Documentation]    Parse node
     ${result} =    Parse Chain Result To Account List
     Set Global Variable    $NODE_ACCOUNT_LIST    ${result}
