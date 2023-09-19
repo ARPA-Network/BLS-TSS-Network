@@ -48,7 +48,7 @@ Note: Contract addresses on ETH Mainnet, Sepolia Testnet and Optimism can be fou
 
 Configuration items in [`conf/user_config.yml`](conf/user_config.yml) are listed here:
 
-- provider_endpoint: Config endpoint to interact with chain provider. (example: "http://127.0.0.1:8545")
+- provider_endpoint: Config http endpoint to interact with chain provider. (example: "http://127.0.0.1:8545")
 
 - chain_id: Config chain id of the network. (example: 31337)
 

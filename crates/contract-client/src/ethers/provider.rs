@@ -5,15 +5,14 @@ use crate::{
 use arpa_core::{ChainIdentity, GeneralMainChainIdentity, GeneralRelayedChainIdentity};
 use async_trait::async_trait;
 use ethers::prelude::*;
-use ethers::providers::Http as HttpProvider;
 use std::{future::Future, sync::Arc};
 
 pub struct ChainProvider {
-    provider: Arc<Provider<HttpProvider>>,
+    provider: Arc<Provider<Ws>>,
 }
 
 impl ChainProvider {
-    pub fn new(provider: Arc<Provider<HttpProvider>>) -> Self {
+    pub fn new(provider: Arc<Provider<Ws>>) -> Self {
         ChainProvider { provider }
     }
 }
@@ -43,13 +42,8 @@ impl BlockFetcher for ChainProvider {
         &self,
         mut cb: C,
     ) -> ContractClientResult<()> {
-        let mut stream = self.provider.watch_blocks().await?;
-        while let Some(block_hash) = stream.next().await {
-            let block = self
-                .provider
-                .get_block(block_hash)
-                .await?
-                .ok_or(ContractClientError::FetchingBlockError)?;
+        let mut stream = self.provider.subscribe_blocks().await?;
+        while let Some(block) = stream.next().await {
             cb(block
                 .number
                 .ok_or(ContractClientError::FetchingBlockError)?

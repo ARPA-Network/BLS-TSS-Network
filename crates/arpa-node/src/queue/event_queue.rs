@@ -47,21 +47,20 @@ impl<E: DebuggableEvent + Clone + Send + Sync + 'static> EventPublisher<E> for E
 pub mod tests {
     use super::EventPublisher;
     use crate::{
-        context::{BlockInfoHandler, ChainIdentityHandler},
+        context::{BlockInfoHandler, ChainIdentityHandlerType},
         event::new_block::NewBlock,
         listener::block::BlockListener,
         queue::event_queue::EventQueue,
         subscriber::{block::BlockSubscriber, Subscriber},
     };
-    use arpa_contract_client::ethers::{
-        adapter::AdapterClient, controller::ControllerClient,
-        controller_relayer::ControllerRelayerClient, coordinator::CoordinatorClient,
-        provider::ChainProvider,
-    };
     use arpa_core::{Config, GeneralMainChainIdentity};
     use arpa_dal::cache::InMemoryBlockInfoCache;
-    use ethers::types::Address;
-    use std::sync::Arc;
+    use ethers::{
+        providers::{Provider, Ws},
+        types::Address,
+        utils::Anvil,
+    };
+    use std::{sync::Arc, time::Duration};
     use threshold_bls::schemes::bn254::G2Curve;
     use tokio::sync::RwLock;
 
@@ -94,11 +93,19 @@ pub mod tests {
         let contract_view_retry_descriptor =
             config.time_limits.unwrap().contract_view_retry_descriptor;
 
+        let avnil = Anvil::new().spawn();
+
+        let provider = Arc::new(
+            Provider::<Ws>::connect(avnil.ws_endpoint())
+                .await
+                .unwrap()
+                .interval(Duration::from_millis(3000)),
+        );
+
         let chain_identity = GeneralMainChainIdentity::new(
             0,
             fake_wallet,
-            "localhost:8545".to_string(),
-            3000,
+            provider,
             Address::random(),
             Address::random(),
             Address::random(),
@@ -106,20 +113,8 @@ pub mod tests {
             contract_view_retry_descriptor,
         );
 
-        let chain_identity: Arc<
-            RwLock<
-                Box<
-                    dyn ChainIdentityHandler<
-                        G2Curve,
-                        ControllerService = ControllerClient,
-                        ControllerRelayerService = ControllerRelayerClient,
-                        CoordinatorService = CoordinatorClient,
-                        AdapterService = AdapterClient,
-                        ProviderService = ChainProvider,
-                    >,
-                >,
-            >,
-        > = Arc::new(RwLock::new(Box::new(chain_identity)));
+        let chain_identity: Arc<RwLock<ChainIdentityHandlerType<G2Curve>>> =
+            Arc::new(RwLock::new(Box::new(chain_identity)));
 
         let p = BlockListener::new(chain_id, chain_identity, eq);
 

@@ -239,7 +239,7 @@ pub mod coordinator_tests {
     use ethers::utils::AnvilInstance;
     use std::env;
     use std::path::PathBuf;
-    use std::{convert::TryFrom, sync::Arc, time::Duration};
+    use std::{sync::Arc, time::Duration};
     use threshold_bls::schemes::bn254::G2Scheme;
 
     #[test]
@@ -262,7 +262,8 @@ pub mod coordinator_tests {
         let wallet: LocalWallet = anvil.keys()[0].clone().into();
 
         // 3. connect to the network
-        let provider = Provider::<Http>::try_from(anvil.endpoint())
+        let provider = Provider::<Ws>::connect(anvil.ws_endpoint())
+            .await
             .unwrap()
             .interval(Duration::from_millis(3000));
 
@@ -319,11 +320,17 @@ pub mod coordinator_tests {
             .await
             .unwrap();
 
+        let provider = Arc::new(
+            Provider::<Ws>::connect(anvil.ws_endpoint())
+                .await
+                .unwrap()
+                .interval(Duration::from_millis(3000)),
+        );
+
         let main_chain_identity = GeneralMainChainIdentity::new(
             anvil.chain_id() as usize,
             wallet,
-            anvil.endpoint(),
-            3000,
+            provider,
             Address::random(),
             Address::random(),
             Address::random(),

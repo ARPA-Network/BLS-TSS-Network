@@ -4,16 +4,18 @@ use super::{ChainIdentity, MainChainIdentity};
 use async_trait::async_trait;
 use ethers_core::types::{Address, BlockNumber, U256};
 use ethers_middleware::{NonceManagerMiddleware, SignerMiddleware};
-use ethers_providers::{Http, Middleware, Provider, ProviderError};
+use ethers_providers::{Http, Middleware, Provider, ProviderError, Ws};
 use ethers_signers::{LocalWallet, Signer};
-use std::{sync::Arc, time::Duration};
+use std::sync::Arc;
 
-pub type WalletSigner = SignerMiddleware<NonceManagerMiddleware<Arc<Provider<Http>>>, LocalWallet>;
+pub type WalletSigner = SignerMiddleware<NonceManagerMiddleware<Arc<Provider<Ws>>>, LocalWallet>;
+pub type HttpWalletSigner =
+    SignerMiddleware<NonceManagerMiddleware<Arc<Provider<Http>>>, LocalWallet>;
 
 #[derive(Debug, Clone)]
 pub struct GeneralMainChainIdentity {
     chain_id: usize,
-    provider: Arc<Provider<Http>>,
+    provider: Arc<Provider<Ws>>,
     signer: Arc<WalletSigner>,
     controller_address: Address,
     controller_relayer_address: Address,
@@ -27,20 +29,13 @@ impl GeneralMainChainIdentity {
     pub fn new(
         chain_id: usize,
         wallet: LocalWallet,
-        provider_rpc_endpoint: String,
-        provider_polling_interval_millis: u64,
+        provider: Arc<Provider<Ws>>,
         controller_address: Address,
         controller_relayer_address: Address,
         adapter_address: Address,
         contract_transaction_retry_descriptor: ExponentialBackoffRetryDescriptor,
         contract_view_retry_descriptor: ExponentialBackoffRetryDescriptor,
     ) -> Self {
-        let provider = Arc::new(
-            Provider::<Http>::try_from(provider_rpc_endpoint)
-                .unwrap()
-                .interval(Duration::from_millis(provider_polling_interval_millis)),
-        );
-
         let wallet = wallet.with_chain_id(chain_id as u32);
 
         let nonce_manager = NonceManagerMiddleware::new(provider.clone(), wallet.address());
@@ -79,7 +74,7 @@ impl ChainIdentity for GeneralMainChainIdentity {
         self.signer.clone()
     }
 
-    fn get_provider(&self) -> Arc<Provider<Http>> {
+    fn get_provider(&self) -> Arc<Provider<Ws>> {
         self.provider.clone()
     }
 
@@ -120,7 +115,7 @@ impl MainChainIdentity for GeneralMainChainIdentity {
 #[derive(Debug, Clone)]
 pub struct GeneralRelayedChainIdentity {
     chain_id: usize,
-    provider: Arc<Provider<Http>>,
+    provider: Arc<Provider<Ws>>,
     signer: Arc<WalletSigner>,
     controller_oracle_address: Address,
     adapter_address: Address,
@@ -133,19 +128,12 @@ impl GeneralRelayedChainIdentity {
     pub fn new(
         chain_id: usize,
         wallet: LocalWallet,
-        provider_rpc_endpoint: String,
-        provider_polling_interval_millis: u64,
+        provider: Arc<Provider<Ws>>,
         controller_oracle_address: Address,
         adapter_address: Address,
         contract_transaction_retry_descriptor: ExponentialBackoffRetryDescriptor,
         contract_view_retry_descriptor: ExponentialBackoffRetryDescriptor,
     ) -> Self {
-        let provider = Arc::new(
-            Provider::<Http>::try_from(provider_rpc_endpoint)
-                .unwrap()
-                .interval(Duration::from_millis(provider_polling_interval_millis)),
-        );
-
         let wallet = wallet.with_chain_id(chain_id as u32);
 
         let nonce_manager = NonceManagerMiddleware::new(provider.clone(), wallet.address());
@@ -183,7 +171,7 @@ impl ChainIdentity for GeneralRelayedChainIdentity {
         self.signer.clone()
     }
 
-    fn get_provider(&self) -> Arc<Provider<Http>> {
+    fn get_provider(&self) -> Arc<Provider<Ws>> {
         self.provider.clone()
     }
 

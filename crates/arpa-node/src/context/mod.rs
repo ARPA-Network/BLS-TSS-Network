@@ -11,12 +11,13 @@ use crate::{
 use arpa_contract_client::{
     adapter::AdapterClientBuilder,
     controller::ControllerClientBuilder,
+    controller_oracle::ControllerOracleClientBuilder,
     controller_relayer::ControllerRelayerClientBuilder,
     coordinator::CoordinatorClientBuilder,
     ethers::{
         adapter::AdapterClient, controller::ControllerClient,
-        controller_relayer::ControllerRelayerClient, coordinator::CoordinatorClient,
-        provider::ChainProvider,
+        controller_oracle::ControllerOracleClient, controller_relayer::ControllerRelayerClient,
+        coordinator::CoordinatorClient, provider::ChainProvider,
     },
     provider::ChainProviderBuilder,
 };
@@ -64,6 +65,7 @@ pub trait ChainIdentityHandler<PC: Curve>:
     ChainIdentity
     + ControllerClientBuilder<PC>
     + ControllerRelayerClientBuilder
+    + ControllerOracleClientBuilder<PC>
     + CoordinatorClientBuilder<PC>
     + AdapterClientBuilder
     + ChainProviderBuilder
@@ -78,6 +80,7 @@ pub type ChainIdentityHandlerType<PC> = Box<
         PC,
         ControllerService = ControllerClient,
         ControllerRelayerService = ControllerRelayerClient,
+        ControllerOracleService = ControllerOracleClient,
         CoordinatorService = CoordinatorClient,
         AdapterService = AdapterClient,
         ProviderService = ChainProvider,
