@@ -34,17 +34,24 @@ L2_RPC = get_key(ENV_PATH, "OP_RPC")
 L1_CHAIN_ID = get_key(ENV_PATH, "L1_CHAIN_ID")
 L1_RPC = get_key(ENV_PATH, "L1_RPC")
 
-# Special Cases (arpa exists / l2 only
-ARPA_EXISTS = get_key(ENV_PATH, "ARPA_EXISTS")
-L2_ONLY = get_key(ENV_PATH, "L2_ONLY")
+# Special Cases (arpa exists / l2 only)
+ARPA_EXISTS = (
+    get_key(ENV_PATH, "ARPA_EXISTS").lower() == "true"
+)  # bool True if ARPA_EXISTS is true in .env
+L2_ONLY = (
+    get_key(ENV_PATH, "L2_ONLY").lower() == "true"
+)  # bool True if L2_ONLY is true in .env
 
-EXISTING_OP_ARPA_ADDRESS=get_key(ENV_PATH, "EXISTING_OP_ARPA_ADDRESS")
-EXISTING_L1_ARPA_ADDRESS=get_key(ENV_PATH, "EXISTING_L1_ARPA_ADDRESS")
-EXISTING_L1_STAKING_ADDRESS=get_key(ENV_PATH, "EXISTING_L1_STAKING_ADDRESS")
-EXISTING_L1_CONTROLLER_ADDRESS=get_key(ENV_PATH, "EXISTING_L1_CONTROLLER_ADDRESS")
-EXISTING_L1_ADAPTER_ADDRESS=get_key(ENV_PATH, "EXISTING_L1_ADAPTER_ADDRESS")
-EXISTING_L1_CONTROLLER_RELAYER=get_key(ENV_PATH, "EXISTING_L1_CONTROLLER_RELAYER")
-OP_L1_CROSS_DOMAIN_MESSENGER_ADDRESS=get_key(ENV_PATH, "OP_L1_CROSS_DOMAIN_MESSENGER_ADDRESS")
+# Existing L1 Addresses
+EXISTING_OP_ARPA_ADDRESS = get_key(ENV_PATH, "EXISTING_OP_ARPA_ADDRESS")
+EXISTING_L1_ARPA_ADDRESS = get_key(ENV_PATH, "EXISTING_L1_ARPA_ADDRESS")
+EXISTING_L1_STAKING_ADDRESS = get_key(ENV_PATH, "EXISTING_L1_STAKING_ADDRESS")
+EXISTING_L1_CONTROLLER_ADDRESS = get_key(ENV_PATH, "EXISTING_L1_CONTROLLER_ADDRESS")
+EXISTING_L1_ADAPTER_ADDRESS = get_key(ENV_PATH, "EXISTING_L1_ADAPTER_ADDRESS")
+EXISTING_L1_CONTROLLER_RELAYER = get_key(ENV_PATH, "EXISTING_L1_CONTROLLER_RELAYER")
+OP_L1_CROSS_DOMAIN_MESSENGER_ADDRESS = get_key(
+    ENV_PATH, "OP_L1_CROSS_DOMAIN_MESSENGER_ADDRESS"
+)
 
 
 print(f"L1_CHAIN_ID: {L1_CHAIN_ID}")
@@ -114,29 +121,34 @@ def get_addresses_from_json(path: str) -> dict:
 
     return contracts_dict
 
+
 def get_l1_addresses():
-        l1_controller_addresses= {}
-        if L2_ONLY:
-            l1_controller_addresses["Arpa"] = EXISTING_L1_ARPA_ADDRESS
-            l1_controller_addresses["Staking"] = EXISTING_L1_STAKING_ADDRESS
-            l1_controller_addresses["Controller"] = EXISTING_L1_CONTROLLER_ADDRESS
-            l1_controller_addresses["ERC1967Proxy"] = EXISTING_L1_ADAPTER_ADDRESS
+    l1_controller_addresses = {}
+    if L2_ONLY:
+        l1_controller_addresses["Arpa"] = EXISTING_L1_ARPA_ADDRESS
+        l1_controller_addresses["Staking"] = EXISTING_L1_STAKING_ADDRESS
+        l1_controller_addresses["Controller"] = EXISTING_L1_CONTROLLER_ADDRESS
+        l1_controller_addresses["ERC1967Proxy"] = EXISTING_L1_ADAPTER_ADDRESS
 
-            l1_chain_messenger_addresses = get_addresses_from_json(CREATE_AND_SET_CHAIN_MESSENGER_BROADCAST_PATH)
-            
-            l1_addresses = {**l1_controller_addresses, **l1_chain_messenger_addresses}
+        l1_chain_messenger_addresses = get_addresses_from_json(
+            CREATE_AND_SET_CHAIN_MESSENGER_BROADCAST_PATH
+        )
 
-        else:
-            l1_addresses = get_addresses_from_json(L1_CONTRACTS_DEPLOYMENT_BROADCAST_PATH)
-            if ARPA_EXISTS:
-                l1_addresses["Arpa"] = EXISTING_L1_ARPA_ADDRESS
-        return l1_addresses
+        l1_addresses = {**l1_controller_addresses, **l1_chain_messenger_addresses}
+
+    else:
+        l1_addresses = get_addresses_from_json(L1_CONTRACTS_DEPLOYMENT_BROADCAST_PATH)
+        if ARPA_EXISTS:
+            l1_addresses["Arpa"] = EXISTING_L1_ARPA_ADDRESS
+    return l1_addresses
+
 
 def get_l2_addresses():
     l2_addresses = get_addresses_from_json(OP_CONTRACTS_DEPLOYMENT_BROADCAST_PATH)
     if ARPA_EXISTS:
         l2_addresses["Arpa"] = EXISTING_OP_ARPA_ADDRESS
     return l2_addresses
+
 
 def run_command(
     cmd: list,
@@ -282,8 +294,7 @@ def deploy_contracts():
     set_key(ENV_PATH, "OP_ARPA_ADDRESS", l2_addresses["Arpa"])
     set_key(ENV_PATH, "OP_CONTROLLER_ORACLE_ADDRESS", l2_addresses["ControllerOracle"])
 
-
-    if not L2_ONLY: 
+    if not L2_ONLY:
         # 3. Deploy L1 ControllerLocalTest contracts
         #     (Controller, Controller Relayer, OPChainMessenger, Adapter, Arpa, Staking)
         # forge script script/ControllerLocalTest.s.sol:ControllerLocalTestScript --fork-url http://localhost:8545 --broadcast
@@ -306,11 +317,12 @@ def deploy_contracts():
         set_key(ENV_PATH, "STAKING_ADDRESS", l1_addresses["Staking"])
         set_key(ENV_PATH, "CONTROLLER_ADDRESS", l1_addresses["Controller"])
         set_key(ENV_PATH, "ADAPTER_ADDRESS", l1_addresses["ERC1967Proxy"])
-        set_key(ENV_PATH, "OP_CHAIN_MESSENGER_ADDRESS", l1_addresses["OPChainMessenger"])
+        set_key(
+            ENV_PATH, "OP_CHAIN_MESSENGER_ADDRESS", l1_addresses["OPChainMessenger"]
+        )
 
-
-    else: # l2_only == True
-        l1_controller_addresses= {}
+    else:  # l2_only == True
+        l1_controller_addresses = {}
         l1_controller_addresses["Arpa"] = EXISTING_L1_ARPA_ADDRESS
         l1_controller_addresses["Staking"] = EXISTING_L1_STAKING_ADDRESS
         l1_controller_addresses["Controller"] = EXISTING_L1_CONTROLLER_ADDRESS
@@ -331,15 +343,18 @@ def deploy_contracts():
             capture_output=HIDE_OUTPUT,
             shell=True,
         )
-        l1_chain_messenger_addresses = get_addresses_from_json(CREATE_AND_SET_CHAIN_MESSENGER_BROADCAST_PATH)
+        l1_chain_messenger_addresses = get_addresses_from_json(
+            CREATE_AND_SET_CHAIN_MESSENGER_BROADCAST_PATH
+        )
 
         l1_addresses = {**l1_controller_addresses, **l1_chain_messenger_addresses}
         set_key(ENV_PATH, "ARPA_ADDRESS", l1_addresses["Arpa"])
         set_key(ENV_PATH, "STAKING_ADDRESS", l1_addresses["Staking"])
         set_key(ENV_PATH, "CONTROLLER_ADDRESS", l1_addresses["Controller"])
         set_key(ENV_PATH, "ADAPTER_ADDRESS", l1_addresses["ERC1967Proxy"])
-        set_key(ENV_PATH, "OP_CHAIN_MESSENGER_ADDRESS", l1_addresses["OPChainMessenger"])
-
+        set_key(
+            ENV_PATH, "OP_CHAIN_MESSENGER_ADDRESS", l1_addresses["OPChainMessenger"]
+        )
 
     # 4. deploy remaining contracts (Controller Oracle Init, StakeNodeLocalTest)
     # forge script script/OPControllerOracleInitializationLocalTest.s.sol:OPControllerOracleInitializationLocalTestScript --fork-url http://localhost:9545 --broadcast
@@ -395,8 +410,7 @@ def deploy_contracts():
 
 
 def deploy_nodes():  # ! Deploy Nodes
-
-    # this is only true if --l2-only config 
+    # this is only true if --l2-only config
     l1_addresses = get_addresses_from_json(L1_CONTRACTS_DEPLOYMENT_BROADCAST_PATH)
     l2_addresses = get_addresses_from_json(OP_CONTRACTS_DEPLOYMENT_BROADCAST_PATH)
 

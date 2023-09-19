@@ -4,15 +4,15 @@ node_management_rpc_endpoint: "[::1]:50092"
 
 node_management_rpc_token: "for_test"
 
-provider_endpoint: "https://eth-goerli.g.alchemy.com/v2/OiN95Z1jVvk_mL4Fd3sfmJvl7iI4YCtF"
+provider_endpoint: "http://localhost:8545"
 
-chain_id: 5
+chain_id: 900
 
-controller_address: "0xA129BEA1a5d9E37Eb2C505c8D302231A28B0A82b"
+controller_address: "0x18E317A7D70d8fBf8e6E893616b52390EbBdb629"
 
-controller_relayer_address: "0x482090C16785C0049dbd3b66e141b5964efD3db7"
+controller_relayer_address: "0xD0141E899a65C95a556fE2B27e5982A6DE7fDD7A"
 
-adapter_address: "0x1c8fFeD156e94B49d4FbD45E32E180d4F91462c7"
+adapter_address: "0xD5ac451B0c50B9476107823Af206eD814a2e2580"
 
 data_path: "./data2.sqlite"
 
@@ -23,7 +23,7 @@ logger:
   rolling_file_size: 10 gb
 
 account:
-  private_key: aee307f879af7ff98efd2e36c82bcb59700ed42566e822fa7a24baee5fa824f3
+  private_key: 701b615bbdfb9de65240bc28bd21bbc0d996645a3dd57e7b12bc2bdf6f192c82
 
 listeners:
   - l_type: Block
@@ -71,11 +71,11 @@ time_limits:
     use_jitter: false
 
 relayed_chains:
-  - chain_id: 420
+  - chain_id: 901
     description: "OP"
-    provider_endpoint: "https://opt-goerli.g.alchemy.com/v2/NRCWELUpWKQlUayEzDUznBl4CqFU7-7m"
-    controller_oracle_address: "0xd5000A659431b0D53Cdaf4fdAD282C7a6f0b0C3A"
-    adapter_address: "0x1c8fFeD156e94B49d4FbD45E32E180d4F91462c7"
+    provider_endpoint: "http://localhost:9545"
+    controller_oracle_address: "0x59b670e9fA9D0A427751Af201D676719a970857b"
+    adapter_address: "0x322813Fd9A801c5507c9de605d63CEA4f2CE6c44"
     listeners:
       - l_type: Block
         interval_millis: 0
