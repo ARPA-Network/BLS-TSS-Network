@@ -1,6 +1,107 @@
 # ARPA Network L1/L2 Devnet Automation
 
-## Usage
+
+## Deployment methods
+
+The below flags can be set in the .env file, and will allow you to perform different kinds of deployments using the deployment script. 
+
+```bash
+LOCAL_TEST="true" # solidity script will fund wallets with test eth. If set to false, must manually fund all wallets.
+ARPA_EXISTS="true" # Deploy using existing ARPA contracts. EXISTING_OP_ARPA_ADDRESS and EXISTING_L1_ARPA_ADDRESS need to be set in .env.
+L2_ONLY="true" # Deploy L2 contracts only, useful when L1 contracts are already deployed. You will need to set all existing L1 contract addresses in the .env file.
+```
+
+## Useful Alias
+```bash
+# kill docker node containers
+alias dnodekill='docker kill $(docker ps -q -f ancestxor=arpachainio/node:latest); docker rm -f $(docker ps -a -q -f ancestor=arpachainio/node:latest)'
+# Kill docker node proccesses
+alias nodekill='pkill -f "node-client -c"'
+# Rm node artifacts (log and sqlite dbs)
+alias logkill='rm -rf /home/ubuntu/BLS-TSS-Network/crates/arpa-node/log; rm /home/ubuntu/BLS-TSS-Network/crates/arpa-node/*.sqlite'
+
+# venv stuff
+alias venv="python3 -m venv .venv"
+alias activate=". .venv/bin/activate"
+```
+
+## L2_ONLY Test Workflow
+
+### L1 and L2 deployment to make sure L1 contracts are deployed
+
+```bash
+# Set .env flags
+LOCAL_TEST="true"
+ARPA_EXISTS="false"
+L2_ONLY="false"
+
+# 1. Kill nodes / clear artifacts and run deployment script
+nodekill
+logkill
+python3 main.py
+```
+
+### L2 Deployment Only
+
+```bash
+# Set .env flags
+LOCAL_TEST="true"
+ARPA_EXISTS="false"
+L2_ONLY="true"
+
+# 2. Copy all existing L1 addresses to .env
+
+# 3. If this ControllerRelayer has not yet been deployed: deploy it manually and copy the address to the .env file.
+# comment out all lines in main() except for deploy_controller_relayer()
+# double check that EXISTING_L1_CONTROLLER_ADDRESS is set in .env
+python3 main.py
+
+# 4. Kill the nodes but preserve the artifacts, run the deployment script
+nodekill
+python3 main.py
+```
+
+## ARPA_EXISTS Test Workflow
+
+### (L1 and L2 deployment with existing ARPA addresses)
+```bash
+# Set .env flags
+LOCAL_TEST="true"
+ARPA_EXISTS="true"
+L2_ONLY="false"
+
+# 1. Set existing arpa addreses:
+   EXISTING_OP_ARPA_ADDRESS
+   EXISTING_L1_ARPA_ADDRESS
+
+# 2. Kill nodes / clear artifacts and run deployment script
+nodekill
+logkill
+python3 main.py
+```
+
+### (L1 and L2 deployment with existing ARPA addresses)
+```bash
+# Set .env flags
+LOCAL_TEST="true"
+ARPA_EXISTS="true"
+L2_ONLY="true"
+
+# 3. Copy all existing L1 values to .env
+
+# 4. If this ControllerRelayer has not yet been deployed: deploy it manually and copy the address to the .env file.
+# comment out all lines in main() except for deploy_controller_relayer()
+# double check that EXISTING_L1_CONTROLLER_ADDRESS is set in .env
+python3 main.py
+
+# 5. Kill the nodes, but preserve the artifacts, and run the deploymenbt script. 
+nodekill
+python3 main.py
+```
+
+---
+
+## OP Devnet Notes
 
 Start Optimism Devnet
 
@@ -11,6 +112,16 @@ git submodule update --init --recursive
 make devnet-up-deploy
 ```
 
+Clean and redeploy OP devnet
+```bash
+cd optimism
+make devnet-clean
+make devnet-up-deploy
+```
+
+
+## Other Notes
+
 Build node client 
 
 ```bash
@@ -18,79 +129,12 @@ cd crates/arpa-node
 cargo build --bin node-client
 ``` 
 
-Deploy ARPA Network contracts to L1 and L2 and start randcast nodes
-
+Run the deployment script
 ```bash
-# for localnet deployment (no further updates needed)
-cp contracts/.env.localnet.example contracts/.env
-# for testnet deployment 
-cp contracts/.env.testnet.example contracts/.env # Update .env file with Alchemy endpoints, private keys, staking mnemonic, etc..
-
+# configure .env in contracts directory.
 cd scripts
-# activate venv
-python3 -m venv .venv
-source .venv/bin/activate
-# install dependencies
-pip3 install -r requirements.txt
-# run script
-python3 main.py
+python3 -m venv .venv # create venv
+source .venv/bin/activate # activate venv
+pip3 install -r requirements.txt # install dependencies
+python3 main.py # run script
 ```
-
-Kill Existing Resources and Start Fresh
-
-```bash
-# Kill Arpa Node Containers
-docker kill $(docker ps -q -f ancestxor=arpachainio/node:latest); docker rm -f $(docker ps -a -q -f ancestor=arpachainio/node:latest)
-
-# Kill Node Procceses, remove logs and DB files
-pkill -f 'node-client -c'
-rm -rf /home/ubuntu/BLS-TSS-Network/crates/arpa-node/log
-rm /home/ubuntu/BLS-TSS-Network/crates/arpa-node/*.sqlite
-
-#Clean and redploy OP devnet
-cd optimism
-make devnet-clean
-make devnet-up-deploy
-
-# Helpful alias
-alias nodekill='pkill -f "node-client -c"; rm -rf /home/ubuntu/BLS-TSS-Network/crates/arpa-node/log; rm /home/ubuntu/BLS-TSS-Network/crates/arpa-node/*.sqlite'
-
-```
-
----
-
-## Helpful View Calls for manual debugging
-
-Request randomness:
-
-```bash
-# L1
-forge script script/GetRandomNumberLocalTest.s.sol:GetRandomNumberLocalTestScript --fork-url http://localhost:8545 --broadcast
-# L2
-forge script script/OPGetRandomNumberLocalTest.s.sol:OPGetRandomNumberLocalTestScript --fork-url http://localhost:9545 --broadcast 
-```
-
-Some view calls:
-
-```bash
-# Get latest l1 group info
-cast call <Controller> "getGroup(uint256)" 0 --rpc-url http://127.0.0.1:8545
-# Check if the latest group info is relayed to L2
-cast call <ControllerOracle> "getGroup(uint256)" 0 --rpc-url http://127.0.0.1:9545
-# Check if the randomness is successfully fulfilled on L1
-cast call <L1_ERC1962Proxy> "getLastRandomness()(uint256)" --rpc-url http://127.0.0.1:8545
-# check if the randomness is successfully fulfilled on L2
-cast call <L2_ERC1962Proxy> "getLastRandomness()(uint256)" --rpc-url http://127.0.0.1:9545
-```
-
-```bash
-################ with contract addresses ################
-# Get latest l1 group info
-cast call 0x9d4454B023096f34B160D6B654540c56A1F81688 "getGroup(uint256)" 0 --rpc-url http://127.0.0.1:8545
-# Check if the latest group info is relayed to L2
-cast call 0x9fE46736679d2D9a65F0992F2272dE9f3c7fa6e0 "getGroup(uint256)" 0 --rpc-url http://127.0.0.1:9545
-# Check if the randomness is successfully fulfilled on L1
-cast call 0x809d550fca64d94Bd9F66E60752A544199cfAC3D "getLastRandomness()(uint256)" --rpc-url http://127.0.0.1:8545
-# Check if the randomness is successfully fulfilled on L2
-cast call 0xDc64a140Aa3E981100a9becA4E685f962f0cF6C9 "getLastRandomness()(uint256)" --rpc-url http://127.0.0.1:9545
-``` 

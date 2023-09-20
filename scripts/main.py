@@ -591,8 +591,8 @@ def test_request_randomness():  # ! Integration Testing
         addresses = json.load(f)
         l1_addresses = addresses["L1 Addresses"]
         l2_addresses = addresses["L2 Addresses"]
-        pprint(l1_addresses)
-        pprint(l2_addresses)
+        # pprint(l1_addresses)
+        # pprint(l2_addresses)
 
     # Check group state
     print("L1 Group Info:")
@@ -799,9 +799,6 @@ def main():
     deploy_contracts()
     deploy_nodes()
     test_request_randomness()
-
-    #
-    # print_node_key_info()
 
 
 if __name__ == "__main__":
