@@ -46,7 +46,7 @@ contract OPControllerOracleLocalTestScript is Script {
         ERC1967Proxy adapter;
         Adapter adapterImpl;
 
-        if (_arpa_exists == false) {
+        if (!_arpa_exists) {
             IERC20 arpa;
             vm.broadcast(_deployerPrivateKey);
             arpa = new Arpa();

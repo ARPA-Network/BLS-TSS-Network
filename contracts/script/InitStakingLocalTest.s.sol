@@ -20,6 +20,8 @@ contract InitStakingLocalTestScript is Script {
     uint32 internal _stakingNodesIndexOffset = uint32(vm.envUint("STAKING_NODES_INDEX_OFFSET"));
     uint32 internal _stakingNodesIndexLength = uint32(vm.envUint("STAKING_NODES_INDEX_LENGTH"));
 
+    bool internal _local_test = vm.envBool("LOCAL_TEST");
+
     Staking internal _staking;
     Arpa internal _arpa;
 
@@ -27,17 +29,20 @@ contract InitStakingLocalTestScript is Script {
         _arpa = Arpa(_arpaAddress);
         _staking = Staking(_stakingAddress);
 
-        // vm.broadcast(_deployerPrivateKey); // ! commented out during testnet deployment.
-        // payable(vm.addr(_userPrivateKey)).transfer(100 ether); // ! commented out during testnet deployment.
+        if (_local_test == true) {
+            vm.broadcast(_deployerPrivateKey); // ! commented out during testnet deployment.
+            payable(vm.addr(_userPrivateKey)).transfer(100 ether); // ! commented out during testnet deployment.
+        }
 
         // add operators
         for (uint32 i = _stakingNodesIndexOffset; i < _stakingNodesIndexOffset + _stakingNodesIndexLength; i++) {
             address operator = vm.rememberKey(vm.deriveKey(_mnemonic, i));
             _operators.push(operator);
-
-            // address payable toOperator = payable(operator); // ! commented out during testnet deployment.
-            // vm.broadcast(_deployerPrivateKey); // ! commented out during testnet deployment.
-            // toOperator.transfer(100 ether); // ! commented out during testnet deployment.
+            if (_local_test == true) {
+                address payable toOperator = payable(operator); // ! commented out during testnet deployment.
+                vm.broadcast(_deployerPrivateKey); // ! commented out during testnet deployment.
+                toOperator.transfer(100 ether); // ! commented out during testnet deployment.
+            }
         }
 
         vm.broadcast(_deployerPrivateKey);

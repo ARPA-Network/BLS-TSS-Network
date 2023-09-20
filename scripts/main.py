@@ -31,8 +31,10 @@ ENV_PATH = os.path.join(CONTRACTS_DIR, ".env")
 # RPC INFO
 L2_CHAIN_ID = get_key(ENV_PATH, "OP_CHAIN_ID")
 L2_RPC = get_key(ENV_PATH, "OP_RPC")
+L2_WS_RPC = get_key(ENV_PATH, "OP_WS_RPC")
 L1_CHAIN_ID = get_key(ENV_PATH, "L1_CHAIN_ID")
 L1_RPC = get_key(ENV_PATH, "L1_RPC")
+L1_WS_RPC = get_key(ENV_PATH, "L1_WS_RPC")
 
 # Special Cases (arpa exists / l2 only)
 ARPA_EXISTS = (
@@ -84,6 +86,8 @@ CREATE_AND_SET_CHAIN_MESSENGER_BROADCAST_PATH = os.path.join(
     "run-latest.json",
 )
 
+NODE_CLIENT_BINARY_PATH = os.path.join(ROOT_DIR, "target/release/node-client")
+
 
 def cprint(text: str, color: str = "green"):
     """Prints text in color
@@ -129,6 +133,7 @@ def get_l1_addresses():
         l1_controller_addresses["Staking"] = EXISTING_L1_STAKING_ADDRESS
         l1_controller_addresses["Controller"] = EXISTING_L1_CONTROLLER_ADDRESS
         l1_controller_addresses["ERC1967Proxy"] = EXISTING_L1_ADAPTER_ADDRESS
+        l1_controller_addresses["ControllerRelayer"] = EXISTING_L1_CONTROLLER_RELAYER
 
         l1_chain_messenger_addresses = get_addresses_from_json(
             CREATE_AND_SET_CHAIN_MESSENGER_BROADCAST_PATH
@@ -376,7 +381,7 @@ def deploy_contracts():
         shell=True,
     )
 
-    if not L2_ONLY:
+    if not L2_ONLY:  # l2_only == False
         # forge script script/InitStakingLocalTest.s.sol:InitStakingLocalTestScript --fork-url http://localhost:8545 --broadcast -g 15
         print("Running Solidity Script: InitStakingLocalTestScript on L1...")
         cmd = f"forge script script/InitStakingLocalTest.s.sol:InitStakingLocalTestScript --fork-url {L1_RPC} --broadcast -g 150 --slow"
@@ -407,6 +412,9 @@ def deploy_contracts():
             capture_output=HIDE_OUTPUT,
             shell=True,
         )
+
+    # Print addresses to addresses.json
+    print_addresses()
 
 
 def deploy_nodes():  # ! Deploy Nodes
@@ -451,8 +459,8 @@ def deploy_nodes():  # ! Deploy Nodes
         data["relayed_chains"][0]["adapter_address"] = l2_addresses["ERC1967Proxy"]
 
         # update rpc endpoints
-        data["provider_endpoint"] = L1_RPC
-        data["relayed_chains"][0]["provider_endpoint"] = L2_RPC
+        data["provider_endpoint"] = L1_WS_RPC
+        data["relayed_chains"][0]["provider_endpoint"] = L2_WS_RPC
 
         # Update Chain ID
         data["chain_id"] = int(L1_CHAIN_ID)
@@ -468,6 +476,7 @@ def deploy_nodes():  # ! Deploy Nodes
     print("Starting randcast nodes...")
     print("Starting Node 1!")
     cmd = f"cargo run --bin node-client -- -c {ARPA_NODE_CONFIG_DIR}/config_1.yml > /dev/null 2>&1 &"
+    # cmd = f"./{NODE_CLIENT_BINARY_PATH} -c {ARPA_NODE_CONFIG_DIR}/config_1.yml > /dev/null 2>&1 &"
     cprint(cmd)
 
     run_command(
@@ -478,6 +487,8 @@ def deploy_nodes():  # ! Deploy Nodes
 
     print("Starting Node 2!")
     cmd = f"cargo run --bin node-client -- -c {ARPA_NODE_CONFIG_DIR}/config_2.yml > /dev/null 2>&1 &"
+    # cmd = f"./{NODE_CLIENT_BINARY_PATH} -c {ARPA_NODE_CONFIG_DIR}/config_.yml > /dev/null 2>&1 &"
+
     cprint(cmd)
     run_command(
         [cmd],
@@ -487,6 +498,7 @@ def deploy_nodes():  # ! Deploy Nodes
 
     print("Starting Node 3!")
     cmd = f"cargo run --bin node-client -- -c {ARPA_NODE_CONFIG_DIR}/config_3.yml > /dev/null 2>&1 &"
+    # cmd = f"./{NODE_CLIENT_BINARY_PATH} -c {ARPA_NODE_CONFIG_DIR}/config_1.yml > /dev/null 2>&1 &"
     cprint(cmd)
     run_command(
         [cmd],
@@ -662,12 +674,15 @@ def test_request_randomness():  # ! Integration Testing
 
 
 def print_addresses():
-    l1_addresses = get_addresses_from_json(L1_CONTRACTS_DEPLOYMENT_BROADCAST_PATH)
-    l2_addresses = get_addresses_from_json(OP_CONTRACTS_DEPLOYMENT_BROADCAST_PATH)
-    print("L1 Addresses:")
-    pprint(l1_addresses)
-    print("L2 Addresses:")
-    pprint(l2_addresses)
+    l1_addresses = get_l1_addresses()
+    l2_addresses = get_l2_addresses()
+
+    addresses = {}
+    addresses["L1 Addresses"] = l1_addresses
+    addresses["L2 Addresses"] = l2_addresses
+
+    with open("addresses.json", "w") as f:
+        json.dump(addresses, f, indent=4)
 
 
 def main():
@@ -676,7 +691,6 @@ def main():
     test_request_randomness()
 
     # print_node_key_info()
-    # print_addresses()
 
 
 if __name__ == "__main__":

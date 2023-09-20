@@ -4,15 +4,15 @@ node_management_rpc_endpoint: "[::1]:50092"
 
 node_management_rpc_token: "for_test"
 
-provider_endpoint: "http://localhost:8545"
+provider_endpoint: "ws://localhost:8546"
 
 chain_id: 900
 
-controller_address: "0x18E317A7D70d8fBf8e6E893616b52390EbBdb629"
+controller_address: "0x4EE6eCAD1c2Dae9f525404De8555724e3c35d07B"
 
-controller_relayer_address: "0xD0141E899a65C95a556fE2B27e5982A6DE7fDD7A"
+controller_relayer_address: "0x367761085BF3C12e5DA2Df99AC6E1a824612b8fb"
 
-adapter_address: "0xD5ac451B0c50B9476107823Af206eD814a2e2580"
+adapter_address: "0x2B0d36FACD61B71CC05ab8F3D2355ec3631C0dd5"
 
 data_path: "./data2.sqlite"
 
@@ -74,9 +74,9 @@ time_limits:
 relayed_chains:
   - chain_id: 901
     description: "OP"
-    provider_endpoint: "http://localhost:9545"
-    controller_oracle_address: "0x59b670e9fA9D0A427751Af201D676719a970857b"
-    adapter_address: "0x322813Fd9A801c5507c9de605d63CEA4f2CE6c44"
+    provider_endpoint: "ws://localhost:9546"
+    controller_oracle_address: "0x3Aa5ebB10DC797CAC828524e59A333d0A371443c"
+    adapter_address: "0x59b670e9fA9D0A427751Af201D676719a970857b"
     listeners:
       - l_type: Block
         interval_millis: 0
