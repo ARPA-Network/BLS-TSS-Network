@@ -266,9 +266,9 @@ Test 2 SubId Request At Same Time
 *** Test Cases ***
 
 Run BLS Test Cases
-    # Repeat Keyword    1    BLS Happy Path1
-    # Repeat Keyword    1    BLS Happy Path2
-    # Repeat Keyword    1    Corner Case1
-    # Repeat Keyword    1    Corner Case2
-    # Repeat Keyword    1    Test Request Gas Too Low
+    Repeat Keyword    1    BLS Happy Path1
+    Repeat Keyword    1    BLS Happy Path2
+    Repeat Keyword    1    Corner Case1
+    Repeat Keyword    1    Corner Case2
+    Repeat Keyword    1    Test Request Gas Too Low
     Repeat Keyword    1    Test 2 SubId Request At Same Time

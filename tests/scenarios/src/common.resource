@@ -69,6 +69,7 @@ Start Local Ethereum Chain
 
     Process Should Be Running    ${anvil_process_handle}
     Set Global Variable    $LOCAL_ETHEREUM_CHAIN_PROCESS_HANDLE    ${anvil_process_handle}
+    
     Sleep    2s
 
 Stop Local Ethereum Chain
