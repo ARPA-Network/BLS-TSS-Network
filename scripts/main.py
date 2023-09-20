@@ -16,7 +16,6 @@ from pk_util import print_keypair
 # Global Variables #
 ####################
 
-HIDE_OUTPUT = False  # supress output
 
 # prep directories
 SCRIPT_DIR = os.getcwd()
@@ -37,7 +36,7 @@ L1_CHAIN_ID = get_key(ENV_PATH, "L1_CHAIN_ID")
 L1_RPC = get_key(ENV_PATH, "L1_RPC")
 L1_WS_RPC = get_key(ENV_PATH, "L1_WS_RPC")
 
-# Special Cases (arpa exists / l2 only)
+# Deployment flags
 ARPA_EXISTS = (
     get_key(ENV_PATH, "ARPA_EXISTS").lower() == "true"
 )  # bool True if ARPA_EXISTS is true in .env
@@ -46,6 +45,8 @@ L2_ONLY = (
 )  # bool True if L2_ONLY is true in .env
 # Admin Private Key used to Relay Groups manually during L2_ONLY deployment
 ADMIN_PRIVATE_KEY = get_key(ENV_PATH, "ADMIN_PRIVATE_KEY")
+VERBOSE_OUTPUT = get_key(ENV_PATH, "VERBOSE_OUTPUT").lower() == "true"
+HIDE_OUTPUT = not VERBOSE_OUTPUT  # if verbose_output = false, hide_output = true
 
 # Existing L1 Addresses
 EXISTING_OP_ARPA_ADDRESS = get_key(ENV_PATH, "EXISTING_OP_ARPA_ADDRESS")
