@@ -8,11 +8,11 @@ provider_endpoint: "ws://localhost:8546"
 
 chain_id: 900
 
-controller_address: "0x4EE6eCAD1c2Dae9f525404De8555724e3c35d07B"
+controller_address: "0xc0F115A19107322cFBf1cDBC7ea011C19EbDB4F8"
 
-controller_relayer_address: "0x367761085BF3C12e5DA2Df99AC6E1a824612b8fb"
+controller_relayer_address: "0x276C216D241856199A83bf27b2286659e5b877D3"
 
-adapter_address: "0x2B0d36FACD61B71CC05ab8F3D2355ec3631C0dd5"
+adapter_address: "0xD0141E899a65C95a556fE2B27e5982A6DE7fDD7A"
 
 data_path: "./data3.sqlite"
 
@@ -75,8 +75,8 @@ relayed_chains:
   - chain_id: 901
     description: "OP"
     provider_endpoint: "ws://localhost:9546"
-    controller_oracle_address: "0x3Aa5ebB10DC797CAC828524e59A333d0A371443c"
-    adapter_address: "0x59b670e9fA9D0A427751Af201D676719a970857b"
+    controller_oracle_address: "0x172076E0166D1F9Cc711C77Adf8488051744980C"
+    adapter_address: "0xBEc49fA140aCaA83533fB00A2BB19bDdd0290f25"
     listeners:
       - l_type: Block
         interval_millis: 0

@@ -27,6 +27,8 @@ contract CreateAndSetChainMessengerScript is Script {
         ControllerRelayer controllerRelayer;
         OPChainMessenger opChainMessenger;
 
+        controllerRelayer = ControllerRelayer(_controllerRelayer);
+
         vm.broadcast(_deployerPrivateKey);
         opChainMessenger =
             new OPChainMessenger(_controllerRelayer, _opControllerOracleAddress, _opL1CrossDomainMessengerAddress);
