@@ -49,6 +49,8 @@ pub const DEFAULT_ROLLING_LOG_FILE_SIZE: u64 = 10 * 1024 * 1024 * 1024;
 pub const DEFAULT_BLOCK_TIME: usize = 12;
 pub const DEFAULT_MAX_RANDOMNESS_FULFILLMENT_ATTEMPTS: usize = 3;
 
+pub const DEFAULT_WEBSOCKET_PROVIDER_RECONNECT_TIMES: usize = 1000000;
+
 pub fn jitter(duration: Duration) -> Duration {
     duration.mul_f64(thread_rng().gen_range(0.5..=1.0))
 }

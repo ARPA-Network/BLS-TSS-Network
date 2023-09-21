@@ -10,6 +10,7 @@ use arpa_contract_client::{ServiceClient, TransactionCaller, ViewCaller};
 use arpa_core::{
     address_to_string, build_wallet_from_config, pad_to_bytes32, Config, ConfigError,
     GeneralMainChainIdentity, GeneralRelayedChainIdentity, WalletSigner,
+    DEFAULT_WEBSOCKET_PROVIDER_RECONNECT_TIMES,
 };
 use arpa_dal::NodeInfoFetcher;
 use arpa_node::context::ChainIdentityHandlerType;
@@ -1479,11 +1480,14 @@ async fn main() -> anyhow::Result<()> {
     let mut chain_identities = BTreeMap::new();
 
     let provider = Arc::new(
-        Provider::<Ws>::connect(config.provider_endpoint.clone())
-            .await?
-            .interval(Duration::from_millis(
-                config.time_limits.unwrap().provider_polling_interval_millis,
-            )),
+        Provider::<Ws>::connect_with_reconnects(
+            config.provider_endpoint.clone(),
+            DEFAULT_WEBSOCKET_PROVIDER_RECONNECT_TIMES,
+        )
+        .await?
+        .interval(Duration::from_millis(
+            config.time_limits.unwrap().provider_polling_interval_millis,
+        )),
     );
 
     let main_chain_identity = GeneralMainChainIdentity::new(
@@ -1515,14 +1519,17 @@ async fn main() -> anyhow::Result<()> {
 
     for relayed_chain in config.relayed_chains.iter() {
         let provider = Arc::new(
-            Provider::<Ws>::connect(relayed_chain.provider_endpoint.clone())
-                .await?
-                .interval(Duration::from_millis(
-                    relayed_chain
-                        .time_limits
-                        .unwrap()
-                        .provider_polling_interval_millis,
-                )),
+            Provider::<Ws>::connect_with_reconnects(
+                relayed_chain.provider_endpoint.clone(),
+                DEFAULT_WEBSOCKET_PROVIDER_RECONNECT_TIMES,
+            )
+            .await?
+            .interval(Duration::from_millis(
+                relayed_chain
+                    .time_limits
+                    .unwrap()
+                    .provider_polling_interval_millis,
+            )),
         );
 
         let relayed_chain_identity = GeneralRelayedChainIdentity::new(

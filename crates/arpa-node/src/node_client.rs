@@ -3,6 +3,7 @@ use arpa_core::log::encoder::JsonEncoder;
 use arpa_core::Config;
 use arpa_core::GeneralMainChainIdentity;
 use arpa_core::GeneralRelayedChainIdentity;
+use arpa_core::DEFAULT_WEBSOCKET_PROVIDER_RECONNECT_TIMES;
 use arpa_core::{build_wallet_from_config, RandomnessTask};
 use arpa_dal::{NodeInfoFetcher, NodeInfoUpdater};
 use arpa_node::context::chain::types::GeneralMainChain;
@@ -195,11 +196,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let randomness_result_cache = db.get_randomness_result_client().await?;
 
     let provider = Arc::new(
-        Provider::<Ws>::connect(config.provider_endpoint.clone())
-            .await?
-            .interval(Duration::from_millis(
-                config.time_limits.unwrap().provider_polling_interval_millis,
-            )),
+        Provider::<Ws>::connect_with_reconnects(
+            config.provider_endpoint.clone(),
+            DEFAULT_WEBSOCKET_PROVIDER_RECONNECT_TIMES,
+        )
+        .await?
+        .interval(Duration::from_millis(
+            config.time_limits.unwrap().provider_polling_interval_millis,
+        )),
     );
 
     let main_chain_identity = GeneralMainChainIdentity::new(
@@ -242,14 +246,17 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     for relayed_chain_config in relayed_chains_config {
         let provider = Arc::new(
-            Provider::<Ws>::connect(relayed_chain_config.provider_endpoint.clone())
-                .await?
-                .interval(Duration::from_millis(
-                    relayed_chain_config
-                        .time_limits
-                        .unwrap()
-                        .provider_polling_interval_millis,
-                )),
+            Provider::<Ws>::connect_with_reconnects(
+                relayed_chain_config.provider_endpoint.clone(),
+                DEFAULT_WEBSOCKET_PROVIDER_RECONNECT_TIMES,
+            )
+            .await?
+            .interval(Duration::from_millis(
+                relayed_chain_config
+                    .time_limits
+                    .unwrap()
+                    .provider_polling_interval_millis,
+            )),
         );
 
         let relayed_chain_identity = GeneralRelayedChainIdentity::new(
