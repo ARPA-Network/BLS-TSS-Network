@@ -1,10 +1,12 @@
-node_committer_rpc_endpoint: "[::1]:50061"
+node_advertised_committer_rpc_endpoint: "18.188.253.80:50061"
 
-node_management_rpc_endpoint: "[::1]:50091"
+node_committer_rpc_endpoint: "0.0.0.0:50061"
+
+node_management_rpc_endpoint: "0.0.0.0:50091"
 
 node_management_rpc_token: "for_test"
 
-provider_endpoint: "ws://localhost:8546"
+provider_endpoint: "ws://172.17.0.1:8546"
 
 chain_id: 900
 
@@ -14,7 +16,7 @@ controller_relayer_address: "0x045857BDEAE7C1c7252d611eB24eB55564198b4C"
 
 adapter_address: "0x5D42EBdBBa61412295D7b0302d6F50aC449Ddb4F"
 
-data_path: "./data1.sqlite"
+data_path: "./data.sqlite"
 
 logger:
   node_id: 1
@@ -74,7 +76,7 @@ time_limits:
 relayed_chains:
   - chain_id: 901
     description: "OP"
-    provider_endpoint: "ws://localhost:9546"
+    provider_endpoint: "ws://172.17.0.1:9546"
     controller_oracle_address: "0xab16A69A5a8c12C732e0DEFF4BE56A70bb64c926"
     adapter_address: "0x1f10F3Ba7ACB61b2F50B9d6DdCf91a6f787C0E82"
     listeners:

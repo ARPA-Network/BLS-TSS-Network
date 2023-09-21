@@ -797,8 +797,8 @@ def main():
     # relay_groups("0x2E2Ed0Cfd3AD2f1d34481277b3204d807Ca2F8c2")
 
     ## Main deployment script
-    deploy_contracts()
-    deploy_nodes()
+    # deploy_contracts()
+    # deploy_nodes()
     test_request_randomness()
 
 
