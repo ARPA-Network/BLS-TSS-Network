@@ -8,16 +8,16 @@ This folder contains dockerfiles, cdk scripts, and config files for facilitating
 
 Scripts are split into the following sections:
 
-[localnet-test](./localnet-test/README.md): deploy testnet locally using docker network. This is the easiest way to get started with randcast and is recommended for testing purposes.
+[localnet-test](./deployments/localnet-test/README.md): deploy testnet locally using docker network. This is the easiest way to get started with randcast and is recommended for testing purposes.
 
 - The dockerfiles provided in this folder most be built locally and are not hosted on dockerhub.
 
-[internet-test](./internet-test/README.md): deploy testnet online using AWS EC2 + docker. This gives a more practical example of how nodes are deployed on mainnet.
+[internet-test](./deployments/internet-test/README.md): deploy testnet online using AWS EC2 + docker. This gives a more practical example of how nodes are deployed on mainnet.
 
 - The dockerfiles provided in this folder have been built and hosted on dockerhub and can be pulled directly from there.
 - EC2 CDK scripts provided for deploying a full fledged test network (Anvil EC2 hosting anvil container + NODE EC2 for running contract-init and  node containers)
 
-[mainnet](./mainnet/README.md): Sample deployment CDK script for randcast on mainnet.
+[mainnet](./deployments/mainnet/README.md): Sample deployment CDK script for randcast on mainnet.
 
 - Uses same node docker image as internet-test.
 - CDK script creates EC2 instance for hosting node containers only.
