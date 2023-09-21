@@ -1,4 +1,4 @@
-node_advertised_committer_rpc_endpoint: "18.188.253.80:50063"
+node_advertised_committer_rpc_endpoint: "172.17.0.1:50063"
 
 node_committer_rpc_endpoint: "0.0.0.0:50063"
 
@@ -10,13 +10,13 @@ provider_endpoint: "ws://172.17.0.1:8546"
 
 chain_id: 900
 
-controller_address: "0x70bDA08DBe07363968e9EE53d899dFE48560605B"
+controller_address: "0x967AB65ef14c58bD4DcfFeaAA1ADb40a022140E5"
 
-controller_relayer_address: "0x045857BDEAE7C1c7252d611eB24eB55564198b4C"
+controller_relayer_address: "0x547382C0D1b23f707918D3c83A77317B71Aa8470"
 
-adapter_address: "0x5D42EBdBBa61412295D7b0302d6F50aC449Ddb4F"
+adapter_address: "0x8e264821AFa98DD104eEcfcfa7FD9f8D8B320adA"
 
-data_path: "./data.sqlite"
+data_path: "./db/data3.sqlite"
 
 logger:
   node_id: 3
@@ -77,8 +77,8 @@ relayed_chains:
   - chain_id: 901
     description: "OP"
     provider_endpoint: "ws://172.17.0.1:9546"
-    controller_oracle_address: "0xab16A69A5a8c12C732e0DEFF4BE56A70bb64c926"
-    adapter_address: "0x1f10F3Ba7ACB61b2F50B9d6DdCf91a6f787C0E82"
+    controller_oracle_address: "0x0ed64d01D0B4B655E410EF1441dD677B695639E7"
+    adapter_address: "0x40a42Baf86Fc821f972Ad2aC878729063CeEF403"
     listeners:
       - l_type: Block
         interval_millis: 0

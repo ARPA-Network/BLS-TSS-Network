@@ -26,6 +26,7 @@ CONTRACTS_DIR = os.path.join(ROOT_DIR, "contracts")
 ENV_EXAMPLE_PATH = os.path.join(CONTRACTS_DIR, ".env.example")
 ENV_PATH = os.path.join(CONTRACTS_DIR, ".env")
 ADDRESSES_JSON_PATH = os.path.join(SCRIPT_DIR, "addresses.json")
+NODE_CLIENT_DIR = os.path.join(ROOT_DIR, "docker/node-client")
 
 
 # RPC INFO
@@ -429,9 +430,10 @@ def deploy_contracts():
 
 
 def deploy_nodes():  # ! Deploy Nodes
-    # this is only true if --l2-only config
-    l1_addresses = get_addresses_from_json(L1_CONTRACTS_DEPLOYMENT_BROADCAST_PATH)
-    l2_addresses = get_addresses_from_json(OP_CONTRACTS_DEPLOYMENT_BROADCAST_PATH)
+    with open(ADDRESSES_JSON_PATH, "r") as f:
+        addresses = json.load(f)
+        l1_addresses = addresses["L1 Addresses"]
+        l2_addresses = addresses["L2 Addresses"]
 
     ######################################
     ###### ARPA Network Deployment #######
@@ -456,7 +458,7 @@ def deploy_nodes():  # ! Deploy Nodes
     yaml.indent(sequence=4, offset=2)  # set indentation
 
     for i, file in enumerate(config_files):
-        file_path = os.path.join(ARPA_NODE_CONFIG_DIR, file)
+        file_path = os.path.join(NODE_CLIENT_DIR, file)
         with open(file_path, "r") as f:
             data = yaml.load(f)
         # L1
@@ -486,34 +488,52 @@ def deploy_nodes():  # ! Deploy Nodes
     # start randcast nodes
     print("Starting randcast nodes...")
     print("Starting Node 1!")
-    cmd = f"cargo run --bin node-client -- -c {ARPA_NODE_CONFIG_DIR}/config_1.yml > /dev/null 2>&1 &"
-    # cmd = f"./{NODE_CLIENT_BINARY_PATH} -c {ARPA_NODE_CONFIG_DIR}/config_1.yml > /dev/null 2>&1 &"
+    # cmd = f"cargo run --bin node-client -- -c {ARPA_NODE_CONFIG_DIR}/config_1.yml > /dev/null 2>&1 &"
+    cmd = f"docker run -d \
+  --name node1 \
+  -p 50061:50061 -p 50091:50091 \
+  -v {ROOT_DIR}/docker/node-client/config_1.yml:/app/config.yml \
+  -v {ROOT_DIR}/docker/node-client/db:/app/db \
+  -v {ROOT_DIR}/docker/node-client/log/1:/app/log/1 \
+  arpachainio/node-client:latest"
     cprint(cmd)
 
     run_command(
         [cmd],
-        cwd=ARPA_NODE_DIR,
+        cwd=NODE_CLIENT_DIR,
         shell=True,
     )
 
     print("Starting Node 2!")
-    cmd = f"cargo run --bin node-client -- -c {ARPA_NODE_CONFIG_DIR}/config_2.yml > /dev/null 2>&1 &"
-    # cmd = f"./{NODE_CLIENT_BINARY_PATH} -c {ARPA_NODE_CONFIG_DIR}/config_.yml > /dev/null 2>&1 &"
+    # cmd = f"cargo run --bin node-client -- -c {ARPA_NODE_CONFIG_DIR}/config_2.yml > /dev/null 2>&1 &"
+    cmd = f"docker run -d \
+  --name node2 \
+  -p 50062:50062 -p 50092:50092 \
+  -v {ROOT_DIR}/docker/node-client/config_2.yml:/app/config.yml \
+  -v {ROOT_DIR}/docker/node-client/db:/app/db \
+  -v {ROOT_DIR}/docker/node-client/log/2:/app/log/2 \
+  arpachainio/node-client:latest"
 
     cprint(cmd)
     run_command(
         [cmd],
-        cwd=ARPA_NODE_DIR,
+        cwd=NODE_CLIENT_DIR,
         shell=True,
     )
 
     print("Starting Node 3!")
-    cmd = f"cargo run --bin node-client -- -c {ARPA_NODE_CONFIG_DIR}/config_3.yml > /dev/null 2>&1 &"
-    # cmd = f"./{NODE_CLIENT_BINARY_PATH} -c {ARPA_NODE_CONFIG_DIR}/config_1.yml > /dev/null 2>&1 &"
+    # cmd = f"cargo run --bin node-client -- -c {ARPA_NODE_CONFIG_DIR}/config_3.yml > /dev/null 2>&1 &"
+    cmd = f"docker run -d \
+  --name node3 \
+  -p 50063:50063 -p 50093:50093 \
+  -v {ROOT_DIR}/docker/node-client/config_3.yml:/app/config.yml \
+  -v {ROOT_DIR}/docker/node-client/db:/app/db \
+  -v {ROOT_DIR}/docker/node-client/log/3:/app/log/3 \
+  arpachainio/node-client:latest"
     cprint(cmd)
     run_command(
         [cmd],
-        cwd=ARPA_NODE_DIR,
+        cwd=NODE_CLIENT_DIR,
         shell=True,
     )
 
@@ -523,7 +543,7 @@ def deploy_nodes():  # ! Deploy Nodes
     # wait for succesful grouping (fail after 1m without grouping)
     print("Waiting for nodes to group... ")
     time.sleep(5)  # wait for node.log file to be created
-    cmd = f"cat {ARPA_NODE_DIR}/log/1/node.log | grep 'available'"
+    cmd = f"cat {NODE_CLIENT_DIR}/log/1/node.log | grep 'available'"
     cprint(cmd)
     nodes_grouped = wait_command(
         [cmd],
@@ -540,7 +560,7 @@ def deploy_nodes():  # ! Deploy Nodes
         # print out logs
         run_command(
             [
-                f"cat {ARPA_NODE_DIR}/log/1/node.log | tail",
+                f"cat {NODE_CLIENT_DIR}/log/1/node.log | tail",
             ],
             shell=True,
         )
@@ -797,8 +817,8 @@ def main():
     # relay_groups("0x2E2Ed0Cfd3AD2f1d34481277b3204d807Ca2F8c2")
 
     ## Main deployment script
-    # deploy_contracts()
-    # deploy_nodes()
+    deploy_contracts()
+    deploy_nodes()
     test_request_randomness()
 
 

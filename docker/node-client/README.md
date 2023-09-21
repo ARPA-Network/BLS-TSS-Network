@@ -45,6 +45,35 @@ docker run -d \
   arpachainio/node-client:latest
 ```
 
+# Modified
+
+```bash
+docker run -d \
+  --name node1 \
+  -p 50061:50061 -p 50091:50091 \
+  -v ./docker/node-client/config_1.yml:/app/config.yml \
+  -v ./docker/node-client/db:/app/db \
+  -v ./docker/node-client/log/1:/app/log/1 \
+  arpachainio/node-client:latest 
+  
+docker run -d \
+  --name node2 \
+  -p 50062:50062 -p 50092:50092 \
+  -v ./docker/node-client/config_2.yml:/app/config.yml \
+  -v ./docker/node-client/db:/app/db \
+  -v ./docker/node-client/log/2:/app/log/2 \
+  arpachainio/node-client:latest 
+  
+docker run -d \
+  --name node3 \
+  -p 50063:50063 -p 50093:50093 \
+  -v ./docker/node-client/config_3.yml:/app/config.yml \
+  -v ./docker/node-client/db:/app/db \
+  -v ./docker/node-client/log/3:/app/log/3 \
+  arpachainio/node-client:latest
+```
+
+
 ## Useful Alias
 
 ```bash

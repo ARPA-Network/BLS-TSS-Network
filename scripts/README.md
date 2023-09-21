@@ -13,16 +13,20 @@ L2_ONLY="true" # Deploy L2 contracts only, useful when L1 contracts are already 
 
 ## Useful Alias
 ```bash
+# rm docker node logs
+alias dnukelog='sudo rm -rf /home/ubuntu/BLS-TSS-Network/docker/node-client/log'
+
 # kill docker node containers
-alias dnodekill='docker kill $(docker ps -q -f ancestxor=arpachainio/node:latest); docker rm -f $(docker ps -a -q -f ancestor=arpachainio/node:latest)'
-# Kill docker node proccesses
-alias nodekill='pkill -f "node-client -c"'
-# Rm node artifacts (log and sqlite dbs)
-alias logkill='rm -rf /home/ubuntu/BLS-TSS-Network/crates/arpa-node/log; rm /home/ubuntu/BLS-TSS-Network/crates/arpa-node/*.sqlite'
+alias dnuke='docker kill node1 node2 node3; docker rm node1 node2 node3;'
+
 
 # venv stuff
 alias venv="python3 -m venv .venv"
 alias activate=". .venv/bin/activate"
+
+# rm db, logs, and kill nodes
+sudo rm -rf db; sudo rm -rf log; docker kill node1 node2 node3; docker rm node1 node2 node3;
+
 ```
 
 ## L2_ONLY Test Workflow
@@ -36,8 +40,6 @@ ARPA_EXISTS="false"
 L2_ONLY="false"
 
 # 1. Kill nodes / clear artifacts and run deployment script
-nodekill
-logkill
 python3 main.py
 ```
 
@@ -57,7 +59,6 @@ L2_ONLY="true"
 python3 main.py
 
 # 4. Kill the nodes but preserve the artifacts, run the deployment script
-nodekill
 python3 main.py
 ```
 
@@ -75,8 +76,6 @@ L2_ONLY="false"
    EXISTING_L1_ARPA_ADDRESS
 
 # 2. Kill nodes / clear artifacts and run deployment script
-nodekill
-logkill
 python3 main.py
 ```
 
@@ -95,7 +94,6 @@ L2_ONLY="true"
 python3 main.py
 
 # 5. Kill the nodes, but preserve the artifacts, and run the deploymenbt script. 
-nodekill
 python3 main.py
 ```
 
