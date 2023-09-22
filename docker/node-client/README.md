@@ -5,7 +5,8 @@
 ```bash
 # manually build images
 cd BLS-TSS-Network
-docker build -t node-client ./docker/internet-test/node-client
+cargo build --bin node-client --release
+docker build -t node-client ./docker/node-client
 
 # tag imges for docker hub
 docker tag node-client arpachainio/node-client:latest
