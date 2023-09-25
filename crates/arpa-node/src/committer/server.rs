@@ -10,17 +10,7 @@ use crate::{
         CommitPartialSignatureReply, CommitPartialSignatureRequest,
     },
 };
-use arpa_contract_client::{
-    adapter::AdapterClientBuilder, controller::ControllerClientBuilder,
-    controller_relayer::ControllerRelayerClientBuilder, coordinator::CoordinatorClientBuilder,
-    provider::ChainProviderBuilder,
-};
-use arpa_core::{BLSTaskError, BLSTaskType, MainChainIdentity, RandomnessTask};
-use arpa_dal::cache::RandomnessResultCache;
-use arpa_dal::{
-    BLSTasksFetcher, BLSTasksUpdater, ContextInfoUpdater, GroupInfoFetcher, GroupInfoUpdater,
-    NodeInfoFetcher, NodeInfoUpdater, SignatureResultCacheFetcher, SignatureResultCacheUpdater,
-};
+use arpa_core::{BLSTaskError, BLSTaskType, SchedulerError};
 use ethers::types::Address;
 use futures::Future;
 use std::{marker::PhantomData, sync::Arc};
@@ -129,7 +119,7 @@ where
                     } else {
                         if !self.context.read().await.contains_relayed_chain(chain_id) {
                             return Err(Status::invalid_argument(
-                                NodeError::InvalidChainId(chain_id).to_string(),
+                                SchedulerError::InvalidChainId(chain_id).to_string(),
                             ));
                         }
                         self.context
@@ -203,47 +193,6 @@ where
 
 pub async fn start_committer_server_with_shutdown<
     F: Future<Output = ()>,
-    N: NodeInfoFetcher<PC>
-        + NodeInfoUpdater<PC>
-        + ContextInfoUpdater
-        + std::fmt::Debug
-        + Clone
-        + Sync
-        + Send
-        + 'static,
-    G: GroupInfoFetcher<PC>
-        + GroupInfoUpdater<PC>
-        + ContextInfoUpdater
-        + std::fmt::Debug
-        + Clone
-        + Sync
-        + Send
-        + 'static,
-    T: BLSTasksFetcher<RandomnessTask>
-        + BLSTasksUpdater<RandomnessTask>
-        + std::fmt::Debug
-        + Clone
-        + Sync
-        + Send
-        + 'static,
-    C: SignatureResultCacheFetcher<RandomnessResultCache>
-        + SignatureResultCacheUpdater<RandomnessResultCache>
-        + std::fmt::Debug
-        + Clone
-        + Sync
-        + Send
-        + 'static,
-    MI: MainChainIdentity
-        + ControllerClientBuilder<PC>
-        + ControllerRelayerClientBuilder
-        + CoordinatorClientBuilder<PC>
-        + AdapterClientBuilder
-        + ChainProviderBuilder
-        + Sync
-        + Send
-        + std::fmt::Debug
-        + Clone
-        + 'static,
     PC: Curve + std::fmt::Debug + Clone + Sync + Send + 'static,
     S: SignatureScheme
         + ThresholdScheme<Public = PC::Point, Private = PC::Scalar>

@@ -4,7 +4,7 @@ node_management_rpc_endpoint: "[::1]:50090"
 
 node_management_rpc_token: "change_me"
 
-provider_endpoint: "http://127.0.0.1:8545"
+provider_endpoint: "ws://127.0.0.1:8546"
 
 chain_id: 900
 
@@ -13,6 +13,10 @@ controller_address: "0x5eb3Bc0a489C5A8288765d2336659EbCA68FCd00"
 controller_relayer_address: "0x82e01223d51Eb87e16A03E24687EDF0F294da6f1"
 
 adapter_address: "0x5FC8d32690cc91D4c39d9d3abcBD16989F875707"
+
+adapter_deployed_block_height: 9600000
+
+arpa_address: "0xa4F59C4Caf15641F32f5756E37d93912E7F96203"
 
 data_path: "./data0.sqlite"
 
@@ -60,6 +64,7 @@ listeners:
     use_jitter: false
 
 time_limits:
+  block_time: 3
   dkg_timeout_duration: 40
   randomness_task_exclusive_window: 10
   listener_interval_millis: 10000
@@ -84,9 +89,11 @@ time_limits:
 relayed_chains:
   - chain_id: 901
     description: "OP"
-    provider_endpoint: "http://127.0.0.1:9545"
+    provider_endpoint: "ws://127.0.0.1:9546"
     controller_oracle_address: "0xCf7Ed3AccA5a467e9e704C703E8D87F634fB0Fc9"
     adapter_address: "0x5FC8d32690cc91D4c39d9d3abcBD16989F875707"
+    adapter_deployed_block_height: 14224644
+    arpa_address: "0xA129BEA1a5d9E37Eb2C505c8D302231A28B0A82b"
     listeners:
       - l_type: Block
         interval_millis: 0
@@ -101,6 +108,7 @@ relayed_chains:
         interval_millis: 2000
         use_jitter: false
     time_limits:
+      block_time: 2
       randomness_task_exclusive_window: 10
       listener_interval_millis: 1000
       provider_polling_interval_millis: 1000

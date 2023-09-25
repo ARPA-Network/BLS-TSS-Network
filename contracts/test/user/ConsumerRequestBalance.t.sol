@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.18;
 
-import {GetRandomNumberExample} from "../../src/user/examples/GetRandomNumberExample.sol";
-import {GetShuffledArrayExample} from "../../src/user/examples/GetShuffledArrayExample.sol";
-import {RollDiceExample} from "../../src/user/examples/RollDiceExample.sol";
-import {AdvancedGetShuffledArrayExample} from "../../src/user/examples/AdvancedGetShuffledArrayExample.sol";
+import {GetRandomNumberExample} from "Randcast-User-Contract/user/examples/GetRandomNumberExample.sol";
+import {GetShuffledArrayExample} from "Randcast-User-Contract/user/examples/GetShuffledArrayExample.sol";
+import {RollDiceExample} from "Randcast-User-Contract/user/examples/RollDiceExample.sol";
+import {AdvancedGetShuffledArrayExample} from "Randcast-User-Contract/user/examples/AdvancedGetShuffledArrayExample.sol";
 import {
     IAdapter,
     Adapter,
@@ -32,7 +32,7 @@ contract ConsumerRequestBalanceTest is RandcastTestHelper {
     uint256 internal _dkgPostProcessReward = 100;
     uint256 internal _lastOutput = 2222222222222222;
 
-    uint16 internal _minimumRequestConfirmations = 3;
+    uint16 internal _minimumRequestConfirmations = 6;
     uint32 internal _maxGasLimit = 2000000;
     uint32 internal _gasAfterPaymentCalculation = 50000;
     uint32 internal _gasExceptCallback = 550000;
@@ -169,6 +169,8 @@ contract ConsumerRequestBalanceTest is RandcastTestHelper {
         uint256 expectedPayment = 1e9 * (uint256(_gasExceptCallback) + 501728);
 
         uint256 plentyOfEthBalance = 1e16;
+        // prepare subId 2 for _rollDiceExample
+        IAdapter(address(_adapter)).createSubscription();
         uint64 subId = _prepareSubscription(_user, address(_rollDiceExample), plentyOfEthBalance);
 
         uint32 bunch = 10;
@@ -214,6 +216,10 @@ contract ConsumerRequestBalanceTest is RandcastTestHelper {
         deal(_user, 1 * 1e18);
         // 350000 + 50000 * (5-3) + 550000 + 9000*5 = 1045000
         uint256 plentyOfEthBalance = 1050e12;
+        // prepare subId 4 for _advancedGetShuffledArrayExample
+        IAdapter(address(_adapter)).createSubscription();
+        IAdapter(address(_adapter)).createSubscription();
+        IAdapter(address(_adapter)).createSubscription();
         uint64 subId = _prepareSubscription(_user, address(_advancedGetShuffledArrayExample), plentyOfEthBalance);
 
         uint32 upper = 10;

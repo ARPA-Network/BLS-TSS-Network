@@ -1,6 +1,6 @@
 use async_trait::async_trait;
 use ethers_core::types::{Address, BlockNumber, U256};
-use ethers_providers::{Http, Provider, ProviderError};
+use ethers_providers::{Provider, ProviderError, Ws};
 use std::sync::Arc;
 
 mod types;
@@ -16,7 +16,7 @@ pub trait ChainIdentity {
 
     fn get_adapter_address(&self) -> Address;
 
-    fn get_provider(&self) -> Arc<Provider<Http>>;
+    fn get_provider(&self) -> Arc<Provider<Ws>>;
 
     fn get_signer(&self) -> Arc<WalletSigner>;
 

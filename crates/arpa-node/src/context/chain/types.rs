@@ -1,7 +1,7 @@
 use crate::{
     context::{
-        BLSTasksHandler, BlockInfoHandler, ChainIdentityHandler, ChainIdentityHandlerType,
-        ContextFetcher, GroupInfoHandler, NodeInfoHandler, SignatureResultCacheHandler,
+        BLSTasksHandler, BlockInfoHandler, ChainIdentityHandlerType, ContextFetcher,
+        GroupInfoHandler, NodeInfoHandler, SignatureResultCacheHandler,
     },
     listener::{
         block::BlockListener, new_randomness_task::NewRandomnessTaskListener,
@@ -19,11 +19,6 @@ use crate::{
         randomness_signature_aggregation::RandomnessSignatureAggregationSubscriber,
         ready_to_handle_randomness_task::ReadyToHandleRandomnessTaskSubscriber, Subscriber,
     },
-};
-use arpa_contract_client::ethers::{
-    adapter::AdapterClient, controller::ControllerClient,
-    controller_relayer::ControllerRelayerClient, coordinator::CoordinatorClient,
-    provider::ChainProvider,
 };
 use arpa_core::{
     ChainIdentity, GeneralMainChainIdentity, GeneralRelayedChainIdentity, ListenerDescriptor,
@@ -89,7 +84,9 @@ impl<
             id: chain_identity.get_chain_id(),
             description,
             chain_identity: Arc::new(RwLock::new(Box::new(chain_identity))),
-            block_cache: Arc::new(RwLock::new(Box::new(InMemoryBlockInfoCache::new()))),
+            block_cache: Arc::new(RwLock::new(Box::new(InMemoryBlockInfoCache::new(
+                time_limits.block_time,
+            )))),
             randomness_tasks_cache: Arc::new(RwLock::new(Box::new(randomness_tasks_cache))),
             committer_randomness_result_cache: Arc::new(RwLock::new(Box::new(
                 committer_randomness_result_cache,
@@ -128,16 +125,7 @@ where
 
     type RandomnessResultCaches = Box<dyn SignatureResultCacheHandler<RandomnessResultCache>>;
 
-    type ChainIdentity = Box<
-        dyn ChainIdentityHandler<
-            PC,
-            ControllerService = ControllerClient,
-            ControllerRelayerService = ControllerRelayerClient,
-            CoordinatorService = CoordinatorClient,
-            AdapterService = AdapterClient,
-            ProviderService = ChainProvider,
-        >,
-    >;
+    type ChainIdentity = ChainIdentityHandlerType<PC>;
 
     fn id(&self) -> usize {
         self.id
@@ -536,6 +524,7 @@ where
                 self.id(),
                 id_address,
                 self.get_chain_identity(),
+                self.get_block_cache(),
                 self.get_randomness_result_cache(),
                 context.get_event_queue(),
                 context.get_dynamic_task_handler(),
@@ -590,7 +579,9 @@ impl<
             id: chain_identity.get_chain_id(),
             description,
             chain_identity: Arc::new(RwLock::new(Box::new(chain_identity))),
-            block_cache: Arc::new(RwLock::new(Box::new(InMemoryBlockInfoCache::new()))),
+            block_cache: Arc::new(RwLock::new(Box::new(InMemoryBlockInfoCache::new(
+                time_limits.block_time,
+            )))),
             randomness_tasks_cache: Arc::new(RwLock::new(Box::new(randomness_tasks_cache))),
             committer_randomness_result_cache: Arc::new(RwLock::new(Box::new(
                 committer_randomness_result_cache,
@@ -629,16 +620,7 @@ where
 
     type RandomnessResultCaches = Box<dyn SignatureResultCacheHandler<RandomnessResultCache>>;
 
-    type ChainIdentity = Box<
-        dyn ChainIdentityHandler<
-            PC,
-            ControllerService = ControllerClient,
-            ControllerRelayerService = ControllerRelayerClient,
-            CoordinatorService = CoordinatorClient,
-            AdapterService = AdapterClient,
-            ProviderService = ChainProvider,
-        >,
-    >;
+    type ChainIdentity = ChainIdentityHandlerType<PC>;
 
     fn id(&self) -> usize {
         self.id
@@ -915,6 +897,7 @@ where
                 self.id(),
                 id_address,
                 self.get_chain_identity(),
+                self.get_block_cache(),
                 self.get_randomness_result_cache(),
                 context.get_event_queue(),
                 context.get_dynamic_task_handler(),

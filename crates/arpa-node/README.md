@@ -231,7 +231,7 @@ Configuration items in [`conf/config.yml`](conf/config.yml) are listed here:
 
 - node_management_rpc_token: Config token phrase for authenticaing management grpc requests by `authorization` header. (example: "arpa_network")
 
-- provider_endpoint: Config endpoint to interact with chain provider. (example: "http://127.0.0.1:8545")
+- provider_endpoint: Config websocket endpoint to interact with chain provider. (example: "ws://127.0.0.1:8546")
 
 - chain_id: Config chain id of main chain. (example: 31337)
 
@@ -240,6 +240,10 @@ Configuration items in [`conf/config.yml`](conf/config.yml) are listed here:
 - controller_relayer_address: Config ControllerRelayer contract address to relay groups to relayed chains. (example: "0x0000000000000000000000000000000000000001")
 
 - adapter_address: Config Adapter contract address to request and fulfill randomness task. (example: "0x0000000000000000000000000000000000000001")
+
+- adapter_deployed_block_height(Optional, used for ARPA Node CLI): Config the block height when adapter contract is deployed to accelerate the query of events. (example: 100000)
+
+- arpa_address(Optional, used for ARPA Node CLI): Config on-chain ARPA token contract address. (example: "0x9fe46736679d2d9a65f0992f2272de9f3c7fa6e0")
 
 - data_path(Optional): Config DB file for persistence. (example: "data.sqlite")
 
@@ -294,6 +298,7 @@ Configuration items in [`conf/config.yml`](conf/config.yml) are listed here:
   - example:
     ```
     time_limits:
+      block_time: 3
       dkg_timeout_duration: 40
       randomness_task_exclusive_window: 10
       listener_interval_millis: 10000
@@ -315,6 +320,7 @@ Configuration items in [`conf/config.yml`](conf/config.yml) are listed here:
         max_attempts: 5
         use_jitter: false
     ```
+  - block_time: Block time of the chain. This value is used to calculate the max pending time of a randomness task. (example: 3)
   - These values need to be set according to config of on-chain Controller contract.
 
     - dkg_timeout_duration: Block numbers between DKG start and timeout. (example: 40)
@@ -322,9 +328,9 @@ Configuration items in [`conf/config.yml`](conf/config.yml) are listed here:
 
   - These values can be set by node owner or administrator according to the rate limitation of the provider. Setting a small value would be to node's advantage in responding tasks. It's recommended to set a value no larger than the block time of the chain.
 
-    - listener_interval_millis: Milliseconds between two rounds of listeners. (example: 10000)
+    - listener_interval_millis: Milliseconds between two rounds of re-trying when a listener fails. (example: 10000)
     - dkg_wait_for_phase_interval_millis: Milliseconds between two rounds of polling for the next DKG phase. (example: 10000)
-    - provider_polling_interval_millis: Milliseconds between two rounds of polling events from provider. (example: 10000)
+    - provider_polling_interval_millis: Milliseconds between two rounds of polling pending transactions. (example: 10000)
 
   - We use exponential backoff to retry when an interaction fails. The interval will be an exponent of base multiplied by factor every time. The interval will be reset when the interaction succeeds.
 
@@ -379,9 +385,11 @@ Configuration items in [`conf/config.yml`](conf/config.yml) are listed here:
   relayed_chains:
   - chain_id: 901
     description: "OP"
-    provider_endpoint: "http://127.0.0.1:9545"
+    provider_endpoint: "ws://127.0.0.1:9546"
     controller_oracle_address: "0xCf7Ed3AccA5a467e9e704C703E8D87F634fB0Fc9"
     adapter_address: "0x5FC8d32690cc91D4c39d9d3abcBD16989F875707"
+    adapter_deployed_block_height: 14224644
+    arpa_address: "0xA129BEA1a5d9E37Eb2C505c8D302231A28B0A82b"
     listeners:
       - l_type: Block
         interval_millis: 0
@@ -396,6 +404,7 @@ Configuration items in [`conf/config.yml`](conf/config.yml) are listed here:
         interval_millis: 2000
         use_jitter: false
     time_limits:
+      block_time: 2
       randomness_task_exclusive_window: 10
       listener_interval_millis: 1000
       provider_polling_interval_millis: 1000

@@ -39,12 +39,17 @@ pub const DEFAULT_PROVIDER_POLLING_INTERVAL_MILLIS: u64 = 10000;
 
 pub const DEFAULT_DYNAMIC_TASK_CLEANER_INTERVAL_MILLIS: u64 = 1000;
 
-pub const FULFILL_RANDOMNESS_GAS_EXCEPT_CALLBACK: u32 = 650000;
+pub const FULFILL_RANDOMNESS_GAS_EXCEPT_CALLBACK: u32 = 670000;
 pub const RANDOMNESS_REWARD_GAS: u32 = 9000;
 pub const VERIFICATION_GAS_OVER_MINIMUM_THRESHOLD: u32 = 50000;
 pub const DEFAULT_MINIMUM_THRESHOLD: u32 = 3;
 
 pub const DEFAULT_ROLLING_LOG_FILE_SIZE: u64 = 10 * 1024 * 1024 * 1024;
+
+pub const DEFAULT_BLOCK_TIME: usize = 12;
+pub const DEFAULT_MAX_RANDOMNESS_FULFILLMENT_ATTEMPTS: usize = 3;
+
+pub const DEFAULT_WEBSOCKET_PROVIDER_RECONNECT_TIMES: usize = 1000000;
 
 pub fn jitter(duration: Duration) -> Duration {
     duration.mul_f64(thread_rng().gen_range(0.5..=1.0))
@@ -61,6 +66,8 @@ pub struct Config {
     pub controller_address: String,
     pub controller_relayer_address: String,
     pub adapter_address: String,
+    adapter_deployed_block_height: Option<u64>,
+    arpa_contract_address: Option<String>,
     // Data file for persistence
     pub data_path: Option<String>,
     pub account: Account,
@@ -82,6 +89,8 @@ impl Default for Config {
             controller_address: PLACEHOLDER_ADDRESS.to_string(),
             controller_relayer_address: PLACEHOLDER_ADDRESS.to_string(),
             adapter_address: PLACEHOLDER_ADDRESS.to_string(),
+            adapter_deployed_block_height: Some(0),
+            arpa_contract_address: None,
             data_path: None,
             account: Default::default(),
             listeners: Default::default(),
@@ -99,6 +108,8 @@ pub struct RelayedChain {
     pub provider_endpoint: String,
     pub controller_oracle_address: String,
     pub adapter_address: String,
+    adapter_deployed_block_height: Option<u64>,
+    arpa_contract_address: Option<String>,
     pub listeners: Option<Vec<ListenerDescriptor>>,
     pub time_limits: Option<TimeLimitDescriptor>,
 }
@@ -227,6 +238,7 @@ impl ListenerDescriptor {
 
 #[derive(Debug, Copy, Clone, Serialize, Deserialize)]
 pub struct TimeLimitDescriptor {
+    pub block_time: usize,
     pub listener_interval_millis: u64,
     pub dkg_wait_for_phase_interval_millis: Option<u64>,
     pub dkg_timeout_duration: Option<usize>,
@@ -295,6 +307,10 @@ impl Config {
             self.listeners = Some(listeners);
         }
 
+        if self.adapter_deployed_block_height.is_none() {
+            self.adapter_deployed_block_height = Some(0);
+        }
+
         match self.time_limits.as_mut() {
             Some(time_limits) if time_limits.listener_interval_millis == 0 => {
                 time_limits.listener_interval_millis = DEFAULT_LISTENER_INTERVAL_MILLIS;
@@ -323,6 +339,7 @@ impl Config {
             Some(_) => {}
             None => {
                 self.time_limits = Some(TimeLimitDescriptor {
+                    block_time: DEFAULT_BLOCK_TIME,
                     listener_interval_millis: DEFAULT_LISTENER_INTERVAL_MILLIS,
                     dkg_wait_for_phase_interval_millis: Some(
                         DEFAULT_DKG_WAIT_FOR_PHASE_INTERVAL_MILLIS,
@@ -358,10 +375,115 @@ impl Config {
 
         self
     }
+
+    pub fn main_chain_id(&self) -> usize {
+        self.chain_id
+    }
+
+    pub fn relayed_chain_ids(&self) -> Vec<usize> {
+        self.relayed_chains.iter().map(|c| c.chain_id).collect()
+    }
+
+    pub fn provider_endpoint(&self, chain_id: usize) -> anyhow::Result<String> {
+        if chain_id == self.chain_id {
+            Ok(self.provider_endpoint.clone())
+        } else {
+            self.relayed_chains
+                .iter()
+                .find(|c| c.chain_id == chain_id)
+                .map(|c| c.provider_endpoint.clone())
+                .ok_or_else(|| ConfigError::InvalidChainId(chain_id).into())
+        }
+    }
+
+    pub fn account(&self) -> Result<Wallet<SigningKey>, ConfigError> {
+        build_wallet_from_config(&self.account)
+    }
+
+    pub fn arpa_address(&self, chain_id: usize) -> anyhow::Result<Address> {
+        if chain_id == self.chain_id {
+            self.arpa_contract_address
+                .as_ref()
+                .map(|a| a.parse().unwrap())
+                .ok_or(ConfigError::LackOfARPAContractAddress.into())
+        } else {
+            self.relayed_chains
+                .iter()
+                .find(|c| c.chain_id == chain_id)
+                .map(|c| {
+                    c.arpa_contract_address
+                        .as_ref()
+                        .map(|a| a.parse().unwrap())
+                        .ok_or(ConfigError::LackOfARPAContractAddress.into())
+                })
+                .unwrap_or_else(|| Err(ConfigError::InvalidChainId(chain_id).into()))
+        }
+    }
+
+    pub fn adapter_address(&self, chain_id: usize) -> anyhow::Result<Address> {
+        if chain_id == self.chain_id {
+            Ok(self.adapter_address.parse().unwrap())
+        } else {
+            self.relayed_chains
+                .iter()
+                .find(|c| c.chain_id == chain_id)
+                .map(|c| c.adapter_address.parse().unwrap())
+                .ok_or_else(|| ConfigError::InvalidChainId(chain_id).into())
+        }
+    }
+
+    pub fn adapter_deployed_block_height(&self, chain_id: usize) -> anyhow::Result<u64> {
+        if chain_id == self.chain_id {
+            Ok(self.adapter_deployed_block_height.unwrap())
+        } else {
+            self.relayed_chains
+                .iter()
+                .find(|c| c.chain_id == chain_id)
+                .map(|c| c.adapter_deployed_block_height.unwrap())
+                .ok_or_else(|| ConfigError::InvalidChainId(chain_id).into())
+        }
+    }
+
+    pub fn contract_transaction_retry_descriptor(
+        &self,
+        chain_id: usize,
+    ) -> anyhow::Result<ExponentialBackoffRetryDescriptor> {
+        if chain_id == self.chain_id {
+            Ok(self
+                .time_limits
+                .unwrap()
+                .contract_transaction_retry_descriptor)
+        } else {
+            self.relayed_chains
+                .iter()
+                .find(|c| c.chain_id == chain_id)
+                .map(|c| c.time_limits.unwrap().contract_transaction_retry_descriptor)
+                .ok_or_else(|| ConfigError::InvalidChainId(chain_id).into())
+        }
+    }
+
+    pub fn contract_view_retry_descriptor(
+        &self,
+        chain_id: usize,
+    ) -> anyhow::Result<ExponentialBackoffRetryDescriptor> {
+        if chain_id == self.chain_id {
+            Ok(self.time_limits.unwrap().contract_view_retry_descriptor)
+        } else {
+            self.relayed_chains
+                .iter()
+                .find(|c| c.chain_id == chain_id)
+                .map(|c| c.time_limits.unwrap().contract_view_retry_descriptor)
+                .ok_or_else(|| ConfigError::InvalidChainId(chain_id).into())
+        }
+    }
 }
 
 impl RelayedChain {
     pub fn initialize(&mut self) {
+        if self.adapter_deployed_block_height.is_none() {
+            self.adapter_deployed_block_height = Some(0);
+        }
+
         if self.listeners.is_none() {
             let listeners = vec![
                 ListenerDescriptor::default(ListenerType::Block),
@@ -387,6 +509,7 @@ impl RelayedChain {
             Some(_) => {}
             None => {
                 self.time_limits = Some(TimeLimitDescriptor {
+                    block_time: DEFAULT_BLOCK_TIME,
                     listener_interval_millis: DEFAULT_LISTENER_INTERVAL_MILLIS,
                     dkg_wait_for_phase_interval_millis: None,
                     dkg_timeout_duration: None,

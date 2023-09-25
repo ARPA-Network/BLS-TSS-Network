@@ -9,9 +9,9 @@ threshold-bls = { path = "../threshold-bls", default-features = false, features 
     "bn254",
 ] }
 
+ethers-providers = { workspace = true, features = ["rustls", "ws"] }
 ethers-core.workspace = true
 ethers-signers.workspace = true
-ethers-providers.workspace = true
 ethers-middleware.workspace = true
 thiserror = "1.0.15"
 serde = "1.0.106"

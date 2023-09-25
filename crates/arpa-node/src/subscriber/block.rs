@@ -12,7 +12,7 @@ use tokio::sync::RwLock;
 
 #[derive(Debug)]
 pub struct BlockSubscriber {
-    pub chain_id: usize,
+    chain_id: usize,
     block_cache: Arc<RwLock<Box<dyn BlockInfoHandler>>>,
     eq: Arc<RwLock<EventQueue>>,
 }

@@ -1,4 +1,4 @@
-use arpa_core::WalletSigner;
+use arpa_core::{HttpWalletSigner, WalletSigner};
 use ethers::providers::Http as HttpProvider;
 use ethers::{
     prelude::{signer::SignerMiddlewareError, ContractError, ProviderError},
@@ -20,6 +20,8 @@ pub enum ContractClientError {
     ChainProviderError(#[from] ProviderError),
     #[error(transparent)]
     ContractError(#[from] ContractError<WalletSigner>),
+    #[error(transparent)]
+    HttpContractError(#[from] ContractError<HttpWalletSigner>),
     #[error(transparent)]
     SignerError(#[from] SignerMiddlewareError<Provider<HttpProvider>, LocalWallet>),
     #[error(transparent)]

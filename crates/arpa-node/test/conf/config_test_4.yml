@@ -4,7 +4,7 @@ node_management_rpc_endpoint: "[::1]:50094"
 
 node_management_rpc_token: "for_test"
 
-provider_endpoint: "http://127.0.0.1:8545"
+provider_endpoint: "ws://127.0.0.1:8546"
 
 chain_id: 900
 
@@ -49,6 +49,7 @@ listeners:
     use_jitter: false
 
 time_limits:
+  block_time: 3
   dkg_timeout_duration: 40
   randomness_task_exclusive_window: 10
   listener_interval_millis: 1000
@@ -73,7 +74,7 @@ time_limits:
 relayed_chains:
   - chain_id: 901
     description: "OP"
-    provider_endpoint: "http://127.0.0.1:9545"
+    provider_endpoint: "ws://127.0.0.1:9546"
     controller_oracle_address: "0xCf7Ed3AccA5a467e9e704C703E8D87F634fB0Fc9"
     adapter_address: "0x5FC8d32690cc91D4c39d9d3abcBD16989F875707"
     listeners:
@@ -90,6 +91,7 @@ relayed_chains:
         interval_millis: 2000
         use_jitter: false
     time_limits:
+      block_time: 2
       randomness_task_exclusive_window: 10
       listener_interval_millis: 1000
       provider_polling_interval_millis: 1000

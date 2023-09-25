@@ -3,3 +3,4 @@ forge-std/=lib/forge-std/src/
 openzeppelin-contracts/=lib/openzeppelin-contracts/
 openzeppelin-contracts-upgradeable/=lib/openzeppelin-contracts-upgradeable/
 Staking-v0.1/=lib/Staking-v0.1/src/
+Randcast-User-Contract/=lib/Randcast-User-Contract/contracts/

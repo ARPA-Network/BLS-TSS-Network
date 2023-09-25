@@ -33,9 +33,6 @@ pub enum NodeError {
     #[error("the block_number: {0} is invalid")]
     InvalidBlockNumber(usize),
 
-    #[error("the chain id: {0} is not supported in the group")]
-    InvalidChainId(usize),
-
     #[error("the message of the task is different from the committer")]
     InvalidTaskMessage,
 

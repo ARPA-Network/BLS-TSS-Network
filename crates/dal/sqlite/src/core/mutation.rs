@@ -215,6 +215,7 @@ impl RandomnessResultMutation {
             partial_signatures: Set(
                 serde_json::to_string(&BTreeMap::<Address, Vec<u8>>::new()).unwrap()
             ),
+            committed_times: Set(0),
             create_at: Set(format_now_date()),
             update_at: Set(format_now_date()),
             state: Set(BLSResultCacheState::NotCommitted.to_i32()),
@@ -256,6 +257,17 @@ impl RandomnessResultMutation {
 
         randomness_result.update_at = Set(format_now_date());
 
+        randomness_result.update(db).await
+    }
+
+    pub async fn incr_committed_times(
+        db: &DbConn,
+        model: randomness_result::Model,
+    ) -> Result<randomness_result::Model, DbErr> {
+        let committed_times = model.committed_times + 1;
+        let mut randomness_result: randomness_result::ActiveModel = model.into();
+        randomness_result.committed_times = Set(committed_times);
+        randomness_result.update_at = Set(format_now_date());
         randomness_result.update(db).await
     }
 }
@@ -332,6 +344,7 @@ impl OPRandomnessResultMutation {
             partial_signatures: Set(
                 serde_json::to_string(&BTreeMap::<Address, Vec<u8>>::new()).unwrap()
             ),
+            committed_times: Set(0),
             create_at: Set(format_now_date()),
             update_at: Set(format_now_date()),
             state: Set(BLSResultCacheState::NotCommitted.to_i32()),
@@ -373,6 +386,17 @@ impl OPRandomnessResultMutation {
 
         randomness_result.update_at = Set(format_now_date());
 
+        randomness_result.update(db).await
+    }
+
+    pub async fn incr_committed_times(
+        db: &DbConn,
+        model: op_randomness_result::Model,
+    ) -> Result<op_randomness_result::Model, DbErr> {
+        let committed_times = model.committed_times + 1;
+        let mut randomness_result: op_randomness_result::ActiveModel = model.into();
+        randomness_result.committed_times = Set(committed_times);
+        randomness_result.update_at = Set(format_now_date());
         randomness_result.update(db).await
     }
 }

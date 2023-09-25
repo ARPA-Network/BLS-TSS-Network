@@ -3,6 +3,7 @@ use arpa_core::log::encoder::JsonEncoder;
 use arpa_core::Config;
 use arpa_core::GeneralMainChainIdentity;
 use arpa_core::GeneralRelayedChainIdentity;
+use arpa_core::DEFAULT_WEBSOCKET_PROVIDER_RECONNECT_TIMES;
 use arpa_core::{build_wallet_from_config, RandomnessTask};
 use arpa_dal::{NodeInfoFetcher, NodeInfoUpdater};
 use arpa_node::context::chain::types::GeneralMainChain;
@@ -12,6 +13,8 @@ use arpa_node::context::GroupInfoHandler;
 use arpa_node::context::NodeInfoHandler;
 use arpa_node::context::{Context, TaskWaiter};
 use arpa_sqlite_db::SqliteDB;
+use ethers::providers::Provider;
+use ethers::providers::Ws;
 use ethers::signers::Signer;
 use log::{info, LevelFilter};
 use log4rs::append::console::ConsoleAppender;
@@ -24,6 +27,7 @@ use log4rs::filter::threshold::ThresholdFilter;
 use log4rs::Config as LogConfig;
 use std::path::PathBuf;
 use std::sync::Arc;
+use std::time::Duration;
 use structopt::StructOpt;
 use threshold_bls::schemes::bn254::G2Curve;
 use threshold_bls::schemes::bn254::G2Scheme;
@@ -165,7 +169,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             panic!("It seems there is no existing node record. Please check the database or remove it.");
         }
 
-        assert_eq!(node_cache.get_id_address()?, id_address,"Node identity is different from the database, please check config or remove the existed database.");
+        assert_eq!(node_cache.get_id_address()?, id_address,
+        "Node identity is different from the database, please check config or remove the existed database.");
 
         // update committer rpc endpoint according to config
         node_cache
@@ -190,11 +195,21 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let randomness_result_cache = db.get_randomness_result_client().await?;
 
+    let provider = Arc::new(
+        Provider::<Ws>::connect_with_reconnects(
+            config.provider_endpoint.clone(),
+            DEFAULT_WEBSOCKET_PROVIDER_RECONNECT_TIMES,
+        )
+        .await?
+        .interval(Duration::from_millis(
+            config.time_limits.unwrap().provider_polling_interval_millis,
+        )),
+    );
+
     let main_chain_identity = GeneralMainChainIdentity::new(
         config.chain_id,
         wallet.clone(),
-        config.provider_endpoint.clone(),
-        config.time_limits.unwrap().provider_polling_interval_millis,
+        provider,
         config
             .controller_address
             .parse()
@@ -230,14 +245,24 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut context = GeneralContext::new(main_chain, config);
 
     for relayed_chain_config in relayed_chains_config {
+        let provider = Arc::new(
+            Provider::<Ws>::connect_with_reconnects(
+                relayed_chain_config.provider_endpoint.clone(),
+                DEFAULT_WEBSOCKET_PROVIDER_RECONNECT_TIMES,
+            )
+            .await?
+            .interval(Duration::from_millis(
+                relayed_chain_config
+                    .time_limits
+                    .unwrap()
+                    .provider_polling_interval_millis,
+            )),
+        );
+
         let relayed_chain_identity = GeneralRelayedChainIdentity::new(
             relayed_chain_config.chain_id,
             wallet.clone(),
-            relayed_chain_config.provider_endpoint.clone(),
-            relayed_chain_config
-                .time_limits
-                .unwrap()
-                .provider_polling_interval_millis,
+            provider,
             relayed_chain_config
                 .controller_oracle_address
                 .parse()

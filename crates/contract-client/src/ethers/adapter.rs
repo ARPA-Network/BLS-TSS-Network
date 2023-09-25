@@ -1,9 +1,8 @@
 use crate::{
     adapter::{AdapterClientBuilder, AdapterLogs, AdapterTransactions, AdapterViews},
-    contract_stub::{
-        adapter::{Adapter, RandomnessRequestFilter},
-        i_controller::RequestDetail,
-        shared_types::PartialSignature as ContractPartialSignature,
+    contract_stub::adapter::{
+        Adapter, PartialSignature as ContractPartialSignature, RandomnessRequestFilter,
+        RequestDetail,
     },
     error::{ContractClientError, ContractClientResult},
     ServiceClient, TransactionCaller, ViewCaller,
@@ -214,8 +213,7 @@ impl AdapterLogs for AdapterClient {
             .event::<RandomnessRequestFilter>()
             .from_block(BlockNumber::Latest);
 
-        // turn the stream into a stream of events
-        let mut stream = events.stream().await?.with_meta();
+        let mut stream = events.subscribe().await?.with_meta();
 
         while let Some(Ok(evt)) = stream.next().await {
             let (
