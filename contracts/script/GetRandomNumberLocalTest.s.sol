@@ -10,7 +10,7 @@ contract GetRandomNumberLocalTestScript is Script {
         GetRandomNumberExample getRandomNumberExample;
         IAdapter adapter;
 
-        uint256 plentyOfEthBalance = vm.envUint("PLENTY_OF_ETH_BALANCE");
+        uint256 plentyOfEthBalance = vm.envUint("L1_MIN_SUB_FUND_ETH_BAL");
         address adapterAddress = vm.envAddress("ADAPTER_ADDRESS");
         uint256 userPrivateKey = vm.envUint("USER_PRIVATE_KEY");
 

@@ -160,4 +160,6 @@ docker run foundry "cast block --rpc-url $RPC_URL latest"
 # Cleanup Docker images
 docker kill $(docker ps -q)
 docker rm $(docker ps -a -q)
+docker kill $(docker ps -q -f ancestor=arpachainio/node:latest) # kill node containers
+
 ```
