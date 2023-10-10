@@ -57,14 +57,14 @@ jobs:
         id: meta
         uses: docker/metadata-action@v4
         with:
-          images: ${{ env.REGISTRY }}/${{ OWNER_LC }}/${{ env.NODE_CLIENT_IMAGE_NAME }}
+          images: ${{ env.REGISTRY }}/${{ env.OWNER_LC }}/${{ env.NODE_CLIENT_IMAGE_NAME }}
 
       # Creates an additional nightly-{SHA} tag
       - name: Finalize Docker Metadata
         id: docker_tagging
         run: |
           echo "trigger from main branch, assigning latest tag"
-          echo "docker_tags=${{ env.REGISTRY }}/${{ OWNER_LC }}/${{ env.NODE_CLIENT_IMAGE_NAME }}:nightly-${GITHUB_SHA},${{ env.REGISTRY }}/${{ OWNER_LC }}/${{ env.NODE_CLIENT_IMAGE_NAME }}:latest" >> $GITHUB_OUTPUT
+          echo "docker_tags=${{ env.REGISTRY }}/${{ env.OWNER_LC }}/${{ env.NODE_CLIENT_IMAGE_NAME }}:nightly-${GITHUB_SHA},${{ env.REGISTRY }}/${{ env.OWNER_LC }}/${{ env.NODE_CLIENT_IMAGE_NAME }}:latest" >> $GITHUB_OUTPUT
 
       # Log docker metadata to explicitly know what is being pushed
       - name: Inspect Docker Metadata
@@ -131,14 +131,14 @@ jobs:
         id: meta
         uses: docker/metadata-action@v4
         with:
-          images: ${{ env.REGISTRY }}/${{ OWNER_LC }}/${{ env.NODE_SHELL_IMAGE_NAME }}
+          images: ${{ env.REGISTRY }}/${{ env.OWNER_LC }}/${{ env.NODE_SHELL_IMAGE_NAME }}
 
       # Creates an additional nightly-{SHA} tag
       - name: Finalize Docker Metadata
         id: docker_tagging
         run: |
           echo "trigger from main branch, assigning latest tag"
-          echo "docker_tags=${{ env.REGISTRY }}/${{ OWNER_LC }}/${{ env.NODE_SHELL_IMAGE_NAME }}:nightly-${GITHUB_SHA},${{ env.REGISTRY }}/${{ OWNER_LC }}/${{ env.NODE_SHELL_IMAGE_NAME }}:latest" >> $GITHUB_OUTPUT
+          echo "docker_tags=${{ env.REGISTRY }}/${{ env.OWNER_LC }}/${{ env.NODE_SHELL_IMAGE_NAME }}:nightly-${GITHUB_SHA},${{ env.REGISTRY }}/${{ env.OWNER_LC }}/${{ env.NODE_SHELL_IMAGE_NAME }}:latest" >> $GITHUB_OUTPUT
 
       # Log docker metadata to explicitly know what is being pushed
       - name: Inspect Docker Metadata
@@ -205,14 +205,14 @@ jobs:
         id: meta
         uses: docker/metadata-action@v4
         with:
-          images: ${{ env.REGISTRY }}/${{ OWNER_LC }}/${{ env.USER_SHELL_IMAGE_NAME }}
+          images: ${{ env.REGISTRY }}/${{ env.OWNER_LC }}/${{ env.USER_SHELL_IMAGE_NAME }}
 
       # Creates an additional nightly-{SHA} tag
       - name: Finalize Docker Metadata
         id: docker_tagging
         run: |
           echo "trigger from main branch, assigning latest tag"
-          echo "docker_tags=${{ env.REGISTRY }}/${{ OWNER_LC }}/${{ env.USER_SHELL_IMAGE_NAME }}:nightly-${GITHUB_SHA},${{ env.REGISTRY }}/${{ OWNER_LC }}/${{ env.USER_SHELL_IMAGE_NAME }}:latest" >> $GITHUB_OUTPUT
+          echo "docker_tags=${{ env.REGISTRY }}/${{ env.OWNER_LC }}/${{ env.USER_SHELL_IMAGE_NAME }}:nightly-${GITHUB_SHA},${{ env.REGISTRY }}/${{ env.OWNER_LC }}/${{ env.USER_SHELL_IMAGE_NAME }}:latest" >> $GITHUB_OUTPUT
 
       # Log docker metadata to explicitly know what is being pushed
       - name: Inspect Docker Metadata
