@@ -18,12 +18,12 @@ COPY . .
 RUN source $HOME/.profile && cargo build --release
 
 ####### Final Stage ########
-FROM ghcr.io/foundry-rs/foundry:latest
+FROM docker.io/frolvlad/alpine-glibc:alpine-3.16_glibc-2.34
 
 # Create a directory for the external config.yml file
 RUN mkdir -p /data
 
 # Copy files from builder stage
-COPY --from=builder /app/target/release/user-shell /usr/local/bin/user-shell
+COPY --from=builder /app/target/release/node-shell /usr/local/bin/node-shell
 
 ENTRYPOINT ["/bin/sh", "-c"]
