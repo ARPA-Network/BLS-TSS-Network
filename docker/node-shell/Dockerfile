@@ -17,24 +17,13 @@ ENV CARGO_NET_GIT_FETCH_WITH_CLI=true
 COPY . .
 RUN source $HOME/.profile && cargo build --release
 
-##########################################################
-# Final stage
+####### Final Stage ########
 FROM docker.io/frolvlad/alpine-glibc:alpine-3.16_glibc-2.34
 
-RUN apk add supervisor
-
 # Create a directory for the external config.yml file
-RUN mkdir -p /app/external
+RUN mkdir -p /data
 
-# Copy the built binary from the builder stage
-COPY --from=builder /app/target/release/node-client /app/node-client
+# Copy files from builder stage
+COPY --from=builder /app/target/release/node-shell /usr/local/bin/node-shell
 
-# Copy supervisord configuration file
-COPY docker/node-client/supervisord.conf /etc/supervisor/conf.d/supervisord.conf
-
-# Copy entrypoint.sh script
-COPY docker/node-client/entrypoint.sh /app/
-RUN chmod +x /app/entrypoint.sh
-
-ENTRYPOINT ["/app/entrypoint.sh"]
-# ENTRYPOINT ["tail", "-f", "/dev/null"]
+ENTRYPOINT ["/bin/sh", "-c"]
