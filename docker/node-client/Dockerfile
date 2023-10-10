@@ -30,10 +30,10 @@ RUN mkdir -p /app/external
 COPY --from=builder /app/target/release/node-client /app/node-client
 
 # Copy supervisord configuration file
-COPY docker/supervisord.conf /etc/supervisor/conf.d/supervisord.conf
+COPY docker/node-client/supervisord.conf /etc/supervisor/conf.d/supervisord.conf
 
 # Copy entrypoint.sh script
-COPY docker/entrypoint.sh /app/
+COPY docker/node-client/entrypoint.sh /app/
 RUN chmod +x /app/entrypoint.sh
 
 ENTRYPOINT ["/app/entrypoint.sh"]
