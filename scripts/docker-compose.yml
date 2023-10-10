@@ -1,0 +1,38 @@
+version: '3'
+services:
+  node1:
+    image: arpachainio/node:latest
+    container_name: node1
+    volumes:
+      - "${PWD}/arpa-node/config_1.yml:/usr/src/app/external/config.yml"
+    ports:
+      - "50061:50061"
+      - "50091:50091"
+    restart: unless-stopped
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+  node2:
+    image: arpachainio/node:latest
+    container_name: node2
+    volumes:
+      - "${PWD}/arpa-node/config_2.yml:/usr/src/app/external/config.yml"
+    ports:
+      - "50062:50061"
+      - "50092:50091"
+    restart: unless-stopped
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+
+  node3:
+    image: arpachainio/node:latest
+    container_name: node3
+    volumes:
+      - "${PWD}/arpa-node/config_3.yml:/usr/src/app/external/config.yml"
+    ports:
+      - "50063:50061"
+      - "50093:50091"
+    restart: unless-stopped
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
