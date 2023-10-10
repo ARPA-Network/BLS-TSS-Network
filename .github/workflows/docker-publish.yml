@@ -34,6 +34,12 @@ jobs:
         with:
           install: true
 
+      - name: set lower case owner name
+        run: |
+          echo "OWNER_LC=${OWNER,,}" >>${GITHUB_ENV}
+        env:
+          OWNER: "${{ github.repository_owner }}"
+
       # Login against a Docker registry except on PR
       # https://github.com/docker/login-action
       - name: Log into registry ${{ env.REGISTRY }}
@@ -51,14 +57,14 @@ jobs:
         id: meta
         uses: docker/metadata-action@v4
         with:
-          images: ${{ env.REGISTRY }}/${{ github.repository_owner }}/${{ env.NODE_CLIENT_IMAGE_NAME }}
+          images: ${{ env.REGISTRY }}/${{ OWNER_LC }}/${{ env.NODE_CLIENT_IMAGE_NAME }}
 
       # Creates an additional nightly-{SHA} tag
       - name: Finalize Docker Metadata
         id: docker_tagging
         run: |
           echo "trigger from main branch, assigning latest tag"
-          echo "docker_tags=${{ env.REGISTRY }}/${{ github.repository_owner }}/${{ env.NODE_CLIENT_IMAGE_NAME }}:nightly-${GITHUB_SHA},${{ env.REGISTRY }}/${{ github.repository_owner }}/${{ env.NODE_CLIENT_IMAGE_NAME }}:latest" >> $GITHUB_OUTPUT
+          echo "docker_tags=${{ env.REGISTRY }}/${{ OWNER_LC }}/${{ env.NODE_CLIENT_IMAGE_NAME }}:nightly-${GITHUB_SHA},${{ env.REGISTRY }}/${{ OWNER_LC }}/${{ env.NODE_CLIENT_IMAGE_NAME }}:latest" >> $GITHUB_OUTPUT
 
       # Log docker metadata to explicitly know what is being pushed
       - name: Inspect Docker Metadata
@@ -102,6 +108,12 @@ jobs:
         with:
           install: true
 
+      - name: set lower case owner name
+        run: |
+          echo "OWNER_LC=${OWNER,,}" >>${GITHUB_ENV}
+        env:
+          OWNER: "${{ github.repository_owner }}"
+
       # Login against a Docker registry except on PR
       # https://github.com/docker/login-action
       - name: Log into registry ${{ env.REGISTRY }}
@@ -119,14 +131,14 @@ jobs:
         id: meta
         uses: docker/metadata-action@v4
         with:
-          images: ${{ env.REGISTRY }}/${{ github.repository_owner }}/${{ env.NODE_SHELL_IMAGE_NAME }}
+          images: ${{ env.REGISTRY }}/${{ OWNER_LC }}/${{ env.NODE_SHELL_IMAGE_NAME }}
 
       # Creates an additional nightly-{SHA} tag
       - name: Finalize Docker Metadata
         id: docker_tagging
         run: |
           echo "trigger from main branch, assigning latest tag"
-          echo "docker_tags=${{ env.REGISTRY }}/${{ github.repository_owner }}/${{ env.NODE_SHELL_IMAGE_NAME }}:nightly-${GITHUB_SHA},${{ env.REGISTRY }}/${{ github.repository_owner }}/${{ env.NODE_SHELL_IMAGE_NAME }}:latest" >> $GITHUB_OUTPUT
+          echo "docker_tags=${{ env.REGISTRY }}/${{ OWNER_LC }}/${{ env.NODE_SHELL_IMAGE_NAME }}:nightly-${GITHUB_SHA},${{ env.REGISTRY }}/${{ OWNER_LC }}/${{ env.NODE_SHELL_IMAGE_NAME }}:latest" >> $GITHUB_OUTPUT
 
       # Log docker metadata to explicitly know what is being pushed
       - name: Inspect Docker Metadata
@@ -170,6 +182,12 @@ jobs:
         with:
           install: true
 
+      - name: set lower case owner name
+        run: |
+          echo "OWNER_LC=${OWNER,,}" >>${GITHUB_ENV}
+        env:
+          OWNER: "${{ github.repository_owner }}"
+
       # Login against a Docker registry except on PR
       # https://github.com/docker/login-action
       - name: Log into registry ${{ env.REGISTRY }}
@@ -187,14 +205,14 @@ jobs:
         id: meta
         uses: docker/metadata-action@v4
         with:
-          images: ${{ env.REGISTRY }}/${{ github.repository_owner }}/${{ env.USER_SHELL_IMAGE_NAME }}
+          images: ${{ env.REGISTRY }}/${{ OWNER_LC }}/${{ env.USER_SHELL_IMAGE_NAME }}
 
       # Creates an additional nightly-{SHA} tag
       - name: Finalize Docker Metadata
         id: docker_tagging
         run: |
           echo "trigger from main branch, assigning latest tag"
-          echo "docker_tags=${{ env.REGISTRY }}/${{ github.repository_owner }}/${{ env.USER_SHELL_IMAGE_NAME }}:nightly-${GITHUB_SHA},${{ env.REGISTRY }}/${{ github.repository_owner }}/${{ env.USER_SHELL_IMAGE_NAME }}:latest" >> $GITHUB_OUTPUT
+          echo "docker_tags=${{ env.REGISTRY }}/${{ OWNER_LC }}/${{ env.USER_SHELL_IMAGE_NAME }}:nightly-${GITHUB_SHA},${{ env.REGISTRY }}/${{ OWNER_LC }}/${{ env.USER_SHELL_IMAGE_NAME }}:latest" >> $GITHUB_OUTPUT
 
       # Log docker metadata to explicitly know what is being pushed
       - name: Inspect Docker Metadata
