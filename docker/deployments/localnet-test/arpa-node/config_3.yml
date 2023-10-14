@@ -46,6 +46,10 @@ time_limits:
   listener_interval_millis: 1000
   dkg_wait_for_phase_interval_millis: 1000
   provider_polling_interval_millis: 1000
+  provider_reset_descriptor:
+    interval_millis: 5000
+    max_attempts: 17280
+    use_jitter: false
   contract_transaction_retry_descriptor:
     base: 2
     factor: 1000
