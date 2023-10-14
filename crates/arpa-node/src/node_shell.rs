@@ -1494,6 +1494,7 @@ async fn main() -> anyhow::Result<()> {
         config.chain_id,
         wallet.clone().with_chain_id(config.chain_id as u64),
         provider,
+        config.provider_endpoint.clone(),
         config
             .controller_address
             .parse()
@@ -1536,6 +1537,7 @@ async fn main() -> anyhow::Result<()> {
             relayed_chain.chain_id,
             wallet.clone().with_chain_id(relayed_chain.chain_id as u64),
             provider,
+            relayed_chain.provider_endpoint.clone(),
             relayed_chain
                 .controller_oracle_address
                 .parse()

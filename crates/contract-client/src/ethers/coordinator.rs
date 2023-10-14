@@ -331,6 +331,7 @@ pub mod coordinator_tests {
             anvil.chain_id() as usize,
             wallet,
             provider,
+            anvil.ws_endpoint(),
             Address::random(),
             Address::random(),
             Address::random(),

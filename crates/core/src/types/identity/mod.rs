@@ -16,8 +16,6 @@ pub trait ChainIdentity {
 
     fn get_adapter_address(&self) -> Address;
 
-    fn get_provider(&self) -> Arc<Provider<Ws>>;
-
     fn get_signer(&self) -> Arc<WalletSigner>;
 
     fn get_contract_transaction_retry_descriptor(&self) -> ExponentialBackoffRetryDescriptor;
@@ -40,4 +38,13 @@ pub trait MainChainIdentity: ChainIdentity {
 
 pub trait RelayedChainIdentity: ChainIdentity {
     fn get_controller_oracle_address(&self) -> Address;
+}
+
+#[async_trait]
+pub trait ChainProviderManager {
+    fn get_provider(&self) -> &Provider<Ws>;
+
+    fn get_provider_endpoint(&self) -> &str;
+
+    async fn reset_provider(&mut self) -> Result<(), ProviderError>;
 }

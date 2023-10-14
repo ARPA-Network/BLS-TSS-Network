@@ -81,4 +81,10 @@ impl<PC: Curve + Sync + Send> Listener for PostGroupingListener<PC> {
 
         Ok(())
     }
+
+    async fn handle_interruption(&self) -> NodeResult<()> {
+        info!("Handle interruption for PostGroupingListener");
+
+        Ok(())
+    }
 }

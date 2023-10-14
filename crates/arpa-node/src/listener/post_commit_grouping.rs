@@ -8,6 +8,8 @@ use crate::{
 use arpa_contract_client::controller::ControllerViews;
 use arpa_core::DKGStatus;
 use async_trait::async_trait;
+use ethers::providers::Middleware;
+use log::info;
 use std::{marker::PhantomData, sync::Arc};
 use threshold_bls::group::Curve;
 use tokio::sync::RwLock;
@@ -59,6 +61,18 @@ impl<PC: Curve + Sync + Send + 'static> Listener for PostCommitGroupingListener<
                 }
             }
         }
+
+        Ok(())
+    }
+
+    async fn handle_interruption(&self) -> NodeResult<()> {
+        info!("Handle interruption for PostCommitGroupingListener");
+        self.chain_identity
+            .read()
+            .await
+            .get_provider()
+            .get_net_version()
+            .await?;
 
         Ok(())
     }

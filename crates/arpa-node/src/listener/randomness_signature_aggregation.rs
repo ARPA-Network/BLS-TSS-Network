@@ -8,6 +8,7 @@ use crate::{
 use arpa_dal::cache::RandomnessResultCache;
 use async_trait::async_trait;
 use ethers::types::Address;
+use log::info;
 use std::{marker::PhantomData, sync::Arc};
 use threshold_bls::group::Curve;
 use tokio::sync::RwLock;
@@ -78,6 +79,15 @@ impl<PC: Curve + Sync + Send> Listener for RandomnessSignatureAggregationListene
                 .await;
             }
         }
+
+        Ok(())
+    }
+
+    async fn handle_interruption(&self) -> NodeResult<()> {
+        info!(
+            "Handle interruption for RandomnessSignatureAggregationListener, chain_id:{}.",
+            self.chain_id
+        );
 
         Ok(())
     }

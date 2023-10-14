@@ -35,6 +35,10 @@ pub const DEFAULT_CONTRACT_VIEW_RETRY_FACTOR: u64 = 500;
 pub const DEFAULT_CONTRACT_VIEW_RETRY_MAX_ATTEMPTS: usize = 3;
 pub const DEFAULT_CONTRACT_VIEW_RETRY_USE_JITTER: bool = true;
 
+pub const DEFAULT_PROVIDER_RESET_INTERVAL_MILLIS: u64 = 5000;
+pub const DEFAULT_PROVIDER_RESET_MAX_ATTEMPTS: usize = 17280;
+pub const DEFAULT_PROVIDER_RESET_USE_JITTER: bool = true;
+
 pub const DEFAULT_PROVIDER_POLLING_INTERVAL_MILLIS: u64 = 10000;
 
 pub const DEFAULT_DYNAMIC_TASK_CLEANER_INTERVAL_MILLIS: u64 = 1000;
@@ -216,14 +220,20 @@ pub struct ListenerDescriptor {
     pub l_type: ListenerType,
     pub interval_millis: u64,
     pub use_jitter: bool,
+    pub reset_descriptor: Option<FixedIntervalRetryDescriptor>,
 }
 
 impl ListenerDescriptor {
-    pub fn build(l_type: ListenerType, interval_millis: u64) -> Self {
+    fn build(
+        l_type: ListenerType,
+        interval_millis: u64,
+        reset_descriptor: FixedIntervalRetryDescriptor,
+    ) -> Self {
         Self {
             l_type,
             interval_millis,
             use_jitter: DEFAULT_LISTENER_USE_JITTER,
+            reset_descriptor: Some(reset_descriptor),
         }
     }
 
@@ -232,6 +242,11 @@ impl ListenerDescriptor {
             l_type,
             interval_millis: DEFAULT_LISTENER_INTERVAL_MILLIS,
             use_jitter: DEFAULT_LISTENER_USE_JITTER,
+            reset_descriptor: Some(FixedIntervalRetryDescriptor {
+                interval_millis: DEFAULT_PROVIDER_RESET_INTERVAL_MILLIS,
+                max_attempts: DEFAULT_PROVIDER_RESET_MAX_ATTEMPTS,
+                use_jitter: DEFAULT_PROVIDER_RESET_USE_JITTER,
+            }),
         }
     }
 }
@@ -244,9 +259,17 @@ pub struct TimeLimitDescriptor {
     pub dkg_timeout_duration: Option<usize>,
     pub randomness_task_exclusive_window: usize,
     pub provider_polling_interval_millis: u64,
+    pub provider_reset_descriptor: FixedIntervalRetryDescriptor,
     pub contract_transaction_retry_descriptor: ExponentialBackoffRetryDescriptor,
     pub contract_view_retry_descriptor: ExponentialBackoffRetryDescriptor,
     pub commit_partial_signature_retry_descriptor: ExponentialBackoffRetryDescriptor,
+}
+
+#[derive(Debug, Copy, Clone, Serialize, Deserialize)]
+pub struct FixedIntervalRetryDescriptor {
+    pub interval_millis: u64,
+    pub max_attempts: usize,
+    pub use_jitter: bool,
 }
 
 #[derive(Debug, Copy, Clone, Serialize, Deserialize)]
@@ -294,19 +317,6 @@ impl Config {
             self.logger = Some(LoggerDescriptor::default());
         }
 
-        if self.listeners.is_none() {
-            let listeners = vec![
-                ListenerDescriptor::default(ListenerType::Block),
-                ListenerDescriptor::default(ListenerType::PreGrouping),
-                ListenerDescriptor::default(ListenerType::PostCommitGrouping),
-                ListenerDescriptor::default(ListenerType::PostGrouping),
-                ListenerDescriptor::default(ListenerType::NewRandomnessTask),
-                ListenerDescriptor::default(ListenerType::ReadyToHandleRandomnessTask),
-                ListenerDescriptor::default(ListenerType::RandomnessSignatureAggregation),
-            ];
-            self.listeners = Some(listeners);
-        }
-
         if self.adapter_deployed_block_height.is_none() {
             self.adapter_deployed_block_height = Some(0);
         }
@@ -347,6 +357,11 @@ impl Config {
                     dkg_timeout_duration: Some(DEFAULT_DKG_TIMEOUT_DURATION),
                     randomness_task_exclusive_window: DEFAULT_RANDOMNESS_TASK_EXCLUSIVE_WINDOW,
                     provider_polling_interval_millis: DEFAULT_PROVIDER_POLLING_INTERVAL_MILLIS,
+                    provider_reset_descriptor: FixedIntervalRetryDescriptor {
+                        interval_millis: DEFAULT_PROVIDER_RESET_INTERVAL_MILLIS,
+                        max_attempts: DEFAULT_PROVIDER_RESET_MAX_ATTEMPTS,
+                        use_jitter: DEFAULT_PROVIDER_RESET_USE_JITTER,
+                    },
                     contract_transaction_retry_descriptor: ExponentialBackoffRetryDescriptor {
                         base: DEFAULT_CONTRACT_TRANSACTION_RETRY_BASE,
                         factor: DEFAULT_CONTRACT_TRANSACTION_RETRY_FACTOR,
@@ -367,6 +382,53 @@ impl Config {
                     },
                 })
             }
+        }
+
+        if self.listeners.is_none() {
+            let listeners = vec![
+                ListenerDescriptor::build(
+                    ListenerType::Block,
+                    self.time_limits.unwrap().listener_interval_millis,
+                    self.time_limits.unwrap().provider_reset_descriptor,
+                ),
+                ListenerDescriptor::build(
+                    ListenerType::PreGrouping,
+                    self.time_limits.unwrap().listener_interval_millis,
+                    self.time_limits.unwrap().provider_reset_descriptor,
+                ),
+                ListenerDescriptor::build(
+                    ListenerType::PostCommitGrouping,
+                    self.time_limits.unwrap().listener_interval_millis,
+                    self.time_limits.unwrap().provider_reset_descriptor,
+                ),
+                ListenerDescriptor::build(
+                    ListenerType::PostGrouping,
+                    self.time_limits.unwrap().listener_interval_millis,
+                    self.time_limits.unwrap().provider_reset_descriptor,
+                ),
+                ListenerDescriptor::build(
+                    ListenerType::NewRandomnessTask,
+                    self.time_limits.unwrap().listener_interval_millis,
+                    self.time_limits.unwrap().provider_reset_descriptor,
+                ),
+                ListenerDescriptor::build(
+                    ListenerType::ReadyToHandleRandomnessTask,
+                    self.time_limits.unwrap().listener_interval_millis,
+                    self.time_limits.unwrap().provider_reset_descriptor,
+                ),
+                ListenerDescriptor::build(
+                    ListenerType::RandomnessSignatureAggregation,
+                    self.time_limits.unwrap().listener_interval_millis,
+                    self.time_limits.unwrap().provider_reset_descriptor,
+                ),
+            ];
+            self.listeners = Some(listeners);
+        } else {
+            self.listeners.as_mut().unwrap().iter_mut().for_each(|l| {
+                if l.reset_descriptor.is_none() {
+                    l.reset_descriptor = Some(self.time_limits.unwrap().provider_reset_descriptor);
+                }
+            });
         }
 
         for relayed_chain in self.relayed_chains.iter_mut() {
@@ -484,16 +546,6 @@ impl RelayedChain {
             self.adapter_deployed_block_height = Some(0);
         }
 
-        if self.listeners.is_none() {
-            let listeners = vec![
-                ListenerDescriptor::default(ListenerType::Block),
-                ListenerDescriptor::default(ListenerType::NewRandomnessTask),
-                ListenerDescriptor::default(ListenerType::ReadyToHandleRandomnessTask),
-                ListenerDescriptor::default(ListenerType::RandomnessSignatureAggregation),
-            ];
-            self.listeners = Some(listeners);
-        }
-
         match self.time_limits.as_mut() {
             Some(time_limits) if time_limits.listener_interval_millis == 0 => {
                 time_limits.listener_interval_millis = DEFAULT_LISTENER_INTERVAL_MILLIS;
@@ -515,6 +567,11 @@ impl RelayedChain {
                     dkg_timeout_duration: None,
                     randomness_task_exclusive_window: DEFAULT_RANDOMNESS_TASK_EXCLUSIVE_WINDOW,
                     provider_polling_interval_millis: DEFAULT_PROVIDER_POLLING_INTERVAL_MILLIS,
+                    provider_reset_descriptor: FixedIntervalRetryDescriptor {
+                        interval_millis: DEFAULT_PROVIDER_RESET_INTERVAL_MILLIS,
+                        max_attempts: DEFAULT_PROVIDER_RESET_MAX_ATTEMPTS,
+                        use_jitter: DEFAULT_PROVIDER_RESET_USE_JITTER,
+                    },
                     contract_transaction_retry_descriptor: ExponentialBackoffRetryDescriptor {
                         base: DEFAULT_CONTRACT_TRANSACTION_RETRY_BASE,
                         factor: DEFAULT_CONTRACT_TRANSACTION_RETRY_FACTOR,
@@ -535,6 +592,38 @@ impl RelayedChain {
                     },
                 })
             }
+        }
+
+        if self.listeners.is_none() {
+            let listeners = vec![
+                ListenerDescriptor::build(
+                    ListenerType::Block,
+                    self.time_limits.unwrap().listener_interval_millis,
+                    self.time_limits.unwrap().provider_reset_descriptor,
+                ),
+                ListenerDescriptor::build(
+                    ListenerType::NewRandomnessTask,
+                    self.time_limits.unwrap().listener_interval_millis,
+                    self.time_limits.unwrap().provider_reset_descriptor,
+                ),
+                ListenerDescriptor::build(
+                    ListenerType::ReadyToHandleRandomnessTask,
+                    self.time_limits.unwrap().listener_interval_millis,
+                    self.time_limits.unwrap().provider_reset_descriptor,
+                ),
+                ListenerDescriptor::build(
+                    ListenerType::RandomnessSignatureAggregation,
+                    self.time_limits.unwrap().listener_interval_millis,
+                    self.time_limits.unwrap().provider_reset_descriptor,
+                ),
+            ];
+            self.listeners = Some(listeners);
+        } else {
+            self.listeners.as_mut().unwrap().iter_mut().for_each(|l| {
+                if l.reset_descriptor.is_none() {
+                    l.reset_descriptor = Some(self.time_limits.unwrap().provider_reset_descriptor);
+                }
+            });
         }
     }
 }

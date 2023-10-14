@@ -14,7 +14,7 @@ use arpa_core::{
     ListenerType, PartialSignature, SchedulerError, SchedulerResult, TaskType,
     DEFAULT_COMMIT_PARTIAL_SIGNATURE_RETRY_BASE, DEFAULT_COMMIT_PARTIAL_SIGNATURE_RETRY_FACTOR,
     DEFAULT_COMMIT_PARTIAL_SIGNATURE_RETRY_MAX_ATTEMPTS,
-    DEFAULT_COMMIT_PARTIAL_SIGNATURE_RETRY_USE_JITTER, DEFAULT_LISTENER_INTERVAL_MILLIS,
+    DEFAULT_COMMIT_PARTIAL_SIGNATURE_RETRY_USE_JITTER,
 };
 use arpa_dal::error::DataAccessResult;
 use ethers::types::Address;
@@ -209,7 +209,7 @@ where
                 .init_listener(
                     self.get_event_queue(),
                     self.get_fixed_task_handler(),
-                    ListenerDescriptor::build(task_type, DEFAULT_LISTENER_INTERVAL_MILLIS),
+                    ListenerDescriptor::default(task_type),
                 )
                 .await
         } else {
@@ -221,7 +221,7 @@ where
                 .init_listener(
                     self.get_event_queue(),
                     self.get_fixed_task_handler(),
-                    ListenerDescriptor::build(task_type, DEFAULT_LISTENER_INTERVAL_MILLIS),
+                    ListenerDescriptor::default(task_type),
                 )
                 .await
         }

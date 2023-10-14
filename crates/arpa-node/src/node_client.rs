@@ -25,6 +25,7 @@ use log4rs::append::rolling_file::RollingFileAppender;
 use log4rs::config::{Appender, Root};
 use log4rs::filter::threshold::ThresholdFilter;
 use log4rs::Config as LogConfig;
+use std::fs;
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;
@@ -132,6 +133,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let is_new_run = !data_path.exists();
 
+    if let Some(parent) = data_path.parent() {
+        fs::create_dir_all(parent)?;
+    }
+
     let db = SqliteDB::build(
         data_path.as_os_str().to_str().unwrap(),
         &wallet.signer().to_bytes(),
@@ -210,6 +215,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         config.chain_id,
         wallet.clone(),
         provider,
+        config.provider_endpoint.clone(),
         config
             .controller_address
             .parse()
@@ -237,7 +243,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         randomness_tasks_cache,
         randomness_result_cache,
         config.time_limits.unwrap(),
-        config.listeners.clone(),
+        config.listeners.as_ref().unwrap().clone(),
     );
 
     let relayed_chains_config = config.relayed_chains.clone();
@@ -263,6 +269,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             relayed_chain_config.chain_id,
             wallet.clone(),
             provider,
+            relayed_chain_config.provider_endpoint.clone(),
             relayed_chain_config
                 .controller_oracle_address
                 .parse()
@@ -294,7 +301,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             op_randomness_tasks_cache,
             op_randomness_result_cache,
             relayed_chain_config.time_limits.unwrap(),
-            relayed_chain_config.listeners.clone(),
+            relayed_chain_config.listeners.unwrap(),
         );
 
         context.add_relayed_chain(Box::new(relayed_chain))?;

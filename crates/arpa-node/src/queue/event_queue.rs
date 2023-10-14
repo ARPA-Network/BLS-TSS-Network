@@ -106,6 +106,7 @@ pub mod tests {
             0,
             fake_wallet,
             provider,
+            avnil.ws_endpoint(),
             Address::random(),
             Address::random(),
             Address::random(),

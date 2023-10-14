@@ -402,10 +402,4 @@ pub mod provider {
             cb: C,
         ) -> ContractClientResult<()>;
     }
-
-    pub trait ChainProviderBuilder {
-        type ProviderService: BlockFetcher + Send + Sync;
-
-        fn build_chain_provider(&self) -> Self::ProviderService;
-    }
 }
