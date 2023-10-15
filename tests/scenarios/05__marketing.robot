@@ -20,6 +20,7 @@ Payment Should In The Range
 Request Randomenes And Check Payment
     [Arguments]    ${min_value}    ${max_value}
     ${result} =    Request Randomness
+    Sleep    1s
     ${sub} =    Get Subscription    1
     ${payment} =   Set Variable    ${sub[3]}
     Mine Blocks    10
@@ -72,7 +73,7 @@ Test Referral
     ...    1. Given a group is ready for randomeness generation
     ...    2. Referral a new user and check if the payment is only the gas fee
     Set Enviorment And Deploy Contract
-    
+    Set Value To Env    USER_PRIVATE_KEY    0x2a871d0798f97d79848a013d4936a73bf4cc922c825d33c1cf7073dff6d409c6
     ${node1} =    Stake And Run Node    1
     ${node2} =    Stake And Run Node    2
     ${node3} =    Stake And Run Node    3
@@ -131,5 +132,5 @@ Test Referral
 *** Test Cases ***
 
 Run Test Cases
-    Repeat Keyword    1    Set Marketing Discount
-    Repeat Keyword    1    Test Referral
+    Repeat Keyword    3    Set Marketing Discount
+    Repeat Keyword    3    Test Referral
