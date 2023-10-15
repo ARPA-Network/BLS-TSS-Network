@@ -20,6 +20,7 @@ contract StakeOperatorScenarioTestScript is Script {
     uint32 internal _stakingNodesIndexOffset = uint32(vm.envUint("STAKING_NODES_INDEX_OFFSET"));
     uint32 internal _stakingNodesIndexLength = 10;
     bool internal _isStakeUser = vm.envBool("IS_STAKE_USER");
+    bool internal _isAddOperator = vm.envBool("IS_ADD_OPERATOR");
 
     Staking internal _staking;
     Arpa internal _arpa;
@@ -29,17 +30,20 @@ contract StakeOperatorScenarioTestScript is Script {
         _staking = Staking(_stakingAddress);
 
         // add operators
-        for (uint32 i = _stakingNodesIndexOffset; i < _stakingNodesIndexOffset + _stakingNodesIndexLength; i++) {
-            address operator = vm.rememberKey(vm.deriveKey(_mnemonic, i));
-            _operators.push(operator);
+        if (_isAddOperator) {
+            for (uint32 i = _stakingNodesIndexOffset; i < _stakingNodesIndexOffset + _stakingNodesIndexLength; i++) {
+                address operator = vm.rememberKey(vm.deriveKey(_mnemonic, i));
+                _operators.push(operator);
 
-            address payable toOperator = payable(operator);
+                address payable toOperator = payable(operator);
+                vm.broadcast(_deployerPrivateKey);
+                toOperator.transfer(1 ether);
+            }
+
             vm.broadcast(_deployerPrivateKey);
-            toOperator.transfer(1 ether);
+            _staking.addOperators(_operators);
         }
 
-        vm.broadcast(_deployerPrivateKey);
-        _staking.addOperators(_operators);
 
         // start the _staking pool
         vm.broadcast(_deployerPrivateKey);

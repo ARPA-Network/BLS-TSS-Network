@@ -63,6 +63,9 @@ contract ControllerLocalTestScript is Script {
     address internal _opControllerOracleAddress = vm.envAddress("OP_CONTROLLER_ORACLE_ADDRESS");
     address internal _opL1CrossDomainMessengerAddress = vm.envAddress("OP_L1_CROSS_DOMAIN_MESSENGER_ADDRESS");
 
+    uint256 internal _baseChainId = vm.envUint("BASE_CHAIN_ID");
+    address internal _baseControllerOracleAddress = vm.envAddress("BASE_CONTROLLER_ORACLE_ADDRESS");
+
     bool internal _arpa_exists = vm.envBool("ARPA_EXISTS");
     address internal _existing_arpa_address = vm.envAddress("EXISTING_L1_ARPA_ADDRESS");
 
@@ -70,6 +73,7 @@ contract ControllerLocalTestScript is Script {
         Controller controller;
         ControllerRelayer controllerRelayer;
         OPChainMessenger opChainMessenger;
+        OPChainMessenger baseChainMessenger;
         ERC1967Proxy adapter;
         Adapter adapterImpl;
         Staking staking;
@@ -78,8 +82,7 @@ contract ControllerLocalTestScript is Script {
         if (_arpa_exists == false) {
             vm.broadcast(_deployerPrivateKey);
             arpa = new Arpa();
-        }
-        else {
+        } else {
             arpa = IERC20(_existing_arpa_address);
         }
 
@@ -166,5 +169,12 @@ contract ControllerLocalTestScript is Script {
 
         vm.broadcast(_deployerPrivateKey);
         controllerRelayer.setChainMessenger(_opChainId, address(opChainMessenger));
+
+        vm.broadcast(_deployerPrivateKey);
+        baseChainMessenger =
+        new OPChainMessenger(address(controllerRelayer), _baseControllerOracleAddress, _opL1CrossDomainMessengerAddress);
+
+        vm.broadcast(_deployerPrivateKey);
+        controllerRelayer.setChainMessenger(_baseChainId, address(baseChainMessenger));
     }
 }

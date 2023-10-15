@@ -136,7 +136,7 @@ Add ARPA
     [Documentation]    Test Add ARPA
     [Arguments]    ${address}    ${amount}
     ${key} =    Get Value From Env    ADMIN_PRIVATE_KEY
-    ${result} =    Run    cast send ${ARPA_CONTRACT_ADDRESS} "mint(address to, uint256 amount)" ${address} ${amount} --private-key=${key} --gas-limit=100000
+    ${result} =    Cast Send    ${ARPA_CONTRACT_ADDRESS}    "mint(address to, uint256 amount)" ${address} ${amount}    ${key}    ''
     RETURN    ${result}
 
 Approve ARPA
@@ -144,7 +144,7 @@ Approve ARPA
     [Arguments]    ${node_index}    ${amount}
     ${stake_contract_address} =    Get Value From Env    STAKING_ADDRESS
     ${key} =    Get Private Key By Index    ${node_index}
-    ${result} =    Run    cast send ${ARPA_CONTRACT_ADDRESS} "approve(address spender, uint256 amount)" ${stake_contract_address} ${amount} --private-key=${key}
+    ${result} =    Cast Send    ${ARPA_CONTRACT_ADDRESS}    "approve(address spender, uint256 amount)" ${stake_contract_address} ${amount}    ${key}    ''
     RETURN    ${result}
 
 Stake ARPA
@@ -152,7 +152,7 @@ Stake ARPA
     [Arguments]    ${node_index}    ${amount}
     ${key} =    Get Private Key By Index    ${node_index}
     ${stake_contract_address} =    Get Value From Env    STAKING_ADDRESS
-    ${result} =    Run    cast send ${stake_contract_address} "stake(uint256 amount)" ${amount} --private-key=${key} --gas-limit=1000000
+    ${result} =    Cast Send    ${stake_contract_address}    "stake(uint256 amount)" ${amount}    ${key}    ''
     RETURN    ${result}
 
 Unstake ARPA
@@ -160,7 +160,7 @@ Unstake ARPA
     [Arguments]    ${node_index}    ${amount}
     ${key} =    Get Private Key By Index    ${node_index}
     ${stake_contract_address} =    Get Value From Env    STAKING_ADDRESS
-    ${result} =    Run    cast send ${stake_contract_address} "unstake(uint256 amount)" ${amount} --private-key=${key} --gas-limit=1000000
+    ${result} =    Cast Send    ${stake_contract_address}    "unstake(uint256 amount)" ${amount}    ${key}    ''
     RETURN    ${result}
     
 Stake And Run Node

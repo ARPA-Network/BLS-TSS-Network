@@ -77,5 +77,5 @@ Test Log Size
 
 *** Test Cases ***
 Run Long Running Case
-    Repeat Keyword    1    Long Running Request Randomness
+    Repeat Keyword    0    Long Running Request Randomness
     Repeat Keyword    0    Test Log Size

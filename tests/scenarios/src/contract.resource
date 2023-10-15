@@ -83,11 +83,13 @@ Deploy User Contract
     ${contract_output} =    Exec Script    GetRandomNumberScenarioTest.s.sol:GetRandomNumberScenarioTestScript
     ${contract_address} =    Get Contract Address From File    contracts/broadcast/GetRandomNumberScenarioTest.s.sol/31337/run-latest.json
     Set Global Variable    $USER_CONTRACT_ADDRESS    ${contract_address['GetRandomNumberExample']}
-    ${user_contract} =    Get Contract    ${PROXY_OUTPUT}GetRandomNumberExample.sol/GetRandomNumberExample.json    ${user_contract_address}
+    ${user_contract} =    Get Contract    ${PROXY_OUTPUT}GetRandomNumberExample.sol/GetRandomNumberExample.json    ${USER_CONTRACT_ADDRESS}
     Set Global Variable    $USER_CONTRACT   ${user_contract}
 
 Request Randomness
     [Documentation]    Request randomness
+    ${key} =    Get Value From Env    USER_PRIVATE_KEY
+    #${request_id} =    Cast Send    ${USER_CONTRACT_ADDRESS}    "getRandomNumber()"    ${key}    ''
     ${request_id} =    Contract Function Transact    ${USER_CONTRACT}    getRandomNumber
     RETURN    ${request_id}
 
@@ -305,7 +307,7 @@ Start Stake
     ${total_amount} =    Convert To Integer    ${total_amount}
     ${stake_address} =    Get Value From Env    STAKING_ADDRESS
     ${key} =    Get Value From Env    ADMIN_PRIVATE_KEY
-    ${result} =    Run    cast send ${stake_address} "start(uint256 amount, uint256 rewardDuration)" ${total_amount} 2592000 --private-key=${key}
+    ${result} =    Cast Send    ${stake_address}    "start(uint256 amount, uint256 rewardDuration)" ${total_amount} 2592000    ${key}
 
 Get Community Stake Count
     [Documentation]    Gets community stake count
@@ -317,24 +319,24 @@ Claim Reward
     [Arguments]    ${index}
     ${address} =    Get Value From Env    STAKING_ADDRESS
     ${key} =    Get Private Key By Index    ${index}
-    ${result} =    Run    cast send ${address} "claimReward()" --private-key=${key}
+    ${result} =    Cast Send    ${address}    "claimReward()"    ${key}    ''
 
 Claim
     [Documentation]    Claim
     [Arguments]    ${index}
     ${address} =    Get Value From Env    STAKING_ADDRESS
     ${key} =    Get Private Key By Index    ${index}
-    ${result} =    Run    cast send ${address} "claim()" --private-key=${key}
+    ${result} =    Cast Send    ${address}    "claim()"    ${key}    ''
 
 Claim Frozen Principal
     [Documentation]    Claim frozen principal
     [Arguments]    ${index}
     ${address} =    Get Value From Env    STAKING_ADDRESS
     ${key} =    Get Private Key By Index    ${index}
-    ${result} =    Run    cast send ${address} "claimFrozenPrincipal()" --private-key=${key}
+    ${result} =    Cast Send    ${address}    "claimFrozenPrincipal()"    ${key}    ''
 
 Node Quit
     [Documentation]    Node quit
     [Arguments]    ${index}
     ${key} =    Get Private Key By Index    ${index}
-    ${result} =    Run    cast send ${PROXY_CONTRACT_ADDRESS} "nodeQuit()" --private-key=${key}
+    ${result} =    Cast Send    ${PROXY_CONTRACT_ADDRESS}    "nodeQuit()"    ${key}    ''

@@ -3,21 +3,21 @@ pragma solidity ^0.8.18;
 
 import {Script} from "forge-std/Script.sol";
 import {IAdapter} from "../src/interfaces/IAdapter.sol";
-import {AdvancedGetShuffledArrayExample} from "../src/user/examples/AdvancedGetShuffledArrayExample.sol";
+import {GetRandomNumberExample} from "Randcast-User-Contract/user/examples/GetRandomNumberExample.sol";
 
 contract GetRandomNumberLocalTestScript is Script {
     function run() external {
-        AdvancedGetShuffledArrayExample _advancedGetShuffledArrayExample;
+        GetRandomNumberExample getRandomNumberExample;
         IAdapter adapter;
 
-        uint256 plentyOfEthBalance = 10000000000000000;
+        uint256 plentyOfEthBalance = vm.envUint("L1_MIN_SUB_FUND_ETH_BAL");
         address adapterAddress = vm.envAddress("ADAPTER_ADDRESS");
         uint256 userPrivateKey = vm.envUint("USER_PRIVATE_KEY");
 
         adapter = IAdapter(adapterAddress);
 
         vm.startBroadcast(userPrivateKey);
-        _advancedGetShuffledArrayExample = new AdvancedGetShuffledArrayExample(
+        getRandomNumberExample = new GetRandomNumberExample(
             adapterAddress
         );
 
@@ -25,26 +25,10 @@ contract GetRandomNumberLocalTestScript is Script {
 
         adapter.fundSubscription{value: plentyOfEthBalance}(subId);
 
-        adapter.addConsumer(subId, address(_advancedGetShuffledArrayExample));
+        adapter.addConsumer(subId, address(getRandomNumberExample));
 
+        getRandomNumberExample.getRandomNumber();
 
-        uint32 upper = 10;
-        uint256 seed = 42;
-        uint16 requestConfirmations = 6;
-        uint32 rdGasLimit = 2000000;
-        uint256 rdMaxGasPrice = 1200000000;
-
-        bytes32 requestId = _advancedGetShuffledArrayExample.getRandomNumberThenGenerateShuffledArray(
-            upper, subId, seed, requestConfirmations, rdGasLimit, rdMaxGasPrice
-        );
-        uint64 subId2 = adapter.createSubscription();
-
-        adapter.fundSubscription{value: plentyOfEthBalance}(subId2);
-
-        adapter.addConsumer(subId2, address(_advancedGetShuffledArrayExample));
-
-        bytes32 requestId2 = _advancedGetShuffledArrayExample.getRandomNumberThenGenerateShuffledArray(
-            upper, subId2, seed, requestConfirmations, rdGasLimit, rdMaxGasPrice
-        );
+        // getRandomNumberExample.getRandomNumber();
     }
 }

@@ -55,17 +55,61 @@ def contract_function_transact(contract, function_name, *args):
     Get the function object from the contract instance
     """
     function = getattr(contract.functions, function_name)
+    max_fee = get_average_gas_price('http://127.0.0.1:8545')
     # Call the function with the provided parameters
-    result = function(*args).transact({'gas': 500000})
+    gas_estimate = function(*args).estimate_gas()
+    result = function(*args).transact({'gasPrice': max_fee, 'gas': int(gas_estimate * 1.2)})
     return result
+
+def get_average_gas_price(url):
+    """
+    This function calculates the average gas price for the last 10 blocks.
+    It connects to an Ethereum node at the given URL, fetches the gas used 
+    and gas limit for each of the last 10 blocks, calculates the gas price for
+    each block, and returns the average gas price.
+    
+    Parameters:
+    url (str): The HTTP provider address of the Ethereum node
+
+    Returns:
+    int: The average gas price for the last 10 blocks
+    """
+
+   # Connect to your Ethereum node
+    w3 = Web3(Web3.HTTPProvider(url))
+
+    # Get the latest block number
+    latest_block_number = w3.eth.block_number
+
+    # Initialize a list to store the gas prices
+    gas_prices = []
+
+    # # Loop through the latest 10 blocks
+    # for i in range(latest_block_number - 9, latest_block_number + 1):
+    #     # Get the block
+    #     block = w3.eth.get_block(i, full_transactions=True)
+
+    #     # Add the gas price of each transaction to the list
+    #     for tx in block['transactions']:
+    #         gas_prices.append(tx['gasPrice'])
+
+    # Calculate the average gas price
+    if len(gas_prices) == 0:
+        return w3.eth.gas_price
+    average_gas_price = sum(gas_prices) / len(gas_prices)
+    return int(average_gas_price * 1.2)
+
 
 def exec_script(script_name, url='http://localhost:8545'):
     """
     Executes a script from the "contracts/script" directory.
     """
+    max_fee = get_average_gas_price(url)
     os.chdir("contracts")
+    # cmd = ("forge script script/" + script_name
+    #     + " --fork-url " + url +  " --with-gas-price " + str(max_fee) + " --broadcast --slow")
     cmd = ("forge script script/" + script_name
-        + " --fork-url " + url + " --broadcast --slow")
+        + " --fork-url " + url +  " --with-gas-price " + str(max_fee) + " --broadcast --slow")
     os.system(cmd)
     os.chdir("..")
 

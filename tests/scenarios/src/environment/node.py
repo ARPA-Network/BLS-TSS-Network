@@ -103,7 +103,51 @@ def create_node_config(controller_address, adapter_address, relayer_address, cha
     relay_chain_config ='[]'
     if chain_id == '900':
         provider_endpoint = "ws://127.0.0.1:8546"
-        relay_chain_config = """- chain_id: 901
+        relay_chain_config = """- chain_id: 8453
+    description: "BASE"
+    provider_endpoint: "ws://127.0.0.1:9646"
+    controller_oracle_address: "0xCf7Ed3AccA5a467e9e704C703E8D87F634fB0Fc9"
+    adapter_address: "0x5FC8d32690cc91D4c39d9d3abcBD16989F875707"
+    
+    listeners:
+      - l_type: Block
+        interval_millis: 10000
+        use_jitter: true
+      - l_type: NewRandomnessTask
+        interval_millis: 10000
+        use_jitter: true
+      - l_type: ReadyToHandleRandomnessTask
+        interval_millis: 10000
+        use_jitter: true
+      - l_type: RandomnessSignatureAggregation
+        interval_millis: 20000
+        use_jitter: false
+
+    time_limits:
+      block_time: 3
+      randomness_task_exclusive_window: 10
+      listener_interval_millis: 1000
+      provider_polling_interval_millis: 1000
+      provider_reset_descriptor:
+        interval_millis: 5000
+        max_attempts: 17280
+        use_jitter: false
+      contract_transaction_retry_descriptor:
+        base: 2
+        factor: 1000
+        max_attempts: 3
+        use_jitter: true
+      contract_view_retry_descriptor:
+        base: 2
+        factor: 500
+        max_attempts: 5
+        use_jitter: true
+      commit_partial_signature_retry_descriptor:
+        base: 2
+        factor: 1000
+        max_attempts: 5
+        use_jitter: false
+  - chain_id: 901
     description: "OP"
     provider_endpoint: "ws://127.0.0.1:9546"
     controller_oracle_address: "0xCf7Ed3AccA5a467e9e704C703E8D87F634fB0Fc9"
@@ -122,12 +166,16 @@ def create_node_config(controller_address, adapter_address, relayer_address, cha
       - l_type: RandomnessSignatureAggregation
         interval_millis: 20000
         use_jitter: false
-    
+
     time_limits:
-      block_time: 2
+      block_time: 3
       randomness_task_exclusive_window: 10
       listener_interval_millis: 1000
       provider_polling_interval_millis: 1000
+      provider_reset_descriptor:
+        interval_millis: 5000
+        max_attempts: 17280
+        use_jitter: false
       contract_transaction_retry_descriptor:
         base: 2
         factor: 1000

@@ -26,6 +26,12 @@ contract GetRandomNumberScenarioTestScript is Script {
 
         adapter.addConsumer(subId, address(getRandomNumberExample));
 
-        getRandomNumberExample.setCallbackGasConfig(2000000, 1500000000);
+        //getRandomNumberExample.setCallbackGasConfig(2000000, 4000000000);
+        // getRandomNumberExample.setGasPriceCall();
+        // getRandomNumberExample.getRandomNumber();
+        // getRandomNumberExample.setGasPriceCall();
+        // getRandomNumberExample.setGasPriceCall();
+        // getRandomNumberExample.setGasPriceCall();
+        
     }
 }

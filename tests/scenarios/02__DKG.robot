@@ -81,9 +81,9 @@ DKG Happy Path1
     
     Deploy User Contract
     Request Randomness
-    Mine Blocks    10
-    Have Node Got Keyword    Partial signature sent and accepted by committer    ${NODE_PROCESS_LIST}
-    Mine Blocks    10
+    Sleep    5s
+    Mine Blocks    6
+    ${result} =    Have Node Got Keyword    fulfill randomness successfully    ${NODE_PROCESS_LIST}
     Sleep    5s
     Check Randomness
     Teardown Scenario Testing Environment
@@ -121,13 +121,14 @@ DKG Happy Path2
 
     ${result} =    Has Equal Value    ${node_rewards['args']['nodeAddress']}    ${address1}    ${address2}    ${address3}    ${address4}
     Should Be True    ${result}
-
+    Mine Blocks    20
+    Sleep    2s
     Deploy User Contract
     Request Randomness
-    Mine Blocks    10
+    
     Have Node Got Keyword    Partial signature sent and accepted by committer    ${NODE_PROCESS_LIST}
     Mine Blocks    10
-    Sleep    5s
+    Sleep    3s
     Check Randomness
     ${group} =   Get Group    0
     Teardown Scenario Testing Environment

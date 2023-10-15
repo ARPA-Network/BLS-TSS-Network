@@ -33,9 +33,9 @@ def get_keyword_from_node_log(node_idx, keyword, retry_time=30):
     :return: the relevant information found for the keyword
     """
     i =  0
+    log_path = f"crates/arpa-node/log/running/node{node_idx}.log"
     while i < retry_time:
         i = i + 1
-        log_path = f"crates/arpa-node/log/running/node{node_idx}.log"
         with open(log_path, 'r', encoding='UTF-8') as process:
             log_info = get_log_info(process, keyword)
             if log_info is not None:
@@ -107,26 +107,26 @@ def get_err_log_from_chain():
                 return line
     return None
 
+import time
+
 def wait_for_keyword_from_log(path, keyword, max_retry_time=300):
     '''
     Wait for a keyword from a log file
     '''
-
     retry_time = 0
     while retry_time < max_retry_time:
-        with open(path, 'r', encoding='UTF-8') as log_file:
-            lines = log_file.readlines()
-
-            # check if keyword exists in any line
-            for line in lines:
-                if keyword in line:
-                    print(f'Keyword: {keyword} found in file.')
-                    return True
-
-            print('Keyword not found. Retrying...')
-            time.sleep(1)
-            retry_time += 1
-
+        try:
+            with open(path, 'r', encoding='UTF-8') as log_file:
+                # check if keyword exists in any line
+                for line in log_file:
+                    if keyword in line:
+                        print(f'Keyword: {keyword} found in file.')
+                        return True
+                print('Keyword not found. Retrying...')
+        except FileNotFoundError:
+            print(f"File {path} not found. Retrying...")
+        time.sleep(2)
+        retry_time += 1
     print('Reached max retry time. Keyword not found.')
     return False
 

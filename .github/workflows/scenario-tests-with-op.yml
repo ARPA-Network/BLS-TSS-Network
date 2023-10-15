@@ -9,35 +9,57 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v2
+      - name: Checkout
+        uses: actions/checkout@v3
+        with:
+          lfs: "true"
 
-    - name: Setup Python
-      uses: actions/setup-python@v2
-      with:
-        python-version: '3.x'
+      - name: Setup Python
+        uses: actions/setup-python@v2
+        with:
+          python-version: '3.10'
 
-    - name: Install dependencies
-      run: |
-        sudo apt-get update && \
-        sudo apt-get install -y protobuf-compiler libprotobuf-dev pkg-config libssh-dev build-essential lsof findutils supervisor git net-tools python3 python3-pip make jq docker.io docker-compose && \
-        python -m pip install --upgrade pip==22.3.1 && \
-        pip install -r requirements.txt
+      - name: Install dependencies
+        run: |
+          sudo apt-get update && \
+          sudo apt-get install -y protobuf-compiler libprotobuf-dev pkg-config libssh-dev build-essential lsof git net-tools make jq && \
+          pip install -r requirements.txt
+        working-directory: tests
 
-    - name: Setup Go
-      uses: actions/setup-go@v2
-      with:
-        go-version: '^1.20.0'
+      - name: Setup Go
+        uses: actions/setup-go@v2
+        with:
+          go-version: '^1.20.0'
 
-    - name: Clone Optimism
-      run: git clone https://github.com/ethereum-optimism/optimism.git
+      - name: Clone Optimism
+        run: git clone https://github.com/Andlyn666/optimism.git --recurse-submodules
+        working-directory: ../
+        
+      - name: Setup Rust
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: nightly-2022-11-29
+          override: true
+          components: rustfmt, clippy
 
-    - name: Setup Rust
-      uses: actions-rs/toolchain@v1
-      with:
-        toolchain: stable
-        profile: minimal
-        components: rustfmt, clippy
+      - name: Install Anvil
+        uses: foundry-rs/foundry-toolchain@v1
+        with:
+          version: nightly-cc5637a979050c39b3d06bc4cc6134f0591ee8d0
+      - name: start devnet
+        run: |
+          make devnet-up-deploy > op.log
+        working-directory: ../optimism
+      - name: Run Forge build
+        run: |
+          forge --version
+          forge build --names
+        id: build
+        working-directory: contracts
+      - name: Run Cargo build
+        run: |
+          cargo build
 
-    - name: Install Foundry
-      run: cargo install --git https://github.com/foundry-rs/foundry --profile local --locked forge cast anvil
+      - name: run tests
+        run: |
+          robot tests/scenarios/07__op_layer2.robot
