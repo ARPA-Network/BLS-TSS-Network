@@ -541,21 +541,14 @@ where
 
             debug!("Intercepting management request: {:?}", req);
 
-            let token_str = match context
-                .read()
-                .await
-                .get_config()
-                .get_node_management_rpc_token()
-            {
-                Ok(t) => t,
-                Err(_) => {
-                    return Ok(
-                        Status::unauthenticated("Invalid management server token setup").to_http(),
-                    )
-                }
-            };
-
-            let token = HeaderValue::from_str(&token_str).unwrap();
+            let token = HeaderValue::from_str(
+                context
+                    .read()
+                    .await
+                    .get_config()
+                    .get_node_management_rpc_token(),
+            )
+            .unwrap();
 
             match req.headers().get("authorization") {
                 Some(t) if token == t => {}

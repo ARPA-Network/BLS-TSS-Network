@@ -149,9 +149,10 @@ where
 
         let f_ts = self.get_fixed_task_handler();
 
-        let rpc_endpoint = self.config.node_committer_rpc_endpoint.clone();
+        let rpc_endpoint = self.config.get_node_committer_rpc_endpoint().to_string();
 
-        let node_management_rpc_endpoint = self.config.node_management_rpc_endpoint.clone();
+        let node_management_rpc_endpoint =
+            self.config.get_node_management_rpc_endpoint().to_string();
 
         let context = Arc::new(RwLock::new(self));
 

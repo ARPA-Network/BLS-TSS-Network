@@ -66,7 +66,7 @@ pub mod tests {
 
     #[tokio::test]
     async fn test() {
-        let config = Config::default().initialize();
+        let config = Config::default();
 
         let eq = Arc::new(RwLock::new(EventQueue::new()));
 
@@ -86,12 +86,11 @@ pub mod tests {
             .unwrap();
 
         let contract_transaction_retry_descriptor = config
-            .time_limits
-            .unwrap()
+            .get_time_limits()
             .contract_transaction_retry_descriptor;
 
         let contract_view_retry_descriptor =
-            config.time_limits.unwrap().contract_view_retry_descriptor;
+            config.get_time_limits().contract_view_retry_descriptor;
 
         let avnil = Anvil::new().spawn();
 

@@ -296,7 +296,7 @@ pub mod coordinator_tests {
 
     #[tokio::test]
     async fn test_publish_to_coordinator() {
-        let config = Config::default().initialize();
+        let config = Config::default();
 
         let anvil = start_chain();
         let coordinator_contract = deploy_contract(&anvil).await;
@@ -336,10 +336,9 @@ pub mod coordinator_tests {
             Address::random(),
             Address::random(),
             config
-                .time_limits
-                .unwrap()
+                .get_time_limits()
                 .contract_transaction_retry_descriptor,
-            config.time_limits.unwrap().contract_view_retry_descriptor,
+            config.get_time_limits().contract_view_retry_descriptor,
         );
 
         let client = CoordinatorClient::new(
@@ -347,10 +346,9 @@ pub mod coordinator_tests {
             coordinator_contract.address(),
             &main_chain_identity,
             config
-                .time_limits
-                .unwrap()
+                .get_time_limits()
                 .contract_transaction_retry_descriptor,
-            config.time_limits.unwrap().contract_view_retry_descriptor,
+            config.get_time_limits().contract_view_retry_descriptor,
         );
 
         let mock_value = vec![1, 2, 3, 4];

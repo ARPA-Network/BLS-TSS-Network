@@ -177,7 +177,7 @@ where
                             .start(
                                 listener.interval_millis,
                                 listener.use_jitter,
-                                listener.reset_descriptor.unwrap(),
+                                listener.reset_descriptor,
                             )
                             .await
                         {
@@ -197,7 +197,7 @@ where
                             .start(
                                 listener.interval_millis,
                                 listener.use_jitter,
-                                listener.reset_descriptor.unwrap(),
+                                listener.reset_descriptor,
                             )
                             .await
                         {
@@ -220,7 +220,7 @@ where
                             .start(
                                 listener.interval_millis,
                                 listener.use_jitter,
-                                listener.reset_descriptor.unwrap(),
+                                listener.reset_descriptor,
                             )
                             .await
                         {
@@ -234,7 +234,7 @@ where
                     self.get_block_cache(),
                     self.get_group_cache(),
                     eq,
-                    self.time_limits.dkg_timeout_duration.unwrap(),
+                    self.time_limits.dkg_timeout_duration,
                 );
 
                 fs.write().await.add_task(
@@ -244,7 +244,7 @@ where
                             .start(
                                 listener.interval_millis,
                                 listener.use_jitter,
-                                listener.reset_descriptor.unwrap(),
+                                listener.reset_descriptor,
                             )
                             .await
                         {
@@ -271,7 +271,7 @@ where
                             .start(
                                 listener.interval_millis,
                                 listener.use_jitter,
-                                listener.reset_descriptor.unwrap(),
+                                listener.reset_descriptor,
                             )
                             .await
                         {
@@ -301,7 +301,7 @@ where
                             .start(
                                 listener.interval_millis,
                                 listener.use_jitter,
-                                listener.reset_descriptor.unwrap(),
+                                listener.reset_descriptor,
                             )
                             .await
                         {
@@ -330,7 +330,7 @@ where
                             .start(
                                 listener.interval_millis,
                                 listener.use_jitter,
-                                listener.reset_descriptor.unwrap(),
+                                listener.reset_descriptor,
                             )
                             .await
                         {
@@ -468,7 +468,7 @@ where
             self.get_group_cache(),
             context.get_event_queue(),
             context.get_dynamic_task_handler(),
-            self.time_limits.dkg_wait_for_phase_interval_millis.unwrap(),
+            self.time_limits.dkg_wait_for_phase_interval_millis,
         );
 
         s_in_grouping.subscribe().await;
@@ -658,7 +658,7 @@ where
                             .start(
                                 listener.interval_millis,
                                 listener.use_jitter,
-                                listener.reset_descriptor.unwrap(),
+                                listener.reset_descriptor,
                             )
                             .await
                         {
@@ -685,7 +685,7 @@ where
                             .start(
                                 listener.interval_millis,
                                 listener.use_jitter,
-                                listener.reset_descriptor.unwrap(),
+                                listener.reset_descriptor,
                             )
                             .await
                         {
@@ -715,7 +715,7 @@ where
                             .start(
                                 listener.interval_millis,
                                 listener.use_jitter,
-                                listener.reset_descriptor.unwrap(),
+                                listener.reset_descriptor,
                             )
                             .await
                         {
@@ -744,7 +744,7 @@ where
                             .start(
                                 listener.interval_millis,
                                 listener.use_jitter,
-                                listener.reset_descriptor.unwrap(),
+                                listener.reset_descriptor,
                             )
                             .await
                         {
