@@ -221,7 +221,13 @@ impl ChainIdentity for GeneralRelayedChainIdentity {
     }
 
     async fn get_current_gas_price(&self) -> Result<U256, ProviderError> {
-        self.signer.provider().get_gas_price().await
+        let (max_fee, _) = self
+            .signer
+            .provider()
+            .estimate_eip1559_fees(Some(eip1559_gas_price_estimator))
+            .await?;
+
+        Ok(max_fee)
     }
 
     async fn get_block_timestamp(
