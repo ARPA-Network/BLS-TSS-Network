@@ -1,40 +1,13 @@
 use crate::{
     error::{ContractClientError, ContractClientResult},
-    provider::{BlockFetcher, ChainProviderBuilder},
+    provider::BlockFetcher,
 };
-use arpa_core::{ChainIdentity, GeneralMainChainIdentity, GeneralRelayedChainIdentity};
 use async_trait::async_trait;
 use ethers::prelude::*;
-use std::{future::Future, sync::Arc};
-
-pub struct ChainProvider {
-    provider: Arc<Provider<Ws>>,
-}
-
-impl ChainProvider {
-    pub fn new(provider: Arc<Provider<Ws>>) -> Self {
-        ChainProvider { provider }
-    }
-}
-
-impl ChainProviderBuilder for GeneralMainChainIdentity {
-    type ProviderService = ChainProvider;
-
-    fn build_chain_provider(&self) -> ChainProvider {
-        ChainProvider::new(self.get_provider())
-    }
-}
-
-impl ChainProviderBuilder for GeneralRelayedChainIdentity {
-    type ProviderService = ChainProvider;
-
-    fn build_chain_provider(&self) -> ChainProvider {
-        ChainProvider::new(self.get_provider())
-    }
-}
+use std::future::Future;
 
 #[async_trait]
-impl BlockFetcher for ChainProvider {
+impl BlockFetcher for Provider<Ws> {
     async fn subscribe_new_block_height<
         C: FnMut(usize) -> F + Send,
         F: Future<Output = ContractClientResult<()>> + Send,
@@ -42,7 +15,7 @@ impl BlockFetcher for ChainProvider {
         &self,
         mut cb: C,
     ) -> ContractClientResult<()> {
-        let mut stream = self.provider.subscribe_blocks().await?;
+        let mut stream = self.subscribe_blocks().await?;
         while let Some(block) = stream.next().await {
             cb(block
                 .number

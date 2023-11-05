@@ -1,3 +1,4 @@
+use super::{Chain, MainChain, RelayedChain};
 use crate::{
     context::{
         BLSTasksHandler, BlockInfoHandler, ChainIdentityHandlerType, ContextFetcher,
@@ -37,8 +38,6 @@ use threshold_bls::{
 };
 use tokio::sync::RwLock;
 
-use super::{Chain, MainChain, RelayedChain};
-
 #[derive(Debug)]
 pub struct GeneralMainChain<
     PC: Curve,
@@ -56,7 +55,7 @@ pub struct GeneralMainChain<
     c: PhantomData<PC>,
     s: PhantomData<S>,
     time_limits: TimeLimitDescriptor,
-    listener_descriptors: Option<Vec<ListenerDescriptor>>,
+    listener_descriptors: Vec<ListenerDescriptor>,
 }
 
 impl<
@@ -78,7 +77,7 @@ impl<
         randomness_tasks_cache: BLSTasksDBClient<RandomnessTask>,
         committer_randomness_result_cache: SignatureResultDBClient<RandomnessResultCache>,
         time_limits: TimeLimitDescriptor,
-        listener_descriptors: Option<Vec<ListenerDescriptor>>,
+        listener_descriptors: Vec<ListenerDescriptor>,
     ) -> Self {
         GeneralMainChain {
             id: chain_identity.get_chain_id(),
@@ -175,7 +174,11 @@ where
                     TaskType::Listener(self.id, ListenerType::Block),
                     async move {
                         if let Err(e) = p_block
-                            .start(listener.interval_millis, listener.use_jitter)
+                            .start(
+                                listener.interval_millis,
+                                listener.use_jitter,
+                                listener.reset_descriptor,
+                            )
                             .await
                         {
                             error!("{:?}", e);
@@ -191,7 +194,11 @@ where
                     TaskType::Listener(self.id, ListenerType::PreGrouping),
                     async move {
                         if let Err(e) = p_pre_grouping
-                            .start(listener.interval_millis, listener.use_jitter)
+                            .start(
+                                listener.interval_millis,
+                                listener.use_jitter,
+                                listener.reset_descriptor,
+                            )
                             .await
                         {
                             error!("{:?}", e);
@@ -210,7 +217,11 @@ where
                     TaskType::Listener(self.id, ListenerType::PostCommitGrouping),
                     async move {
                         if let Err(e) = p_post_commit_grouping
-                            .start(listener.interval_millis, listener.use_jitter)
+                            .start(
+                                listener.interval_millis,
+                                listener.use_jitter,
+                                listener.reset_descriptor,
+                            )
                             .await
                         {
                             error!("{:?}", e);
@@ -223,14 +234,18 @@ where
                     self.get_block_cache(),
                     self.get_group_cache(),
                     eq,
-                    self.time_limits.dkg_timeout_duration.unwrap(),
+                    self.time_limits.dkg_timeout_duration,
                 );
 
                 fs.write().await.add_task(
                     TaskType::Listener(self.id, ListenerType::PostGrouping),
                     async move {
                         if let Err(e) = p_post_grouping
-                            .start(listener.interval_millis, listener.use_jitter)
+                            .start(
+                                listener.interval_millis,
+                                listener.use_jitter,
+                                listener.reset_descriptor,
+                            )
                             .await
                         {
                             error!("{:?}", e);
@@ -253,7 +268,11 @@ where
                     TaskType::Listener(self.id, ListenerType::NewRandomnessTask),
                     async move {
                         if let Err(e) = p_new_randomness_task
-                            .start(listener.interval_millis, listener.use_jitter)
+                            .start(
+                                listener.interval_millis,
+                                listener.use_jitter,
+                                listener.reset_descriptor,
+                            )
                             .await
                         {
                             error!("{:?}", e);
@@ -279,7 +298,11 @@ where
                     TaskType::Listener(self.id, ListenerType::ReadyToHandleRandomnessTask),
                     async move {
                         if let Err(e) = p_ready_to_handle_randomness_task
-                            .start(listener.interval_millis, listener.use_jitter)
+                            .start(
+                                listener.interval_millis,
+                                listener.use_jitter,
+                                listener.reset_descriptor,
+                            )
                             .await
                         {
                             error!("{:?}", e);
@@ -304,7 +327,11 @@ where
                     TaskType::Listener(self.id, ListenerType::RandomnessSignatureAggregation),
                     async move {
                         if let Err(e) = p_randomness_signature_aggregation
-                            .start(listener.interval_millis, listener.use_jitter)
+                            .start(
+                                listener.interval_millis,
+                                listener.use_jitter,
+                                listener.reset_descriptor,
+                            )
                             .await
                         {
                             error!("{:?}", e);
@@ -319,25 +346,11 @@ where
         &self,
         context: &(dyn ContextFetcher + Sync + Send),
     ) -> SchedulerResult<()> {
-        match &self.listener_descriptors {
-            Some(listeners) => {
-                for listener in listeners {
-                    self.init_listener(
-                        context.get_event_queue(),
-                        context.get_fixed_task_handler(),
-                        *listener,
-                    )
-                    .await?;
-                }
-            }
-            None => {
-                self.init_block_listeners(context).await?;
+        self.init_block_listeners(context).await?;
 
-                self.init_dkg_listeners(context).await?;
+        self.init_dkg_listeners(context).await?;
 
-                self.init_randomness_listeners(context).await?;
-            }
-        }
+        self.init_randomness_listeners(context).await?;
 
         Ok(())
     }
@@ -380,15 +393,16 @@ where
         &self,
         context: &(dyn ContextFetcher + Sync + Send),
     ) -> SchedulerResult<()> {
-        self.init_listener(
-            context.get_event_queue(),
-            context.get_fixed_task_handler(),
-            ListenerDescriptor::build(
-                ListenerType::Block,
-                self.time_limits.listener_interval_millis,
-            ),
-        )
-        .await?;
+        for listener in self.listener_descriptors.iter() {
+            if listener.l_type == ListenerType::Block {
+                self.init_listener(
+                    context.get_event_queue(),
+                    context.get_fixed_task_handler(),
+                    *listener,
+                )
+                .await?;
+            }
+        }
 
         Ok(())
     }
@@ -397,33 +411,19 @@ where
         &self,
         context: &(dyn ContextFetcher + Sync + Send),
     ) -> SchedulerResult<()> {
-        self.init_listener(
-            context.get_event_queue(),
-            context.get_fixed_task_handler(),
-            ListenerDescriptor::build(
-                ListenerType::PreGrouping,
-                self.time_limits.listener_interval_millis,
-            ),
-        )
-        .await?;
-        self.init_listener(
-            context.get_event_queue(),
-            context.get_fixed_task_handler(),
-            ListenerDescriptor::build(
-                ListenerType::PostCommitGrouping,
-                self.time_limits.listener_interval_millis,
-            ),
-        )
-        .await?;
-        self.init_listener(
-            context.get_event_queue(),
-            context.get_fixed_task_handler(),
-            ListenerDescriptor::build(
-                ListenerType::PostGrouping,
-                self.time_limits.listener_interval_millis,
-            ),
-        )
-        .await?;
+        for listener in self.listener_descriptors.iter() {
+            if listener.l_type == ListenerType::PreGrouping
+                || listener.l_type == ListenerType::PostCommitGrouping
+                || listener.l_type == ListenerType::PostGrouping
+            {
+                self.init_listener(
+                    context.get_event_queue(),
+                    context.get_fixed_task_handler(),
+                    *listener,
+                )
+                .await?;
+            }
+        }
 
         Ok(())
     }
@@ -432,33 +432,19 @@ where
         &self,
         context: &(dyn ContextFetcher + Sync + Send),
     ) -> SchedulerResult<()> {
-        self.init_listener(
-            context.get_event_queue(),
-            context.get_fixed_task_handler(),
-            ListenerDescriptor::build(
-                ListenerType::NewRandomnessTask,
-                self.time_limits.listener_interval_millis,
-            ),
-        )
-        .await?;
-        self.init_listener(
-            context.get_event_queue(),
-            context.get_fixed_task_handler(),
-            ListenerDescriptor::build(
-                ListenerType::ReadyToHandleRandomnessTask,
-                self.time_limits.listener_interval_millis,
-            ),
-        )
-        .await?;
-        self.init_listener(
-            context.get_event_queue(),
-            context.get_fixed_task_handler(),
-            ListenerDescriptor::build(
-                ListenerType::RandomnessSignatureAggregation,
-                self.time_limits.listener_interval_millis,
-            ),
-        )
-        .await?;
+        for listener in self.listener_descriptors.iter() {
+            if listener.l_type == ListenerType::NewRandomnessTask
+                || listener.l_type == ListenerType::ReadyToHandleRandomnessTask
+                || listener.l_type == ListenerType::RandomnessSignatureAggregation
+            {
+                self.init_listener(
+                    context.get_event_queue(),
+                    context.get_fixed_task_handler(),
+                    *listener,
+                )
+                .await?;
+            }
+        }
 
         Ok(())
     }
@@ -482,7 +468,7 @@ where
             self.get_group_cache(),
             context.get_event_queue(),
             context.get_dynamic_task_handler(),
-            self.time_limits.dkg_wait_for_phase_interval_millis.unwrap(),
+            self.time_limits.dkg_wait_for_phase_interval_millis,
         );
 
         s_in_grouping.subscribe().await;
@@ -551,7 +537,7 @@ pub struct GeneralRelayedChain<
     c: PhantomData<PC>,
     s: PhantomData<S>,
     time_limits: TimeLimitDescriptor,
-    listener_descriptors: Option<Vec<ListenerDescriptor>>,
+    listener_descriptors: Vec<ListenerDescriptor>,
 }
 
 impl<
@@ -573,7 +559,7 @@ impl<
         randomness_tasks_cache: OPBLSTasksDBClient<RandomnessTask>,
         committer_randomness_result_cache: OPSignatureResultDBClient<RandomnessResultCache>,
         time_limits: TimeLimitDescriptor,
-        listener_descriptors: Option<Vec<ListenerDescriptor>>,
+        listener_descriptors: Vec<ListenerDescriptor>,
     ) -> Self {
         GeneralRelayedChain {
             id: chain_identity.get_chain_id(),
@@ -669,7 +655,11 @@ where
                     TaskType::Listener(self.id, ListenerType::Block),
                     async move {
                         if let Err(e) = p_block
-                            .start(listener.interval_millis, listener.use_jitter)
+                            .start(
+                                listener.interval_millis,
+                                listener.use_jitter,
+                                listener.reset_descriptor,
+                            )
                             .await
                         {
                             error!("{:?}", e);
@@ -692,7 +682,11 @@ where
                     TaskType::Listener(self.id, ListenerType::NewRandomnessTask),
                     async move {
                         if let Err(e) = p_new_randomness_task
-                            .start(listener.interval_millis, listener.use_jitter)
+                            .start(
+                                listener.interval_millis,
+                                listener.use_jitter,
+                                listener.reset_descriptor,
+                            )
                             .await
                         {
                             error!("{:?}", e);
@@ -718,7 +712,11 @@ where
                     TaskType::Listener(self.id, ListenerType::ReadyToHandleRandomnessTask),
                     async move {
                         if let Err(e) = p_ready_to_handle_randomness_task
-                            .start(listener.interval_millis, listener.use_jitter)
+                            .start(
+                                listener.interval_millis,
+                                listener.use_jitter,
+                                listener.reset_descriptor,
+                            )
                             .await
                         {
                             error!("{:?}", e);
@@ -743,7 +741,11 @@ where
                     TaskType::Listener(self.id, ListenerType::RandomnessSignatureAggregation),
                     async move {
                         if let Err(e) = p_randomness_signature_aggregation
-                            .start(listener.interval_millis, listener.use_jitter)
+                            .start(
+                                listener.interval_millis,
+                                listener.use_jitter,
+                                listener.reset_descriptor,
+                            )
                             .await
                         {
                             error!("{:?}", e);
@@ -764,23 +766,9 @@ where
         &self,
         context: &(dyn ContextFetcher + Sync + Send),
     ) -> SchedulerResult<()> {
-        match &self.listener_descriptors {
-            Some(listeners) => {
-                for listener in listeners {
-                    self.init_listener(
-                        context.get_event_queue(),
-                        context.get_fixed_task_handler(),
-                        *listener,
-                    )
-                    .await?;
-                }
-            }
-            None => {
-                self.init_block_listeners(context).await?;
+        self.init_block_listeners(context).await?;
 
-                self.init_randomness_listeners(context).await?;
-            }
-        }
+        self.init_randomness_listeners(context).await?;
 
         Ok(())
     }
@@ -821,15 +809,16 @@ where
         &self,
         context: &(dyn ContextFetcher + Sync + Send),
     ) -> SchedulerResult<()> {
-        self.init_listener(
-            context.get_event_queue(),
-            context.get_fixed_task_handler(),
-            ListenerDescriptor::build(
-                ListenerType::Block,
-                self.time_limits.listener_interval_millis,
-            ),
-        )
-        .await?;
+        for listener in self.listener_descriptors.iter() {
+            if listener.l_type == ListenerType::Block {
+                self.init_listener(
+                    context.get_event_queue(),
+                    context.get_fixed_task_handler(),
+                    *listener,
+                )
+                .await?;
+            }
+        }
 
         Ok(())
     }
@@ -838,33 +827,19 @@ where
         &self,
         context: &(dyn ContextFetcher + Sync + Send),
     ) -> SchedulerResult<()> {
-        self.init_listener(
-            context.get_event_queue(),
-            context.get_fixed_task_handler(),
-            ListenerDescriptor::build(
-                ListenerType::NewRandomnessTask,
-                self.time_limits.listener_interval_millis,
-            ),
-        )
-        .await?;
-        self.init_listener(
-            context.get_event_queue(),
-            context.get_fixed_task_handler(),
-            ListenerDescriptor::build(
-                ListenerType::ReadyToHandleRandomnessTask,
-                self.time_limits.listener_interval_millis,
-            ),
-        )
-        .await?;
-        self.init_listener(
-            context.get_event_queue(),
-            context.get_fixed_task_handler(),
-            ListenerDescriptor::build(
-                ListenerType::RandomnessSignatureAggregation,
-                self.time_limits.listener_interval_millis,
-            ),
-        )
-        .await?;
+        for listener in self.listener_descriptors.iter() {
+            if listener.l_type == ListenerType::NewRandomnessTask
+                || listener.l_type == ListenerType::ReadyToHandleRandomnessTask
+                || listener.l_type == ListenerType::RandomnessSignatureAggregation
+            {
+                self.init_listener(
+                    context.get_event_queue(),
+                    context.get_fixed_task_handler(),
+                    *listener,
+                )
+                .await?;
+            }
+        }
 
         Ok(())
     }

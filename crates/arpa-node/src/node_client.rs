@@ -1,10 +1,11 @@
 use arpa_contract_client::controller::{ControllerClientBuilder, ControllerTransactions};
+use arpa_core::build_wallet_from_config;
 use arpa_core::log::encoder::JsonEncoder;
 use arpa_core::Config;
 use arpa_core::GeneralMainChainIdentity;
 use arpa_core::GeneralRelayedChainIdentity;
+use arpa_core::RandomnessTask;
 use arpa_core::DEFAULT_WEBSOCKET_PROVIDER_RECONNECT_TIMES;
-use arpa_core::{build_wallet_from_config, RandomnessTask};
 use arpa_dal::{NodeInfoFetcher, NodeInfoUpdater};
 use arpa_node::context::chain::types::GeneralMainChain;
 use arpa_node::context::chain::types::GeneralRelayedChain;
@@ -25,6 +26,7 @@ use log4rs::append::rolling_file::RollingFileAppender;
 use log4rs::config::{Appender, Root};
 use log4rs::filter::threshold::ThresholdFilter;
 use log4rs::Config as LogConfig;
+use std::fs;
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;
@@ -115,22 +117,28 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let config = Config::load(opt.config_path);
 
+    let logger_descriptor = config.get_logger_descriptor();
+
     init_logger(
-        &config.logger.as_ref().unwrap().node_id,
-        config.logger.as_ref().unwrap().context_logging,
-        &config.logger.as_ref().unwrap().log_file_path,
-        config.logger.as_ref().unwrap().rolling_file_size,
+        logger_descriptor.get_node_id(),
+        logger_descriptor.get_context_logging(),
+        logger_descriptor.get_log_file_path(),
+        logger_descriptor.get_rolling_file_size(),
     );
 
     info!("{:?}", config);
 
-    let data_path = PathBuf::from(config.data_path.clone().unwrap());
+    let data_path = PathBuf::from(config.get_data_path());
 
-    let wallet = build_wallet_from_config(&config.account)?;
+    let wallet = build_wallet_from_config(config.get_account())?;
 
     let id_address = wallet.address();
 
     let is_new_run = !data_path.exists();
+
+    if let Some(parent) = data_path.parent() {
+        fs::create_dir_all(parent)?;
+    }
 
     let db = SqliteDB::build(
         data_path.as_os_str().to_str().unwrap(),
@@ -155,9 +163,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             .save_node_info(
                 id_address,
                 config
-                    .node_advertised_committer_rpc_endpoint
-                    .clone()
-                    .unwrap(),
+                    .get_node_advertised_committer_rpc_endpoint()
+                    .to_string(),
                 dkg_private_key,
                 dkg_public_key,
             )
@@ -176,9 +183,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         node_cache
             .set_node_rpc_endpoint(
                 config
-                    .node_advertised_committer_rpc_endpoint
-                    .clone()
-                    .unwrap(),
+                    .get_node_advertised_committer_rpc_endpoint()
+                    .to_string(),
             )
             .await?;
 
@@ -197,36 +203,36 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let provider = Arc::new(
         Provider::<Ws>::connect_with_reconnects(
-            config.provider_endpoint.clone(),
+            config.get_provider_endpoint(),
             DEFAULT_WEBSOCKET_PROVIDER_RECONNECT_TIMES,
         )
         .await?
         .interval(Duration::from_millis(
-            config.time_limits.unwrap().provider_polling_interval_millis,
+            config.get_time_limits().provider_polling_interval_millis,
         )),
     );
 
     let main_chain_identity = GeneralMainChainIdentity::new(
-        config.chain_id,
+        config.get_main_chain_id(),
         wallet.clone(),
         provider,
+        config.get_provider_endpoint().to_string(),
         config
-            .controller_address
+            .get_controller_address()
             .parse()
             .expect("bad format of controller_address"),
         config
-            .controller_relayer_address
+            .get_controller_relayer_address()
             .parse()
             .expect("bad format of controller_relayer_address"),
         config
-            .adapter_address
+            .get_adapter_address()
             .parse()
             .expect("bad format of adapter_address"),
         config
-            .time_limits
-            .unwrap()
+            .get_time_limits()
             .contract_transaction_retry_descriptor,
-        config.time_limits.unwrap().contract_view_retry_descriptor,
+        config.get_time_limits().contract_view_retry_descriptor,
     );
 
     let main_chain = GeneralMainChain::<G2Curve, G2Scheme>::new(
@@ -236,48 +242,46 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         group_cache.clone(),
         randomness_tasks_cache,
         randomness_result_cache,
-        config.time_limits.unwrap(),
-        config.listeners.clone(),
+        *config.get_time_limits(),
+        config.get_listeners().clone(),
     );
 
-    let relayed_chains_config = config.relayed_chains.clone();
+    let relayed_chains_config = config.get_relayed_chains().clone();
 
     let mut context = GeneralContext::new(main_chain, config);
 
     for relayed_chain_config in relayed_chains_config {
         let provider = Arc::new(
             Provider::<Ws>::connect_with_reconnects(
-                relayed_chain_config.provider_endpoint.clone(),
+                relayed_chain_config.get_provider_endpoint(),
                 DEFAULT_WEBSOCKET_PROVIDER_RECONNECT_TIMES,
             )
             .await?
             .interval(Duration::from_millis(
                 relayed_chain_config
-                    .time_limits
-                    .unwrap()
+                    .get_time_limits()
                     .provider_polling_interval_millis,
             )),
         );
 
         let relayed_chain_identity = GeneralRelayedChainIdentity::new(
-            relayed_chain_config.chain_id,
+            relayed_chain_config.get_chain_id(),
             wallet.clone(),
             provider,
+            relayed_chain_config.get_provider_endpoint().to_string(),
             relayed_chain_config
-                .controller_oracle_address
+                .get_controller_oracle_address()
                 .parse()
                 .expect("bad format of controller_oracle_address"),
             relayed_chain_config
-                .adapter_address
+                .get_adapter_address()
                 .parse()
                 .expect("bad format of adapter_address"),
             relayed_chain_config
-                .time_limits
-                .unwrap()
+                .get_time_limits()
                 .contract_transaction_retry_descriptor,
             relayed_chain_config
-                .time_limits
-                .unwrap()
+                .get_time_limits()
                 .contract_view_retry_descriptor,
         );
 
@@ -287,14 +291,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         let op_randomness_result_cache = db.get_op_randomness_result_client().await?;
 
         let relayed_chain = GeneralRelayedChain::<G2Curve, G2Scheme>::new(
-            relayed_chain_config.description,
+            relayed_chain_config.get_description().to_string(),
             relayed_chain_identity,
             node_cache.clone(),
             group_cache.clone(),
             op_randomness_tasks_cache,
             op_randomness_result_cache,
-            relayed_chain_config.time_limits.unwrap(),
-            relayed_chain_config.listeners.clone(),
+            *relayed_chain_config.get_time_limits(),
+            relayed_chain_config.get_listeners().to_vec(),
         );
 
         context.add_relayed_chain(Box::new(relayed_chain))?;

@@ -8,7 +8,7 @@ use crate::{
 use arpa_contract_client::adapter::AdapterLogs;
 use arpa_core::RandomnessTask;
 use async_trait::async_trait;
-use ethers::types::Address;
+use ethers::{providers::Middleware, types::Address};
 use log::info;
 use std::{marker::PhantomData, sync::Arc};
 use threshold_bls::group::Curve;
@@ -88,6 +88,21 @@ impl<PC: Curve + Sync + Send> Listener for NewRandomnessTaskListener<PC> {
                     Ok(())
                 }
             })
+            .await?;
+
+        Ok(())
+    }
+
+    async fn handle_interruption(&self) -> NodeResult<()> {
+        info!(
+            "Handle interruption for NewRandomnessTaskListener, chain_id:{}.",
+            self.chain_id
+        );
+        self.chain_identity
+            .read()
+            .await
+            .get_provider()
+            .get_net_version()
             .await?;
 
         Ok(())

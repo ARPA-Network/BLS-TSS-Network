@@ -304,6 +304,10 @@ Configuration items in [`conf/config.yml`](conf/config.yml) are listed here:
       listener_interval_millis: 10000
       dkg_wait_for_phase_interval_millis: 10000
       provider_polling_interval_millis: 10000
+      provider_reset_descriptor:
+        interval_millis: 5000
+        max_attempts: 17280
+        use_jitter: false
       contract_transaction_retry_descriptor:
         base: 2
         factor: 1000
@@ -332,7 +336,13 @@ Configuration items in [`conf/config.yml`](conf/config.yml) are listed here:
     - dkg_wait_for_phase_interval_millis: Milliseconds between two rounds of polling for the next DKG phase. (example: 10000)
     - provider_polling_interval_millis: Milliseconds between two rounds of polling pending transactions. (example: 10000)
 
-  - We use exponential backoff to retry when an interaction fails. The interval will be an exponent of base multiplied by factor every time. The interval will be reset when the interaction succeeds.
+  - We use fixed interval to reset the provider when it can't be reconnected.
+
+    - provider_reset_descriptor: (interval sequence by default: 5s, 10s, ..., 24h)
+
+  - We use exponential backoff to retry when a transaction or view call fails, or a rpc request to the committer fails. The interval will be an exponent of base multiplied by factor every time, and it will be reset when the interaction succeeds.
+
+    - interval = factor \* base ^ attempt
 
   - A jitter is added to the interval to avoid the situation that all the tasks are polling at the same time. It will multiply a random number between 0.5 and 1.0 to the interval.
 
@@ -408,6 +418,10 @@ Configuration items in [`conf/config.yml`](conf/config.yml) are listed here:
       randomness_task_exclusive_window: 10
       listener_interval_millis: 1000
       provider_polling_interval_millis: 1000
+      provider_reset_descriptor:
+        interval_millis: 5000
+        max_attempts: 17280
+        use_jitter: false
       contract_transaction_retry_descriptor:
         base: 2
         factor: 1000
@@ -428,6 +442,8 @@ Configuration items in [`conf/config.yml`](conf/config.yml) are listed here:
   - The node share the same identity with the main chain on all relayed chains, so the node MUST be registered on the main chain first(will automatically execute on the new-run).
 
   - Currently latest grouping info are relayed from the main chain to relayed chains, so the listeners of PreGrouping, PostCommitGrouping and PostGrouping are not needed.
+
+  - Time limits of relayed chains are independent of the main chain. The way to set them is the same as the main chain.
 
 # Local Test
 

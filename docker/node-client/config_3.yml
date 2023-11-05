@@ -6,15 +6,15 @@ node_management_rpc_endpoint: "0.0.0.0:50093"
 
 node_management_rpc_token: "for_test"
 
-provider_endpoint: "ws://172.17.0.1:8546"
+provider_endpoint: "ws://127.0.0.1:8546"
 
 chain_id: 900
 
-controller_address: "0x967AB65ef14c58bD4DcfFeaAA1ADb40a022140E5"
+controller_address: "0x5eb3Bc0a489C5A8288765d2336659EbCA68FCd00"
 
-controller_relayer_address: "0x547382C0D1b23f707918D3c83A77317B71Aa8470"
+controller_relayer_address: "0x82e01223d51Eb87e16A03E24687EDF0F294da6f1"
 
-adapter_address: "0x8e264821AFa98DD104eEcfcfa7FD9f8D8B320adA"
+adapter_address: "0x4c5859f0F772848b2D91F1D83E2Fe57935348029"
 
 data_path: "./db/data3.sqlite"
 
@@ -57,6 +57,10 @@ time_limits:
   listener_interval_millis: 1000
   dkg_wait_for_phase_interval_millis: 1000
   provider_polling_interval_millis: 1000
+  provider_reset_descriptor:
+    interval_millis: 5000
+    max_attempts: 17280
+    use_jitter: false
   contract_transaction_retry_descriptor:
     base: 2
     factor: 1000
@@ -76,9 +80,9 @@ time_limits:
 relayed_chains:
   - chain_id: 901
     description: "OP"
-    provider_endpoint: "ws://172.17.0.1:9546"
-    controller_oracle_address: "0x0ed64d01D0B4B655E410EF1441dD677B695639E7"
-    adapter_address: "0x40a42Baf86Fc821f972Ad2aC878729063CeEF403"
+    provider_endpoint: "ws://127.0.0.1:9546"
+    controller_oracle_address: "0xCf7Ed3AccA5a467e9e704C703E8D87F634fB0Fc9"
+    adapter_address: "0x5FC8d32690cc91D4c39d9d3abcBD16989F875707"
     listeners:
       - l_type: Block
         interval_millis: 0
@@ -97,6 +101,10 @@ relayed_chains:
       randomness_task_exclusive_window: 10
       listener_interval_millis: 1000
       provider_polling_interval_millis: 1000
+      provider_reset_descriptor:
+        interval_millis: 5000
+        max_attempts: 17280
+        use_jitter: false
       contract_transaction_retry_descriptor:
         base: 2
         factor: 1000

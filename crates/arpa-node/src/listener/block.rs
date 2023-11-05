@@ -7,6 +7,7 @@ use crate::{
 };
 use arpa_contract_client::provider::BlockFetcher;
 use async_trait::async_trait;
+use log::info;
 use std::{marker::PhantomData, sync::Arc};
 use threshold_bls::group::Curve;
 use tokio::sync::RwLock;
@@ -43,11 +44,13 @@ impl<PC: Curve + Sync + Send> EventPublisher<NewBlock> for BlockListener<PC> {
 #[async_trait]
 impl<PC: Curve + Sync + Send> Listener for BlockListener<PC> {
     async fn listen(&self) -> NodeResult<()> {
-        let client = self.chain_identity.read().await.build_chain_provider();
         let chain_id = self.chain_id;
         let eq = self.eq.clone();
 
-        client
+        self.chain_identity
+            .read()
+            .await
+            .get_provider()
             .subscribe_new_block_height(move |block_height: usize| {
                 let eq = eq.clone();
                 async move {
@@ -63,6 +66,16 @@ impl<PC: Curve + Sync + Send> Listener for BlockListener<PC> {
                 }
             })
             .await?;
+
+        Ok(())
+    }
+
+    async fn handle_interruption(&self) -> NodeResult<()> {
+        info!(
+            "Handle interruption for BlockListener, chain_id:{}.",
+            self.chain_id
+        );
+        self.chain_identity.write().await.reset_provider().await?;
 
         Ok(())
     }

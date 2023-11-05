@@ -38,6 +38,9 @@ L1_RPC = get_key(ENV_PATH, "L1_RPC")
 L1_WS_RPC = get_key(ENV_PATH, "L1_WS_RPC")
 
 # Deployment flags
+LOCAL_TEST = (
+    get_key(ENV_PATH, "LOCAL_TEST").lower() == "true"
+)
 ARPA_EXISTS = (
     get_key(ENV_PATH, "ARPA_EXISTS").lower() == "true"
 )  # bool True if ARPA_EXISTS is true in .env
@@ -488,16 +491,17 @@ def deploy_nodes():  # ! Deploy Nodes
     # start randcast nodes
     print("Starting randcast nodes...")
     print("Starting Node 1!")
-    # cmd = f"cargo run --bin node-client -- -c {ARPA_NODE_CONFIG_DIR}/config_1.yml > /dev/null 2>&1 &"
-    cmd = f"docker run -d \
-  --name node1 \
-  -p 50061:50061 -p 50091:50091 \
-  -v {ROOT_DIR}/docker/node-client/config_1.yml:/app/config.yml \
-  -v {ROOT_DIR}/docker/node-client/db:/app/db \
-  -v {ROOT_DIR}/docker/node-client/log/1:/app/log/1 \
-  arpachainio/node-client:latest"
+    if LOCAL_TEST:
+        cmd = f"cargo run --bin node-client -- -c {NODE_CLIENT_DIR}/config_1.yml > /dev/null 2>&1 &"
+    else: 
+        cmd = f"docker run -d \
+            --name node1 \
+            -p 50061:50061 -p 50091:50091 \
+            -v {ROOT_DIR}/docker/node-client/config_1.yml:/app/config.yml \
+            -v {ROOT_DIR}/docker/node-client/db:/app/db \
+            -v {ROOT_DIR}/docker/node-client/log/1:/app/log/1 \
+            ghcr.io/arpa-network/node-client:latest"
     cprint(cmd)
-
     run_command(
         [cmd],
         cwd=NODE_CLIENT_DIR,
@@ -505,15 +509,16 @@ def deploy_nodes():  # ! Deploy Nodes
     )
 
     print("Starting Node 2!")
-    # cmd = f"cargo run --bin node-client -- -c {ARPA_NODE_CONFIG_DIR}/config_2.yml > /dev/null 2>&1 &"
-    cmd = f"docker run -d \
-  --name node2 \
-  -p 50062:50062 -p 50092:50092 \
-  -v {ROOT_DIR}/docker/node-client/config_2.yml:/app/config.yml \
-  -v {ROOT_DIR}/docker/node-client/db:/app/db \
-  -v {ROOT_DIR}/docker/node-client/log/2:/app/log/2 \
-  arpachainio/node-client:latest"
-
+    if LOCAL_TEST:
+        cmd = f"cargo run --bin node-client -- -c {NODE_CLIENT_DIR}/config_2.yml > /dev/null 2>&1 &"
+    else: 
+        cmd = f"docker run -d \
+            --name node2 \
+            -p 50062:50062 -p 50092:50092 \
+            -v {ROOT_DIR}/docker/node-client/config_2.yml:/app/config.yml \
+            -v {ROOT_DIR}/docker/node-client/db:/app/db \
+            -v {ROOT_DIR}/docker/node-client/log/2:/app/log/2 \
+            ghcr.io/arpa-network/node-client:latest"
     cprint(cmd)
     run_command(
         [cmd],
@@ -522,14 +527,16 @@ def deploy_nodes():  # ! Deploy Nodes
     )
 
     print("Starting Node 3!")
-    # cmd = f"cargo run --bin node-client -- -c {ARPA_NODE_CONFIG_DIR}/config_3.yml > /dev/null 2>&1 &"
-    cmd = f"docker run -d \
-  --name node3 \
-  -p 50063:50063 -p 50093:50093 \
-  -v {ROOT_DIR}/docker/node-client/config_3.yml:/app/config.yml \
-  -v {ROOT_DIR}/docker/node-client/db:/app/db \
-  -v {ROOT_DIR}/docker/node-client/log/3:/app/log/3 \
-  arpachainio/node-client:latest"
+    if LOCAL_TEST:
+        cmd = f"cargo run --bin node-client -- -c {NODE_CLIENT_DIR}/config_3.yml > /dev/null 2>&1 &"
+    else: 
+        cmd = f"docker run -d \
+            --name node3 \
+            -p 50063:50063 -p 50093:50093 \
+            -v {ROOT_DIR}/docker/node-client/config_3.yml:/app/config.yml \
+            -v {ROOT_DIR}/docker/node-client/db:/app/db \
+            -v {ROOT_DIR}/docker/node-client/log/3:/app/log/3 \
+            ghcr.io/arpa-network/node-client:latest"
     cprint(cmd)
     run_command(
         [cmd],

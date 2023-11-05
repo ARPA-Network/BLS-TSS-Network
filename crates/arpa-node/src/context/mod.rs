@@ -17,11 +17,10 @@ use arpa_contract_client::{
     ethers::{
         adapter::AdapterClient, controller::ControllerClient,
         controller_oracle::ControllerOracleClient, controller_relayer::ControllerRelayerClient,
-        coordinator::CoordinatorClient, provider::ChainProvider,
+        coordinator::CoordinatorClient,
     },
-    provider::ChainProviderBuilder,
 };
-use arpa_core::{ChainIdentity, Config, RandomnessTask};
+use arpa_core::{ChainIdentity, ChainProviderManager, Config, RandomnessTask};
 use arpa_core::{SchedulerResult, Task};
 use arpa_dal::{
     cache::RandomnessResultCache, BLSTasksFetcher, BlockInfoFetcher, BlockInfoUpdater,
@@ -63,12 +62,12 @@ pub trait SignatureResultCacheHandler<T: ResultCache>:
 
 pub trait ChainIdentityHandler<PC: Curve>:
     ChainIdentity
+    + ChainProviderManager
     + ControllerClientBuilder<PC>
     + ControllerRelayerClientBuilder
     + ControllerOracleClientBuilder<PC>
     + CoordinatorClientBuilder<PC>
     + AdapterClientBuilder
-    + ChainProviderBuilder
     + std::fmt::Debug
     + Sync
     + Send
@@ -83,7 +82,6 @@ pub type ChainIdentityHandlerType<PC> = Box<
         ControllerOracleService = ControllerOracleClient,
         CoordinatorService = CoordinatorClient,
         AdapterService = AdapterClient,
-        ProviderService = ChainProvider,
     >,
 >;
 

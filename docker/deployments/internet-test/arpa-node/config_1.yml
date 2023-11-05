@@ -4,7 +4,7 @@ node_management_rpc_endpoint: "0.0.0.0:50091"
 
 node_management_rpc_token: "for_test"
 
-provider_endpoint: "http://<ETH_RPC_IP>:8545" 
+provider_endpoint: "http://<ETH_RPC_IP>:8545"
 
 chain_id: 31337
 
@@ -46,6 +46,10 @@ time_limits:
   listener_interval_millis: 1000
   dkg_wait_for_phase_interval_millis: 1000
   provider_polling_interval_millis: 1000
+  provider_reset_descriptor:
+    interval_millis: 5000
+    max_attempts: 17280
+    use_jitter: false
   contract_transaction_retry_descriptor:
     base: 2
     factor: 1000
