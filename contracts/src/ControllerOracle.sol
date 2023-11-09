@@ -66,7 +66,7 @@ contract ControllerOracle is Initializable, IControllerOracle, OwnableUpgradeabl
         _adapterContractAddress = adapterContractAddress;
         _lastOutput = lastOutput;
 
-        __Ownable_init();
+        __Ownable_init(msg.sender);
     }
 
     function updateGroup(address committer, Group memory group) external {

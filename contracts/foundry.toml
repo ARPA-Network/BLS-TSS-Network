@@ -5,7 +5,7 @@ libs = ['lib']
 optimizer = true
 optimizer_runs = 300
 ignored_error_codes = [5159, 5574]
-solc = "0.8.18"
+solc = "0.8.20"
 
 [profile.test]
 verbosity = 2

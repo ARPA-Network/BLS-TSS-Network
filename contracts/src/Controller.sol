@@ -98,7 +98,7 @@ contract Controller is Initializable, IController, IControllerOwner, OwnableUpgr
         _arpa = IERC20(arpa);
         _lastOutput = lastOutput;
 
-        __Ownable_init();
+        __Ownable_init(msg.sender);
     }
 
     // =============

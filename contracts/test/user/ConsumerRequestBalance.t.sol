@@ -5,6 +5,7 @@ import {GetRandomNumberExample} from "Randcast-User-Contract/user/examples/GetRa
 import {GetShuffledArrayExample} from "Randcast-User-Contract/user/examples/GetShuffledArrayExample.sol";
 import {RollDiceExample} from "Randcast-User-Contract/user/examples/RollDiceExample.sol";
 import {AdvancedGetShuffledArrayExample} from "Randcast-User-Contract/user/examples/AdvancedGetShuffledArrayExample.sol";
+import {GeneralRandcastConsumerBase} from "Randcast-User-Contract/user/GeneralRandcastConsumerBase.sol";
 import {
     IAdapter,
     Adapter,
@@ -136,7 +137,7 @@ contract ConsumerRequestBalanceTest is RandcastTestHelper {
         vm.startPrank(_user);
 
         uint32 bunch = 10;
-        vm.expectRevert(Adapter.InvalidSubscription.selector);
+        vm.expectRevert(GeneralRandcastConsumerBase.NoSubscriptionBound.selector);
         _rollDiceExample.rollDice(bunch);
     }
 
