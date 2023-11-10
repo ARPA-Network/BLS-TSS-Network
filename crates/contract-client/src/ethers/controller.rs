@@ -12,7 +12,7 @@ use crate::{TransactionCaller, ViewCaller};
 use arpa_core::{
     u256_to_vec, ChainIdentity, DKGTask, ExponentialBackoffRetryDescriptor,
     GeneralMainChainIdentity, GeneralRelayedChainIdentity, Group, MainChainIdentity, Member, Node,
-    WalletSigner,
+    WsWalletSigner,
 };
 use async_trait::async_trait;
 use ethers::prelude::*;
@@ -25,7 +25,7 @@ use threshold_bls::group::Curve;
 pub struct ControllerClient {
     chain_id: usize,
     controller_address: Address,
-    signer: Arc<WalletSigner>,
+    signer: Arc<WsWalletSigner>,
     contract_transaction_retry_descriptor: ExponentialBackoffRetryDescriptor,
     contract_view_retry_descriptor: ExponentialBackoffRetryDescriptor,
 }
@@ -70,7 +70,7 @@ impl<C: Curve> ControllerClientBuilder<C> for GeneralRelayedChainIdentity {
     }
 }
 
-type ControllerContract = Controller<WalletSigner>;
+type ControllerContract = Controller<WsWalletSigner>;
 
 #[async_trait]
 impl ServiceClient<ControllerContract> for ControllerClient {
@@ -98,6 +98,7 @@ impl ControllerTransactions for ControllerClient {
         ControllerClient::call_contract_transaction(
             self.chain_id,
             "node_register",
+            controller_contract.client_ref(),
             call,
             self.contract_transaction_retry_descriptor,
             true,
@@ -127,6 +128,7 @@ impl ControllerTransactions for ControllerClient {
         ControllerClient::call_contract_transaction(
             self.chain_id,
             "commit_dkg",
+            controller_contract.client_ref(),
             call,
             self.contract_transaction_retry_descriptor,
             true,
@@ -147,6 +149,7 @@ impl ControllerTransactions for ControllerClient {
         ControllerClient::call_contract_transaction(
             self.chain_id,
             "post_process_dkg",
+            controller_contract.client_ref(),
             call,
             self.contract_transaction_retry_descriptor,
             false,

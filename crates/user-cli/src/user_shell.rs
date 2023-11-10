@@ -199,6 +199,7 @@ async fn send(args: ArgMatches, context: &mut Context) -> anyhow::Result<Option<
             let trx_hash = ArpaClient::call_contract_transaction(
                 main_chain_id as usize,
                 "approve-arpa-to-staking",
+                arpa_contract.client_ref(),
                 arpa_contract.approve(context.config.staking_address(), amount),
                 context
                     .config
@@ -267,6 +268,7 @@ async fn send(args: ArgMatches, context: &mut Context) -> anyhow::Result<Option<
             let trx_hash = StakingClient::call_contract_transaction(
                 main_chain_id as usize,
                 "stake",
+                staking_contract.client_ref(),
                 staking_contract.stake(amount),
                 context
                     .config
@@ -310,6 +312,7 @@ async fn send(args: ArgMatches, context: &mut Context) -> anyhow::Result<Option<
             let trx_hash = StakingClient::call_contract_transaction(
                 main_chain_id as usize,
                 "unstake",
+                staking_contract.client_ref(),
                 staking_contract.unstake(amount),
                 context
                     .config
@@ -333,6 +336,7 @@ async fn send(args: ArgMatches, context: &mut Context) -> anyhow::Result<Option<
             let trx_hash = StakingClient::call_contract_transaction(
                 main_chain_id as usize,
                 "claim",
+                staking_contract.client_ref(),
                 staking_contract.claim(),
                 context
                     .config
@@ -356,6 +360,7 @@ async fn send(args: ArgMatches, context: &mut Context) -> anyhow::Result<Option<
             let trx_hash = StakingClient::call_contract_transaction(
                 main_chain_id as usize,
                 "claim_reward",
+                staking_contract.client_ref(),
                 staking_contract.claim_reward(),
                 context
                     .config
@@ -379,6 +384,7 @@ async fn send(args: ArgMatches, context: &mut Context) -> anyhow::Result<Option<
             let trx_hash = StakingClient::call_contract_transaction(
                 main_chain_id as usize,
                 "claim_frozen_principal",
+                staking_contract.client_ref(),
                 staking_contract.claim_frozen_principal(),
                 context
                     .config
@@ -402,6 +408,7 @@ async fn send(args: ArgMatches, context: &mut Context) -> anyhow::Result<Option<
             let trx_hash = AdapterClient::call_contract_transaction(
                 *chain_id as usize,
                 "create_subscription",
+                adapter_contract.client_ref(),
                 adapter_contract.create_subscription(),
                 context
                     .config
@@ -428,6 +435,7 @@ async fn send(args: ArgMatches, context: &mut Context) -> anyhow::Result<Option<
             let trx_hash = AdapterClient::call_contract_transaction(
                 *chain_id as usize,
                 "add_consumer",
+                adapter_contract.client_ref(),
                 adapter_contract.add_consumer(*sub_id, consumer.parse().unwrap()),
                 context
                     .config
@@ -455,6 +463,7 @@ async fn send(args: ArgMatches, context: &mut Context) -> anyhow::Result<Option<
             let trx_hash = AdapterClient::call_contract_transaction(
                 *chain_id as usize,
                 "fund_subscription",
+                adapter_contract.client_ref(),
                 adapter_contract.fund_subscription(*sub_id).value(amount),
                 context
                     .config
@@ -481,6 +490,7 @@ async fn send(args: ArgMatches, context: &mut Context) -> anyhow::Result<Option<
             let trx_hash = AdapterClient::call_contract_transaction(
                 *chain_id as usize,
                 "set_referral",
+                adapter_contract.client_ref(),
                 adapter_contract.set_referral(*sub_id, *referral_sub_id),
                 context
                     .config
@@ -507,6 +517,7 @@ async fn send(args: ArgMatches, context: &mut Context) -> anyhow::Result<Option<
             let trx_hash = AdapterClient::call_contract_transaction(
                 *chain_id as usize,
                 "cancel_subscription",
+                adapter_contract.client_ref(),
                 adapter_contract.cancel_subscription(*sub_id, recipient.parse().unwrap()),
                 context
                     .config
@@ -533,6 +544,7 @@ async fn send(args: ArgMatches, context: &mut Context) -> anyhow::Result<Option<
             let trx_hash = AdapterClient::call_contract_transaction(
                 *chain_id as usize,
                 "remove_consumer",
+                adapter_contract.client_ref(),
                 adapter_contract.remove_consumer(*sub_id, consumer.parse().unwrap()),
                 context
                     .config
