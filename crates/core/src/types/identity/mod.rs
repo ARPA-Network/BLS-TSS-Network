@@ -16,7 +16,7 @@ pub trait ChainIdentity {
 
     fn get_adapter_address(&self) -> Address;
 
-    fn get_signer(&self) -> Arc<WalletSigner>;
+    fn get_signer(&self) -> Arc<WsWalletSigner>;
 
     fn get_contract_transaction_retry_descriptor(&self) -> ExponentialBackoffRetryDescriptor;
 

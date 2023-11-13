@@ -9,7 +9,7 @@ use crate::{
 use ::core::panic;
 use arpa_core::{
     ChainIdentity, ExponentialBackoffRetryDescriptor, GeneralMainChainIdentity,
-    GeneralRelayedChainIdentity, WalletSigner,
+    GeneralRelayedChainIdentity, WsWalletSigner,
 };
 use async_trait::async_trait;
 use dkg_core::{
@@ -24,7 +24,7 @@ use threshold_bls::group::Curve;
 pub struct CoordinatorClient {
     chain_id: usize,
     coordinator_address: Address,
-    signer: Arc<WalletSigner>,
+    signer: Arc<WsWalletSigner>,
     contract_transaction_retry_descriptor: ExponentialBackoffRetryDescriptor,
     contract_view_retry_descriptor: ExponentialBackoffRetryDescriptor,
 }
@@ -69,7 +69,7 @@ impl<C: Curve + 'static> CoordinatorClientBuilder<C> for GeneralRelayedChainIden
     }
 }
 
-type CoordinatorContract = Coordinator<WalletSigner>;
+type CoordinatorContract = Coordinator<WsWalletSigner>;
 
 #[async_trait]
 impl ServiceClient<CoordinatorContract> for CoordinatorClient {
@@ -97,6 +97,7 @@ impl CoordinatorTransactions for CoordinatorClient {
         CoordinatorClient::call_contract_transaction(
             self.chain_id,
             "publish",
+            coordinator_contract.client_ref(),
             call,
             self.contract_transaction_retry_descriptor,
             false,
@@ -225,7 +226,7 @@ impl<C: Curve + 'static> BoardPublisher<C> for CoordinatorClient {
 
 #[cfg(test)]
 pub mod coordinator_tests {
-    use super::{CoordinatorClient, WalletSigner};
+    use super::{CoordinatorClient, WsWalletSigner};
     use crate::contract_stub::coordinator::Coordinator;
     use crate::coordinator::CoordinatorTransactions;
     use crate::error::ContractClientError;
@@ -257,7 +258,7 @@ pub mod coordinator_tests {
         Anvil::new().chain_id(1u64).mnemonic(PHRASE).spawn()
     }
 
-    async fn deploy_contract(anvil: &AnvilInstance) -> Coordinator<WalletSigner> {
+    async fn deploy_contract(anvil: &AnvilInstance) -> Coordinator<WsWalletSigner> {
         // 2. instantiate our wallet
         let wallet: LocalWallet = anvil.keys()[0].clone().into();
 
@@ -357,7 +358,7 @@ pub mod coordinator_tests {
 
         let res = client.publish(mock_value.clone()).await;
         assert!(res.is_err());
-        if let ContractClientError::ContractError(Revert(bytes)) = res.unwrap_err() {
+        if let ContractClientError::WsContractError(Revert(bytes)) = res.unwrap_err() {
             let error_msg = String::decode_with_selector(&bytes).unwrap();
             assert_eq!("share existed", error_msg);
         } else {

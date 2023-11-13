@@ -11,14 +11,14 @@ use ethers_providers::{Http, Middleware, Provider, ProviderError, Ws};
 use ethers_signers::{LocalWallet, Signer};
 use std::sync::Arc;
 
-pub type WalletSigner = SignerMiddleware<NonceManagerMiddleware<Arc<Provider<Ws>>>, LocalWallet>;
+pub type WsWalletSigner = SignerMiddleware<NonceManagerMiddleware<Arc<Provider<Ws>>>, LocalWallet>;
 pub type HttpWalletSigner =
     SignerMiddleware<NonceManagerMiddleware<Arc<Provider<Http>>>, LocalWallet>;
 
 #[derive(Debug, Clone)]
 pub struct GeneralMainChainIdentity {
     chain_id: usize,
-    signer: Arc<WalletSigner>,
+    signer: Arc<WsWalletSigner>,
     provider_endpoint: String,
     controller_address: Address,
     controller_relayer_address: Address,
@@ -74,7 +74,7 @@ impl ChainIdentity for GeneralMainChainIdentity {
         self.adapter_address
     }
 
-    fn get_signer(&self) -> Arc<WalletSigner> {
+    fn get_signer(&self) -> Arc<WsWalletSigner> {
         self.signer.clone()
     }
 
@@ -155,7 +155,7 @@ impl ChainProviderManager for GeneralMainChainIdentity {
 #[derive(Debug, Clone)]
 pub struct GeneralRelayedChainIdentity {
     chain_id: usize,
-    signer: Arc<WalletSigner>,
+    signer: Arc<WsWalletSigner>,
     provider_endpoint: String,
     controller_oracle_address: Address,
     adapter_address: Address,
@@ -208,7 +208,7 @@ impl ChainIdentity for GeneralRelayedChainIdentity {
         self.adapter_address
     }
 
-    fn get_signer(&self) -> Arc<WalletSigner> {
+    fn get_signer(&self) -> Arc<WsWalletSigner> {
         self.signer.clone()
     }
 

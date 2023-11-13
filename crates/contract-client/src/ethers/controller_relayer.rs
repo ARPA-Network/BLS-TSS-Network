@@ -6,7 +6,7 @@ use crate::{
 };
 use arpa_core::{
     ChainIdentity, ExponentialBackoffRetryDescriptor, GeneralMainChainIdentity,
-    GeneralRelayedChainIdentity, MainChainIdentity, WalletSigner,
+    GeneralRelayedChainIdentity, MainChainIdentity, WsWalletSigner,
 };
 use async_trait::async_trait;
 use ethers::prelude::*;
@@ -15,7 +15,7 @@ use std::sync::Arc;
 pub struct ControllerRelayerClient {
     chain_id: usize,
     controller_relayer_address: Address,
-    signer: Arc<WalletSigner>,
+    signer: Arc<WsWalletSigner>,
     contract_transaction_retry_descriptor: ExponentialBackoffRetryDescriptor,
 }
 
@@ -56,7 +56,7 @@ impl ControllerRelayerClientBuilder for GeneralRelayedChainIdentity {
     }
 }
 
-type ControllerRelayerContract = ControllerRelayer<WalletSigner>;
+type ControllerRelayerContract = ControllerRelayer<WsWalletSigner>;
 
 #[async_trait]
 impl ServiceClient<ControllerRelayerContract> for ControllerRelayerClient {
@@ -82,6 +82,7 @@ impl ControllerRelayerTransactions for ControllerRelayerClient {
         ControllerRelayerClient::call_contract_transaction(
             self.chain_id,
             "relay_group",
+            controller_relayer_contract.client_ref(),
             call,
             self.contract_transaction_retry_descriptor,
             false,

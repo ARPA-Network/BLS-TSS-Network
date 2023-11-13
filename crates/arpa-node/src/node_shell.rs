@@ -9,7 +9,7 @@ use arpa_contract_client::ethers::controller_oracle::ControllerOracleClient;
 use arpa_contract_client::{ServiceClient, TransactionCaller, ViewCaller};
 use arpa_core::{
     address_to_string, build_wallet_from_config, pad_to_bytes32, Config, ConfigError,
-    GeneralMainChainIdentity, GeneralRelayedChainIdentity, WalletSigner,
+    GeneralMainChainIdentity, GeneralRelayedChainIdentity, WsWalletSigner,
     DEFAULT_WEBSOCKET_PROVIDER_RECONNECT_TIMES,
 };
 use arpa_dal::NodeInfoFetcher;
@@ -193,6 +193,7 @@ async fn send<PC: Curve>(
             let trx_hash = ArpaClient::call_contract_transaction(
                 main_chain_id,
                 "approve-arpa-to-staking",
+                arpa_contract.client_ref(),
                 arpa_contract.approve(context.staking_contract_address().await?, amount),
                 context
                     .config
@@ -278,6 +279,7 @@ async fn send<PC: Curve>(
             let trx_hash = StakingClient::call_contract_transaction(
                 main_chain_id,
                 "stake",
+                staking_contract.client_ref(),
                 staking_contract.stake(amount),
                 context
                     .config
@@ -322,6 +324,7 @@ async fn send<PC: Curve>(
             let trx_hash = StakingClient::call_contract_transaction(
                 main_chain_id,
                 "unstake",
+                staking_contract.client_ref(),
                 staking_contract.unstake(amount),
                 context
                     .config
@@ -346,6 +349,7 @@ async fn send<PC: Curve>(
             let trx_hash = StakingClient::call_contract_transaction(
                 main_chain_id,
                 "claim_frozen_principal",
+                staking_contract.client_ref(),
                 staking_contract.claim_frozen_principal(),
                 context
                     .config
@@ -410,6 +414,7 @@ async fn send<PC: Curve>(
             let trx_hash = ControllerClient::call_contract_transaction(
                 main_chain_id,
                 "node_activate",
+                controller_contract.client_ref(),
                 controller_contract.node_activate(),
                 context
                     .config
@@ -442,6 +447,7 @@ async fn send<PC: Curve>(
             let trx_hash = ControllerClient::call_contract_transaction(
                 main_chain_id,
                 "node_quit",
+                controller_contract.client_ref(),
                 controller_contract.node_quit(),
                 context
                     .config
@@ -484,6 +490,7 @@ async fn send<PC: Curve>(
             let trx_hash = ControllerClient::call_contract_transaction(
                 main_chain_id,
                 "change_dkg_public_key",
+                controller_contract.client_ref(),
                 controller_contract
                     .change_dkg_public_key(bincode::serialize(&dkg_public_key)?.into()),
                 context
@@ -523,6 +530,7 @@ async fn send<PC: Curve>(
                 let trx_hash = ControllerClient::call_contract_transaction(
                     *chain_id,
                     "node_withdraw",
+                    controller_contract.client_ref(),
                     controller_contract.node_withdraw(recipient),
                     context
                         .config
@@ -546,6 +554,7 @@ async fn send<PC: Curve>(
                 let trx_hash = ControllerOracleClient::call_contract_transaction(
                     *chain_id,
                     "node_withdraw",
+                    controller_oracle_contract.client_ref(),
                     controller_oracle_contract.node_withdraw(recipient),
                     context
                         .config
@@ -929,7 +938,7 @@ async fn call<PC: Curve>(
                 .build_adapter_client(context.wallet.address());
 
             let adapter_contract =
-                ServiceClient::<AdapterContract<WalletSigner>>::prepare_service_client(&client)
+                ServiceClient::<AdapterContract<WsWalletSigner>>::prepare_service_client(&client)
                     .await?;
 
             let filter = adapter_contract
@@ -972,7 +981,7 @@ async fn call<PC: Curve>(
                 .build_adapter_client(context.chain_identity(*chain_id)?.get_id_address());
 
             let adapter_contract =
-                ServiceClient::<AdapterContract<WalletSigner>>::prepare_service_client(&client)
+                ServiceClient::<AdapterContract<WsWalletSigner>>::prepare_service_client(&client)
                     .await?;
 
             let filter = adapter_contract
@@ -1127,7 +1136,7 @@ async fn call<PC: Curve>(
                 .build_adapter_client(context.wallet.address());
 
             let adapter_contract =
-                ServiceClient::<AdapterContract<WalletSigner>>::prepare_service_client(&client)
+                ServiceClient::<AdapterContract<WsWalletSigner>>::prepare_service_client(&client)
                     .await?;
 
             let (
@@ -1167,7 +1176,7 @@ async fn call<PC: Curve>(
                 .build_adapter_client(context.wallet.address());
 
             let adapter_contract =
-                ServiceClient::<AdapterContract<WalletSigner>>::prepare_service_client(&client)
+                ServiceClient::<AdapterContract<WsWalletSigner>>::prepare_service_client(&client)
                     .await?;
 
             let last_assigned_group_index = AdapterClient::call_contract_view(
@@ -1191,7 +1200,7 @@ async fn call<PC: Curve>(
                 .build_adapter_client(context.wallet.address());
 
             let adapter_contract =
-                ServiceClient::<AdapterContract<WalletSigner>>::prepare_service_client(&client)
+                ServiceClient::<AdapterContract<WsWalletSigner>>::prepare_service_client(&client)
                     .await?;
 
             let randomness_count = AdapterClient::call_contract_view(
@@ -1290,7 +1299,7 @@ async fn call<PC: Curve>(
                 .build_adapter_client(context.wallet.address());
 
             let adapter_contract =
-                ServiceClient::<AdapterContract<WalletSigner>>::prepare_service_client(&client)
+                ServiceClient::<AdapterContract<WsWalletSigner>>::prepare_service_client(&client)
                     .await?;
 
             let (
@@ -1325,7 +1334,7 @@ async fn call<PC: Curve>(
                 .build_adapter_client(context.wallet.address());
 
             let adapter_contract =
-                ServiceClient::<AdapterContract<WalletSigner>>::prepare_service_client(&client)
+                ServiceClient::<AdapterContract<WsWalletSigner>>::prepare_service_client(&client)
                     .await?;
 
             let r_id = sub_matches.get_one::<String>("request-id").unwrap();
