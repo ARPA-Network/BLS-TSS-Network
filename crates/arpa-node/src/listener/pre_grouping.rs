@@ -1,11 +1,12 @@
 use super::Listener;
 use crate::{
-    context::{ChainIdentityHandlerType, GroupInfoHandler},
+    context::ChainIdentityHandlerType,
     error::NodeResult,
     event::new_dkg_task::NewDKGTask,
     queue::{event_queue::EventQueue, EventPublisher},
 };
 use arpa_contract_client::controller::ControllerLogs;
+use arpa_dal::GroupInfoHandler;
 use async_trait::async_trait;
 use ethers::providers::Middleware;
 use log::info;

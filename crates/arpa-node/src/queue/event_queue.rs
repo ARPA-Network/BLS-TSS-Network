@@ -47,14 +47,14 @@ impl<E: DebuggableEvent + Clone + Send + Sync + 'static> EventPublisher<E> for E
 pub mod tests {
     use super::EventPublisher;
     use crate::{
-        context::{BlockInfoHandler, ChainIdentityHandlerType},
+        context::ChainIdentityHandlerType,
         event::new_block::NewBlock,
         listener::block::BlockListener,
         queue::event_queue::EventQueue,
         subscriber::{block::BlockSubscriber, Subscriber},
     };
     use arpa_core::{Config, GeneralMainChainIdentity};
-    use arpa_dal::cache::InMemoryBlockInfoCache;
+    use arpa_dal::{cache::InMemoryBlockInfoCache, BlockInfoHandler};
     use ethers::{
         providers::{Provider, Ws},
         types::Address,

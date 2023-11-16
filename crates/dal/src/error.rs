@@ -20,6 +20,9 @@ pub enum DataAccessError {
     #[error(transparent)]
     DBError(anyhow::Error),
 
+    #[error("the chain id: {0} is not supported")]
+    InvalidChainId(usize),
+
     #[error("could not deserialize: {0}")]
     DeserializationError(#[from] bincode::Error),
 }

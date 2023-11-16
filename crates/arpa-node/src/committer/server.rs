@@ -1,6 +1,6 @@
 use crate::{
     algorithm::bls::{BLSCore, SimpleBLSCore},
-    context::{types::GeneralContext, Context, GroupInfoHandler},
+    context::{types::GeneralContext, Context},
     error::NodeError,
 };
 use crate::{
@@ -11,6 +11,7 @@ use crate::{
     },
 };
 use arpa_core::{BLSTaskError, BLSTaskType, SchedulerError};
+use arpa_dal::GroupInfoHandler;
 use ethers::types::Address;
 use futures::Future;
 use std::{marker::PhantomData, sync::Arc};

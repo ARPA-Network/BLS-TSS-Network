@@ -1,12 +1,13 @@
 use super::Listener;
 use crate::{
-    context::{BLSTasksHandler, ChainIdentityHandlerType},
+    context::ChainIdentityHandlerType,
     error::NodeResult,
     event::new_randomness_task::NewRandomnessTask,
     queue::{event_queue::EventQueue, EventPublisher},
 };
 use arpa_contract_client::adapter::AdapterLogs;
 use arpa_core::RandomnessTask;
+use arpa_dal::BLSTasksHandler;
 use async_trait::async_trait;
 use ethers::{providers::Middleware, types::Address};
 use log::info;

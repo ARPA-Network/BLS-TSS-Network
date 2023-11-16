@@ -1,11 +1,11 @@
 use super::Listener;
 use crate::{
-    context::{BlockInfoHandler, GroupInfoHandler, SignatureResultCacheHandler},
     error::NodeResult,
     event::ready_to_fulfill_randomness_task::ReadyToFulfillRandomnessTask,
     queue::{event_queue::EventQueue, EventPublisher},
 };
 use arpa_dal::cache::RandomnessResultCache;
+use arpa_dal::{BlockInfoHandler, GroupInfoHandler, SignatureResultCacheHandler};
 use async_trait::async_trait;
 use ethers::types::Address;
 use log::info;

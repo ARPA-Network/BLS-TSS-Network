@@ -1,12 +1,13 @@
 use super::Listener;
 use crate::{
-    context::{ChainIdentityHandlerType, GroupInfoHandler},
+    context::ChainIdentityHandlerType,
     error::NodeResult,
     event::dkg_success::DKGSuccess,
     queue::{event_queue::EventQueue, EventPublisher},
 };
 use arpa_contract_client::controller::ControllerViews;
 use arpa_core::DKGStatus;
+use arpa_dal::GroupInfoHandler;
 use async_trait::async_trait;
 use ethers::providers::Middleware;
 use log::info;
