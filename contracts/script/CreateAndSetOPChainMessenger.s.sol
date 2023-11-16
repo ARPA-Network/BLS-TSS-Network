@@ -15,7 +15,7 @@ import {ERC1967Proxy} from "openzeppelin-contracts/contracts/proxy/ERC1967/ERC19
 import {Staking} from "Staking-v0.1/Staking.sol";
 
 // solhint-disable-next-line max-states-count
-contract CreateAndSetChainMessengerScript is Script {
+contract CreateAndSetOPChainMessengerScript is Script {
     uint256 internal _deployerPrivateKey = vm.envUint("ADMIN_PRIVATE_KEY");
 
     address internal _opControllerOracleAddress = vm.envAddress("OP_CONTROLLER_ORACLE_ADDRESS");
