@@ -154,15 +154,18 @@ def get_l1_addresses():
         l1_controller_addresses["ERC1967Proxy"] = EXISTING_L1_ADAPTER_ADDRESS
         l1_controller_addresses["ControllerRelayer"] = EXISTING_L1_CONTROLLER_RELAYER
 
-        l1_chain_op_messenger_addresses = get_addresses_from_json(
-            CREATE_AND_SET_OP_CHAIN_MESSENGER_BROADCAST_PATH
-        )
-        l1_chain_base_messenger_addresses = get_addresses_from_json(
-            CREATE_AND_SET_BASE_CHAIN_MESSENGER_BROADCAST_PATH
-        )
+        l1_addresses = {**l1_controller_addresses}
 
-        l1_addresses = {**l1_controller_addresses, **l1_chain_op_messenger_addresses
-                        , **l1_chain_base_messenger_addresses}
+        if os.path.exists(CREATE_AND_SET_OP_CHAIN_MESSENGER_BROADCAST_PATH):
+            l1_chain_op_messenger_addresses = get_addresses_from_json(
+                CREATE_AND_SET_OP_CHAIN_MESSENGER_BROADCAST_PATH
+            )
+            l1_addresses.update(l1_chain_op_messenger_addresses)
+        if os.path.exists(CREATE_AND_SET_BASE_CHAIN_MESSENGER_BROADCAST_PATH):
+            l1_chain_base_messenger_addresses = get_addresses_from_json(
+                CREATE_AND_SET_BASE_CHAIN_MESSENGER_BROADCAST_PATH
+            )
+            l1_addresses.update(l1_chain_base_messenger_addresses)
 
     else:
         l1_addresses = get_addresses_from_json(L1_CONTRACTS_DEPLOYMENT_BROADCAST_PATH)
@@ -377,24 +380,26 @@ def deploy_contracts():
             capture_output=HIDE_OUTPUT,
             shell=True,
         )
-        l1_chain_op_messenger_addresses = get_addresses_from_json(
-            CREATE_AND_SET_OP_CHAIN_MESSENGER_BROADCAST_PATH
-        )
-        l1_chain_base_messenger_addresses = get_addresses_from_json(
-            CREATE_AND_SET_BASE_CHAIN_MESSENGER_BROADCAST_PATH
-        )
 
-        l1_addresses = {**l1_controller_addresses, **l1_chain_op_messenger_addresses, **l1_chain_base_messenger_addresses}
+        l1_addresses = {**l1_controller_addresses}
         set_key(ENV_PATH, "ARPA_ADDRESS", l1_addresses["Arpa"])
         set_key(ENV_PATH, "STAKING_ADDRESS", l1_addresses["Staking"])
         set_key(ENV_PATH, "CONTROLLER_ADDRESS", l1_addresses["Controller"])
         set_key(ENV_PATH, "ADAPTER_ADDRESS", l1_addresses["ERC1967Proxy"])
 
         if BASE_DEPLOYMENT:
+            l1_chain_base_messenger_addresses = get_addresses_from_json(
+                CREATE_AND_SET_BASE_CHAIN_MESSENGER_BROADCAST_PATH
+            )
+            l1_addresses.update(l1_chain_base_messenger_addresses)
             set_key(
                 ENV_PATH, "OP_CHAIN_MESSENGER_ADDRESS", l1_addresses["BaseChainMessenger"]
             )
         else:
+            l1_chain_op_messenger_addresses = get_addresses_from_json(
+                CREATE_AND_SET_OP_CHAIN_MESSENGER_BROADCAST_PATH
+            )
+            l1_addresses.update(l1_chain_op_messenger_addresses)
             set_key(
                 ENV_PATH, "OP_CHAIN_MESSENGER_ADDRESS", l1_addresses["OPChainMessenger"]
             )
