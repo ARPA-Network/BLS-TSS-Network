@@ -31,6 +31,11 @@ impl SqliteDB {
     pub async fn get_randomness_result_client(
         &self,
     ) -> DataAccessResult<SignatureResultDBClient<RandomnessResultCache>> {
+        let txn = self.connection.begin().await.map_err(|e| {
+            let e: DBError = e.into();
+            e
+        })?;
+
         // set commit result of committing records(if any) to not committed
         let update_stmt = Query::update()
             .table(RandomnessResultTable::Table)
@@ -56,6 +61,11 @@ impl SqliteDB {
         ));
         let randomness_results: Vec<RandomnessRecord> =
             self.query_all_statement(&query_stmt).await?;
+
+        txn.commit().await.map_err(|e| {
+            let e: DBError = e.into();
+            e
+        })?;
 
         let results = randomness_results
             .into_iter()
