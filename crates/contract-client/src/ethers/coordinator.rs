@@ -230,6 +230,7 @@ pub mod coordinator_tests {
     use crate::contract_stub::coordinator::Coordinator;
     use crate::coordinator::CoordinatorTransactions;
     use crate::error::ContractClientError;
+    use arpa_core::eip1559_gas_price_estimator;
     use arpa_core::Config;
     use arpa_core::GeneralMainChainIdentity;
     use ethers::abi::Tokenize;
@@ -238,6 +239,7 @@ pub mod coordinator_tests {
     use ethers::signers::coins_bip39::English;
     use ethers::utils::Anvil;
     use ethers::utils::AnvilInstance;
+    use simple_logger::SimpleLogger;
     use std::env;
     use std::path::PathBuf;
     use std::{sync::Arc, time::Duration};
@@ -277,11 +279,18 @@ pub mod coordinator_tests {
         ));
 
         // 5. deploy contract
-        let coordinator_contract = Coordinator::deploy(client, (3u8, 30u8))
-            .unwrap()
-            .send()
-            .await
-            .unwrap();
+        let mut call = Coordinator::deploy(client.clone(), (3u8, 30u8)).unwrap();
+
+        if let Some(tx) = call.deployer.tx.as_eip1559_mut() {
+            let (max_fee, max_priority_fee) = client
+                .estimate_eip1559_fees(Some(eip1559_gas_price_estimator))
+                .await
+                .unwrap();
+            tx.max_fee_per_gas = Some(max_fee);
+            tx.max_priority_fee_per_gas = Some(max_priority_fee);
+        }
+
+        let coordinator_contract = call.send().await.unwrap();
 
         coordinator_contract
     }
@@ -297,6 +306,11 @@ pub mod coordinator_tests {
 
     #[tokio::test]
     async fn test_publish_to_coordinator() {
+        SimpleLogger::new()
+            .with_level(log::LevelFilter::Info)
+            .init()
+            .unwrap();
+
         let config = Config::default();
 
         let anvil = start_chain();
@@ -315,11 +329,19 @@ pub mod coordinator_tests {
         let nodes = vec![wallet.address()];
         let public_keys = vec![bincode::serialize(&dkg_public_key).unwrap().into()];
 
-        coordinator_contract
-            .initialize(nodes, public_keys)
-            .send()
-            .await
-            .unwrap();
+        let mut call = coordinator_contract.initialize(nodes, public_keys);
+
+        if let Some(tx) = call.tx.as_eip1559_mut() {
+            let (max_fee, max_priority_fee) = coordinator_contract
+                .client_ref()
+                .estimate_eip1559_fees(Some(eip1559_gas_price_estimator))
+                .await
+                .unwrap();
+            tx.max_fee_per_gas = Some(max_fee);
+            tx.max_priority_fee_per_gas = Some(max_priority_fee);
+        }
+
+        call.send().await.unwrap();
 
         let provider = Arc::new(
             Provider::<Ws>::connect(anvil.ws_endpoint())

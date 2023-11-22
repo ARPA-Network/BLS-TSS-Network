@@ -1,4 +1,4 @@
-name: Unit Tests On PR
+name: Node Unit Tests On PR
 
 on:
   pull_request_target:
@@ -8,7 +8,7 @@ env:
 
 jobs:
   tests:
-    name: Unit tests
+    name: Node Unit tests
     runs-on: ubuntu-latest
 
     steps:

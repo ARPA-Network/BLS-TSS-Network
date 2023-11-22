@@ -1,10 +1,10 @@
 use super::{DebuggableEvent, DebuggableSubscriber, Subscriber};
 use crate::{
-    context::BlockInfoHandler,
     error::NodeResult,
     event::{new_block::NewBlock, types::Topic},
     queue::{event_queue::EventQueue, EventSubscriber},
 };
+use arpa_dal::BlockInfoHandler;
 use async_trait::async_trait;
 use log::debug;
 use std::sync::Arc;

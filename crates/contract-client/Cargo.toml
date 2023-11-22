@@ -32,3 +32,6 @@ path = "src/lib.rs"
 tonic-build = "0.9"
 prost-build = "0.11"
 ethers-contract-abigen.workspace = true
+
+[dev-dependencies]
+simple_logger = "4.2.0"

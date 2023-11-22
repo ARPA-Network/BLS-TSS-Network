@@ -1,9 +1,6 @@
 use super::{Chain, MainChain, RelayedChain};
 use crate::{
-    context::{
-        BLSTasksHandler, BlockInfoHandler, ChainIdentityHandlerType, ContextFetcher,
-        GroupInfoHandler, NodeInfoHandler, SignatureResultCacheHandler,
-    },
+    context::{ChainIdentityHandlerType, ContextFetcher},
     listener::{
         block::BlockListener, new_randomness_task::NewRandomnessTaskListener,
         post_commit_grouping::PostCommitGroupingListener, post_grouping::PostGroupingListener,
@@ -26,8 +23,9 @@ use arpa_core::{
     ListenerType, RandomnessTask, SchedulerError, SchedulerResult, TaskType, TimeLimitDescriptor,
 };
 use arpa_dal::cache::{InMemoryBlockInfoCache, RandomnessResultCache};
-use arpa_sqlite_db::{
-    BLSTasksDBClient, OPBLSTasksDBClient, OPSignatureResultDBClient, SignatureResultDBClient,
+use arpa_dal::{
+    BLSTasksHandler, BlockInfoHandler, GroupInfoHandler, NodeInfoHandler,
+    SignatureResultCacheHandler,
 };
 use async_trait::async_trait;
 use log::error;
@@ -74,8 +72,10 @@ impl<
         chain_identity: GeneralMainChainIdentity,
         node_cache: Arc<RwLock<Box<dyn NodeInfoHandler<PC>>>>,
         group_cache: Arc<RwLock<Box<dyn GroupInfoHandler<PC>>>>,
-        randomness_tasks_cache: BLSTasksDBClient<RandomnessTask>,
-        committer_randomness_result_cache: SignatureResultDBClient<RandomnessResultCache>,
+        randomness_tasks_cache: Arc<RwLock<Box<dyn BLSTasksHandler<RandomnessTask>>>>,
+        committer_randomness_result_cache: Arc<
+            RwLock<Box<dyn SignatureResultCacheHandler<RandomnessResultCache>>>,
+        >,
         time_limits: TimeLimitDescriptor,
         listener_descriptors: Vec<ListenerDescriptor>,
     ) -> Self {
@@ -86,10 +86,8 @@ impl<
             block_cache: Arc::new(RwLock::new(Box::new(InMemoryBlockInfoCache::new(
                 time_limits.block_time,
             )))),
-            randomness_tasks_cache: Arc::new(RwLock::new(Box::new(randomness_tasks_cache))),
-            committer_randomness_result_cache: Arc::new(RwLock::new(Box::new(
-                committer_randomness_result_cache,
-            ))),
+            randomness_tasks_cache,
+            committer_randomness_result_cache,
             node_cache,
             group_cache,
             c: PhantomData,
@@ -556,8 +554,10 @@ impl<
         chain_identity: GeneralRelayedChainIdentity,
         node_cache: Arc<RwLock<Box<dyn NodeInfoHandler<PC>>>>,
         group_cache: Arc<RwLock<Box<dyn GroupInfoHandler<PC>>>>,
-        randomness_tasks_cache: OPBLSTasksDBClient<RandomnessTask>,
-        committer_randomness_result_cache: OPSignatureResultDBClient<RandomnessResultCache>,
+        randomness_tasks_cache: Arc<RwLock<Box<dyn BLSTasksHandler<RandomnessTask>>>>,
+        committer_randomness_result_cache: Arc<
+            RwLock<Box<dyn SignatureResultCacheHandler<RandomnessResultCache>>>,
+        >,
         time_limits: TimeLimitDescriptor,
         listener_descriptors: Vec<ListenerDescriptor>,
     ) -> Self {
@@ -568,10 +568,8 @@ impl<
             block_cache: Arc::new(RwLock::new(Box::new(InMemoryBlockInfoCache::new(
                 time_limits.block_time,
             )))),
-            randomness_tasks_cache: Arc::new(RwLock::new(Box::new(randomness_tasks_cache))),
-            committer_randomness_result_cache: Arc::new(RwLock::new(Box::new(
-                committer_randomness_result_cache,
-            ))),
+            randomness_tasks_cache,
+            committer_randomness_result_cache,
             node_cache,
             group_cache,
             c: PhantomData,

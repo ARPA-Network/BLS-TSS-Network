@@ -3,7 +3,6 @@ use crate::{
     committer::{
         client::GeneralCommitterClient, CommitterClient, CommitterClientHandler, CommitterService,
     },
-    context::{BLSTasksHandler, GroupInfoHandler, SignatureResultCacheHandler},
     error::NodeResult,
     event::{ready_to_handle_randomness_task::ReadyToHandleRandomnessTask, types::Topic},
     queue::{event_queue::EventQueue, EventSubscriber},
@@ -14,6 +13,7 @@ use arpa_core::{
     TaskType,
 };
 use arpa_dal::cache::RandomnessResultCache;
+use arpa_dal::{BLSTasksHandler, GroupInfoHandler, SignatureResultCacheHandler};
 use async_trait::async_trait;
 use ethers::types::{Address, U256};
 use log::{debug, error, info};

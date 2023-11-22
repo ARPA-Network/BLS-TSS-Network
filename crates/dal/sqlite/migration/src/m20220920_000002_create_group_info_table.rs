@@ -52,7 +52,7 @@ impl MigrationTrait for Migration {
 }
 
 #[derive(Iden)]
-enum GroupInfo {
+pub enum GroupInfo {
     Table,
     Id,
     Index,

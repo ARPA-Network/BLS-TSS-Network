@@ -1,7 +1,7 @@
 use super::{DebuggableEvent, DebuggableSubscriber, Subscriber};
 use crate::{
     algorithm::dkg::{AllPhasesDKGCore, DKGCore},
-    context::{ChainIdentityHandlerType, GroupInfoHandler, NodeInfoHandler},
+    context::ChainIdentityHandlerType,
     error::NodeResult,
     event::{run_dkg::RunDKG, types::Topic},
     queue::{event_queue::EventQueue, EventSubscriber},
@@ -9,6 +9,7 @@ use crate::{
 };
 use arpa_contract_client::controller::ControllerTransactions;
 use arpa_core::{DKGStatus, DKGTask};
+use arpa_dal::{GroupInfoHandler, NodeInfoHandler};
 use async_trait::async_trait;
 use core::fmt::Debug;
 use log::{debug, error};

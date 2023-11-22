@@ -1,11 +1,11 @@
 use super::{DebuggableEvent, DebuggableSubscriber, Subscriber};
 use crate::{
-    context::GroupInfoHandler,
     error::NodeResult,
     event::{dkg_success::DKGSuccess, types::Topic},
     queue::{event_queue::EventQueue, EventSubscriber},
 };
 use arpa_core::DKGStatus;
+use arpa_dal::GroupInfoHandler;
 use async_trait::async_trait;
 use log::{debug, info};
 use std::{marker::PhantomData, sync::Arc};

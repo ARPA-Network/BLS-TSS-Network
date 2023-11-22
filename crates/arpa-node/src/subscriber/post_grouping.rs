@@ -1,6 +1,6 @@
 use super::{DebuggableEvent, DebuggableSubscriber, Subscriber};
 use crate::{
-    context::{ChainIdentityHandlerType, GroupInfoHandler},
+    context::ChainIdentityHandlerType,
     error::NodeResult,
     event::{dkg_post_process::DKGPostProcess, types::Topic},
     queue::{event_queue::EventQueue, EventSubscriber},
@@ -11,6 +11,7 @@ use arpa_contract_client::{
     controller_relayer::ControllerRelayerTransactions,
 };
 use arpa_core::{DKGStatus, SubscriberType, TaskType, PLACEHOLDER_ADDRESS};
+use arpa_dal::GroupInfoHandler;
 use arpa_log::*;
 use async_trait::async_trait;
 use log::{debug, error, info};

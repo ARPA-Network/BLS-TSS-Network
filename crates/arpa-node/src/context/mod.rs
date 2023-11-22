@@ -20,14 +20,11 @@ use arpa_contract_client::{
         coordinator::CoordinatorClient,
     },
 };
-use arpa_core::{ChainIdentity, ChainProviderManager, Config, RandomnessTask};
-use arpa_core::{SchedulerResult, Task};
+use arpa_core::{ChainIdentity, ChainProviderManager, Config, RandomnessTask, SchedulerResult};
+use arpa_dal::cache::RandomnessResultCache;
 use arpa_dal::{
-    cache::RandomnessResultCache, BLSTasksFetcher, BlockInfoFetcher, BlockInfoUpdater,
-    ContextInfoUpdater, GroupInfoFetcher, GroupInfoUpdater, NodeInfoFetcher, NodeInfoUpdater,
-};
-use arpa_dal::{
-    BLSTasksUpdater, ResultCache, SignatureResultCacheFetcher, SignatureResultCacheUpdater,
+    BLSTasksHandler, BlockInfoHandler, GroupInfoHandler, NodeInfoHandler,
+    SignatureResultCacheHandler,
 };
 use async_trait::async_trait;
 use std::sync::Arc;
@@ -36,29 +33,6 @@ use threshold_bls::{
     sig::{SignatureScheme, ThresholdScheme},
 };
 use tokio::sync::RwLock;
-
-pub trait BlockInfoHandler:
-    BlockInfoFetcher + BlockInfoUpdater + std::fmt::Debug + Sync + Send
-{
-}
-
-pub trait NodeInfoHandler<PC: Curve>:
-    NodeInfoFetcher<PC> + NodeInfoUpdater<PC> + ContextInfoUpdater + std::fmt::Debug + Sync + Send
-{
-}
-
-pub trait GroupInfoHandler<PC: Curve>:
-    GroupInfoFetcher<PC> + GroupInfoUpdater<PC> + ContextInfoUpdater + std::fmt::Debug + Sync + Send
-{
-}
-pub trait BLSTasksHandler<T: Task>:
-    BLSTasksFetcher<T> + BLSTasksUpdater<T> + std::fmt::Debug + Sync + Send
-{
-}
-pub trait SignatureResultCacheHandler<T: ResultCache>:
-    SignatureResultCacheFetcher<T> + SignatureResultCacheUpdater<T> + std::fmt::Debug + Sync + Send
-{
-}
 
 pub trait ChainIdentityHandler<PC: Curve>:
     ChainIdentity

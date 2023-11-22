@@ -11,6 +11,29 @@ use std::collections::BTreeMap;
 use std::fmt::Debug;
 use threshold_bls::{group::Curve, sig::Share};
 
+pub trait BlockInfoHandler:
+    BlockInfoFetcher + BlockInfoUpdater + std::fmt::Debug + Sync + Send
+{
+}
+
+pub trait NodeInfoHandler<PC: Curve>:
+    NodeInfoFetcher<PC> + NodeInfoUpdater<PC> + ContextInfoUpdater + std::fmt::Debug + Sync + Send
+{
+}
+
+pub trait GroupInfoHandler<PC: Curve>:
+    GroupInfoFetcher<PC> + GroupInfoUpdater<PC> + ContextInfoUpdater + std::fmt::Debug + Sync + Send
+{
+}
+pub trait BLSTasksHandler<T: Task>:
+    BLSTasksFetcher<T> + BLSTasksUpdater<T> + std::fmt::Debug + Sync + Send
+{
+}
+pub trait SignatureResultCacheHandler<T: ResultCache>:
+    SignatureResultCacheFetcher<T> + SignatureResultCacheUpdater<T> + std::fmt::Debug + Sync + Send
+{
+}
+
 pub trait BlockInfoFetcher {
     fn get_block_height(&self) -> usize;
 

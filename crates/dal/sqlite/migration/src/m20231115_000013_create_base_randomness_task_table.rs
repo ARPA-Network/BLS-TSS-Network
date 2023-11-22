@@ -9,77 +9,81 @@ impl MigrationTrait for Migration {
         manager
             .create_table(
                 Table::create()
-                    .table(RandomnessTask::Table)
+                    .table(BaseRandomnessTask::Table)
                     .if_not_exists()
                     .col(
-                        ColumnDef::new(RandomnessTask::Id)
+                        ColumnDef::new(BaseRandomnessTask::Id)
                             .integer()
                             .not_null()
                             .primary_key(),
                     )
                     .col(
-                        ColumnDef::new(RandomnessTask::RequestId)
+                        ColumnDef::new(BaseRandomnessTask::RequestId)
                             .blob(BlobSize::Medium)
                             .not_null(),
                     )
                     .col(
-                        ColumnDef::new(RandomnessTask::SubscriptionId)
+                        ColumnDef::new(BaseRandomnessTask::SubscriptionId)
                             .big_unsigned()
                             .not_null(),
                     )
                     .col(
-                        ColumnDef::new(RandomnessTask::GroupIndex)
+                        ColumnDef::new(BaseRandomnessTask::GroupIndex)
                             .unsigned()
                             .not_null(),
                     )
                     .col(
-                        ColumnDef::new(RandomnessTask::RequestType)
+                        ColumnDef::new(BaseRandomnessTask::RequestType)
                             .tiny_unsigned()
                             .not_null(),
                     )
                     .col(
-                        ColumnDef::new(RandomnessTask::Params)
-                            .blob(BlobSize::Medium)
-                            .not_null(),
-                    )
-                    .col(ColumnDef::new(RandomnessTask::Requester).text().not_null())
-                    .col(
-                        ColumnDef::new(RandomnessTask::Seed)
+                        ColumnDef::new(BaseRandomnessTask::Params)
                             .blob(BlobSize::Medium)
                             .not_null(),
                     )
                     .col(
-                        ColumnDef::new(RandomnessTask::RequestConfirmations)
+                        ColumnDef::new(BaseRandomnessTask::Requester)
+                            .text()
+                            .not_null(),
+                    )
+                    .col(
+                        ColumnDef::new(BaseRandomnessTask::Seed)
+                            .blob(BlobSize::Medium)
+                            .not_null(),
+                    )
+                    .col(
+                        ColumnDef::new(BaseRandomnessTask::RequestConfirmations)
                             .unsigned()
                             .not_null(),
                     )
                     .col(
-                        ColumnDef::new(RandomnessTask::CallbackGasLimit)
+                        ColumnDef::new(BaseRandomnessTask::CallbackGasLimit)
                             .unsigned()
                             .not_null(),
                     )
                     .col(
-                        ColumnDef::new(RandomnessTask::CallbackMaxGasPrice)
+                        ColumnDef::new(BaseRandomnessTask::CallbackMaxGasPrice)
                             .blob(BlobSize::Medium)
                             .not_null(),
                     )
                     .col(
-                        ColumnDef::new(RandomnessTask::AssignmentBlockHeight)
+                        ColumnDef::new(BaseRandomnessTask::AssignmentBlockHeight)
                             .big_unsigned()
                             .not_null(),
                     )
                     .col(
-                        ColumnDef::new(RandomnessTask::State)
+                        ColumnDef::new(BaseRandomnessTask::State)
                             .tiny_unsigned()
                             .not_null(),
                     )
                     .col(
-                        ColumnDef::new(RandomnessTask::CreateAt)
+                        ColumnDef::new(BaseRandomnessTask::CreateAt)
                             .date_time()
                             .not_null(),
                     )
                     .col(
-                        ColumnDef::new(RandomnessTask::UpdateAt)
+                        ColumnDef::new(BaseRandomnessTask::UpdateAt)
                             .date_time()
                             .not_null(),
                     )
@@ -90,13 +94,13 @@ impl MigrationTrait for Migration {
 
     async fn down(&self, manager: &SchemaManager) -> Result<(), DbErr> {
         manager
-            .drop_table(Table::drop().table(RandomnessTask::Table).to_owned())
+            .drop_table(Table::drop().table(BaseRandomnessTask::Table).to_owned())
             .await
     }
 }
 
 #[derive(Iden)]
-pub enum RandomnessTask {
+pub enum BaseRandomnessTask {
     Table,
     Id,
     RequestId,

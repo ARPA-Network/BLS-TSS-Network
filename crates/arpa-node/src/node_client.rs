@@ -4,14 +4,13 @@ use arpa_core::log::encoder::JsonEncoder;
 use arpa_core::Config;
 use arpa_core::GeneralMainChainIdentity;
 use arpa_core::GeneralRelayedChainIdentity;
-use arpa_core::RandomnessTask;
 use arpa_core::DEFAULT_WEBSOCKET_PROVIDER_RECONNECT_TIMES;
+use arpa_dal::GroupInfoHandler;
+use arpa_dal::NodeInfoHandler;
 use arpa_dal::{NodeInfoFetcher, NodeInfoUpdater};
 use arpa_node::context::chain::types::GeneralMainChain;
 use arpa_node::context::chain::types::GeneralRelayedChain;
 use arpa_node::context::types::GeneralContext;
-use arpa_node::context::GroupInfoHandler;
-use arpa_node::context::NodeInfoHandler;
 use arpa_node::context::{Context, TaskWaiter};
 use arpa_sqlite_db::SqliteDB;
 use ethers::providers::Provider;
@@ -197,9 +196,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let group_cache: Arc<RwLock<Box<dyn GroupInfoHandler<G2Curve>>>> =
         Arc::new(RwLock::new(Box::new(group_cache)));
 
-    let randomness_tasks_cache = db.get_bls_tasks_client::<RandomnessTask>();
+    let randomness_tasks_cache = Arc::new(RwLock::new(db.build_randomness_tasks_cache(0)?));
 
-    let randomness_result_cache = db.get_randomness_result_client().await?;
+    let randomness_result_cache = Arc::new(RwLock::new(db.build_randomness_result_cache(0).await?));
 
     let provider = Arc::new(
         Provider::<Ws>::connect_with_reconnects(
@@ -264,8 +263,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             )),
         );
 
+        let relayed_chain_id = relayed_chain_config.get_chain_id();
+
         let relayed_chain_identity = GeneralRelayedChainIdentity::new(
-            relayed_chain_config.get_chain_id(),
+            relayed_chain_id,
             wallet.clone(),
             provider,
             relayed_chain_config.get_provider_endpoint().to_string(),
@@ -285,18 +286,21 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 .contract_view_retry_descriptor,
         );
 
-        // TODO use op db client for now, replace to factory later
-        let op_randomness_tasks_cache = db.get_op_bls_tasks_client::<RandomnessTask>();
+        let randomness_tasks_cache = Arc::new(RwLock::new(
+            db.build_randomness_tasks_cache(relayed_chain_id)?,
+        ));
 
-        let op_randomness_result_cache = db.get_op_randomness_result_client().await?;
+        let randomness_result_cache = Arc::new(RwLock::new(
+            db.build_randomness_result_cache(relayed_chain_id).await?,
+        ));
 
         let relayed_chain = GeneralRelayedChain::<G2Curve, G2Scheme>::new(
             relayed_chain_config.get_description().to_string(),
             relayed_chain_identity,
             node_cache.clone(),
             group_cache.clone(),
-            op_randomness_tasks_cache,
-            op_randomness_result_cache,
+            randomness_tasks_cache,
+            randomness_result_cache,
             *relayed_chain_config.get_time_limits(),
             relayed_chain_config.get_listeners().to_vec(),
         );
