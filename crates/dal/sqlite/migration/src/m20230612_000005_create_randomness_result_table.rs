@@ -70,7 +70,7 @@ impl MigrationTrait for Migration {
 }
 
 #[derive(Iden)]
-pub(crate) enum RandomnessResult {
+pub enum RandomnessResult {
     Table,
     Id,
     RequestId,
@@ -81,4 +81,5 @@ pub(crate) enum RandomnessResult {
     State,
     CreateAt,
     UpdateAt,
+    CommittedTimes,
 }

@@ -1,15 +1,13 @@
-use crate::task::BaseRandomnessTaskQuery;
 use crate::types::DBError;
+use crate::types::RandomnessRecord;
 use crate::types::SqliteDB;
 use arpa_core::format_now_date;
 use arpa_core::BLSTaskError;
-use arpa_core::RandomnessRequestType;
 use arpa_core::{RandomnessTask, Task};
 use arpa_dal::cache::BLSResultCache;
 use arpa_dal::cache::InMemorySignatureResultCache;
 use arpa_dal::cache::RandomnessResultCache;
 use arpa_dal::error::DataAccessResult;
-use arpa_dal::error::RandomnessTaskError;
 use arpa_dal::BLSResultCacheState;
 use arpa_dal::ResultCache;
 use arpa_dal::SignatureResultCacheFetcher;
@@ -18,7 +16,15 @@ use async_trait::async_trait;
 use entity::base_randomness_result;
 use entity::prelude::BaseRandomnessResult;
 use ethers_core::types::Address;
-use ethers_core::types::U256;
+use migration::Expr;
+use migration::Query;
+use migration::SelectStatement;
+use migration::SimpleExpr;
+use migration::{
+    BaseRandomnessResult as BaseRandomnessResultTable,
+    BaseRandomnessTask as BaseRandomnessTaskTable,
+};
+use sea_orm::TransactionTrait;
 use sea_orm::{ActiveModelTrait, DbConn, DbErr, Set};
 use sea_orm::{ColumnTrait, EntityTrait, QueryFilter};
 use std::collections::BTreeMap;
@@ -29,86 +35,41 @@ impl SqliteDB {
         &self,
     ) -> DataAccessResult<BaseSignatureResultDBClient<RandomnessResultCache>> {
         // set commit result of committing records(if any) to not committed
-        let committing_models = BaseRandomnessResultQuery::select_by_state(
-            &self.connection,
-            BLSResultCacheState::Committing.to_i32(),
-        )
-        .await
-        .map_err(|e| {
-            let e: DBError = e.into();
-            e
-        })?;
-
-        for committing_model in committing_models {
-            BaseRandomnessResultMutation::update_commit_result(
-                &self.connection,
-                committing_model,
-                BLSResultCacheState::NotCommitted.to_i32(),
+        let update_stmt = Query::update()
+            .table(BaseRandomnessResultTable::Table)
+            .values([
+                (
+                    BaseRandomnessResultTable::State,
+                    BLSResultCacheState::NotCommitted.to_i32().into(),
+                ),
+                (
+                    BaseRandomnessResultTable::UpdateAt,
+                    format_now_date().into(),
+                ),
+            ])
+            .and_where(
+                Expr::col(BaseRandomnessResultTable::State)
+                    .eq(BLSResultCacheState::Committing.to_i32()),
             )
-            .await
-            .map_err(|e| {
-                let e: DBError = e.into();
-                e
-            })?;
-        }
+            .to_owned();
+
+        self.execute_update_statement(&update_stmt).await?;
 
         // load all not committed records
-        let models = BaseRandomnessResultQuery::select_by_state(
-            &self.connection,
-            BLSResultCacheState::NotCommitted.to_i32(),
-        )
-        .await
-        .map_err(|e| {
-            let e: DBError = e.into();
-            e
-        })?;
+        let query_stmt = build_randomness_record_query(Some(
+            Expr::col((
+                BaseRandomnessResultTable::Table,
+                BaseRandomnessResultTable::State,
+            ))
+            .eq(BLSResultCacheState::NotCommitted.to_i32()),
+        ));
+        let randomness_results: Vec<RandomnessRecord> =
+            self.query_all_statement(&query_stmt).await?;
 
-        let mut results = vec![];
-
-        for model in models {
-            let task =
-                BaseRandomnessTaskQuery::select_by_request_id(&self.connection, &model.request_id)
-                    .await
-                    .map_err(|e| {
-                        let e: DBError = e.into();
-                        e
-                    })?
-                    .map(|model| RandomnessTask {
-                        request_id: model.request_id,
-                        subscription_id: model.subscription_id as u64,
-                        group_index: model.group_index as u32,
-                        request_type: RandomnessRequestType::from(model.request_type as u8),
-                        params: model.params,
-                        requester: model.requester.parse::<Address>().unwrap(),
-                        seed: U256::from_big_endian(&model.seed),
-                        request_confirmations: model.request_confirmations as u16,
-                        callback_gas_limit: model.callback_gas_limit as u32,
-                        callback_max_gas_price: U256::from_big_endian(
-                            &model.callback_max_gas_price,
-                        ),
-                        assignment_block_height: model.assignment_block_height as usize,
-                    })
-                    .ok_or_else(|| {
-                        RandomnessTaskError::NoRandomnessTask(format!("{:?}", &model.request_id))
-                    })?;
-
-            let partial_signatures: BTreeMap<Address, Vec<u8>> =
-                serde_json::from_str(&model.partial_signatures).unwrap();
-
-            let signature_result_cache = RandomnessResultCache {
-                group_index: model.group_index as usize,
-                randomness_task: task,
-                message: model.message,
-                threshold: model.threshold as usize,
-                partial_signatures,
-                committed_times: model.committed_times as usize,
-            };
-
-            results.push(BLSResultCache {
-                result_cache: signature_result_cache,
-                state: BLSResultCacheState::from(model.state),
-            });
-        }
+        let results = randomness_results
+            .into_iter()
+            .map(|r| r.into())
+            .collect::<Vec<_>>();
 
         Ok(BaseSignatureResultDBClient {
             db_client: Arc::new(self.clone()),
@@ -151,53 +112,21 @@ impl SignatureResultCacheFetcher<RandomnessResultCache>
         &self,
         task_request_id: &[u8],
     ) -> DataAccessResult<BLSResultCache<RandomnessResultCache>> {
-        let model =
-            BaseRandomnessResultQuery::select_by_request_id(self.get_connection(), task_request_id)
-                .await
-                .map_err(|e| {
-                    let e: DBError = e.into();
-                    e
-                })?
-                .ok_or(BLSTaskError::CommitterCacheNotExisted)?;
-
-        let task =
-            BaseRandomnessTaskQuery::select_by_request_id(self.get_connection(), task_request_id)
-                .await
-                .map_err(|e| {
-                    let e: DBError = e.into();
-                    e
-                })?
-                .map(|model| RandomnessTask {
-                    request_id: model.request_id,
-                    subscription_id: model.subscription_id as u64,
-                    group_index: model.group_index as u32,
-                    request_type: RandomnessRequestType::from(model.request_type as u8),
-                    params: model.params,
-                    requester: model.requester.parse::<Address>().unwrap(),
-                    seed: U256::from_big_endian(&model.seed),
-                    request_confirmations: model.request_confirmations as u16,
-                    callback_gas_limit: model.callback_gas_limit as u32,
-                    callback_max_gas_price: U256::from_big_endian(&model.callback_max_gas_price),
-                    assignment_block_height: model.assignment_block_height as usize,
-                })
-                .ok_or_else(|| {
-                    RandomnessTaskError::NoRandomnessTask(format!("{:?}", task_request_id))
-                })?;
-
-        let partial_signatures: BTreeMap<Address, Vec<u8>> =
-            serde_json::from_str(&model.partial_signatures).unwrap();
-
-        Ok(BLSResultCache {
-            result_cache: RandomnessResultCache {
-                group_index: model.group_index as usize,
-                message: model.message,
-                randomness_task: task,
-                partial_signatures,
-                threshold: model.threshold as usize,
-                committed_times: model.committed_times as usize,
-            },
-            state: BLSResultCacheState::from(model.state),
-        })
+        let query_stmt = build_randomness_record_query(Some(
+            Expr::col((
+                BaseRandomnessResultTable::Table,
+                BaseRandomnessResultTable::RequestId,
+            ))
+            .eq(task_request_id),
+        ));
+        if let Some(randomness_record) = self
+            .db_client
+            .query_one_statement::<RandomnessRecord>(&query_stmt)
+            .await?
+        {
+            return Ok(randomness_record.into());
+        }
+        return Err(BLSTaskError::CommitterCacheNotExisted.into());
     }
 }
 
@@ -214,29 +143,33 @@ impl SignatureResultCacheUpdater<RandomnessResultCache>
             .get_ready_to_commit_signatures(current_block_height)
             .await?;
 
-        for signature in ready_to_commit_signatures.iter() {
-            let model = BaseRandomnessResultQuery::select_by_request_id(
-                self.get_connection(),
-                signature.request_id(),
-            )
-            .await
-            .map_err(|e| {
-                let e: DBError = e.into();
-                e
-            })?
-            .ok_or(BLSTaskError::CommitterCacheNotExisted)?;
-
-            BaseRandomnessResultMutation::update_commit_result(
-                self.get_connection(),
-                model,
-                BLSResultCacheState::Committing.to_i32(),
-            )
-            .await
-            .map_err(|e| {
-                let e: DBError = e.into();
-                e
-            })?;
+        if ready_to_commit_signatures.is_empty() {
+            return Ok(vec![]);
         }
+
+        let request_ids = ready_to_commit_signatures
+            .iter()
+            .map(|s| s.request_id())
+            .collect::<Vec<_>>();
+
+        let update_stmt = Query::update()
+            .table(BaseRandomnessResultTable::Table)
+            .values([
+                (
+                    BaseRandomnessResultTable::State,
+                    BLSResultCacheState::Committing.to_i32().into(),
+                ),
+                (
+                    BaseRandomnessResultTable::UpdateAt,
+                    format_now_date().into(),
+                ),
+            ])
+            .and_where(Expr::col(BaseRandomnessResultTable::RequestId).is_in(request_ids))
+            .to_owned();
+
+        self.db_client
+            .execute_update_statement(&update_stmt)
+            .await?;
 
         Ok(ready_to_commit_signatures)
     }
@@ -246,25 +179,21 @@ impl SignatureResultCacheUpdater<RandomnessResultCache>
         task_request_id: &[u8],
         status: BLSResultCacheState,
     ) -> DataAccessResult<()> {
-        let model =
-            BaseRandomnessResultQuery::select_by_request_id(self.get_connection(), task_request_id)
-                .await
-                .map_err(|e| {
-                    let e: DBError = e.into();
-                    e
-                })?
-                .ok_or(BLSTaskError::CommitterCacheNotExisted)?;
+        let update_stmt = Query::update()
+            .table(BaseRandomnessResultTable::Table)
+            .values([
+                (BaseRandomnessResultTable::State, status.to_i32().into()),
+                (
+                    BaseRandomnessResultTable::UpdateAt,
+                    format_now_date().into(),
+                ),
+            ])
+            .and_where(Expr::col(BaseRandomnessResultTable::RequestId).eq(task_request_id))
+            .to_owned();
 
-        BaseRandomnessResultMutation::update_commit_result(
-            self.get_connection(),
-            model,
-            status.to_i32(),
-        )
-        .await
-        .map_err(|e| {
-            let e: DBError = e.into();
-            e
-        })?;
+        self.db_client
+            .execute_update_statement(&update_stmt)
+            .await?;
 
         self.signature_results_cache
             .update_commit_result(task_request_id, status)
@@ -306,6 +235,11 @@ impl SignatureResultCacheUpdater<RandomnessResultCache>
         member_address: Address,
         partial_signature: Vec<u8>,
     ) -> DataAccessResult<bool> {
+        let txn = self.get_connection().begin().await.map_err(|e| {
+            let e: DBError = e.into();
+            e
+        })?;
+
         let model = BaseRandomnessResultQuery::select_by_request_id(
             self.get_connection(),
             &task_request_id,
@@ -329,6 +263,11 @@ impl SignatureResultCacheUpdater<RandomnessResultCache>
             e
         })?;
 
+        txn.commit().await.map_err(|e| {
+            let e: DBError = e.into();
+            e
+        })?;
+
         self.signature_results_cache
             .add_partial_signature(task_request_id, member_address, partial_signature)
             .await?;
@@ -337,21 +276,24 @@ impl SignatureResultCacheUpdater<RandomnessResultCache>
     }
 
     async fn incr_committed_times(&mut self, task_request_id: &[u8]) -> DataAccessResult<()> {
-        let model =
-            BaseRandomnessResultQuery::select_by_request_id(self.get_connection(), task_request_id)
-                .await
-                .map_err(|e| {
-                    let e: DBError = e.into();
-                    e
-                })?
-                .ok_or(BLSTaskError::CommitterCacheNotExisted)?;
+        let update_stmt = Query::update()
+            .table(BaseRandomnessResultTable::Table)
+            .values([
+                (
+                    BaseRandomnessResultTable::CommittedTimes,
+                    Expr::col(BaseRandomnessResultTable::CommittedTimes).add(1),
+                ),
+                (
+                    BaseRandomnessResultTable::UpdateAt,
+                    format_now_date().into(),
+                ),
+            ])
+            .and_where(Expr::col(BaseRandomnessResultTable::RequestId).eq(task_request_id))
+            .to_owned();
 
-        BaseRandomnessResultMutation::incr_committed_times(self.get_connection(), model)
-            .await
-            .map_err(|e| {
-                let e: DBError = e.into();
-                e
-            })?;
+        self.db_client
+            .execute_update_statement(&update_stmt)
+            .await?;
 
         self.signature_results_cache
             .incr_committed_times(task_request_id)
@@ -371,16 +313,6 @@ impl BaseRandomnessResultQuery {
         BaseRandomnessResult::find()
             .filter(base_randomness_result::Column::RequestId.eq(request_id))
             .one(db)
-            .await
-    }
-
-    pub async fn select_by_state(
-        db: &DbConn,
-        state: i32,
-    ) -> Result<Vec<base_randomness_result::Model>, DbErr> {
-        BaseRandomnessResult::find()
-            .filter(base_randomness_result::Column::State.eq(state))
-            .all(db)
             .await
     }
 }
@@ -433,29 +365,92 @@ impl BaseRandomnessResultMutation {
 
         randomness_result.update(db).await
     }
+}
 
-    pub async fn update_commit_result(
-        db: &DbConn,
-        model: base_randomness_result::Model,
-        status: i32,
-    ) -> Result<base_randomness_result::Model, DbErr> {
-        let mut randomness_result: base_randomness_result::ActiveModel = model.into();
-
-        randomness_result.state = Set(status);
-
-        randomness_result.update_at = Set(format_now_date());
-
-        randomness_result.update(db).await
-    }
-
-    pub async fn incr_committed_times(
-        db: &DbConn,
-        model: base_randomness_result::Model,
-    ) -> Result<base_randomness_result::Model, DbErr> {
-        let committed_times = model.committed_times + 1;
-        let mut randomness_result: base_randomness_result::ActiveModel = model.into();
-        randomness_result.committed_times = Set(committed_times);
-        randomness_result.update_at = Set(format_now_date());
-        randomness_result.update(db).await
-    }
+pub(crate) fn build_randomness_record_query(and_where: Option<SimpleExpr>) -> SelectStatement {
+    Query::select()
+        .column((
+            BaseRandomnessResultTable::Table,
+            BaseRandomnessResultTable::RequestId,
+        ))
+        .column((
+            BaseRandomnessResultTable::Table,
+            BaseRandomnessResultTable::GroupIndex,
+        ))
+        .column((
+            BaseRandomnessResultTable::Table,
+            BaseRandomnessResultTable::Message,
+        ))
+        .column((
+            BaseRandomnessResultTable::Table,
+            BaseRandomnessResultTable::Threshold,
+        ))
+        .column((
+            BaseRandomnessResultTable::Table,
+            BaseRandomnessResultTable::PartialSignatures,
+        ))
+        .column((
+            BaseRandomnessResultTable::Table,
+            BaseRandomnessResultTable::CommittedTimes,
+        ))
+        .column((
+            BaseRandomnessResultTable::Table,
+            BaseRandomnessResultTable::State,
+        ))
+        .column((
+            BaseRandomnessTaskTable::Table,
+            BaseRandomnessTaskTable::SubscriptionId,
+        ))
+        .column((
+            BaseRandomnessTaskTable::Table,
+            BaseRandomnessTaskTable::RequestType,
+        ))
+        .column((
+            BaseRandomnessTaskTable::Table,
+            BaseRandomnessTaskTable::Params,
+        ))
+        .column((
+            BaseRandomnessTaskTable::Table,
+            BaseRandomnessTaskTable::Requester,
+        ))
+        .column((
+            BaseRandomnessTaskTable::Table,
+            BaseRandomnessTaskTable::Seed,
+        ))
+        .column((
+            BaseRandomnessTaskTable::Table,
+            BaseRandomnessTaskTable::RequestConfirmations,
+        ))
+        .column((
+            BaseRandomnessTaskTable::Table,
+            BaseRandomnessTaskTable::CallbackGasLimit,
+        ))
+        .column((
+            BaseRandomnessTaskTable::Table,
+            BaseRandomnessTaskTable::CallbackMaxGasPrice,
+        ))
+        .column((
+            BaseRandomnessTaskTable::Table,
+            BaseRandomnessTaskTable::AssignmentBlockHeight,
+        ))
+        .from(BaseRandomnessResultTable::Table)
+        .inner_join(
+            BaseRandomnessTaskTable::Table,
+            Expr::col((
+                BaseRandomnessResultTable::Table,
+                BaseRandomnessResultTable::RequestId,
+            ))
+            .equals((
+                BaseRandomnessTaskTable::Table,
+                BaseRandomnessTaskTable::RequestId,
+            )),
+        )
+        .conditions(
+            and_where.is_some(),
+            |x| {
+                x.and_where(and_where.unwrap());
+            },
+            |_x| {},
+        )
+        .to_owned()
 }

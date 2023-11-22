@@ -1,3 +1,4 @@
+use crate::types::model_to_randomness_task;
 use crate::types::DBError;
 use crate::types::SqliteDB;
 use arpa_core::format_now_date;
@@ -6,7 +7,7 @@ use arpa_core::RandomnessRequestType;
 use arpa_core::{address_to_string, RandomnessTask, Task};
 use arpa_dal::error::DataAccessResult;
 use arpa_dal::error::RandomnessTaskError;
-use arpa_dal::{error::DataAccessError, BLSTasksFetcher, BLSTasksUpdater};
+use arpa_dal::{BLSTasksFetcher, BLSTasksUpdater};
 use async_trait::async_trait;
 use entity::prelude::RandomnessTask as RandomnessTaskEntity;
 use entity::randomness_task;
@@ -59,20 +60,7 @@ impl BLSTasksFetcher<RandomnessTask> for BLSTasksDBClient<RandomnessTask> {
                 e
             })?;
 
-        task.map(|model| RandomnessTask {
-            request_id: model.request_id,
-            subscription_id: model.subscription_id as u64,
-            group_index: model.group_index as u32,
-            request_type: RandomnessRequestType::from(model.request_type as u8),
-            params: model.params,
-            requester: model.requester.parse::<Address>().unwrap(),
-            seed: U256::from_big_endian(&model.seed),
-            request_confirmations: model.request_confirmations as u16,
-            callback_gas_limit: model.callback_gas_limit as u32,
-            callback_max_gas_price: U256::from_big_endian(&model.callback_max_gas_price),
-            assignment_block_height: model.assignment_block_height as usize,
-        })
-        .ok_or_else(|| {
+        task.map(model_to_randomness_task).ok_or_else(|| {
             RandomnessTaskError::NoRandomnessTask(format!("{:?}", task_request_id)).into()
         })
     }
@@ -156,8 +144,7 @@ impl BLSTasksUpdater<RandomnessTask> for BLSTasksDBClient<RandomnessTask> {
         })
         .map_err(|e| {
             let e: DBError = e.into();
-            let e: DataAccessError = e.into();
-            e
+            e.into()
         })
     }
 }

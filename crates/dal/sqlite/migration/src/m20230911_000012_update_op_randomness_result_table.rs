@@ -36,6 +36,6 @@ impl MigrationTrait for Migration {
 }
 
 #[derive(Iden)]
-pub(crate) enum OPRandomnessResultNewColumn {
+pub enum OPRandomnessResultNewColumn {
     CommittedTimes,
 }

@@ -1,17 +1,15 @@
+use crate::types::base_model_to_randomness_task;
 use crate::types::DBError;
 use crate::types::SqliteDB;
 use arpa_core::format_now_date;
 use arpa_core::u256_to_vec;
-use arpa_core::RandomnessRequestType;
 use arpa_core::{address_to_string, RandomnessTask, Task};
 use arpa_dal::error::DataAccessResult;
 use arpa_dal::error::RandomnessTaskError;
-use arpa_dal::{error::DataAccessError, BLSTasksFetcher, BLSTasksUpdater};
+use arpa_dal::{BLSTasksFetcher, BLSTasksUpdater};
 use async_trait::async_trait;
 use entity::base_randomness_task;
 use entity::prelude::BaseRandomnessTask;
-use ethers_core::types::Address;
-use ethers_core::types::U256;
 use sea_orm::{
     ActiveModelTrait, ColumnTrait, DbBackend, DbConn, DbErr, EntityTrait, FromQueryResult,
     QueryFilter, Set, Statement,
@@ -61,20 +59,7 @@ impl BLSTasksFetcher<RandomnessTask> for BaseBLSTasksDBClient<RandomnessTask> {
                 e
             })?;
 
-        task.map(|model| RandomnessTask {
-            request_id: model.request_id,
-            subscription_id: model.subscription_id as u64,
-            group_index: model.group_index as u32,
-            request_type: RandomnessRequestType::from(model.request_type as u8),
-            params: model.params,
-            requester: model.requester.parse::<Address>().unwrap(),
-            seed: U256::from_big_endian(&model.seed),
-            request_confirmations: model.request_confirmations as u16,
-            callback_gas_limit: model.callback_gas_limit as u32,
-            callback_max_gas_price: U256::from_big_endian(&model.callback_max_gas_price),
-            assignment_block_height: model.assignment_block_height as usize,
-        })
-        .ok_or_else(|| {
+        task.map(base_model_to_randomness_task).ok_or_else(|| {
             RandomnessTaskError::NoRandomnessTask(format!("{:?}", task_request_id)).into()
         })
     }
@@ -141,25 +126,12 @@ impl BLSTasksUpdater<RandomnessTask> for BaseBLSTasksDBClient<RandomnessTask> {
         .map(|models| {
             models
                 .into_iter()
-                .map(|model| RandomnessTask {
-                    request_id: model.request_id,
-                    subscription_id: model.subscription_id as u64,
-                    group_index: model.group_index as u32,
-                    request_type: RandomnessRequestType::from(model.request_type as u8),
-                    params: model.params,
-                    requester: model.requester.parse::<Address>().unwrap(),
-                    seed: U256::from_big_endian(&model.seed),
-                    request_confirmations: model.request_confirmations as u16,
-                    callback_gas_limit: model.callback_gas_limit as u32,
-                    callback_max_gas_price: U256::from_big_endian(&model.callback_max_gas_price),
-                    assignment_block_height: model.assignment_block_height as usize,
-                })
+                .map(base_model_to_randomness_task)
                 .collect::<Vec<_>>()
         })
         .map_err(|e| {
             let e: DBError = e.into();
-            let e: DataAccessError = e.into();
-            e
+            e.into()
         })
     }
 }

@@ -100,7 +100,7 @@ impl MigrationTrait for Migration {
 }
 
 #[derive(Iden)]
-pub(crate) enum BaseRandomnessTask {
+pub enum BaseRandomnessTask {
     Table,
     Id,
     RequestId,

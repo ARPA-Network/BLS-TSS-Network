@@ -25,13 +25,16 @@ use ethers_core::utils::hex;
 use log::LevelFilter;
 use migration::Migrator;
 use migration::MigratorTrait;
+use migration::SelectStatement;
+use migration::UpdateStatement;
 use result::BaseSignatureResultDBClient;
 use sea_orm::ConnectOptions;
 use sea_orm::ConnectionTrait;
 use sea_orm::DatabaseBackend;
+use sea_orm::FromQueryResult;
 use sea_orm::QueryResult;
 use sea_orm::Statement;
-use std::{sync::Arc, time::Duration};
+use std::time::Duration;
 use task::BaseBLSTasksDBClient;
 use threshold_bls::group::Curve;
 
@@ -58,14 +61,12 @@ impl SqliteDB {
 
         let connection = sea_orm::Database::connect(opt).await?;
 
-        let db = SqliteDB {
-            connection: Arc::new(connection),
-        };
+        let db = SqliteDB { connection };
 
         db.integrity_check().await.map_err(|e|
             format!("Node identity is different from the database, please check the (account)cipher key. Original error: {:?}", e.to_string()))?;
 
-        Migrator::up(&*db.connection, None).await?;
+        Migrator::up(&db.connection, None).await?;
 
         Ok(db)
     }
@@ -115,6 +116,53 @@ impl SqliteDB {
             }
             _ => Err(DataAccessError::InvalidChainId(chain_id)),
         }
+    }
+
+    pub(crate) async fn execute_update_statement(
+        &self,
+        stmt: &UpdateStatement,
+    ) -> DataAccessResult<()> {
+        let builder = self.connection.get_database_backend();
+
+        self.connection
+            .execute(builder.build(stmt))
+            .await
+            .map_err(|e| {
+                let e: DBError = e.into();
+                e
+            })?;
+
+        Ok(())
+    }
+
+    pub(crate) async fn query_all_statement<S: FromQueryResult>(
+        &self,
+        stmt: &SelectStatement,
+    ) -> DataAccessResult<Vec<S>> {
+        let builder = self.connection.get_database_backend();
+
+        S::find_by_statement(builder.build(stmt))
+            .all(&self.connection)
+            .await
+            .map_err(|e| {
+                let e: DBError = e.into();
+                e.into()
+            })
+    }
+
+    pub(crate) async fn query_one_statement<S: FromQueryResult>(
+        &self,
+        stmt: &SelectStatement,
+    ) -> DataAccessResult<Option<S>> {
+        let builder = self.connection.get_database_backend();
+
+        S::find_by_statement(builder.build(stmt))
+            .one(&self.connection)
+            .await
+            .map_err(|e| {
+                let e: DBError = e.into();
+                e.into()
+            })
     }
 }
 

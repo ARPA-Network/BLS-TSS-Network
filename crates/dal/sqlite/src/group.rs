@@ -111,10 +111,9 @@ impl<C: Curve> GroupInfoDBClient<C> {
         }
     }
 
-    fn only_has_group_task(&self) -> DBResult<()> {
+    fn get_group_info_cache(&self) -> DataAccessResult<&InMemoryGroupInfoCache<C>> {
         self.group_info_cache
             .as_ref()
-            .map(|_| ())
             .ok_or_else(|| GroupError::NoGroupTask.into())
     }
 
@@ -133,123 +132,93 @@ impl<C: Curve> ContextInfoUpdater for GroupInfoDBClient<C> {
 
 impl<C: Curve> GroupInfoFetcher<C> for GroupInfoDBClient<C> {
     fn get_group(&self) -> DataAccessResult<&Group<C>> {
-        self.only_has_group_task()?;
+        let group_info_cache = self.get_group_info_cache()?;
 
-        let group_info = self.group_info_cache.as_ref().unwrap();
-
-        group_info.get_group()
+        group_info_cache.get_group()
     }
 
     fn get_index(&self) -> DataAccessResult<usize> {
-        self.only_has_group_task()?;
+        let group_info_cache = self.get_group_info_cache()?;
 
-        let group_info = self.group_info_cache.as_ref().unwrap();
-
-        group_info.get_index()
+        group_info_cache.get_index()
     }
 
     fn get_epoch(&self) -> DataAccessResult<usize> {
-        self.only_has_group_task()?;
+        let group_info_cache = self.get_group_info_cache()?;
 
-        let group_info = self.group_info_cache.as_ref().unwrap();
-
-        group_info.get_epoch()
+        group_info_cache.get_epoch()
     }
 
     fn get_size(&self) -> DataAccessResult<usize> {
-        self.only_has_group_task()?;
+        let group_info_cache = self.get_group_info_cache()?;
 
-        let group_info = self.group_info_cache.as_ref().unwrap();
-
-        group_info.get_size()
+        group_info_cache.get_size()
     }
 
     fn get_threshold(&self) -> DataAccessResult<usize> {
-        self.only_has_group_task()?;
+        let group_info_cache = self.get_group_info_cache()?;
 
-        let group_info = self.group_info_cache.as_ref().unwrap();
-
-        group_info.get_threshold()
+        group_info_cache.get_threshold()
     }
 
     fn get_state(&self) -> DataAccessResult<bool> {
-        self.only_has_group_task()?;
+        let group_info_cache = self.get_group_info_cache()?;
 
-        let group_info = self.group_info_cache.as_ref().unwrap();
-
-        group_info.get_state()
+        group_info_cache.get_state()
     }
 
     fn get_self_index(&self) -> DataAccessResult<usize> {
-        self.only_has_group_task()?;
+        let group_info_cache = self.get_group_info_cache()?;
 
-        let group_info = self.group_info_cache.as_ref().unwrap();
-
-        group_info.get_self_index()
+        group_info_cache.get_self_index()
     }
 
     fn get_public_key(&self) -> DataAccessResult<&C::Point> {
-        self.only_has_group_task()?;
+        let group_info_cache = self.get_group_info_cache()?;
 
-        let group_info = self.group_info_cache.as_ref().unwrap();
-
-        group_info.get_public_key()
+        group_info_cache.get_public_key()
     }
 
     fn get_secret_share(&self) -> DataAccessResult<&Share<C::Scalar>> {
-        self.only_has_group_task()?;
+        let group_info_cache = self.get_group_info_cache()?;
 
-        let group_info = self.group_info_cache.as_ref().unwrap();
-
-        group_info.get_secret_share()
+        group_info_cache.get_secret_share()
     }
 
     fn get_members(&self) -> DataAccessResult<&BTreeMap<Address, Member<C>>> {
-        self.only_has_group_task()?;
+        let group_info_cache = self.get_group_info_cache()?;
 
-        let group_info = self.group_info_cache.as_ref().unwrap();
-
-        group_info.get_members()
+        group_info_cache.get_members()
     }
 
     fn get_member(&self, id_address: Address) -> DataAccessResult<&arpa_core::Member<C>> {
-        self.only_has_group_task()?;
+        let group_info_cache = self.get_group_info_cache()?;
 
-        let group_info = self.group_info_cache.as_ref().unwrap();
-
-        group_info.get_member(id_address)
+        group_info_cache.get_member(id_address)
     }
 
     fn get_committers(&self) -> DataAccessResult<Vec<Address>> {
-        self.only_has_group_task()?;
+        let group_info_cache = self.get_group_info_cache()?;
 
-        let group_info = self.group_info_cache.as_ref().unwrap();
-
-        group_info.get_committers()
+        group_info_cache.get_committers()
     }
 
     fn get_dkg_start_block_height(&self) -> DataAccessResult<usize> {
-        self.only_has_group_task()?;
+        let group_info_cache = self.get_group_info_cache()?;
 
-        let group_info = self.group_info_cache.as_ref().unwrap();
-
-        group_info.get_dkg_start_block_height()
+        group_info_cache.get_dkg_start_block_height()
     }
 
     fn get_dkg_status(&self) -> DataAccessResult<arpa_core::DKGStatus> {
-        self.only_has_group_task()?;
+        let group_info_cache = self.get_group_info_cache()?;
 
-        let group_info = self.group_info_cache.as_ref().unwrap();
-
-        group_info.get_dkg_status()
+        group_info_cache.get_dkg_status()
     }
 
     fn is_committer(&self, id_address: Address) -> DataAccessResult<bool> {
-        self.only_has_group_task()?;
+        let group_info_cache = self.get_group_info_cache()?;
 
-        let group_info = self.group_info_cache.as_ref().unwrap();
-
-        group_info.is_committer(id_address)
+        group_info_cache.is_committer(id_address)
     }
 }
 
@@ -302,11 +271,11 @@ impl<C: Curve + Sync + Send> GroupInfoUpdater<C> for GroupInfoDBClient<C> {
         epoch: usize,
         output: DKGOutput<C>,
     ) -> DataAccessResult<(C::Point, C::Point, Vec<Address>)> {
-        self.only_has_group_task()?;
+        let group_info_cache = self.get_group_info_cache()?;
 
-        let self_index = self.group_info_cache.as_ref().unwrap().get_self_index()?;
+        let self_index = group_info_cache.get_self_index()?;
 
-        let mut group = self.group_info_cache.as_ref().unwrap().get_group()?.clone();
+        let mut group = group_info_cache.get_group()?.clone();
 
         if group.index != index {
             return Err(GroupError::GroupIndexObsolete(group.index).into());
@@ -388,11 +357,11 @@ impl<C: Curve + Sync + Send> GroupInfoUpdater<C> for GroupInfoDBClient<C> {
         epoch: usize,
         dkg_status: arpa_core::DKGStatus,
     ) -> DataAccessResult<bool> {
-        self.only_has_group_task()?;
+        let group_info_cache = self.get_group_info_cache()?;
 
-        let current_dkg_status = self.group_info_cache.as_ref().unwrap().get_dkg_status()?;
+        let current_dkg_status = group_info_cache.get_dkg_status()?;
 
-        let group = self.group_info_cache.as_ref().unwrap().get_group()?;
+        let group = group_info_cache.get_group()?;
 
         if group.index != index {
             return Err(GroupError::GroupIndexObsolete(group.index).into());
@@ -428,9 +397,9 @@ impl<C: Curve + Sync + Send> GroupInfoUpdater<C> for GroupInfoDBClient<C> {
         epoch: usize,
         committer_indices: Vec<Address>,
     ) -> DataAccessResult<()> {
-        self.only_has_group_task()?;
+        let group_info_cache = self.get_group_info_cache()?;
 
-        let group = self.group_info_cache.as_ref().unwrap().get_group()?;
+        let group = group_info_cache.get_group()?;
 
         if group.index != index {
             return Err(GroupError::GroupIndexObsolete(group.index).into());

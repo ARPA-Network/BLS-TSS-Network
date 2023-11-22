@@ -44,7 +44,7 @@ impl MigrationTrait for Migration {
 }
 
 #[derive(Iden)]
-enum NodeInfo {
+pub enum NodeInfo {
     Table,
     Id,
     IdAddress,
