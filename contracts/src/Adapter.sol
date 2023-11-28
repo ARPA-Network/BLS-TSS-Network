@@ -179,7 +179,7 @@ contract Adapter is UUPSUpgradeable, IAdapter, IAdapterOwner, RequestIdBase, Own
     function initialize(address controller) public initializer {
         _controller = IController(controller);
 
-        __Ownable_init(msg.sender);
+        __Ownable_init();
     }
 
     // solhint-disable-next-line no-empty-blocks

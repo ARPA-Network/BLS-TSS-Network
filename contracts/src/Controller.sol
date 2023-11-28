@@ -98,7 +98,7 @@ contract Controller is Initializable, IController, IControllerOwner, OwnableUpgr
         _arpa = IERC20(arpa);
         _lastOutput = lastOutput;
 
-        __Ownable_init(msg.sender);
+        __Ownable_init();
     }
 
     // =============
@@ -248,7 +248,9 @@ contract Controller is Initializable, IController, IControllerOwner, OwnableUpgr
     }
 
     function commitDkg(CommitDkgParams memory params) external override(IController) {
-        if (params.groupIndex >= _groupData.groupCount) revert GroupNotExist(params.groupIndex);
+        if (params.groupIndex >= _groupData.groupCount) {
+            revert GroupNotExist(params.groupIndex);
+        }
 
         // require coordinator exists
         if (_coordinators[params.groupIndex] == address(0)) {
@@ -320,7 +322,9 @@ contract Controller is Initializable, IController, IControllerOwner, OwnableUpgr
     }
 
     function postProcessDkg(uint256 groupIndex, uint256 groupEpoch) external override(IController) {
-        if (groupIndex >= _groupData.groupCount) revert GroupNotExist(groupIndex);
+        if (groupIndex >= _groupData.groupCount) {
+            revert GroupNotExist(groupIndex);
+        }
 
         // require calling node is in group
         if (_groupData.getMemberIndexByAddress(groupIndex, msg.sender) == -1) {

@@ -6,7 +6,6 @@ import "./Adapter.sol";
 import "./interfaces/IController.sol";
 
 contract ControllerProxy {
-    
     struct ModifiedDkgData {
         bytes publicKey;
         bytes partialPublicKey;
@@ -25,8 +24,7 @@ contract ControllerProxy {
      * This is the keccak-256 hash of "eip1967.proxy.implementation" subtracted by 1, and is
      * validated in the constructor.
      */
-    bytes32 internal constant _IMPLEMENTATION_SLOT =
-        0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc;
+    bytes32 internal constant _IMPLEMENTATION_SLOT = 0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc;
 
     function implementation() public view returns (address r) {
         assembly {
@@ -54,26 +52,15 @@ contract ControllerProxy {
 
             // Call the implementation.
             // out and outsize are 0 because we don't know the size yet.
-            let result := delegatecall(
-                gas(),
-                _implementation,
-                0,
-                calldatasize(),
-                0,
-                0
-            )
+            let result := delegatecall(gas(), _implementation, 0, calldatasize(), 0, 0)
 
             // Copy the returned data.
             returndatacopy(0, 0, returndatasize())
 
             switch result
             // delegatecall returns 0 on error.
-            case 0 {
-                revert(0, returndatasize())
-            }
-            default {
-                return(0, returndatasize())
-            }
+            case 0 { revert(0, returndatasize()) }
+            default { return(0, returndatasize()) }
         }
     }
 
@@ -101,7 +88,9 @@ contract ControllerProxy {
     function getModifiedDkgData(address node) external view returns (ModifiedDkgData memory) {
         return modifyDkgData[node];
     }
+
     event testProxy(address test);
+
     function commitDkg(IController.CommitDkgParams memory params) external {
         bytes memory publicKeyModified = params.publicKey;
         bytes memory partialPublicKeyModified = params.partialPublicKey;
@@ -121,8 +110,7 @@ contract ControllerProxy {
         params.partialPublicKey = partialPublicKeyModified;
         params.disqualifiedNodes = disqualifiedNodesModified;
 
-        (bool success,) = implementation().delegatecall(abi.encodeWithSelector(
-            IController.commitDkg.selector, params));
+        (bool success,) = implementation().delegatecall(abi.encodeWithSelector(IController.commitDkg.selector, params));
         require(success, "modified delegatecall reverted");
     }
 
@@ -131,6 +119,6 @@ contract ControllerProxy {
     }
 
     receive() external payable {
-       _delegate(implementation());
+        _delegate(implementation());
     }
 }
