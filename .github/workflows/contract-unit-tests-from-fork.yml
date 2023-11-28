@@ -8,7 +8,7 @@ env:
 
 jobs:
   contract-tests:
-    name: Unit tests
+    name: Contract Unit tests
     runs-on: ubuntu-latest
 
     steps:

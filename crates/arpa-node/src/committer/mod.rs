@@ -1,8 +1,9 @@
 pub mod client;
 pub mod server;
 
-use crate::{context::GroupInfoHandler, error::NodeResult};
+use crate::error::NodeResult;
 use arpa_core::{BLSTaskType, ExponentialBackoffRetryDescriptor};
+use arpa_dal::GroupInfoHandler;
 use async_trait::async_trait;
 use ethers::types::Address;
 use std::sync::Arc;

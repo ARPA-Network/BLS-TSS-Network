@@ -1,11 +1,11 @@
 use super::Listener;
 use crate::{
-    context::{BlockInfoHandler, GroupInfoHandler},
     error::NodeResult,
     event::dkg_post_process::DKGPostProcess,
     queue::{event_queue::EventQueue, EventPublisher},
 };
 use arpa_core::DKGStatus;
+use arpa_dal::{BlockInfoHandler, GroupInfoHandler};
 use async_trait::async_trait;
 use log::info;
 use std::{marker::PhantomData, sync::Arc};
@@ -78,6 +78,12 @@ impl<PC: Curve + Sync + Send> Listener for PostGroupingListener<PC> {
                 }
             }
         }
+
+        Ok(())
+    }
+
+    async fn handle_interruption(&self) -> NodeResult<()> {
+        info!("Handle interruption for PostGroupingListener");
 
         Ok(())
     }

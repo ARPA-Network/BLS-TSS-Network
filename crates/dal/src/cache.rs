@@ -1,5 +1,5 @@
 use crate::error::{DataAccessResult, GroupError, NodeInfoError};
-use crate::{BLSResultCacheState, ContextInfoUpdater};
+use crate::{BLSResultCacheState, BlockInfoHandler, ContextInfoUpdater};
 
 use super::{
     BLSTasksFetcher, BLSTasksUpdater, BlockInfoFetcher, BlockInfoUpdater, GroupInfoFetcher,
@@ -31,6 +31,8 @@ impl InMemoryBlockInfoCache {
         }
     }
 }
+
+impl BlockInfoHandler for InMemoryBlockInfoCache {}
 
 impl BlockInfoFetcher for InMemoryBlockInfoCache {
     fn get_block_height(&self) -> usize {

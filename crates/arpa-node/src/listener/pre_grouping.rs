@@ -1,12 +1,15 @@
 use super::Listener;
 use crate::{
-    context::{ChainIdentityHandlerType, GroupInfoHandler},
+    context::ChainIdentityHandlerType,
     error::NodeResult,
     event::new_dkg_task::NewDKGTask,
     queue::{event_queue::EventQueue, EventPublisher},
 };
 use arpa_contract_client::controller::ControllerLogs;
+use arpa_dal::GroupInfoHandler;
 use async_trait::async_trait;
+use ethers::providers::Middleware;
+use log::info;
 use std::{marker::PhantomData, sync::Arc};
 use threshold_bls::group::Curve;
 use tokio::sync::RwLock;
@@ -77,6 +80,18 @@ impl<PC: Curve + Sync + Send> Listener for PreGroupingListener<PC> {
                     Ok(())
                 }
             })
+            .await?;
+
+        Ok(())
+    }
+
+    async fn handle_interruption(&self) -> NodeResult<()> {
+        info!("Handle interruption for PreGroupingListener");
+        self.chain_identity
+            .read()
+            .await
+            .get_provider()
+            .get_net_version()
             .await?;
 
         Ok(())

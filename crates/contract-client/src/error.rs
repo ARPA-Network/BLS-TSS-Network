@@ -1,10 +1,5 @@
-use arpa_core::{HttpWalletSigner, WalletSigner};
-use ethers::providers::Http as HttpProvider;
-use ethers::{
-    prelude::{signer::SignerMiddlewareError, ContractError, ProviderError},
-    providers::Provider,
-    signers::LocalWallet,
-};
+use arpa_core::{HttpWalletSigner, WsWalletSigner};
+use ethers::prelude::{ContractError, ProviderError};
 use rustc_hex::FromHexError;
 use thiserror::Error;
 
@@ -19,11 +14,9 @@ pub enum ContractClientError {
     #[error(transparent)]
     ChainProviderError(#[from] ProviderError),
     #[error(transparent)]
-    ContractError(#[from] ContractError<WalletSigner>),
+    WsContractError(#[from] ContractError<WsWalletSigner>),
     #[error(transparent)]
     HttpContractError(#[from] ContractError<HttpWalletSigner>),
-    #[error(transparent)]
-    SignerError(#[from] SignerMiddlewareError<Provider<HttpProvider>, LocalWallet>),
     #[error(transparent)]
     AddressParseError(#[from] FromHexError),
     #[error("can't fetch new block, please check provider")]

@@ -8,7 +8,7 @@ use crate::{
 use crate::{TransactionCaller, ViewCaller};
 use arpa_core::{
     u256_to_vec, ChainIdentity, ExponentialBackoffRetryDescriptor, GeneralMainChainIdentity,
-    GeneralRelayedChainIdentity, Group, Member, RelayedChainIdentity, WalletSigner,
+    GeneralRelayedChainIdentity, Group, Member, RelayedChainIdentity, WsWalletSigner,
 };
 use async_trait::async_trait;
 use ethers::prelude::*;
@@ -20,7 +20,7 @@ use threshold_bls::group::Curve;
 pub struct ControllerOracleClient {
     chain_id: usize,
     controller_oracle_address: Address,
-    signer: Arc<WalletSigner>,
+    signer: Arc<WsWalletSigner>,
     contract_transaction_retry_descriptor: ExponentialBackoffRetryDescriptor,
     contract_view_retry_descriptor: ExponentialBackoffRetryDescriptor,
 }
@@ -65,7 +65,7 @@ impl<C: Curve> ControllerOracleClientBuilder<C> for GeneralRelayedChainIdentity 
     }
 }
 
-type ControllerOracleContract = ControllerOracle<WalletSigner>;
+type ControllerOracleContract = ControllerOracle<WsWalletSigner>;
 
 #[async_trait]
 impl ServiceClient<ControllerOracleContract> for ControllerOracleClient {
@@ -94,6 +94,7 @@ impl ControllerOracleTransactions for ControllerOracleClient {
         ControllerOracleClient::call_contract_transaction(
             self.chain_id,
             "node_withdraw",
+            controller_oracle_contract.client_ref(),
             call,
             self.contract_transaction_retry_descriptor,
             true,

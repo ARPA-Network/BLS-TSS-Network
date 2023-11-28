@@ -1,0 +1,120 @@
+use sea_orm_migration::prelude::*;
+
+#[derive(DeriveMigrationName)]
+pub struct Migration;
+
+#[async_trait::async_trait]
+impl MigrationTrait for Migration {
+    async fn up(&self, manager: &SchemaManager) -> Result<(), DbErr> {
+        manager
+            .create_table(
+                Table::create()
+                    .table(BaseRandomnessTask::Table)
+                    .if_not_exists()
+                    .col(
+                        ColumnDef::new(BaseRandomnessTask::Id)
+                            .integer()
+                            .not_null()
+                            .primary_key(),
+                    )
+                    .col(
+                        ColumnDef::new(BaseRandomnessTask::RequestId)
+                            .blob(BlobSize::Medium)
+                            .not_null(),
+                    )
+                    .col(
+                        ColumnDef::new(BaseRandomnessTask::SubscriptionId)
+                            .big_unsigned()
+                            .not_null(),
+                    )
+                    .col(
+                        ColumnDef::new(BaseRandomnessTask::GroupIndex)
+                            .unsigned()
+                            .not_null(),
+                    )
+                    .col(
+                        ColumnDef::new(BaseRandomnessTask::RequestType)
+                            .tiny_unsigned()
+                            .not_null(),
+                    )
+                    .col(
+                        ColumnDef::new(BaseRandomnessTask::Params)
+                            .blob(BlobSize::Medium)
+                            .not_null(),
+                    )
+                    .col(
+                        ColumnDef::new(BaseRandomnessTask::Requester)
+                            .text()
+                            .not_null(),
+                    )
+                    .col(
+                        ColumnDef::new(BaseRandomnessTask::Seed)
+                            .blob(BlobSize::Medium)
+                            .not_null(),
+                    )
+                    .col(
+                        ColumnDef::new(BaseRandomnessTask::RequestConfirmations)
+                            .unsigned()
+                            .not_null(),
+                    )
+                    .col(
+                        ColumnDef::new(BaseRandomnessTask::CallbackGasLimit)
+                            .unsigned()
+                            .not_null(),
+                    )
+                    .col(
+                        ColumnDef::new(BaseRandomnessTask::CallbackMaxGasPrice)
+                            .blob(BlobSize::Medium)
+                            .not_null(),
+                    )
+                    .col(
+                        ColumnDef::new(BaseRandomnessTask::AssignmentBlockHeight)
+                            .big_unsigned()
+                            .not_null(),
+                    )
+                    .col(
+                        ColumnDef::new(BaseRandomnessTask::State)
+                            .tiny_unsigned()
+                            .not_null(),
+                    )
+                    .col(
+                        ColumnDef::new(BaseRandomnessTask::CreateAt)
+                            .date_time()
+                            .not_null(),
+                    )
+                    .col(
+                        ColumnDef::new(BaseRandomnessTask::UpdateAt)
+                            .date_time()
+                            .not_null(),
+                    )
+                    .to_owned(),
+            )
+            .await
+    }
+
+    async fn down(&self, manager: &SchemaManager) -> Result<(), DbErr> {
+        manager
+            .drop_table(Table::drop().table(BaseRandomnessTask::Table).to_owned())
+            .await
+    }
+}
+
+#[derive(Iden)]
+pub enum BaseRandomnessTask {
+    Table,
+    Id,
+    RequestId,
+    SubscriptionId,
+    GroupIndex,
+    RequestType,
+    Params,
+    Requester,
+    Seed,
+    RequestConfirmations,
+    CallbackGasLimit,
+    CallbackMaxGasPrice,
+    AssignmentBlockHeight,
+    State,
+    CreateAt,
+    UpdateAt,
+}

@@ -9,7 +9,7 @@ use crate::{
 use ::core::panic;
 use arpa_core::{
     ChainIdentity, ExponentialBackoffRetryDescriptor, GeneralMainChainIdentity,
-    GeneralRelayedChainIdentity, WalletSigner,
+    GeneralRelayedChainIdentity, WsWalletSigner,
 };
 use async_trait::async_trait;
 use dkg_core::{
@@ -24,7 +24,7 @@ use threshold_bls::group::Curve;
 pub struct CoordinatorClient {
     chain_id: usize,
     coordinator_address: Address,
-    signer: Arc<WalletSigner>,
+    signer: Arc<WsWalletSigner>,
     contract_transaction_retry_descriptor: ExponentialBackoffRetryDescriptor,
     contract_view_retry_descriptor: ExponentialBackoffRetryDescriptor,
 }
@@ -69,7 +69,7 @@ impl<C: Curve + 'static> CoordinatorClientBuilder<C> for GeneralRelayedChainIden
     }
 }
 
-type CoordinatorContract = Coordinator<WalletSigner>;
+type CoordinatorContract = Coordinator<WsWalletSigner>;
 
 #[async_trait]
 impl ServiceClient<CoordinatorContract> for CoordinatorClient {
@@ -97,6 +97,7 @@ impl CoordinatorTransactions for CoordinatorClient {
         CoordinatorClient::call_contract_transaction(
             self.chain_id,
             "publish",
+            coordinator_contract.client_ref(),
             call,
             self.contract_transaction_retry_descriptor,
             false,
@@ -225,10 +226,11 @@ impl<C: Curve + 'static> BoardPublisher<C> for CoordinatorClient {
 
 #[cfg(test)]
 pub mod coordinator_tests {
-    use super::{CoordinatorClient, WalletSigner};
+    use super::{CoordinatorClient, WsWalletSigner};
     use crate::contract_stub::coordinator::Coordinator;
     use crate::coordinator::CoordinatorTransactions;
     use crate::error::ContractClientError;
+    use arpa_core::eip1559_gas_price_estimator;
     use arpa_core::Config;
     use arpa_core::GeneralMainChainIdentity;
     use ethers::abi::Tokenize;
@@ -237,6 +239,7 @@ pub mod coordinator_tests {
     use ethers::signers::coins_bip39::English;
     use ethers::utils::Anvil;
     use ethers::utils::AnvilInstance;
+    use simple_logger::SimpleLogger;
     use std::env;
     use std::path::PathBuf;
     use std::{sync::Arc, time::Duration};
@@ -257,7 +260,7 @@ pub mod coordinator_tests {
         Anvil::new().chain_id(1u64).mnemonic(PHRASE).spawn()
     }
 
-    async fn deploy_contract(anvil: &AnvilInstance) -> Coordinator<WalletSigner> {
+    async fn deploy_contract(anvil: &AnvilInstance) -> Coordinator<WsWalletSigner> {
         // 2. instantiate our wallet
         let wallet: LocalWallet = anvil.keys()[0].clone().into();
 
@@ -276,11 +279,18 @@ pub mod coordinator_tests {
         ));
 
         // 5. deploy contract
-        let coordinator_contract = Coordinator::deploy(client, (3u8, 30u8))
-            .unwrap()
-            .send()
-            .await
-            .unwrap();
+        let mut call = Coordinator::deploy(client.clone(), (3u8, 30u8)).unwrap();
+
+        if let Some(tx) = call.deployer.tx.as_eip1559_mut() {
+            let (max_fee, max_priority_fee) = client
+                .estimate_eip1559_fees(Some(eip1559_gas_price_estimator))
+                .await
+                .unwrap();
+            tx.max_fee_per_gas = Some(max_fee);
+            tx.max_priority_fee_per_gas = Some(max_priority_fee);
+        }
+
+        let coordinator_contract = call.send().await.unwrap();
 
         coordinator_contract
     }
@@ -296,7 +306,12 @@ pub mod coordinator_tests {
 
     #[tokio::test]
     async fn test_publish_to_coordinator() {
-        let config = Config::default().initialize();
+        SimpleLogger::new()
+            .with_level(log::LevelFilter::Info)
+            .init()
+            .unwrap();
+
+        let config = Config::default();
 
         let anvil = start_chain();
         let coordinator_contract = deploy_contract(&anvil).await;
@@ -314,11 +329,19 @@ pub mod coordinator_tests {
         let nodes = vec![wallet.address()];
         let public_keys = vec![bincode::serialize(&dkg_public_key).unwrap().into()];
 
-        coordinator_contract
-            .initialize(nodes, public_keys)
-            .send()
-            .await
-            .unwrap();
+        let mut call = coordinator_contract.initialize(nodes, public_keys);
+
+        if let Some(tx) = call.tx.as_eip1559_mut() {
+            let (max_fee, max_priority_fee) = coordinator_contract
+                .client_ref()
+                .estimate_eip1559_fees(Some(eip1559_gas_price_estimator))
+                .await
+                .unwrap();
+            tx.max_fee_per_gas = Some(max_fee);
+            tx.max_priority_fee_per_gas = Some(max_priority_fee);
+        }
+
+        call.send().await.unwrap();
 
         let provider = Arc::new(
             Provider::<Ws>::connect(anvil.ws_endpoint())
@@ -331,14 +354,14 @@ pub mod coordinator_tests {
             anvil.chain_id() as usize,
             wallet,
             provider,
+            anvil.ws_endpoint(),
             Address::random(),
             Address::random(),
             Address::random(),
             config
-                .time_limits
-                .unwrap()
+                .get_time_limits()
                 .contract_transaction_retry_descriptor,
-            config.time_limits.unwrap().contract_view_retry_descriptor,
+            config.get_time_limits().contract_view_retry_descriptor,
         );
 
         let client = CoordinatorClient::new(
@@ -346,10 +369,9 @@ pub mod coordinator_tests {
             coordinator_contract.address(),
             &main_chain_identity,
             config
-                .time_limits
-                .unwrap()
+                .get_time_limits()
                 .contract_transaction_retry_descriptor,
-            config.time_limits.unwrap().contract_view_retry_descriptor,
+            config.get_time_limits().contract_view_retry_descriptor,
         );
 
         let mock_value = vec![1, 2, 3, 4];
@@ -358,7 +380,7 @@ pub mod coordinator_tests {
 
         let res = client.publish(mock_value.clone()).await;
         assert!(res.is_err());
-        if let ContractClientError::ContractError(Revert(bytes)) = res.unwrap_err() {
+        if let ContractClientError::WsContractError(Revert(bytes)) = res.unwrap_err() {
             let error_msg = String::decode_with_selector(&bytes).unwrap();
             assert_eq!("share existed", error_msg);
         } else {

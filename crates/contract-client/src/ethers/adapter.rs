@@ -10,7 +10,7 @@ use crate::{
 use arpa_core::{
     pad_to_bytes32, ChainIdentity, ExponentialBackoffRetryDescriptor, GeneralMainChainIdentity,
     GeneralRelayedChainIdentity, PartialSignature, RandomnessRequestType, RandomnessTask,
-    WalletSigner, DEFAULT_MINIMUM_THRESHOLD, FULFILL_RANDOMNESS_GAS_EXCEPT_CALLBACK,
+    WsWalletSigner, DEFAULT_MINIMUM_THRESHOLD, FULFILL_RANDOMNESS_GAS_EXCEPT_CALLBACK,
     RANDOMNESS_REWARD_GAS, VERIFICATION_GAS_OVER_MINIMUM_THRESHOLD,
 };
 use async_trait::async_trait;
@@ -23,7 +23,7 @@ pub struct AdapterClient {
     chain_id: usize,
     main_id_address: Address,
     adapter_address: Address,
-    signer: Arc<WalletSigner>,
+    signer: Arc<WsWalletSigner>,
     contract_transaction_retry_descriptor: ExponentialBackoffRetryDescriptor,
     contract_view_retry_descriptor: ExponentialBackoffRetryDescriptor,
 }
@@ -33,7 +33,7 @@ impl AdapterClient {
         chain_id: usize,
         main_id_address: Address,
         adapter_address: Address,
-        signer: Arc<WalletSigner>,
+        signer: Arc<WsWalletSigner>,
         contract_transaction_retry_descriptor: ExponentialBackoffRetryDescriptor,
         contract_view_retry_descriptor: ExponentialBackoffRetryDescriptor,
     ) -> Self {
@@ -78,7 +78,7 @@ impl AdapterClientBuilder for GeneralRelayedChainIdentity {
     }
 }
 
-type AdapterContract = Adapter<WalletSigner>;
+type AdapterContract = Adapter<WsWalletSigner>;
 
 #[async_trait]
 impl ServiceClient<AdapterContract> for AdapterClient {
@@ -151,6 +151,7 @@ impl AdapterTransactions for AdapterClient {
         AdapterClient::call_contract_transaction(
             self.chain_id,
             "fulfill_randomness",
+            adapter_contract.client_ref(),
             call.gas(
                 task.callback_gas_limit
                     + FULFILL_RANDOMNESS_GAS_EXCEPT_CALLBACK

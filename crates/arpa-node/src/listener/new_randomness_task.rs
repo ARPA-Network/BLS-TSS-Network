@@ -1,14 +1,15 @@
 use super::Listener;
 use crate::{
-    context::{BLSTasksHandler, ChainIdentityHandlerType},
+    context::ChainIdentityHandlerType,
     error::NodeResult,
     event::new_randomness_task::NewRandomnessTask,
     queue::{event_queue::EventQueue, EventPublisher},
 };
 use arpa_contract_client::adapter::AdapterLogs;
 use arpa_core::RandomnessTask;
+use arpa_dal::BLSTasksHandler;
 use async_trait::async_trait;
-use ethers::types::Address;
+use ethers::{providers::Middleware, types::Address};
 use log::info;
 use std::{marker::PhantomData, sync::Arc};
 use threshold_bls::group::Curve;
@@ -88,6 +89,21 @@ impl<PC: Curve + Sync + Send> Listener for NewRandomnessTaskListener<PC> {
                     Ok(())
                 }
             })
+            .await?;
+
+        Ok(())
+    }
+
+    async fn handle_interruption(&self) -> NodeResult<()> {
+        info!(
+            "Handle interruption for NewRandomnessTaskListener, chain_id:{}.",
+            self.chain_id
+        );
+        self.chain_identity
+            .read()
+            .await
+            .get_provider()
+            .get_net_version()
             .await?;
 
         Ok(())

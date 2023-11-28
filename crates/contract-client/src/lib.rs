@@ -4,7 +4,7 @@ use ::ethers::prelude::ContractError;
 use ::ethers::providers::Middleware;
 use ::ethers::types::U64;
 use ::ethers::{prelude::builders::ContractCall, types::H256};
-use arpa_core::{jitter, ExponentialBackoffRetryDescriptor};
+use arpa_core::{eip1559_gas_price_estimator, jitter, ExponentialBackoffRetryDescriptor};
 use async_trait::async_trait;
 use error::ContractClientResult;
 use log::{error, info};
@@ -28,7 +28,8 @@ pub trait TransactionCaller {
     >(
         chain_id: usize,
         info: &str,
-        call: ContractCall<M, D>,
+        client: &M,
+        mut call: ContractCall<M, D>,
         contract_transaction_retry_descriptor: ExponentialBackoffRetryDescriptor,
         retry_on_transaction_fail: bool,
     ) -> ContractClientResult<H256>
@@ -46,6 +47,16 @@ pub trait TransactionCaller {
                     }
                 })
                 .take(contract_transaction_retry_descriptor.max_attempts);
+
+        // set gas price for EIP-1559 trxs
+        if let Some(tx) = call.tx.as_eip1559_mut() {
+            let (max_fee, max_priority_fee) = client
+                .estimate_eip1559_fees(Some(eip1559_gas_price_estimator))
+                .await
+                .map_err(ContractError::from_middleware_error)?;
+            tx.max_fee_per_gas = Some(max_fee);
+            tx.max_priority_fee_per_gas = Some(max_priority_fee);
+        }
 
         let transaction_hash = RetryIf::spawn(
             retry_strategy,
@@ -401,11 +412,5 @@ pub mod provider {
             &self,
             cb: C,
         ) -> ContractClientResult<()>;
-    }
-
-    pub trait ChainProviderBuilder {
-        type ProviderService: BlockFetcher + Send + Sync;
-
-        fn build_chain_provider(&self) -> Self::ProviderService;
     }
 }

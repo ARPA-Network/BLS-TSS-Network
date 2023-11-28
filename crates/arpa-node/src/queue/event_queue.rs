@@ -47,14 +47,14 @@ impl<E: DebuggableEvent + Clone + Send + Sync + 'static> EventPublisher<E> for E
 pub mod tests {
     use super::EventPublisher;
     use crate::{
-        context::{BlockInfoHandler, ChainIdentityHandlerType},
+        context::ChainIdentityHandlerType,
         event::new_block::NewBlock,
         listener::block::BlockListener,
         queue::event_queue::EventQueue,
         subscriber::{block::BlockSubscriber, Subscriber},
     };
     use arpa_core::{Config, GeneralMainChainIdentity};
-    use arpa_dal::cache::InMemoryBlockInfoCache;
+    use arpa_dal::{cache::InMemoryBlockInfoCache, BlockInfoHandler};
     use ethers::{
         providers::{Provider, Ws},
         types::Address,
@@ -66,7 +66,7 @@ pub mod tests {
 
     #[tokio::test]
     async fn test() {
-        let config = Config::default().initialize();
+        let config = Config::default();
 
         let eq = Arc::new(RwLock::new(EventQueue::new()));
 
@@ -86,12 +86,11 @@ pub mod tests {
             .unwrap();
 
         let contract_transaction_retry_descriptor = config
-            .time_limits
-            .unwrap()
+            .get_time_limits()
             .contract_transaction_retry_descriptor;
 
         let contract_view_retry_descriptor =
-            config.time_limits.unwrap().contract_view_retry_descriptor;
+            config.get_time_limits().contract_view_retry_descriptor;
 
         let avnil = Anvil::new().spawn();
 
@@ -106,6 +105,7 @@ pub mod tests {
             0,
             fake_wallet,
             provider,
+            avnil.ws_endpoint(),
             Address::random(),
             Address::random(),
             Address::random(),

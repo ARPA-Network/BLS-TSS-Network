@@ -17,11 +17,7 @@ use arpa_core::{
     Config, GeneralMainChainIdentity, GeneralRelayedChainIdentity, RandomnessTask, RpcServerType,
     SchedulerResult, TaskType, DEFAULT_DYNAMIC_TASK_CLEANER_INTERVAL_MILLIS,
 };
-use arpa_dal::cache::{InMemoryBlockInfoCache, RandomnessResultCache};
-use arpa_sqlite_db::{
-    BLSTasksDBClient, GroupInfoDBClient, NodeInfoDBClient, OPBLSTasksDBClient,
-    OPSignatureResultDBClient, SignatureResultDBClient,
-};
+use arpa_dal::cache::RandomnessResultCache;
 use async_trait::async_trait;
 use log::error;
 use std::{collections::HashMap, fmt::Debug, sync::Arc};
@@ -149,9 +145,10 @@ where
 
         let f_ts = self.get_fixed_task_handler();
 
-        let rpc_endpoint = self.config.node_committer_rpc_endpoint.clone();
+        let rpc_endpoint = self.config.get_node_committer_rpc_endpoint().to_string();
 
-        let node_management_rpc_endpoint = self.config.node_management_rpc_endpoint.clone();
+        let node_management_rpc_endpoint =
+            self.config.get_node_management_rpc_endpoint().to_string();
 
         let context = Arc::new(RwLock::new(self));
 
@@ -279,17 +276,4 @@ where
 }
 
 impl<PC: Curve + 'static> ChainIdentityHandler<PC> for GeneralMainChainIdentity {}
-impl<PC: Curve + 'static> NodeInfoHandler<PC> for NodeInfoDBClient<PC> {}
-impl<PC: Curve + 'static> GroupInfoHandler<PC> for GroupInfoDBClient<PC> {}
 impl<PC: Curve + 'static> ChainIdentityHandler<PC> for GeneralRelayedChainIdentity {}
-impl BlockInfoHandler for InMemoryBlockInfoCache {}
-impl BLSTasksHandler<RandomnessTask> for OPBLSTasksDBClient<RandomnessTask> {}
-impl BLSTasksHandler<RandomnessTask> for BLSTasksDBClient<RandomnessTask> {}
-impl SignatureResultCacheHandler<RandomnessResultCache>
-    for SignatureResultDBClient<RandomnessResultCache>
-{
-}
-impl SignatureResultCacheHandler<RandomnessResultCache>
-    for OPSignatureResultDBClient<RandomnessResultCache>
-{
-}
