@@ -157,7 +157,7 @@ contract ProxyTest is Test {
         vm.prank(_stakingDeployer);
         MockUpgradedAdapter adapterImpl2ByNotOwner = new MockUpgradedAdapter();
 
-                vm.expectRevert("Ownable: caller is not the owner");
+        vm.expectRevert("Ownable: caller is not the owner");
         vm.prank(_stakingDeployer);
         UUPSUpgradeable(address(_adapter)).upgradeTo(address(adapterImpl2ByNotOwner));
 

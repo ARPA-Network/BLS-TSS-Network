@@ -78,8 +78,7 @@ contract ControllerLocalTestScript is Script {
         if (_arpa_exists == false) {
             vm.broadcast(_deployerPrivateKey);
             arpa = new Arpa();
-        }
-        else {
+        } else {
             arpa = IERC20(_existing_arpa_address);
         }
 
