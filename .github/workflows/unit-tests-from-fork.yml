@@ -32,6 +32,6 @@ jobs:
       - name: Install Anvil
         uses: foundry-rs/foundry-toolchain@v1
         with:
-          version: nightly
+          version: nightly-cc5637a979050c39b3d06bc4cc6134f0591ee8d0
       - name: Run tests
         run: CARGO_HTTP_MULTIPLEXING=false cargo test --all -- --test-threads=1 --nocapture
