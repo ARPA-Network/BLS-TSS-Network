@@ -48,7 +48,6 @@ contract StakeOperatorScenarioTestScript is Script {
         vm.broadcast(_deployerPrivateKey);
         _arpa.approve(address(_staking), _rewardAmount);
 
-
         // let a user stake to accumulate some rewards
         if (_isStakeUser) {
             vm.broadcast(_deployerPrivateKey);
@@ -56,7 +55,6 @@ contract StakeOperatorScenarioTestScript is Script {
             vm.rememberKey(_userPrivateKey);
             _stake(vm.addr(_userPrivateKey));
         }
-
     }
 
     function _stake(address sender) internal {

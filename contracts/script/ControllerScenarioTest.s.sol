@@ -85,7 +85,7 @@ contract ControllerScenarioTest is Script {
 
         vm.broadcast(_deployerPrivateKey);
         controller = new Controller();
-        
+
         vm.broadcast(_deployerPrivateKey);
         proxy = new ControllerProxy(address(controller));
 
@@ -96,8 +96,7 @@ contract ControllerScenarioTest is Script {
         adapterImpl = new Adapter();
 
         vm.broadcast(_deployerPrivateKey);
-        adapter =
-            new ERC1967Proxy(address(adapterImpl),abi.encodeWithSignature("initialize(address)",address(proxy)));
+        adapter = new ERC1967Proxy(address(adapterImpl),abi.encodeWithSignature("initialize(address)",address(proxy)));
 
         vm.broadcast(_deployerPrivateKey);
         IControllerOwner(address(proxy)).setControllerConfig(
@@ -122,9 +121,9 @@ contract ControllerScenarioTest is Script {
             _signatureTaskExclusiveWindow,
             _rewardPerSignature,
             _committerRewardPerSignature
-            );
+        );
 
-        vm.broadcast(_deployerPrivateKey);        
+        vm.broadcast(_deployerPrivateKey);
         IAdapterOwner(address(adapter)).setFlatFeeConfig(
             IAdapterOwner.FeeConfig(
                 _fulfillmentFlatFeeEthPPMTier1,

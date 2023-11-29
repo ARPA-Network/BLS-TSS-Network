@@ -31,17 +31,12 @@ contract TestFeeConfigScript is Script {
     uint256 internal _flatFeePromotionStartTimestamp = block.timestamp;
     uint256 internal _flatFeePromotionEndTimestamp = block.timestamp + 120;
 
-
     address internal _controllerAddress = vm.envAddress("CONTROLLER_ADDRESS");
     address internal _stakingAddress = vm.envAddress("STAKING_ADDRESS");
     address internal _adapterAddress = vm.envAddress("ADAPTER_ADDRESS");
 
     function run() external {
         vm.broadcast(_deployerPrivateKey);
-        IAdapterOwner(_adapterAddress).setReferralConfig(
-            true,
-            2,
-            2
-        );
+        IAdapterOwner(_adapterAddress).setReferralConfig(true, 2, 2);
     }
 }

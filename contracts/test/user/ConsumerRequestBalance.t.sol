@@ -5,6 +5,7 @@ import {GetRandomNumberExample} from "Randcast-User-Contract/user/examples/GetRa
 import {GetShuffledArrayExample} from "Randcast-User-Contract/user/examples/GetShuffledArrayExample.sol";
 import {RollDiceExample, GeneralRandcastConsumerBase} from "Randcast-User-Contract/user/examples/RollDiceExample.sol";
 import {AdvancedGetShuffledArrayExample} from "Randcast-User-Contract/user/examples/AdvancedGetShuffledArrayExample.sol";
+import {GeneralRandcastConsumerBase} from "Randcast-User-Contract/user/GeneralRandcastConsumerBase.sol";
 import {
     IAdapter,
     Adapter,
