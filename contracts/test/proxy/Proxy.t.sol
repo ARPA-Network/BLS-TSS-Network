@@ -157,23 +157,23 @@ contract ProxyTest is Test {
         vm.prank(_stakingDeployer);
         MockUpgradedAdapter adapterImpl2ByNotOwner = new MockUpgradedAdapter();
 
-        vm.expectRevert();
+        vm.expectRevert("Ownable: caller is not the owner");
         vm.prank(_stakingDeployer);
-        UUPSUpgradeable(address(_adapter)).upgradeToAndCall(address(adapterImpl2ByNotOwner), "");
+        UUPSUpgradeable(address(_adapter)).upgradeTo(address(adapterImpl2ByNotOwner));
 
         // _adapter can be upgraded by the owner
         vm.prank(_admin);
         MockUpgradedAdapter adapterImpl2 = new MockUpgradedAdapter();
 
         // initialize should fail because the contract is already initialized(state should be the same)
-        vm.expectRevert(abi.encodeWithSignature("InvalidInitialization()"));
+        vm.expectRevert("Initializable: contract is already initialized");
         vm.prank(_admin);
         UUPSUpgradeable(address(_adapter)).upgradeToAndCall(
             address(adapterImpl2), abi.encodeWithSignature("initialize(address)", address(_controller))
         );
 
         vm.prank(_admin);
-        UUPSUpgradeable(address(_adapter)).upgradeToAndCall(address(adapterImpl2), "");
+        UUPSUpgradeable(address(_adapter)).upgradeTo(address(adapterImpl2));
 
         // the state shoud be the same after upgrade
         assertEq(IAdapter(address(_adapter)).getFeeTier(50), _fulfillmentFlatFeeEthPPMTier5);
