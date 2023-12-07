@@ -1,8 +1,7 @@
-name: scenario-test-layer2
+name: scenario-test
 
 on:
-  push:
-    branches: [ scenario-test ]
+  pull_request:
 
 jobs:
   build:

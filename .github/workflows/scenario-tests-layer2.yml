@@ -1,8 +1,7 @@
 name: scenario-test-layer2
 
 on:
-  push:
-    branches: [ scenario-test ]
+  pull_request:
 
 jobs:
   build:
@@ -62,4 +61,4 @@ jobs:
 
       - name: run tests
         run: |
-          robot --include l1 tests/scenarios/
+          robot --include l2 tests/scenarios/

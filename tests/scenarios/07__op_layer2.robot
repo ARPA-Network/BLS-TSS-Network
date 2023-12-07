@@ -48,7 +48,7 @@ L2 Connect Retry
     ...    This case must run after [L2 Normal Process] case.
     ...    Test the retry strategy of the node.
     Kill Previous Node    20
-    ${L2_process} =    Start Process    Anvil    -p    10045    -f    http://localhost:9545    --block-time    2
+    ${L2_process} =    Start Process    anvil    -p    10045    -f    http://localhost:9545    --block-time    2
     ${relay_config} =    Create Relay List    ws://127.0.0.1:10045    901
     Create Node Config    ${CONTRACT_ADDRESSES['Controller']}    ${CONTRACT_ADDRESSES['ERC1967Proxy']}    ${CONTRACT_ADDRESSES['ControllerRelayer']}    900    ${relay_config}
     Start Node    1
@@ -63,7 +63,7 @@ L2 Connect Retry
     Terminate Process    ${L2_process}    kill=true
     All Nodes Have Keyword    Error during reconnection    ${NODE_PROCESS_LIST}
     All Nodes Have Keyword    Handle interruption for NewRandomnessTaskListener    ${NODE_PROCESS_LIST}
-    ${L2_process} =    Start Process    Anvil    -p    10045    -f    http://localhost:9545    --block-time    2
+    ${L2_process} =    Start Process    anvil    -p    10045    -f    http://localhost:9545    --block-time    2
     Process Should Be Running    ${L2_process}
     Sleep    5s
     Deploy OP User Contract    http://localhost:10045    901
