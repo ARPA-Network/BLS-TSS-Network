@@ -32,7 +32,8 @@ Set Op Enviorment And Deploy Contract
     Bound OP Contract ABI
     Set ARPA Address
     Parse Node
-    Create Node Config    ${CONTRACT_ADDRESSES['Controller']}    ${CONTRACT_ADDRESSES['ERC1967Proxy']}    ${CONTRACT_ADDRESSES['ControllerRelayer']}    900
+    ${relay_config} =    Create Relay List    ws://127.0.0.1:9546    901    ws://127.0.0.1:9646    8453
+    Create Node Config    ${CONTRACT_ADDRESSES['Controller']}    ${CONTRACT_ADDRESSES['ERC1967Proxy']}    ${CONTRACT_ADDRESSES['ControllerRelayer']}    900    ${relay_config}
 
 Set Op Enviormnet
     ${result} =    Exec Script    OPControllerOracleLocalTest.s.sol:OPControllerOracleLocalTestScript    http://localhost:9645
@@ -93,13 +94,13 @@ Teardown OP Environment
     Set Global Variable    $BLOCK_TIME    0
     Set Global Variable    $USER_CONTRACT_ADDRESS    NULL
     Clear Database
-    Terminate All Processes
+    Terminate All Processes    kill=true
 
 Request Randomness OP
     [Documentation]    Cast request randomness
     [Arguments]    ${url}
     ${key} =       Get Value From Env    USER_PRIVATE_KEY
-    ${result} =    Run    cast send ${USER_CONTRACT_ADDRESS} "requestRandomness()" --private-key=${key} --rpc-url=${url} --gas-limit=100000
+    ${result} =    Cast Send    ${USER_CONTRACT_ADDRESS}    "requestRandomness()"  ${key}    ${url}
 
 Check Randomness OP
     [Documentation]    Check the randomness

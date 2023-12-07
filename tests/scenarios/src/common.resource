@@ -66,6 +66,7 @@ Start Local Ethereum Chain
     END
 
     Process Should Be Running    ${anvil_process_handle}
+    Sleep    2s
     Set Global Variable    $LOCAL_ETHEREUM_CHAIN_PROCESS_HANDLE    ${anvil_process_handle}
     Mine Blocks    10
     Sleep    2s
@@ -188,7 +189,7 @@ Get Tip
     [Documentation]    Get current tip
     [Arguments]    ${rpc_url}
     ${tip} =    Set Variable    0
-    IF  ${rpc_url} == ''
+    IF  ${rpc_url == ''}
         ${gas_price} =    Run    cast gas-price
         ${gas_price} =    Convert To Integer    ${gas_price}
         ${base_fee} =    Run    cast base-fee
@@ -210,7 +211,7 @@ Cast Send
     [Arguments]    ${address}    ${method}   ${key}    ${rpc_url}
     ${tip} =    Get Tip    ${rpc_url}
     ${tip} =    Convert To Integer    ${tip * 6 / 5}
-    IF  ${rpc_url} == ''
+    IF  ${rpc_url == ''}
          ${result} =    Run    cast send ${address} ${method} --private-key=${key} --priority-gas-price=${tip}
     ELSE
         ${result} =    Run  cast send ${address} ${method} --private-key=${key} --rpc-url=${rpc_url} --priority-gas-price=${tip}

@@ -49,7 +49,8 @@ Set Enviorment And Deploy Contract
     Bound Contract ABI
     Set ARPA Address
     Parse Node
-    ${result} =    Create Node Config    ${CONTRACT_ADDRESSES['ControllerProxy']}    ${CONTRACT_ADDRESSES['ERC1967Proxy']}    ${CONTRACT_ADDRESSES['ControllerRelayer']}    31337
+    ${result} =    Create Node Config    ${CONTRACT_ADDRESSES['ControllerProxy']}    ${CONTRACT_ADDRESSES['ERC1967Proxy']}    ${CONTRACT_ADDRESSES['ControllerRelayer']}    31337    []
+    Clear Database
 
 Init Envioirmnet
     [Documentation]    Init enviorment
@@ -89,7 +90,6 @@ Deploy User Contract
 Request Randomness
     [Documentation]    Request randomness
     ${key} =    Get Value From Env    USER_PRIVATE_KEY
-    #${request_id} =    Cast Send    ${USER_CONTRACT_ADDRESS}    "getRandomNumber()"    ${key}    ''
     ${request_id} =    Contract Function Transact    ${USER_CONTRACT}    getRandomNumber
     RETURN    ${request_id}
 
@@ -307,7 +307,7 @@ Start Stake
     ${total_amount} =    Convert To Integer    ${total_amount}
     ${stake_address} =    Get Value From Env    STAKING_ADDRESS
     ${key} =    Get Value From Env    ADMIN_PRIVATE_KEY
-    ${result} =    Cast Send    ${stake_address}    "start(uint256 amount, uint256 rewardDuration)" ${total_amount} 2592000    ${key}
+    ${result} =    Cast Send    ${stake_address}    "start(uint256 amount, uint256 rewardDuration)" ${total_amount} 2592000    ${key}    ${EMPTY}
 
 Get Community Stake Count
     [Documentation]    Gets community stake count
@@ -319,24 +319,24 @@ Claim Reward
     [Arguments]    ${index}
     ${address} =    Get Value From Env    STAKING_ADDRESS
     ${key} =    Get Private Key By Index    ${index}
-    ${result} =    Cast Send    ${address}    "claimReward()"    ${key}    ''
+    ${result} =    Cast Send    ${address}    "claimReward()"    ${key}    ${EMPTY}
 
 Claim
     [Documentation]    Claim
     [Arguments]    ${index}
     ${address} =    Get Value From Env    STAKING_ADDRESS
     ${key} =    Get Private Key By Index    ${index}
-    ${result} =    Cast Send    ${address}    "claim()"    ${key}    ''
+    ${result} =    Cast Send    ${address}    "claim()"    ${key}    ${EMPTY}
 
 Claim Frozen Principal
     [Documentation]    Claim frozen principal
     [Arguments]    ${index}
     ${address} =    Get Value From Env    STAKING_ADDRESS
     ${key} =    Get Private Key By Index    ${index}
-    ${result} =    Cast Send    ${address}    "claimFrozenPrincipal()"    ${key}    ''
+    ${result} =    Cast Send    ${address}    "claimFrozenPrincipal()"    ${key}    ${EMPTY}
 
 Node Quit
     [Documentation]    Node quit
     [Arguments]    ${index}
     ${key} =    Get Private Key By Index    ${index}
-    ${result} =    Cast Send    ${PROXY_CONTRACT_ADDRESS}    "nodeQuit()"    ${key}    ''
+    ${result} =    Cast Send    ${PROXY_CONTRACT_ADDRESS}    "nodeQuit()"    ${key}    ${EMPTY}

@@ -470,5 +470,6 @@ Test Staking With Node
 *** Test Cases ***
 
 Run Test Cases
+    [Tags]    l1
     Repeat Keyword    1    Test Staking
     Repeat Keyword    1    Test Staking With Node

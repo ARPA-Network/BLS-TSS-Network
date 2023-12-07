@@ -37,4 +37,5 @@ Normal Process
 
 *** Test Cases ***
 Run Normal Process
+    [Tags]    l1
     Repeat Keyword    1    Normal Process

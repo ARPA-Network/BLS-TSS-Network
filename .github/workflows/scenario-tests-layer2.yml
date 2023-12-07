@@ -1,8 +1,8 @@
-name: CI
+name: scenario-test-layer2
 
 on:
   push:
-    branches: [ main ]
+    branches: [ scenario-test ]
 
 jobs:
   build:
@@ -62,4 +62,4 @@ jobs:
 
       - name: run tests
         run: |
-          robot tests/scenarios/07__op_layer2.robot
+          robot --include l1 tests/scenarios/

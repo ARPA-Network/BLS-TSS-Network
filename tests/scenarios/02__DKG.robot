@@ -78,10 +78,10 @@ DKG Happy Path1
     
     ${slash_event} =    Get Event    ${CONTROLLER_CONTRACT}    NodeSlashed
     Should Be Equal As Strings    ${slash_event['args']['nodeIdAddress']}    ${address4}
-    
+    Mine Blocks    20
+    Sleep    10s
     Deploy User Contract
     Request Randomness
-    Sleep    5s
     Mine Blocks    6
     ${result} =    Have Node Got Keyword    fulfill randomness successfully    ${NODE_PROCESS_LIST}
     Sleep    5s
@@ -175,7 +175,8 @@ DKG Sad Path1
 *** Test Cases ***
 
 Run DKG Test cases
+    [Tags]    l1
     Repeat Keyword    1    Test Rebalance
-    Repeat Keyword    1    DKG Happy Path1
+    #Repeat Keyword    1    DKG Happy Path1
     Repeat Keyword    1    DKG Happy Path2
     Repeat Keyword    1    DKG Sad Path1

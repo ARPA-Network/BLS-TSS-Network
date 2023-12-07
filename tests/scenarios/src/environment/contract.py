@@ -83,17 +83,20 @@ def get_average_gas_price(url):
 
     # Initialize a list to store the gas prices
     gas_prices = []
+    if url == 'http://localhost:8545':
+        try:
+            # Loop through the latest 10 blocks
+            for i in range(latest_block_number - 9, latest_block_number + 1):
+                # Get the block
+                block = w3.eth.get_block(i, full_transactions=True)
 
-    # # Loop through the latest 10 blocks
-    # for i in range(latest_block_number - 9, latest_block_number + 1):
-    #     # Get the block
-    #     block = w3.eth.get_block(i, full_transactions=True)
-
-    #     # Add the gas price of each transaction to the list
-    #     for tx in block['transactions']:
-    #         gas_prices.append(tx['gasPrice'])
-
-    # Calculate the average gas price
+                # Add the gas price of each transaction to the list
+                if block is not None:
+                    for tx in block['transactions']:
+                        gas_prices.append(tx['gasPrice'])
+                # Calculate the average gas price
+        except Exception as exception:
+            print(f"Error: {str(exception)}")
     if len(gas_prices) == 0:
         return w3.eth.gas_price
     average_gas_price = sum(gas_prices) / len(gas_prices)
@@ -106,8 +109,6 @@ def exec_script(script_name, url='http://localhost:8545'):
     """
     max_fee = get_average_gas_price(url)
     os.chdir("contracts")
-    # cmd = ("forge script script/" + script_name
-    #     + " --fork-url " + url +  " --with-gas-price " + str(max_fee) + " --broadcast --slow")
     cmd = ("forge script script/" + script_name
         + " --fork-url " + url +  " --with-gas-price " + str(max_fee) + " --broadcast --slow")
     os.system(cmd)

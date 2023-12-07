@@ -9,10 +9,9 @@ import sys
 import re
 import grpc
 sys.path.insert(1, 'tests/scenarios/src/environment/proto')
-import management_pb2
-import management_pb2_grpc
 from google.protobuf.empty_pb2 import Empty
-
+import management_pb2_grpc
+import management_pb2
 
 
 def get_request(request_name, **args):
@@ -31,6 +30,7 @@ def get_request(request_name, **args):
     except AttributeError:
         return Empty()
 
+
 def get_reply(reply_name):
     """
     Return an instance of the given Reply object.
@@ -41,6 +41,7 @@ def get_reply(reply_name):
         return reply()
     except AttributeError:
         return Empty()
+
 
 def call_request(endpoint, request_name, **args):
     """
@@ -58,13 +59,16 @@ def call_request(endpoint, request_name, **args):
     response = function(request, metadata=metadata)
     return response
 
+
 class Account:
     """
     Class of a account to manage the node.
     """
+
     def __init__(self, address, key):
         self.address = address
         self.key = key
+
 
 def parse_chain_result_to_account_list():
     """
@@ -90,66 +94,19 @@ def parse_chain_result_to_account_list():
             for match in matches:
                 accounts.append(match.group())
         # Create a list of Account objects using the namedtuple syntax
-        account_list = [Account(a,k) for a,k in zip(accounts, private_keys)]
+        account_list = [Account(a, k) for a, k in zip(accounts, private_keys)]
         return account_list
 
-def create_node_config(controller_address, adapter_address, relayer_address, chain_id):
-    """
-    Create the node config files.
-    """
-    # Get dictionary of account/private key pairs
-    account_list = parse_chain_result_to_account_list()
-    provider_endpoint = "ws://127.0.0.1:8545"
-    relay_chain_config ='[]'
-    if chain_id == '900':
-        provider_endpoint = "ws://127.0.0.1:8546"
-        relay_chain_config = """- chain_id: 8453
-    description: "BASE"
-    provider_endpoint: "ws://127.0.0.1:9646"
-    controller_oracle_address: "0xCf7Ed3AccA5a467e9e704C703E8D87F634fB0Fc9"
-    adapter_address: "0x5FC8d32690cc91D4c39d9d3abcBD16989F875707"
-    
-    listeners:
-      - l_type: Block
-        interval_millis: 10000
-        use_jitter: true
-      - l_type: NewRandomnessTask
-        interval_millis: 10000
-        use_jitter: true
-      - l_type: ReadyToHandleRandomnessTask
-        interval_millis: 10000
-        use_jitter: true
-      - l_type: RandomnessSignatureAggregation
-        interval_millis: 20000
-        use_jitter: false
 
-    time_limits:
-      block_time: 3
-      randomness_task_exclusive_window: 10
-      listener_interval_millis: 1000
-      provider_polling_interval_millis: 1000
-      provider_reset_descriptor:
-        interval_millis: 5000
-        max_attempts: 17280
-        use_jitter: false
-      contract_transaction_retry_descriptor:
-        base: 2
-        factor: 1000
-        max_attempts: 3
-        use_jitter: true
-      contract_view_retry_descriptor:
-        base: 2
-        factor: 500
-        max_attempts: 5
-        use_jitter: true
-      commit_partial_signature_retry_descriptor:
-        base: 2
-        factor: 1000
-        max_attempts: 5
-        use_jitter: false
-  - chain_id: 901
-    description: "OP"
-    provider_endpoint: "ws://127.0.0.1:9546"
+def create_relay_list(op_endpoint=None, op_chain_id=None, base_endpoint=None, base_chain_id=None):
+    """
+    Create the relay list.
+    """
+
+    def generate_relay_string(description, chain_id, endpoint):
+        return f"""- chain_id: {chain_id}
+    description: "{description}"
+    provider_endpoint: {endpoint}
     controller_oracle_address: "0xCf7Ed3AccA5a467e9e704C703E8D87F634fB0Fc9"
     adapter_address: "0x5FC8d32690cc91D4c39d9d3abcBD16989F875707"
     
@@ -191,6 +148,31 @@ def create_node_config(controller_address, adapter_address, relayer_address, cha
         factor: 1000
         max_attempts: 5
         use_jitter: false"""
+
+    relay_chain_config = []
+
+    if op_endpoint is not None and op_chain_id is not None:
+        relay_chain_config.append(
+            generate_relay_string("OP", op_chain_id, op_endpoint))
+
+    if base_endpoint is not None and base_chain_id is not None:
+        relay_chain_config.append(generate_relay_string(
+            "base", base_chain_id, base_endpoint))
+
+    joined_list = '\n  '.join(relay_chain_config)
+    return joined_list
+
+
+def create_node_config(controller_address, adapter_address, relayer_address, chain_id, relay_config):
+    """
+    Create the node config files.
+    """
+    # Get dictionary of account/private key pairs
+    account_list = parse_chain_result_to_account_list()
+    provider_endpoint = "ws://127.0.0.1:8545"
+    relay_chain_config = relay_config
+    if chain_id == '900':
+        provider_endpoint = "ws://127.0.0.1:8546"
     # Loop through accounts
     i = 0
     for account in account_list:
@@ -291,9 +273,9 @@ def start_node(node_idx):
     root_path = os.path.dirname(os.path.abspath(__file__))
     root_path = root_path.split("/tests/")[0]
     cmd = ("cd crates/arpa-node;"
-       "cargo run --bin node-client -- -c "
-       "{}/tests/scenarios/src/environment/node_config/config{}.yml"
-      ).format(root_path, node_idx)
+           "cargo run --bin node-client -- -c "
+           "{}/tests/scenarios/src/environment/node_config/config{}.yml"
+           ).format(root_path, node_idx)
     log_path = f"crates/arpa-node/log/running/node{node_idx}.log"
     # Check if file exists, if not create an empty file
     if not os.path.exists(log_path):
@@ -303,6 +285,7 @@ def start_node(node_idx):
                                 stderr=subprocess.STDOUT, cwd=root_path)
     return proc
 
+
 def kill_node(proc):
     """
     Kill a node.
@@ -310,6 +293,7 @@ def kill_node(proc):
     """
     proc.kill()
     proc.terminate()
+
 
 def kill_process_by_port(port):
     """
@@ -322,6 +306,7 @@ def kill_process_by_port(port):
     else:
         command = f'lsof -ti :{port} | xargs kill -9'
         subprocess.call(command, shell=True)
+
 
 def kill_node_by_index(index):
     """
@@ -340,7 +325,8 @@ def get_node_port_from_index(node_idx):
     node_idx: index of the node.
     """
     port = 50201 + int(node_idx) - 1
-    return  'localhost:' + str(port)
+    return 'localhost:' + str(port)
+
 
 def add_process_to_list(proc, node_list):
     """
@@ -353,12 +339,14 @@ def add_process_to_list(proc, node_list):
     node_list.append(proc)
     return node_list
 
+
 def kill_previous_node(node_number=10):
     """
     Kill all previous processes.
     """
     for i in range(1, node_number + 1):
         kill_node_by_index(i)
+
 
 def print_node_process():
     """
@@ -367,7 +355,7 @@ def print_node_process():
     # Find all processes using ports 50061-50110
     cmd = 'lsof -i :50061-50220'
     proc = subprocess.Popen(cmd.split(), stdout=subprocess.PIPE)
-    out,_ = proc.communicate()
+    out, _ = proc.communicate()
     for line in out.splitlines()[1:]:
         fields = line.strip().split()
         if fields:

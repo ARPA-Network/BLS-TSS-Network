@@ -107,7 +107,7 @@ Test Referral
     ${subId2} =    Convert To Integer    2
     ${adapter_address} =    Get Value From Env    ADAPTER_ADDRESS
     
-    ${result} =    Cast Send    ${adapter_address}    "setReferral(uint64, uint64)" ${subId1} ${subId2}    ${original_private_key}
+    ${result} =    Cast Send    ${adapter_address}    "setReferral(uint64, uint64)" ${subId1} ${subId2}    ${original_private_key}    ${EMPTY}
     
     Request Randomenes And Check Payment    0    100000000000000000
     Request Randomenes And Check Payment    0    100000000000000000
@@ -132,5 +132,6 @@ Test Referral
 *** Test Cases ***
 
 Run Test Cases
+    [Tags]    l1
     Repeat Keyword    1    Set Marketing Discount
     Repeat Keyword    1    Test Referral
