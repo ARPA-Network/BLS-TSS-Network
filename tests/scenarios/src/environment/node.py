@@ -304,7 +304,7 @@ def kill_process_by_port(port):
         command = f'FOR /F "tokens=5 delims= " %P IN (\'netstat -a -n -o ^| findstr :{port}\') DO TaskKill.exe /F /PID %P'
         os.system(command)
     else:
-        command = f'lsof -ti :{port} | xargs kill -9'
+        command = f'lsof -ti :{port} | xargs -r kill -9'
         subprocess.call(command, shell=True)
 
 
