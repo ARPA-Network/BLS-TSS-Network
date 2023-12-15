@@ -38,3 +38,5 @@ contracts/test/Test.t.sol
 passwd
 *.pyc
 *.history
+/tests/scenarios/src/environment/node_config
+/contracts/output/

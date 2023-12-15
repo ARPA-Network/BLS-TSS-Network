@@ -23,6 +23,7 @@ ${STAKE_CONTRACT}
 ${ADAPTER_CONTRACT}
 ${USER_CONTRACT_ADDRESS}                 NULL
 ${USER_CONTRACT}
+${CONTRACT_ADDRESSES}                    NULL
 # Test value:
 ${MODIFIRD_PUB_KEY}                      0x137bde2a3eca9e26d5023c8a31c7db75db47b4d1776efc144bc9cfa36403125510292172c806e0d9dd29958c8b359ea9c693179c505558cc95ca8ce6a690eb800652ce1fadb1895c06e5f28e871d8e3797f749941108195d2106a782464a09ed23ece01e5c6512317cd413fbecc36032ab7ba45f62704e9808ec2b6a2dd03d8c
 ${MODIFIRD_PARTIAL_PUB_KEY}              0x02
@@ -33,16 +34,23 @@ ${MODIFIRD_PARTIAL_PUB_KEY}              0x02
 Set Enviorment And Deploy Contract
     [Documentation]    Set enviorment and deploy proxy contract
     Clear Log
-    Setup Chain Environment
-    ${result} =    Exec Script    ControllerScenarioTest.s.sol:ControllerScenarioTest
-    ${result} =    Exec Script    StakeOperatorScenarioTest.s.sol:StakeOperatorScenarioTestScript
-    Bound Contract ABI
-    Set ARPA Address
-    ${adapter_address} =    Get Value From Env    ADAPTER_ADDRESS
-    ${result} =    Create Node Config    ${PROXY_CONTRACT_ADDRESS}    ${adapter_address}
     Kill Previous Node    20
     Clear Database
     Set Global Variable    $NODE_PROCESS_LIST    ${EMPTY_LIST}
+    Setup Chain Environment
+    ${result} =    Exec Script    ControllerScenarioTest.s.sol:ControllerScenarioTest
+    ${contract_addresses} =    Get Contract Address From File    contracts/broadcast/ControllerScenarioTest.s.sol/31337/run-latest.json
+    Set Global Variable    $CONTRACT_ADDRESSES    ${contract_addresses}
+    Set Environment Variable    ARPA_ADDRESS    ${contract_addresses['Arpa']}
+    Set Environment Variable    CONTROLLER_ADDRESS    ${contract_addresses['ControllerProxy']}
+    Set Environment Variable    STAKING_ADDRESS    ${contract_addresses['Staking']}
+    Set Environment Variable   ADAPTER_ADDRESS    ${contract_addresses['ERC1967Proxy']}
+    ${result} =    Exec Script    StakeOperatorScenarioTest.s.sol:StakeOperatorScenarioTestScript
+    Bound Contract ABI
+    Set ARPA Address
+    Parse Node
+    ${result} =    Create Node Config    ${CONTRACT_ADDRESSES['ControllerProxy']}    ${CONTRACT_ADDRESSES['ERC1967Proxy']}    ${CONTRACT_ADDRESSES['ControllerRelayer']}    31337    []
+    Clear Database
 
 Init Envioirmnet
     [Documentation]    Init enviorment
@@ -55,7 +63,7 @@ Build Contract
 
 Bound Contract ABI
     [Documentation]    Bound contract ABI to handle contract function call
-    ${proxy_address} =    Get Value From Env    PROXY_ADDRESS
+    ${proxy_address} =    Set Variable    ${CONTRACT_ADDRESSES['ControllerProxy']}
     ${proxy_address} =    To Checksum Address    ${proxy_address}
     Set Global Variable    $PROXY_CONTRACT_ADDRESS    ${proxy_address}
     ${proxy_contract} =    Get Contract    ${PROXY_OUTPUT}ControllerProxy.sol/ControllerProxy.json    ${PROXY_CONTRACT_ADDRESS}
@@ -75,12 +83,13 @@ Deploy User Contract
     [Documentation]    Deploy user request contract
     ${contract_output} =    Exec Script    GetRandomNumberScenarioTest.s.sol:GetRandomNumberScenarioTestScript
     ${contract_address} =    Get Contract Address From File    contracts/broadcast/GetRandomNumberScenarioTest.s.sol/31337/run-latest.json
-    Set Global Variable    $USER_CONTRACT_ADDRESS    ${contract_address[0]}  
-    ${user_contract} =    Get Contract    ${PROXY_OUTPUT}GetRandomNumberExample.sol/GetRandomNumberExample.json    ${user_contract_address}
+    Set Global Variable    $USER_CONTRACT_ADDRESS    ${contract_address['GetRandomNumberExample']}
+    ${user_contract} =    Get Contract    ${PROXY_OUTPUT}GetRandomNumberExample.sol/GetRandomNumberExample.json    ${USER_CONTRACT_ADDRESS}
     Set Global Variable    $USER_CONTRACT   ${user_contract}
 
 Request Randomness
     [Documentation]    Request randomness
+    ${key} =    Get Value From Env    USER_PRIVATE_KEY
     ${request_id} =    Contract Function Transact    ${USER_CONTRACT}    getRandomNumber
     RETURN    ${request_id}
 
@@ -91,8 +100,7 @@ Check Randomness
     RETURN    ${last_output}
 
 Set ARPA Address
-    ${address} =    Get Value From Env    ARPA_ADDRESS
-    Set Global Variable    $ARPA_CONTRACT_ADDRESS    ${address}
+    Set Global Variable    $ARPA_CONTRACT_ADDRESS    ${CONTRACT_ADDRESSES['Arpa']}
 
 Get Modified CommitdDkg
     [Documentation]    Get all modifed value of commitDkg
@@ -299,7 +307,7 @@ Start Stake
     ${total_amount} =    Convert To Integer    ${total_amount}
     ${stake_address} =    Get Value From Env    STAKING_ADDRESS
     ${key} =    Get Value From Env    ADMIN_PRIVATE_KEY
-    ${result} =    Run    cast send ${stake_address} "start(uint256 amount, uint256 rewardDuration)" ${total_amount} 2592000 --private-key=${key}
+    ${result} =    Cast Send    ${stake_address}    "start(uint256 amount, uint256 rewardDuration)" ${total_amount} 2592000    ${key}    ${EMPTY}
 
 Get Community Stake Count
     [Documentation]    Gets community stake count
@@ -311,24 +319,24 @@ Claim Reward
     [Arguments]    ${index}
     ${address} =    Get Value From Env    STAKING_ADDRESS
     ${key} =    Get Private Key By Index    ${index}
-    ${result} =    Run    cast send ${address} "claimReward()" --private-key=${key}
+    ${result} =    Cast Send    ${address}    "claimReward()"    ${key}    ${EMPTY}
 
 Claim
     [Documentation]    Claim
     [Arguments]    ${index}
     ${address} =    Get Value From Env    STAKING_ADDRESS
     ${key} =    Get Private Key By Index    ${index}
-    ${result} =    Run    cast send ${address} "claim()" --private-key=${key}
+    ${result} =    Cast Send    ${address}    "claim()"    ${key}    ${EMPTY}
 
 Claim Frozen Principal
     [Documentation]    Claim frozen principal
     [Arguments]    ${index}
     ${address} =    Get Value From Env    STAKING_ADDRESS
     ${key} =    Get Private Key By Index    ${index}
-    ${result} =    Run    cast send ${address} "claimFrozenPrincipal()" --private-key=${key}
+    ${result} =    Cast Send    ${address}    "claimFrozenPrincipal()"    ${key}    ${EMPTY}
 
 Node Quit
     [Documentation]    Node quit
     [Arguments]    ${index}
     ${key} =    Get Private Key By Index    ${index}
-    ${result} =    Run    cast send ${PROXY_CONTRACT_ADDRESS} "nodeQuit()" --private-key=${key}
+    ${result} =    Cast Send    ${PROXY_CONTRACT_ADDRESS}    "nodeQuit()"    ${key}    ${EMPTY}

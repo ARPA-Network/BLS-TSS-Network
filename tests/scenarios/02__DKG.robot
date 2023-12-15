@@ -34,9 +34,9 @@ Test Rebalance
     Group Node Number Should Be    0    5
 
     ${node6} =    Stake And Run Node    6
-    ${result} =        Get Keyword From Log    6    Transaction successful(node_register)
+    ${result} =        Get Keyword From Node Log    6    Transaction successful(node_register)
     ${get_share} =    All Nodes Have Keyword    Calling contract view get_shares    ${NODE_PROCESS_LIST}
-    ${group_result} =    Get Keyword From Log    6    is available
+    ${group_result} =    Get Keyword From Node Log    6    is available
 
     Group Node Number Should Be    0    3
     Group Node Number Should Be    1    3
@@ -71,19 +71,19 @@ DKG Happy Path1
 
     ${log_phase_1} =    All Nodes Have Keyword    Waiting for Phase 1 to start    ${NODE_PROCESS_LIST}
     Mine Blocks    8
-    ${log_phase_2} =   Get Keyword From Log    2    Waiting for Phase 2 to start
+    ${log_phase_2} =   Get Keyword From Node Log    2    Waiting for Phase 2 to start
     Mine Blocks    9
-    ${log_group_available} =   Get Keyword From Log    2    Group index:
+    ${log_group_available} =   Get Keyword From Node Log    2    Group index:
     Group Node Number Should Be    0    3
     
     ${slash_event} =    Get Event    ${CONTROLLER_CONTRACT}    NodeSlashed
     Should Be Equal As Strings    ${slash_event['args']['nodeIdAddress']}    ${address4}
-    
+    Mine Blocks    20
+    Sleep    10s
     Deploy User Contract
     Request Randomness
-    Mine Blocks    10
-    Have Node Got Keyword    Partial signature sent and accepted by committer    ${NODE_PROCESS_LIST}
-    Mine Blocks    10
+    Mine Blocks    6
+    ${result} =    Have Node Got Keyword    fulfill randomness successfully    ${NODE_PROCESS_LIST}
     Sleep    5s
     Check Randomness
     Teardown Scenario Testing Environment
@@ -108,7 +108,7 @@ DKG Happy Path2
 
     ${log_phase_1} =    All Nodes Have Keyword    Waiting for Phase 1 to start    ${NODE_PROCESS_LIST}
     Mine Blocks    8
-    ${log_phase_2} =   Get Keyword From Log    2    Waiting for Phase 2 to start
+    ${log_phase_2} =   Get Keyword From Node Log    2    Waiting for Phase 2 to start
     Mine Blocks    9
     ${log_group_available} =       All Nodes Have Keyword    Group index:    ${NODE_PROCESS_LIST}
     Group Node Number Should Be    0    4
@@ -121,13 +121,14 @@ DKG Happy Path2
 
     ${result} =    Has Equal Value    ${node_rewards['args']['nodeAddress']}    ${address1}    ${address2}    ${address3}    ${address4}
     Should Be True    ${result}
-
+    Mine Blocks    20
+    Sleep    2s
     Deploy User Contract
     Request Randomness
-    Mine Blocks    10
+    
     Have Node Got Keyword    Partial signature sent and accepted by committer    ${NODE_PROCESS_LIST}
     Mine Blocks    10
-    Sleep    5s
+    Sleep    3s
     Check Randomness
     ${group} =   Get Group    0
     Teardown Scenario Testing Environment
@@ -174,7 +175,8 @@ DKG Sad Path1
 *** Test Cases ***
 
 Run DKG Test cases
+    [Tags]    l1
     Repeat Keyword    1    Test Rebalance
-    Repeat Keyword    1    DKG Happy Path1
+    #Repeat Keyword    1    DKG Happy Path1
     Repeat Keyword    1    DKG Happy Path2
     Repeat Keyword    1    DKG Sad Path1

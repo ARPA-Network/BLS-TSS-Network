@@ -57,27 +57,26 @@ Start Local Ethereum Chain
     IF  ${BLOCK_TIME} == 0
         ${anvil_process_handle} =    Start Process    anvil
         ...    --accounts    ${NUM_ACCOUNTS}
-        ...    --gas-price    100000000
         ...    stdout=${LOG_PATH}/anvil-chain.log
     ELSE
         ${anvil_process_handle} =    Start Process    anvil
         ...    --block-time    ${BLOCK_TIME}
         ...    --accounts    ${NUM_ACCOUNTS}
-        ...    --gas-price    100000000
         ...    stdout=${LOG_PATH}/anvil-chain.log
     END
 
     Process Should Be Running    ${anvil_process_handle}
-    Set Global Variable    $LOCAL_ETHEREUM_CHAIN_PROCESS_HANDLE    ${anvil_process_handle}
     Sleep    2s
-    ${result} =    Parse Chain Result To Account List
-    Set Global Variable    $NODE_ACCOUNT_LIST    ${result}
+    Set Global Variable    $LOCAL_ETHEREUM_CHAIN_PROCESS_HANDLE    ${anvil_process_handle}
+    Mine Blocks    10
+    Sleep    2s
 
 Stop Local Ethereum Chain
     [Documentation]    Stops the local Ethereum blockchain child process running in the backgroud of Anvil
     ...    by grabbing the previously saved process handle during the suite setup process
     Terminate Process    ${LOCAL_ETHEREUM_CHAIN_PROCESS_HANDLE}
     Process Should Be Stopped    ${LOCAL_ETHEREUM_CHAIN_PROCESS_HANDLE}
+    Set Global Variable    $LOCAL_ETHEREUM_CHAIN_PROCESS_HANDLE    ''
 
 Get Chain ID
     [Documentation]    Tests the local Ethereum chain is up and running
@@ -180,3 +179,41 @@ Source Environment Variables
     [Documentation]    Source environment variables
     ${result} =    Run    source ${ENV_PATH}
     ${result} =    Run    cp ${ENV_PATH} ${CONTRACT_PATH}.env
+
+Parse Node
+    [Documentation]    Parse node
+    ${result} =    Parse Chain Result To Account List
+    Set Global Variable    $NODE_ACCOUNT_LIST    ${result}
+
+Get Tip
+    [Documentation]    Get current tip
+    [Arguments]    ${rpc_url}
+    ${tip} =    Set Variable    0
+    IF  ${rpc_url == ''}
+        ${gas_price} =    Run    cast gas-price
+        ${gas_price} =    Convert To Integer    ${gas_price}
+        ${base_fee} =    Run    cast base-fee
+        ${base_fee} =    Convert To Integer    ${base_fee}
+        ${tip} =    Set Variable    ${gas_price - ${base_fee}}
+    ELSE
+        ${gas_price} =    Run    cast gas-price --rpc-url=${rpc_url}
+        ${gas_price} =    Convert To Integer    ${gas_price}
+        ${base_fee} =    Run    cast base-fee --rpc-url=${rpc_url}
+        ${base_fee} =    Convert To Integer    ${base_fee}
+        ${tip} =    Set Variable    ${gas_price - ${base_fee}}
+    END
+
+    RETURN    ${tip}
+
+
+Cast Send   
+    [Documentation]    Package Cast Send   
+    [Arguments]    ${address}    ${method}   ${key}    ${rpc_url}
+    ${tip} =    Get Tip    ${rpc_url}
+    ${tip} =    Convert To Integer    ${tip * 6 / 5}
+    IF  ${rpc_url == ''}
+         ${result} =    Run    cast send ${address} ${method} --private-key=${key} --priority-gas-price=${tip}
+    ELSE
+        ${result} =    Run  cast send ${address} ${method} --private-key=${key} --rpc-url=${rpc_url} --priority-gas-price=${tip}
+    END
+    

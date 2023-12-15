@@ -20,6 +20,7 @@ Payment Should In The Range
 Request Randomenes And Check Payment
     [Arguments]    ${min_value}    ${max_value}
     ${result} =    Request Randomness
+    Sleep    1s
     ${sub} =    Get Subscription    1
     ${payment} =   Set Variable    ${sub[3]}
     Mine Blocks    10
@@ -72,7 +73,7 @@ Test Referral
     ...    1. Given a group is ready for randomeness generation
     ...    2. Referral a new user and check if the payment is only the gas fee
     Set Enviorment And Deploy Contract
-    
+    Set Value To Env    USER_PRIVATE_KEY    0x2a871d0798f97d79848a013d4936a73bf4cc922c825d33c1cf7073dff6d409c6
     ${node1} =    Stake And Run Node    1
     ${node2} =    Stake And Run Node    2
     ${node3} =    Stake And Run Node    3
@@ -97,7 +98,7 @@ Test Referral
     Sleep    10s
     
     ${contract_address} =    Get Contract Address From File    contracts/broadcast/GetRandomNumberScenarioTest.s.sol/31337/run-latest.json
-    ${new_user_contract} =    Get Contract    ${PROXY_OUTPUT}GetRandomNumberExample.sol/GetRandomNumberExample.json    ${contract_address[0]}
+    ${new_user_contract} =    Get Contract    ${PROXY_OUTPUT}GetRandomNumberExample.sol/GetRandomNumberExample.json    ${contract_address['GetRandomNumberExample']}
     ${result} =    Contract Function Transact    ${new_user_contract}    getRandomNumber
     Mine Blocks    10
     Sleep    10s
@@ -106,7 +107,7 @@ Test Referral
     ${subId2} =    Convert To Integer    2
     ${adapter_address} =    Get Value From Env    ADAPTER_ADDRESS
     
-    ${result} =    Run    cast send ${adapter_address} "setReferral(uint64, uint64)" ${subId1} ${subId2} --private-key ${original_private_key}
+    ${result} =    Cast Send    ${adapter_address}    "setReferral(uint64, uint64)" ${subId1} ${subId2}    ${original_private_key}    ${EMPTY}
     
     Request Randomenes And Check Payment    0    100000000000000000
     Request Randomenes And Check Payment    0    100000000000000000
@@ -131,5 +132,6 @@ Test Referral
 *** Test Cases ***
 
 Run Test Cases
+    [Tags]    l1
     Repeat Keyword    1    Set Marketing Discount
     Repeat Keyword    1    Test Referral

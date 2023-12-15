@@ -135,8 +135,8 @@ contract RandcastPlaygroundConsumerTest is RandcastTestHelper {
 
         deal(_node1, 1 * 1e18);
         _fulfillRequest(_node1, requestId, 17);
-        (,, uint256 balance,,,,,,) = AdapterForTest(address(_adapter)).getSubscription(2);
 
+        (,, uint256 balance,,,,,,) = AdapterForTest(address(_adapter)).getSubscription(2);
         vm.prank(_user);
         uint256 curBalance = _user.balance;
         ISharedConsumer(address(_shareConsumer)).cancelSubscription();
@@ -152,7 +152,6 @@ contract RandcastPlaygroundConsumerTest is RandcastTestHelper {
 
         uint32 bunch = 1;
         uint32 size = 6;
-
         vm.prank(_user);
         uint256 gasFee = ISharedConsumer(address(_shareConsumer)).estimateFee(
             ISharedConsumer.PlayType.Roll, 0, abi.encode(bunch, size)
@@ -167,11 +166,10 @@ contract RandcastPlaygroundConsumerTest is RandcastTestHelper {
 
         deal(_node1, 1 * 1e18);
         _fulfillRequest(_node1, requestId, 17);
-        (,, uint256 balance,,,,,,) = AdapterForTest(address(_adapter)).getSubscription(2);
 
+        (,, uint256 balance,,,,,,) = AdapterForTest(address(_adapter)).getSubscription(2);
         vm.prank(_user);
         uint256 curBalance = _user.balance;
-
         ISharedConsumer(address(_shareConsumer)).cancelSubscription();
         assertEq(_user.balance, curBalance + balance);
         emit log_uint(gasFee);
@@ -185,7 +183,6 @@ contract RandcastPlaygroundConsumerTest is RandcastTestHelper {
 
         uint32 ticketNumber = 30;
         uint32 winnerNumber = 1;
-
         vm.prank(_user);
         bytes32 requestId = ISharedConsumer(address(_shareConsumer)).drawTickets(ticketNumber, winnerNumber, 1, 0, 0);
 
