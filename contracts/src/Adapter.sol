@@ -151,6 +151,7 @@ contract Adapter is UUPSUpgradeable, IAdapter, IAdapterOwner, RequestIdBase, Own
     error InvalidZeroAddress();
     error GasLimitTooBig(uint32 have, uint32 want);
     error RequestNotExpired();
+    error ExceedCallbackMaxGasPrice(uint256 have, uint256 want);
 
     // *Modifiers*
     modifier onlySubOwner(uint64 subId) {
@@ -556,6 +557,10 @@ contract Adapter is UUPSUpgradeable, IAdapter, IAdapterOwner, RequestIdBase, Own
                 )
         ) {
             revert IncorrectCommitment();
+        }
+
+        if (tx.gasprice > requestDetail.callbackMaxGasPrice) {
+            revert ExceedCallbackMaxGasPrice(tx.gasprice, requestDetail.callbackMaxGasPrice);
         }
 
         if (block.number < requestDetail.blockNum + requestDetail.requestConfirmations) {
