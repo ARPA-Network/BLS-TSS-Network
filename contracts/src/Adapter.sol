@@ -338,6 +338,8 @@ contract Adapter is UUPSUpgradeable, IAdapter, IAdapterOwner, RequestIdBase, Own
                 _subscriptions[subId].consumers[i] = consumers[consumers.length - 1];
                 _subscriptions[subId].consumers.pop();
 
+                delete _consumers[consumer].nonces[subId];
+
                 emit SubscriptionConsumerRemoved(subId, consumer);
                 return;
             }
