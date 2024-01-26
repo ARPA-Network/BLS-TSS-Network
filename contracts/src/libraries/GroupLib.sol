@@ -314,7 +314,7 @@ library GroupLib {
             // add member to target group
             addToGroup(groupData, membersLeftInGroup[i], targetGroupIndex);
 
-            if (groupData.groups[i].size >= DEFAULT_MINIMUM_THRESHOLD) {
+            if (groupData.groups[targetGroupIndex].size >= DEFAULT_MINIMUM_THRESHOLD) {
                 involvedGroups[currentIndex] = targetGroupIndex;
                 currentIndex++;
             }
