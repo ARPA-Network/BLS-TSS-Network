@@ -293,16 +293,11 @@ library GroupLib {
         // Get group and set isStrictlyMajorityConsensusReached to false
         g.isStrictlyMajorityConsensusReached = false;
 
-        // collect idAddress of members in group
-        address[] memory membersLeftInGroup = new address[](g.members.length);
-        for (uint256 i = 0; i < g.members.length; i++) {
-            membersLeftInGroup[i] = g.members[i].nodeIdAddress;
-        }
         uint256[] memory involvedGroups = new uint256[](groupData.groupCount); // max number of groups involved is groupCount
         uint256 currentIndex;
 
         // for each membersLeftInGroup, call findOrCreateTargetGroup and then add that member to the new group.
-        for (uint256 i = 0; i < membersLeftInGroup.length; i++) {
+        for (uint256 i = g.members.length - 1; i >= 0; i--) {
             // find a suitable group for the member
             (uint256 targetGroupIndex,) = findOrCreateTargetGroup(groupData);
 
@@ -311,13 +306,12 @@ library GroupLib {
                 break;
             }
 
-            // add member to target group
-            addToGroup(groupData, membersLeftInGroup[i], targetGroupIndex);
-
-            if (groupData.groups[targetGroupIndex].size >= DEFAULT_MINIMUM_THRESHOLD) {
+            // remove and add member to target group
+            if (addToGroup(groupData, g.members[i].nodeIdAddress, targetGroupIndex)) {
                 involvedGroups[currentIndex] = targetGroupIndex;
                 currentIndex++;
             }
+            removeFromGroup(groupData, i, groupIndex);
         }
 
         return Utils.trimTrailingElements(involvedGroups, currentIndex);
@@ -441,7 +435,7 @@ library GroupLib {
         // max of 51% of group size and DEFAULT_MINIMUM_THRESHOLD
         g.threshold = minimum > DEFAULT_MINIMUM_THRESHOLD ? minimum : DEFAULT_MINIMUM_THRESHOLD;
 
-        if (g.size >= 3) {
+        if (g.size >= DEFAULT_MINIMUM_THRESHOLD) {
             return true;
         }
     }
@@ -466,7 +460,7 @@ library GroupLib {
         uint256 minimum = Utils.minimumThreshold(g.size);
         g.threshold = minimum > DEFAULT_MINIMUM_THRESHOLD ? minimum : DEFAULT_MINIMUM_THRESHOLD;
 
-        if (g.size < 3) {
+        if (g.size < DEFAULT_MINIMUM_THRESHOLD) {
             return (true, false);
         }
 
