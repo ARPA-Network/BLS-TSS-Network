@@ -93,6 +93,7 @@ contract Controller is Initializable, IController, IControllerOwner, OwnableUpgr
     error PartialKeyAlreadyRegistered(uint256 groupIndex, address nodeIdAddress);
     error SenderNotAdapter();
     error InvalidZeroAddress();
+    error DuplicatedDisqualifiedNode();
 
     function initialize(address arpa, uint256 lastOutput) public initializer {
         _arpa = IERC20(arpa);
@@ -287,6 +288,17 @@ contract Controller is Initializable, IController, IControllerOwner, OwnableUpgr
         uint256[4] memory publicKey = BLS.fromBytesPublicKey(params.publicKey);
         if (!BLS.isValidPublicKey(publicKey)) {
             revert BLS.InvalidPublicKey();
+        }
+
+        for (uint256 i = 0; i < params.disqualifiedNodes.length; i++) {
+            if (_groupData.getMemberIndexByAddress(params.groupIndex, params.disqualifiedNodes[i]) == -1) {
+                revert NodeNotInGroup(params.groupIndex, params.disqualifiedNodes[i]);
+            }
+            for (uint256 j = i + 1; j < params.disqualifiedNodes.length; j++) {
+                if (params.disqualifiedNodes[i] == params.disqualifiedNodes[j]) {
+                    revert DuplicatedDisqualifiedNode();
+                }
+            }
         }
 
         // Populate CommitResult / CommitCache
