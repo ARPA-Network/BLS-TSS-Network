@@ -872,6 +872,10 @@ contract Adapter is UUPSUpgradeable, IAdapter, IAdapterOwner, RequestIdBase, Own
         uint256 partialSignersCount,
         uint256 startGas
     ) internal returns (uint256, uint256) {
+        if (sub.owner == address(0)) {
+            revert InvalidSubscription();
+        }
+
         // Increment the req count for fee tier selection.
         sub.reqCount += 1;
         uint64 reqCount;
