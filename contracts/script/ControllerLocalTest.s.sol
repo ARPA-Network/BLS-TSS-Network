@@ -78,8 +78,7 @@ contract ControllerLocalTestScript is Script {
         if (_arpa_exists == false) {
             vm.broadcast(_deployerPrivateKey);
             arpa = new Arpa();
-        }
-        else {
+        } else {
             arpa = IERC20(_existing_arpa_address);
         }
 
@@ -101,14 +100,14 @@ contract ControllerLocalTestScript is Script {
         controller = new Controller();
 
         vm.broadcast(_deployerPrivateKey);
-        controller.initialize(address(staking), _lastOutput);
+        controller.initialize(address(arpa), _lastOutput);
 
         vm.broadcast(_deployerPrivateKey);
         adapterImpl = new Adapter();
 
         vm.broadcast(_deployerPrivateKey);
         adapter =
-            new ERC1967Proxy(address(adapterImpl),abi.encodeWithSignature("initialize(address)",address(controller)));
+            new ERC1967Proxy(address(adapterImpl), abi.encodeWithSignature("initialize(address)", address(controller)));
 
         vm.broadcast(_deployerPrivateKey);
         IControllerOwner(address(controller)).setControllerConfig(
@@ -161,8 +160,9 @@ contract ControllerLocalTestScript is Script {
         controllerRelayer = new ControllerRelayer(address(controller));
 
         vm.broadcast(_deployerPrivateKey);
-        opChainMessenger =
-        new OPChainMessenger(address(controllerRelayer), _opControllerOracleAddress, _opL1CrossDomainMessengerAddress);
+        opChainMessenger = new OPChainMessenger(
+            address(controllerRelayer), _opControllerOracleAddress, _opL1CrossDomainMessengerAddress
+        );
 
         vm.broadcast(_deployerPrivateKey);
         controllerRelayer.setChainMessenger(_opChainId, address(opChainMessenger));

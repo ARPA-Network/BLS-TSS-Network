@@ -98,13 +98,13 @@ contract ControllerScenarioTest is Script {
         proxy = new ControllerProxy(address(controller));
 
         vm.broadcast(_deployerPrivateKey);
-        IControllerOwner(address(proxy)).initialize(address(staking), _lastOutput);
+        IControllerOwner(address(proxy)).initialize(address(arpa), _lastOutput);
 
         vm.broadcast(_deployerPrivateKey);
         adapterImpl = new Adapter();
 
         vm.broadcast(_deployerPrivateKey);
-        adapter = new ERC1967Proxy(address(adapterImpl),abi.encodeWithSignature("initialize(address)",address(proxy)));
+        adapter = new ERC1967Proxy(address(adapterImpl), abi.encodeWithSignature("initialize(address)", address(proxy)));
 
         vm.broadcast(_deployerPrivateKey);
         IControllerOwner(address(proxy)).setControllerConfig(
@@ -121,7 +121,7 @@ contract ControllerScenarioTest is Script {
         );
 
         vm.broadcast(_deployerPrivateKey);
-        
+
         IAdapterOwner(address(adapter)).setAdapterConfig(
             _minimumRequestConfirmations,
             _maxGasLimit,
@@ -153,13 +153,14 @@ contract ControllerScenarioTest is Script {
 
         vm.broadcast(_deployerPrivateKey);
         staking.setController(address(proxy));
-        
+
         vm.broadcast(_deployerPrivateKey);
         controllerRelayer = new ControllerRelayer(address(proxy));
 
         vm.broadcast(_deployerPrivateKey);
-        opChainMessenger =
-        new OPChainMessenger(address(controllerRelayer), _opControllerOracleAddress, _opL1CrossDomainMessengerAddress);
+        opChainMessenger = new OPChainMessenger(
+            address(controllerRelayer), _opControllerOracleAddress, _opL1CrossDomainMessengerAddress
+        );
 
         vm.broadcast(_deployerPrivateKey);
         controllerRelayer.setChainMessenger(_opChainId, address(opChainMessenger));
