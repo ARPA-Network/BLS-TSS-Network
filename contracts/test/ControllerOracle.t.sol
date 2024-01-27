@@ -125,7 +125,82 @@ contract ControllerOracleTest is RandcastTestHelper {
         uint256 epoch, uint256 indexed groupIndex, uint256 indexed groupEpoch, address indexed committer
     );
 
-    function testUpdateGroup() public {
+    function testUpdateGroupByUnAuthorized() public {
+        Params[] memory params = new Params[](10);
+        bytes memory err;
+        params[0] = Params(_node1, false, err, 0, 8, _publicKey, _partialPublicKey1, new address[](0));
+        params[1] = Params(_node2, false, err, 0, 8, _publicKey, _partialPublicKey2, new address[](0));
+        params[2] = Params(_node3, false, err, 0, 8, _publicKey, _partialPublicKey3, new address[](0));
+        params[3] = Params(_node4, false, err, 0, 8, _publicKey, _partialPublicKey4, new address[](0));
+        params[4] = Params(_node5, false, err, 0, 8, _publicKey, _partialPublicKey5, new address[](0));
+        params[5] = Params(_node6, false, err, 0, 8, _publicKey, _partialPublicKey6, new address[](0));
+        params[6] = Params(_node7, false, err, 0, 8, _publicKey, _partialPublicKey7, new address[](0));
+        params[7] = Params(_node8, false, err, 0, 8, _publicKey, _partialPublicKey8, new address[](0));
+        params[8] = Params(_node9, false, err, 0, 8, _publicKey, _partialPublicKey9, new address[](0));
+        params[9] = Params(_node10, false, err, 0, 8, _publicKey, _partialPublicKey10, new address[](0));
+
+        dkgHelper(params);
+
+        assertEq(checkIsStrictlyMajorityConsensusReached(0), true);
+        assertEq(_controller.getGroup(0).members.length, 10);
+        assertEq(_controller.getGroup(0).size, 10);
+
+        bytes memory group = abi.encode(_controller.getGroup(0));
+
+        address chainMessenger = address(0x90001);
+        MockL2CrossDomainMessenger l2CrossDomainMessenger = new MockL2CrossDomainMessenger(chainMessenger);
+        address adapterContractAddress = address(0x90102);
+
+        ControllerOracle controllerOracle = new ControllerOracle();
+        controllerOracle.initialize(
+            address(_arpa), chainMessenger, address(l2CrossDomainMessenger), adapterContractAddress, 42
+        );
+
+        vm.prank(_node1);
+        vm.expectRevert(ControllerOracle.SenderNotChainMessenger.selector);
+        controllerOracle.updateGroup(_node1, abi.decode(group, (IControllerOracle.Group)));
+    }
+
+    function testUpdateGroupByOwner() public {
+        Params[] memory params = new Params[](10);
+        bytes memory err;
+        params[0] = Params(_node1, false, err, 0, 8, _publicKey, _partialPublicKey1, new address[](0));
+        params[1] = Params(_node2, false, err, 0, 8, _publicKey, _partialPublicKey2, new address[](0));
+        params[2] = Params(_node3, false, err, 0, 8, _publicKey, _partialPublicKey3, new address[](0));
+        params[3] = Params(_node4, false, err, 0, 8, _publicKey, _partialPublicKey4, new address[](0));
+        params[4] = Params(_node5, false, err, 0, 8, _publicKey, _partialPublicKey5, new address[](0));
+        params[5] = Params(_node6, false, err, 0, 8, _publicKey, _partialPublicKey6, new address[](0));
+        params[6] = Params(_node7, false, err, 0, 8, _publicKey, _partialPublicKey7, new address[](0));
+        params[7] = Params(_node8, false, err, 0, 8, _publicKey, _partialPublicKey8, new address[](0));
+        params[8] = Params(_node9, false, err, 0, 8, _publicKey, _partialPublicKey9, new address[](0));
+        params[9] = Params(_node10, false, err, 0, 8, _publicKey, _partialPublicKey10, new address[](0));
+
+        dkgHelper(params);
+
+        assertEq(checkIsStrictlyMajorityConsensusReached(0), true);
+        assertEq(_controller.getGroup(0).members.length, 10);
+        assertEq(_controller.getGroup(0).size, 10);
+
+        bytes memory group = abi.encode(_controller.getGroup(0));
+
+        address chainMessenger = address(0x90001);
+        address l2CrossDomainMessenger = address(0x90002);
+        address adapterContractAddress = address(0x90102);
+
+        vm.prank(_owner);
+        ControllerOracle controllerOracle = new ControllerOracle();
+        vm.prank(_owner);
+        controllerOracle.initialize(address(_arpa), chainMessenger, l2CrossDomainMessenger, adapterContractAddress, 42);
+        vm.expectEmit(true, true, true, true);
+        emit GroupUpdated(1, 0, 8, _owner);
+
+        vm.prank(_owner);
+        controllerOracle.updateGroup(_owner, abi.decode(group, (IControllerOracle.Group)));
+
+        printGroupInfo(controllerOracle.getGroup(0));
+    }
+
+    function testUpdateGroupByL2CrossDomainMessenger() public {
         Params[] memory params = new Params[](10);
         bytes memory err;
         params[0] = Params(_node1, false, err, 0, 8, _publicKey, _partialPublicKey1, new address[](0));
