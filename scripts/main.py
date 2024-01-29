@@ -349,7 +349,7 @@ def deploy_contracts():
         set_key(ENV_PATH, "CONTROLLER_ADDRESS", l1_addresses["Controller"])
         set_key(ENV_PATH, "ADAPTER_ADDRESS", l1_addresses["ERC1967Proxy"])
         set_key(
-            ENV_PATH, "OP_CHAIN_MESSENGER_ADDRESS", l1_addresses["OPChainMessenger"]
+            ENV_PATH, "L1_CHAIN_MESSENGER_ADDRESS", l1_addresses["OPChainMessenger"]
         )
 
     else:  # l2_only == True
@@ -393,7 +393,7 @@ def deploy_contracts():
             )
             l1_addresses.update(l1_chain_base_messenger_addresses)
             set_key(
-                ENV_PATH, "OP_CHAIN_MESSENGER_ADDRESS", l1_addresses["BaseChainMessenger"]
+                ENV_PATH, "L1_CHAIN_MESSENGER_ADDRESS", l1_addresses["BaseChainMessenger"]
             )
         else:
             l1_chain_op_messenger_addresses = get_addresses_from_json(
@@ -401,7 +401,7 @@ def deploy_contracts():
             )
             l1_addresses.update(l1_chain_op_messenger_addresses)
             set_key(
-                ENV_PATH, "OP_CHAIN_MESSENGER_ADDRESS", l1_addresses["OPChainMessenger"]
+                ENV_PATH, "L1_CHAIN_MESSENGER_ADDRESS", l1_addresses["OPChainMessenger"]
             )
 
     # 4. deploy remaining contracts (Controller Oracle Init, StakeNodeLocalTest)
@@ -417,7 +417,7 @@ def deploy_contracts():
             "OP_ADAPTER_ADDRESS": l2_addresses["ERC1967Proxy"],
             "OP_ARPA_ADDRESS": l2_addresses["Arpa"],
             "OP_CONTROLLER_ORACLE_ADDRESS": l2_addresses["ControllerOracle"],
-            "OP_CHAIN_MESSENGER_ADDRESS": l1_addresses["BaseChainMessenger"] if BASE_DEPLOYMENT else l1_addresses["OPChainMessenger"],  # new
+            "L1_CHAIN_MESSENGER_ADDRESS": l1_addresses["BaseChainMessenger"] if BASE_DEPLOYMENT else l1_addresses["OPChainMessenger"],  # new
         },
         cwd=CONTRACTS_DIR,
         capture_output=HIDE_OUTPUT,
@@ -527,7 +527,7 @@ def deploy_nodes():  # ! Deploy Nodes
     print("Starting randcast nodes...")
     print("Starting Node 1!")
     if LOCAL_TEST:
-        cmd = f"cargo run --bin node-client -- -c {NODE_CLIENT_DIR}/config_1.yml > /dev/null 2>&1 &"
+        cmd = f"cargo run --release --bin node-client -- -c {NODE_CLIENT_DIR}/config_1.yml > /dev/null 2>&1 &"
     else: 
         cmd = f"docker run -d \
             --name node1 \
@@ -545,7 +545,7 @@ def deploy_nodes():  # ! Deploy Nodes
 
     print("Starting Node 2!")
     if LOCAL_TEST:
-        cmd = f"cargo run --bin node-client -- -c {NODE_CLIENT_DIR}/config_2.yml > /dev/null 2>&1 &"
+        cmd = f"cargo run --release --bin node-client -- -c {NODE_CLIENT_DIR}/config_2.yml > /dev/null 2>&1 &"
     else: 
         cmd = f"docker run -d \
             --name node2 \
@@ -563,7 +563,7 @@ def deploy_nodes():  # ! Deploy Nodes
 
     print("Starting Node 3!")
     if LOCAL_TEST:
-        cmd = f"cargo run --bin node-client -- -c {NODE_CLIENT_DIR}/config_3.yml > /dev/null 2>&1 &"
+        cmd = f"cargo run --release --bin node-client -- -c {NODE_CLIENT_DIR}/config_3.yml > /dev/null 2>&1 &"
     else: 
         cmd = f"docker run -d \
             --name node3 \
