@@ -50,6 +50,9 @@ L2_ONLY = (
 BASE_DEPLOYMENT = (
     get_key(ENV_PATH, "OP_CHAIN_ID") == "8453" or get_key(ENV_PATH, "OP_CHAIN_ID") == "84531"
 )
+REDSTONE_DEPLOYMENT = (
+    get_key(ENV_PATH, "OP_CHAIN_ID") == "17001"
+)
 # Admin Private Key used to Relay Groups manually during L2_ONLY deployment
 ADMIN_PRIVATE_KEY = get_key(ENV_PATH, "ADMIN_PRIVATE_KEY")
 VERBOSE_OUTPUT = get_key(ENV_PATH, "VERBOSE_OUTPUT").lower() == "true"
@@ -101,6 +104,14 @@ CREATE_AND_SET_BASE_CHAIN_MESSENGER_BROADCAST_PATH = os.path.join(
     CONTRACTS_DIR,
     "broadcast",
     "CreateAndSetBaseChainMessenger.s.sol",
+    L1_CHAIN_ID,
+    "run-latest.json",
+)
+
+CREATE_AND_SET_REDSTONE_CHAIN_MESSENGER_BROADCAST_PATH = os.path.join(
+    CONTRACTS_DIR,
+    "broadcast",
+    "CreateAndSetRedstoneChainMessenger.s.sol",
     L1_CHAIN_ID,
     "run-latest.json",
 )
@@ -166,6 +177,11 @@ def get_l1_addresses():
                 CREATE_AND_SET_BASE_CHAIN_MESSENGER_BROADCAST_PATH
             )
             l1_addresses.update(l1_chain_base_messenger_addresses)
+        if os.path.exists(CREATE_AND_SET_REDSTONE_CHAIN_MESSENGER_BROADCAST_PATH):
+            l1_chain_redstone_messenger_addresses = get_addresses_from_json(
+                CREATE_AND_SET_REDSTONE_CHAIN_MESSENGER_BROADCAST_PATH
+            )
+            l1_addresses.update(l1_chain_redstone_messenger_addresses)
 
     else:
         l1_addresses = get_addresses_from_json(L1_CONTRACTS_DEPLOYMENT_BROADCAST_PATH)
@@ -360,7 +376,11 @@ def deploy_contracts():
         l1_controller_addresses["ERC1967Proxy"] = EXISTING_L1_ADAPTER_ADDRESS
 
         # Deploy CreateAndSetChainMessenger script
-        if BASE_DEPLOYMENT:
+        if REDSTONE_DEPLOYMENT:
+            print("Running Solidity Script: CreateAndSetRedstoneChainMessenger on L1...")
+            cmd = f"forge script script/CreateAndSetRedstoneChainMessenger.s.sol:CreateAndSetRedstoneChainMessengerScript --fork-url {L1_RPC} --broadcast --slow"
+            cprint(cmd)
+        elif BASE_DEPLOYMENT:
             print("Running Solidity Script: CreateAndSetBaseChainMessenger on L1...")
             cmd = f"forge script script/CreateAndSetBaseChainMessenger.s.sol:CreateAndSetBaseChainMessengerScript --fork-url {L1_RPC} --broadcast --slow"
             cprint(cmd)
@@ -387,7 +407,15 @@ def deploy_contracts():
         set_key(ENV_PATH, "CONTROLLER_ADDRESS", l1_addresses["Controller"])
         set_key(ENV_PATH, "ADAPTER_ADDRESS", l1_addresses["ERC1967Proxy"])
 
-        if BASE_DEPLOYMENT:
+        if REDSTONE_DEPLOYMENT:
+            l1_chain_redstone_messenger_addresses = get_addresses_from_json(
+                CREATE_AND_SET_REDSTONE_CHAIN_MESSENGER_BROADCAST_PATH
+            )
+            l1_addresses.update(l1_chain_redstone_messenger_addresses)
+            set_key(
+                ENV_PATH, "L1_CHAIN_MESSENGER_ADDRESS", l1_addresses["RedstoneChainMessenger"]
+            )
+        elif BASE_DEPLOYMENT:
             l1_chain_base_messenger_addresses = get_addresses_from_json(
                 CREATE_AND_SET_BASE_CHAIN_MESSENGER_BROADCAST_PATH
             )
@@ -417,7 +445,7 @@ def deploy_contracts():
             "OP_ADAPTER_ADDRESS": l2_addresses["ERC1967Proxy"],
             "OP_ARPA_ADDRESS": l2_addresses["Arpa"],
             "OP_CONTROLLER_ORACLE_ADDRESS": l2_addresses["ControllerOracle"],
-            "L1_CHAIN_MESSENGER_ADDRESS": l1_addresses["BaseChainMessenger"] if BASE_DEPLOYMENT else l1_addresses["OPChainMessenger"],  # new
+            "L1_CHAIN_MESSENGER_ADDRESS": l1_addresses["BaseChainMessenger"] if BASE_DEPLOYMENT else (l1_addresses["RedstoneChainMessenger"] if REDSTONE_DEPLOYMENT else l1_addresses["OPChainMessenger"]),  # new
         },
         cwd=CONTRACTS_DIR,
         capture_output=HIDE_OUTPUT,
