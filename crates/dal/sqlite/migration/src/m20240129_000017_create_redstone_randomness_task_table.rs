@@ -1,0 +1,124 @@
+use sea_orm_migration::prelude::*;
+
+#[derive(DeriveMigrationName)]
+pub struct Migration;
+
+#[async_trait::async_trait]
+impl MigrationTrait for Migration {
+    async fn up(&self, manager: &SchemaManager) -> Result<(), DbErr> {
+        manager
+            .create_table(
+                Table::create()
+                    .table(RedstoneRandomnessTask::Table)
+                    .if_not_exists()
+                    .col(
+                        ColumnDef::new(RedstoneRandomnessTask::Id)
+                            .integer()
+                            .not_null()
+                            .primary_key(),
+                    )
+                    .col(
+                        ColumnDef::new(RedstoneRandomnessTask::RequestId)
+                            .blob(BlobSize::Medium)
+                            .not_null(),
+                    )
+                    .col(
+                        ColumnDef::new(RedstoneRandomnessTask::SubscriptionId)
+                            .big_unsigned()
+                            .not_null(),
+                    )
+                    .col(
+                        ColumnDef::new(RedstoneRandomnessTask::GroupIndex)
+                            .unsigned()
+                            .not_null(),
+                    )
+                    .col(
+                        ColumnDef::new(RedstoneRandomnessTask::RequestType)
+                            .tiny_unsigned()
+                            .not_null(),
+                    )
+                    .col(
+                        ColumnDef::new(RedstoneRandomnessTask::Params)
+                            .blob(BlobSize::Medium)
+                            .not_null(),
+                    )
+                    .col(
+                        ColumnDef::new(RedstoneRandomnessTask::Requester)
+                            .text()
+                            .not_null(),
+                    )
+                    .col(
+                        ColumnDef::new(RedstoneRandomnessTask::Seed)
+                            .blob(BlobSize::Medium)
+                            .not_null(),
+                    )
+                    .col(
+                        ColumnDef::new(RedstoneRandomnessTask::RequestConfirmations)
+                            .unsigned()
+                            .not_null(),
+                    )
+                    .col(
+                        ColumnDef::new(RedstoneRandomnessTask::CallbackGasLimit)
+                            .unsigned()
+                            .not_null(),
+                    )
+                    .col(
+                        ColumnDef::new(RedstoneRandomnessTask::CallbackMaxGasPrice)
+                            .blob(BlobSize::Medium)
+                            .not_null(),
+                    )
+                    .col(
+                        ColumnDef::new(RedstoneRandomnessTask::AssignmentBlockHeight)
+                            .big_unsigned()
+                            .not_null(),
+                    )
+                    .col(
+                        ColumnDef::new(RedstoneRandomnessTask::State)
+                            .tiny_unsigned()
+                            .not_null(),
+                    )
+                    .col(
+                        ColumnDef::new(RedstoneRandomnessTask::CreateAt)
+                            .date_time()
+                            .not_null(),
+                    )
+                    .col(
+                        ColumnDef::new(RedstoneRandomnessTask::UpdateAt)
+                            .date_time()
+                            .not_null(),
+                    )
+                    .to_owned(),
+            )
+            .await
+    }
+
+    async fn down(&self, manager: &SchemaManager) -> Result<(), DbErr> {
+        manager
+            .drop_table(
+                Table::drop()
+                    .table(RedstoneRandomnessTask::Table)
+                    .to_owned(),
+            )
+            .await
+    }
+}
+
+#[derive(Iden)]
+pub enum RedstoneRandomnessTask {
+    Table,
+    Id,
+    RequestId,
+    SubscriptionId,
+    GroupIndex,
+    RequestType,
+    Params,
+    Requester,
+    Seed,
+    RequestConfirmations,
+    CallbackGasLimit,
+    CallbackMaxGasPrice,
+    AssignmentBlockHeight,
+    State,
+    CreateAt,
+    UpdateAt,
+}

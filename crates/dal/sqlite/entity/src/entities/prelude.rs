@@ -8,3 +8,5 @@ pub use super::op_randomness_result::Entity as OpRandomnessResult;
 pub use super::op_randomness_task::Entity as OpRandomnessTask;
 pub use super::randomness_result::Entity as RandomnessResult;
 pub use super::randomness_task::Entity as RandomnessTask;
+pub use super::redstone_randomness_result::Entity as RedstoneRandomnessResult;
+pub use super::redstone_randomness_task::Entity as RedstoneRandomnessTask;
