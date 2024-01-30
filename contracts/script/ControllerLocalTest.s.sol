@@ -4,7 +4,6 @@ pragma solidity ^0.8.18;
 import {Script} from "forge-std/Script.sol";
 import {Controller} from "../src/Controller.sol";
 import {ControllerRelayer} from "../src/ControllerRelayer.sol";
-import {OPChainMessenger} from "../src/OPChainMessenger.sol";
 import {IControllerOwner} from "../src/interfaces/IControllerOwner.sol";
 import {Adapter} from "../src/Adapter.sol";
 import {IAdapterOwner} from "../src/interfaces/IAdapterOwner.sol";
@@ -63,23 +62,22 @@ contract ControllerLocalTestScript is Script {
     address internal _opControllerOracleAddress = vm.envAddress("OP_CONTROLLER_ORACLE_ADDRESS");
     address internal _opL1CrossDomainMessengerAddress = vm.envAddress("OP_L1_CROSS_DOMAIN_MESSENGER_ADDRESS");
 
-    bool internal _arpa_exists = vm.envBool("ARPA_EXISTS");
-    address internal _existing_arpa_address = vm.envAddress("EXISTING_L1_ARPA_ADDRESS");
+    bool internal _arpaExists = vm.envBool("ARPA_EXISTS");
+    address internal _existingArpaAddress = vm.envAddress("EXISTING_L1_ARPA_ADDRESS");
 
     function run() external {
         Controller controller;
         ControllerRelayer controllerRelayer;
-        OPChainMessenger opChainMessenger;
         ERC1967Proxy adapter;
         Adapter adapterImpl;
         Staking staking;
         IERC20 arpa;
 
-        if (_arpa_exists == false) {
+        if (_arpaExists == false) {
             vm.broadcast(_deployerPrivateKey);
             arpa = new Arpa();
         } else {
-            arpa = IERC20(_existing_arpa_address);
+            arpa = IERC20(_existingArpaAddress);
         }
 
         Staking.PoolConstructorParams memory params = Staking.PoolConstructorParams(
@@ -158,13 +156,5 @@ contract ControllerLocalTestScript is Script {
 
         vm.broadcast(_deployerPrivateKey);
         controllerRelayer = new ControllerRelayer(address(controller));
-
-        vm.broadcast(_deployerPrivateKey);
-        opChainMessenger = new OPChainMessenger(
-            address(controllerRelayer), _opControllerOracleAddress, _opL1CrossDomainMessengerAddress
-        );
-
-        vm.broadcast(_deployerPrivateKey);
-        controllerRelayer.setChainMessenger(_opChainId, address(opChainMessenger));
     }
 }
