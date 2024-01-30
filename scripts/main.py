@@ -327,7 +327,7 @@ def deploy_contracts():
     # 2. Deploy L2 OPControllerOracleLocalTest contracts (ControllerOracle, Adapter, Arpa)
     # # forge script script/OPControllerOracleLocalTest.s.sol:OPControllerOracleLocalTestScript --fork-url http://localhost:9545 --broadcast
     print("Running Solidity Script: OPControllerOracleLocalTest on L2...")
-    cmd = f"forge script script/OPControllerOracleLocalTest.s.sol:OPControllerOracleLocalTestScript --fork-url {L2_RPC} --broadcast --slow"
+    cmd = f"forge script script/OPControllerOracleLocalTest.s.sol:OPControllerOracleLocalTestScript --fork-url {L2_RPC} --broadcast"
     cprint(cmd)
     run_command(
         [cmd], env={}, cwd=CONTRACTS_DIR, capture_output=HIDE_OUTPUT, shell=True
@@ -346,7 +346,7 @@ def deploy_contracts():
         #     (Controller, Controller Relayer, OPChainMessenger, Adapter, Arpa, Staking)
         # forge script script/ControllerLocalTest.s.sol:ControllerLocalTestScript --fork-url http://localhost:8545 --broadcast
         print("Running Solidity Script: ControllerLocalTest on L1...")
-        cmd = f"forge script script/ControllerLocalTest.s.sol:ControllerLocalTestScript --fork-url {L1_RPC} --broadcast --slow"
+        cmd = f"forge script script/ControllerLocalTest.s.sol:ControllerLocalTestScript --fork-url {L1_RPC} --broadcast"
         cprint(cmd)
         run_command(
             [cmd],
@@ -364,6 +364,7 @@ def deploy_contracts():
         set_key(ENV_PATH, "STAKING_ADDRESS", l1_addresses["Staking"])
         set_key(ENV_PATH, "CONTROLLER_ADDRESS", l1_addresses["Controller"])
         set_key(ENV_PATH, "ADAPTER_ADDRESS", l1_addresses["ERC1967Proxy"])
+        l1_controller_relayer = l1_addresses["ControllerRelayer"]
 
     else:  # l2_only == True
         l1_controller_addresses = {}
@@ -372,37 +373,39 @@ def deploy_contracts():
         l1_controller_addresses["Controller"] = EXISTING_L1_CONTROLLER_ADDRESS
         l1_controller_addresses["ERC1967Proxy"] = EXISTING_L1_ADAPTER_ADDRESS
 
-        # Deploy CreateAndSetChainMessenger script
-        if REDSTONE_DEPLOYMENT:
-            print("Running Solidity Script: CreateAndSetRedstoneChainMessenger on L1...")
-            cmd = f"forge script script/CreateAndSetRedstoneChainMessenger.s.sol:CreateAndSetRedstoneChainMessengerScript --fork-url {L1_RPC} --broadcast --slow"
-            cprint(cmd)
-        elif BASE_DEPLOYMENT:
-            print("Running Solidity Script: CreateAndSetBaseChainMessenger on L1...")
-            cmd = f"forge script script/CreateAndSetBaseChainMessenger.s.sol:CreateAndSetBaseChainMessengerScript --fork-url {L1_RPC} --broadcast --slow"
-            cprint(cmd)
-        else: 
-            print("Running Solidity Script: CreateAndSetOPChainMessenger on L1...")
-            cmd = f"forge script script/CreateAndSetOPChainMessenger.s.sol:CreateAndSetOPChainMessengerScript --fork-url {L1_RPC} --broadcast --slow"
-            cprint(cmd)
-        
-        run_command(
-            [cmd],
-            env={
-                "OP_L1_CROSS_DOMAIN_MESSENGER_ADDRESS": OP_L1_CROSS_DOMAIN_MESSENGER_ADDRESS,
-                "OP_CONTROLLER_ORACLE_ADDRESS": l2_addresses["ControllerOracle"],
-                "EXISTING_L1_CONTROLLER_RELAYER": EXISTING_L1_CONTROLLER_RELAYER,
-            },
-            cwd=CONTRACTS_DIR,
-            capture_output=HIDE_OUTPUT,
-            shell=True,
-        )
-
         l1_addresses = {**l1_controller_addresses}
         set_key(ENV_PATH, "ARPA_ADDRESS", l1_addresses["Arpa"])
         set_key(ENV_PATH, "STAKING_ADDRESS", l1_addresses["Staking"])
         set_key(ENV_PATH, "CONTROLLER_ADDRESS", l1_addresses["Controller"])
         set_key(ENV_PATH, "ADAPTER_ADDRESS", l1_addresses["ERC1967Proxy"])
+        l1_controller_relayer = EXISTING_L1_CONTROLLER_RELAYER
+
+
+    # Deploy CreateAndSetChainMessenger script
+    if REDSTONE_DEPLOYMENT:
+        print("Running Solidity Script: CreateAndSetRedstoneChainMessenger on L1...")
+        cmd = f"forge script script/CreateAndSetRedstoneChainMessenger.s.sol:CreateAndSetRedstoneChainMessengerScript --fork-url {L1_RPC} --broadcast"
+        cprint(cmd)
+    elif BASE_DEPLOYMENT:
+        print("Running Solidity Script: CreateAndSetBaseChainMessenger on L1...")
+        cmd = f"forge script script/CreateAndSetBaseChainMessenger.s.sol:CreateAndSetBaseChainMessengerScript --fork-url {L1_RPC} --broadcast"
+        cprint(cmd)
+    else: 
+        print("Running Solidity Script: CreateAndSetOPChainMessenger on L1...")
+        cmd = f"forge script script/CreateAndSetOPChainMessenger.s.sol:CreateAndSetOPChainMessengerScript --fork-url {L1_RPC} --broadcast"
+        cprint(cmd)
+    
+    run_command(
+        [cmd],
+        env={
+            "OP_L1_CROSS_DOMAIN_MESSENGER_ADDRESS": OP_L1_CROSS_DOMAIN_MESSENGER_ADDRESS,
+            "OP_CONTROLLER_ORACLE_ADDRESS": l2_addresses["ControllerOracle"],
+            "EXISTING_L1_CONTROLLER_RELAYER": l1_controller_relayer,
+        },
+        cwd=CONTRACTS_DIR,
+        capture_output=HIDE_OUTPUT,
+        shell=True,
+    )
 
     if REDSTONE_DEPLOYMENT:
         l1_chain_redstone_messenger_addresses = get_addresses_from_json(
@@ -434,7 +437,7 @@ def deploy_contracts():
     print(
         "Running Solidity Script: OPControllerOracleInitializationLocalTestScript on L2..."
     )
-    cmd = f"forge script script/OPControllerOracleInitializationLocalTest.s.sol:OPControllerOracleInitializationLocalTestScript --fork-url {L2_RPC} --broadcast --slow"
+    cmd = f"forge script script/OPControllerOracleInitializationLocalTest.s.sol:OPControllerOracleInitializationLocalTestScript --fork-url {L2_RPC} --broadcast"
     cprint(cmd)
     run_command(
         [cmd],
@@ -452,7 +455,7 @@ def deploy_contracts():
     if not L2_ONLY:  # l2_only == False
         # forge script script/InitStakingLocalTest.s.sol:InitStakingLocalTestScript --fork-url http://localhost:8545 --broadcast -g 15
         print("Running Solidity Script: InitStakingLocalTestScript on L1...")
-        cmd = f"forge script script/InitStakingLocalTest.s.sol:InitStakingLocalTestScript --fork-url {L1_RPC} --broadcast -g 150 --slow"
+        cmd = f"forge script script/InitStakingLocalTest.s.sol:InitStakingLocalTestScript --fork-url {L1_RPC} --broadcast -g 150"
         cprint(cmd)
         run_command(
             [cmd],
@@ -467,7 +470,7 @@ def deploy_contracts():
 
         # forge script script/StakeNodeLocalTest.s.sol:StakeNodeLocalTestScript --fork-url http://localhost:8545 --broadcast
         print("Running Solidity Script: StakeNodeLocalTestScript on L1...")
-        cmd = f"forge script script/StakeNodeLocalTest.s.sol:StakeNodeLocalTestScript --fork-url {L1_RPC} --broadcast -g 150 --slow"
+        cmd = f"forge script script/StakeNodeLocalTest.s.sol:StakeNodeLocalTestScript --fork-url {L1_RPC} --broadcast -g 150"
         cprint(cmd)
         run_command(
             [cmd],
@@ -711,7 +714,7 @@ def test_request_randomness():  # ! Integration Testing
 
     # 2. Deploy L1 user contract and request randomness
     print("Deploying L1 user contract and requesting randomness...")
-    cmd = f"forge script script/GetRandomNumberLocalTest.s.sol:GetRandomNumberLocalTestScript --fork-url {L1_RPC} --broadcast --slow"
+    cmd = f"forge script script/GetRandomNumberLocalTest.s.sol:GetRandomNumberLocalTestScript --fork-url {L1_RPC} --broadcast"
     cprint(cmd)
     run_command(
         [cmd],
@@ -752,7 +755,7 @@ def test_request_randomness():  # ! Integration Testing
     print("Deploying l2 user contract and requesting randomness...")
 
     # forge script script/OPGetRandomNumberLocalTest.s.sol:OPGetRandomNumberLocalTestScript --fork-url http://localhost:9545 --broadcast
-    cmd = f"forge script script/OPGetRandomNumberLocalTest.s.sol:OPGetRandomNumberLocalTestScript --fork-url {L2_RPC} --broadcast --slow"
+    cmd = f"forge script script/OPGetRandomNumberLocalTest.s.sol:OPGetRandomNumberLocalTestScript --fork-url {L2_RPC} --broadcast"
     cprint(cmd)
     run_command(
         [cmd],
