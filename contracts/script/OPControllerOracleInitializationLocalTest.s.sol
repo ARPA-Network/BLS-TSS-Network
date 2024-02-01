@@ -18,13 +18,13 @@ contract OPControllerOracleInitializationLocalTestScript is Script {
     address internal _arpaAddress = vm.envAddress("OP_ARPA_ADDRESS");
     address internal _controllerOracleAddress = vm.envAddress("OP_CONTROLLER_ORACLE_ADDRESS");
     address internal _adapterAddress = vm.envAddress("OP_ADAPTER_ADDRESS");
-    address internal _opChainMessengerAddress = vm.envAddress("OP_CHAIN_MESSENGER_ADDRESS");
+    address internal _l1ChainMessengerAddress = vm.envAddress("L1_CHAIN_MESSENGER_ADDRESS");
     address internal _opL2CrossDomainMessengerAddress = vm.envAddress("OP_L2_CROSS_DOMAIN_MESSENGER_ADDRESS");
 
     function run() external {
         vm.broadcast(_deployerPrivateKey);
         ControllerOracle(_controllerOracleAddress).initialize(
-            _arpaAddress, _opChainMessengerAddress, _opL2CrossDomainMessengerAddress, _adapterAddress, _lastOutput
+            _arpaAddress, _l1ChainMessengerAddress, _opL2CrossDomainMessengerAddress, _adapterAddress, _lastOutput
         );
     }
 }

@@ -71,8 +71,11 @@ contract ControllerOracle is Initializable, IControllerOracle, OwnableUpgradeabl
 
     function updateGroup(address committer, Group memory group) external {
         if (
-            msg.sender != address(_l2CrossDomainMessenger)
-                || _l2CrossDomainMessenger.xDomainMessageSender() != _chainMessenger
+            msg.sender != owner()
+                && (
+                    msg.sender != address(_l2CrossDomainMessenger)
+                        || _l2CrossDomainMessenger.xDomainMessageSender() != _chainMessenger
+                )
         ) {
             revert SenderNotChainMessenger();
         }

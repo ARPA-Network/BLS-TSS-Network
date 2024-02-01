@@ -11,6 +11,7 @@ library ChainHelper {
     uint256 public constant OP_DEVNET_L2_CHAIN_ID = 901;
     uint256 public constant BASE_MAINNET_CHAIN_ID = 8453;
     uint256 public constant BASE_GOERLI_TESTNET_CHAIN_ID = 84531;
+    uint256 public constant REDSTONE_HOLESKY_TESTNET_CHAIN_ID = 17001;
 
     uint32 public constant OP_BASIC_FULFILLMENT_L1_GAS_USED = 5016;
     uint32 public constant OP_FULFILLMENT_GAS_PER_PARTICIPANT = 652;
@@ -21,6 +22,7 @@ library ChainHelper {
         if (
             chainId == OP_MAINNET_CHAIN_ID || chainId == OP_GOERLI_TESTNET_CHAIN_ID || chainId == OP_DEVNET_L2_CHAIN_ID
                 || chainId == BASE_MAINNET_CHAIN_ID || chainId == BASE_GOERLI_TESTNET_CHAIN_ID
+                || chainId == REDSTONE_HOLESKY_TESTNET_CHAIN_ID
         ) {
             return 2;
         } else if (chainId == OP_DEVNET_L1_CHAIN_ID) {

@@ -151,6 +151,7 @@ contract Adapter is UUPSUpgradeable, IAdapter, IAdapterOwner, RequestIdBase, Own
     error InvalidZeroAddress();
     error GasLimitTooBig(uint32 have, uint32 want);
     error RequestNotExpired();
+    error ExceedCallbackMaxGasPrice(uint256 have, uint256 want);
 
     // *Modifiers*
     modifier onlySubOwner(uint64 subId) {
@@ -336,6 +337,8 @@ contract Adapter is UUPSUpgradeable, IAdapter, IAdapterOwner, RequestIdBase, Own
             if (consumers[i] == consumer) {
                 _subscriptions[subId].consumers[i] = consumers[consumers.length - 1];
                 _subscriptions[subId].consumers.pop();
+
+                delete _consumers[consumer].nonces[subId];
 
                 emit SubscriptionConsumerRemoved(subId, consumer);
                 return;
@@ -556,6 +559,10 @@ contract Adapter is UUPSUpgradeable, IAdapter, IAdapterOwner, RequestIdBase, Own
                 )
         ) {
             revert IncorrectCommitment();
+        }
+
+        if (tx.gasprice > requestDetail.callbackMaxGasPrice) {
+            revert ExceedCallbackMaxGasPrice(tx.gasprice, requestDetail.callbackMaxGasPrice);
         }
 
         if (block.number < requestDetail.blockNum + requestDetail.requestConfirmations) {
@@ -867,6 +874,10 @@ contract Adapter is UUPSUpgradeable, IAdapter, IAdapterOwner, RequestIdBase, Own
         uint256 partialSignersCount,
         uint256 startGas
     ) internal returns (uint256, uint256) {
+        if (sub.owner == address(0)) {
+            revert InvalidSubscription();
+        }
+
         // Increment the req count for fee tier selection.
         sub.reqCount += 1;
         uint64 reqCount;

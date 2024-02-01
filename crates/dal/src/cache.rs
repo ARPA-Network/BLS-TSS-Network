@@ -711,7 +711,7 @@ impl SignatureResultCacheUpdater<RandomnessResultCache>
             .signature_result_caches
             .values_mut()
             .filter(|v| {
-                (current_block_height
+                ((current_block_height + 1)
                     >= v.result_cache.randomness_task.assignment_block_height
                         + v.result_cache.randomness_task.request_confirmations as usize)
                     && v.state == BLSResultCacheState::NotCommitted

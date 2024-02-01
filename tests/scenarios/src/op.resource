@@ -55,7 +55,7 @@ Set Op Enviormnet
     Set Environment Variable    CONTROLLER_ADDRESS    ${contract_addresses['Controller']}
     Set Environment Variable    STAKING_ADDRESS    ${contract_addresses['Staking']}
     Set Environment Variable   ADAPTER_ADDRESS    ${contract_addresses['ERC1967Proxy']}
-    Set Environment Variable    OP_CHAIN_MESSENGER_ADDRESS    ${contract_addresses['OPChainMessenger']}
+    Set Environment Variable    L1_CHAIN_MESSENGER_ADDRESS    ${contract_addresses['OPChainMessenger']}
     ${result} =    Exec Script    OPControllerOracleInitializationLocalTest.s.sol:OPControllerOracleInitializationLocalTestScript    http://localhost:9545
     ${result} =    Exec Script    OPControllerOracleInitializationLocalTest.s.sol:OPControllerOracleInitializationLocalTestScript    http://localhost:9645
     ${result} =    Exec Script    InitStakingLocalTest.s.sol:InitStakingLocalTestScript

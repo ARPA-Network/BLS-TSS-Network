@@ -66,8 +66,8 @@ contract ControllerLocalTestScript is Script {
     uint256 internal _baseChainId = vm.envUint("BASE_CHAIN_ID");
     address internal _baseControllerOracleAddress = vm.envAddress("BASE_CONTROLLER_ORACLE_ADDRESS");
 
-    bool internal _arpa_exists = vm.envBool("ARPA_EXISTS");
-    address internal _existing_arpa_address = vm.envAddress("EXISTING_L1_ARPA_ADDRESS");
+    bool internal _arpaExists = vm.envBool("ARPA_EXISTS");
+    address internal _existingArpaAddress = vm.envAddress("EXISTING_L1_ARPA_ADDRESS");
 
     function run() external {
         Controller controller;
@@ -79,11 +79,11 @@ contract ControllerLocalTestScript is Script {
         Staking staking;
         IERC20 arpa;
 
-        if (_arpa_exists == false) {
+        if (_arpaExists == false) {
             vm.broadcast(_deployerPrivateKey);
             arpa = new Arpa();
         } else {
-            arpa = IERC20(_existing_arpa_address);
+            arpa = IERC20(_existingArpaAddress);
         }
 
         Staking.PoolConstructorParams memory params = Staking.PoolConstructorParams(
@@ -104,14 +104,14 @@ contract ControllerLocalTestScript is Script {
         controller = new Controller();
 
         vm.broadcast(_deployerPrivateKey);
-        controller.initialize(address(staking), _lastOutput);
+        controller.initialize(address(arpa), _lastOutput);
 
         vm.broadcast(_deployerPrivateKey);
         adapterImpl = new Adapter();
 
         vm.broadcast(_deployerPrivateKey);
         adapter =
-            new ERC1967Proxy(address(adapterImpl),abi.encodeWithSignature("initialize(address)",address(controller)));
+            new ERC1967Proxy(address(adapterImpl), abi.encodeWithSignature("initialize(address)", address(controller)));
 
         vm.broadcast(_deployerPrivateKey);
         IControllerOwner(address(controller)).setControllerConfig(
@@ -164,15 +164,17 @@ contract ControllerLocalTestScript is Script {
         controllerRelayer = new ControllerRelayer(address(controller));
 
         vm.broadcast(_deployerPrivateKey);
-        opChainMessenger =
-        new OPChainMessenger(address(controllerRelayer), _opControllerOracleAddress, _opL1CrossDomainMessengerAddress);
+        opChainMessenger = new OPChainMessenger(
+            address(controllerRelayer), _opControllerOracleAddress, _opL1CrossDomainMessengerAddress
+        );
 
         vm.broadcast(_deployerPrivateKey);
         controllerRelayer.setChainMessenger(_opChainId, address(opChainMessenger));
 
         vm.broadcast(_deployerPrivateKey);
-        baseChainMessenger =
-        new OPChainMessenger(address(controllerRelayer), _baseControllerOracleAddress, _opL1CrossDomainMessengerAddress);
+        baseChainMessenger = new OPChainMessenger(
+            address(controllerRelayer), _baseControllerOracleAddress, _opL1CrossDomainMessengerAddress
+        );
 
         vm.broadcast(_deployerPrivateKey);
         controllerRelayer.setChainMessenger(_baseChainId, address(baseChainMessenger));
