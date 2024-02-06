@@ -42,9 +42,11 @@ use threshold_bls::group::Curve;
 
 pub const OP_MAINNET_CHAIN_ID: usize = 10;
 pub const OP_GOERLI_TESTNET_CHAIN_ID: usize = 420;
+pub const OP_SEPOLIA_TESTNET_CHAIN_ID: usize = 11155420;
 pub const OP_DEVNET_CHAIN_ID: usize = 901;
 pub const BASE_MAINNET_CHAIN_ID: usize = 8453;
 pub const BASE_GOERLI_TESTNET_CHAIN_ID: usize = 84531;
+pub const BASE_SEPOLIA_TESTNET_CHAIN_ID: usize = 84532;
 pub const REDSTONE_HOLESKY_TESTNET_CHAIN_ID: usize = 17001;
 
 impl SqliteDB {
@@ -95,10 +97,13 @@ impl SqliteDB {
     ) -> DataAccessResult<Box<dyn BLSTasksHandler<RandomnessTask>>> {
         match chain_id {
             0 => Ok(Box::new(self.get_bls_tasks_client::<RandomnessTask>())),
-            OP_MAINNET_CHAIN_ID | OP_GOERLI_TESTNET_CHAIN_ID | OP_DEVNET_CHAIN_ID => {
-                Ok(Box::new(self.get_op_bls_tasks_client::<RandomnessTask>()))
-            }
-            BASE_MAINNET_CHAIN_ID | BASE_GOERLI_TESTNET_CHAIN_ID => {
+            OP_MAINNET_CHAIN_ID
+            | OP_GOERLI_TESTNET_CHAIN_ID
+            | OP_SEPOLIA_TESTNET_CHAIN_ID
+            | OP_DEVNET_CHAIN_ID => Ok(Box::new(self.get_op_bls_tasks_client::<RandomnessTask>())),
+            BASE_MAINNET_CHAIN_ID
+            | BASE_GOERLI_TESTNET_CHAIN_ID
+            | BASE_SEPOLIA_TESTNET_CHAIN_ID => {
                 Ok(Box::new(self.get_base_bls_tasks_client::<RandomnessTask>()))
             }
             REDSTONE_HOLESKY_TESTNET_CHAIN_ID => Ok(Box::new(
@@ -114,10 +119,13 @@ impl SqliteDB {
     ) -> DataAccessResult<Box<dyn SignatureResultCacheHandler<RandomnessResultCache>>> {
         match chain_id {
             0 => Ok(Box::new(self.get_randomness_result_client().await?)),
-            OP_MAINNET_CHAIN_ID | OP_GOERLI_TESTNET_CHAIN_ID | OP_DEVNET_CHAIN_ID => {
-                Ok(Box::new(self.get_op_randomness_result_client().await?))
-            }
-            BASE_MAINNET_CHAIN_ID | BASE_GOERLI_TESTNET_CHAIN_ID => {
+            OP_MAINNET_CHAIN_ID
+            | OP_GOERLI_TESTNET_CHAIN_ID
+            | OP_SEPOLIA_TESTNET_CHAIN_ID
+            | OP_DEVNET_CHAIN_ID => Ok(Box::new(self.get_op_randomness_result_client().await?)),
+            BASE_MAINNET_CHAIN_ID
+            | BASE_GOERLI_TESTNET_CHAIN_ID
+            | BASE_SEPOLIA_TESTNET_CHAIN_ID => {
                 Ok(Box::new(self.get_base_randomness_result_client().await?))
             }
             REDSTONE_HOLESKY_TESTNET_CHAIN_ID => Ok(Box::new(
