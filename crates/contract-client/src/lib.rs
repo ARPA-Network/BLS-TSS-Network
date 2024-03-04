@@ -1,10 +1,13 @@
 use crate::error::ContractClientError;
 use ::ethers::abi::Detokenize;
 use ::ethers::prelude::ContractError;
-use ::ethers::providers::Middleware;
-use ::ethers::types::U64;
+use ::ethers::providers::{Middleware, ProviderError};
+use ::ethers::types::{BlockNumber, U64};
 use ::ethers::{prelude::builders::ContractCall, types::H256};
-use arpa_core::{eip1559_gas_price_estimator, jitter, ExponentialBackoffRetryDescriptor};
+use arpa_core::{
+    eip1559_gas_price_estimator, fallback_eip1559_gas_price_estimator, jitter,
+    ExponentialBackoffRetryDescriptor,
+};
 use async_trait::async_trait;
 use error::ContractClientResult;
 use log::{error, info};
@@ -50,10 +53,34 @@ pub trait TransactionCaller {
 
         // set gas price for EIP-1559 trxs
         if let Some(tx) = call.tx.as_eip1559_mut() {
-            let (max_fee, max_priority_fee) = client
+            let (max_fee, max_priority_fee) = match client
                 .estimate_eip1559_fees(Some(eip1559_gas_price_estimator))
                 .await
-                .map_err(ContractError::from_middleware_error)?;
+            {
+                Ok((max_fee, max_priority_fee)) => (max_fee, max_priority_fee),
+                Err(_) => {
+                    // try to estimate the gas price using the legacy method
+                    let base_fee_per_gas = client
+                        .get_block(BlockNumber::Latest)
+                        .await
+                        .map_err(ContractError::from_middleware_error)?
+                        .ok_or_else(|| ProviderError::CustomError("Latest block not found".into()))?
+                        .base_fee_per_gas
+                        .ok_or_else(|| {
+                            ProviderError::CustomError("EIP-1559 not activated".into())
+                        })?;
+
+                    let gas_price = client
+                        .get_gas_price()
+                        .await
+                        .map_err(ContractError::from_middleware_error)?;
+
+                    fallback_eip1559_gas_price_estimator(
+                        base_fee_per_gas,
+                        gas_price - base_fee_per_gas,
+                    )
+                }
+            };
             tx.max_fee_per_gas = Some(max_fee);
             tx.max_priority_fee_per_gas = Some(max_priority_fee);
         }
