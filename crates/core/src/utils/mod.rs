@@ -35,12 +35,22 @@ pub fn pad_to_bytes32(s: &[u8]) -> Option<[u8; 32]> {
     Some(result)
 }
 
-/// The EIP-1559 fee estimator which is based on the work by [ethers-rs](https://github.com/gakonst/ethers-rs/blob/e0e79df7e9032e882fce4f47bcc25d87bceaec68/ethers-core/src/utils/mod.rs#L500) and [MyCrypto](https://github.com/gakonst/ethers-rs/blob/e0e79df7e9032e882fce4f47bcc25d87bceaec68/ethers-core/src/utils/mod.rs#L500)
+/// The EIP-1559 fee estimator which is based on the work by [ethers-rs](https://github.com/gakonst/ethers-rs/blob/e0e79df7e9032e882fce4f47bcc25d87bceaec68/ethers-core/src/utils/mod.rs#L500) and [MyCrypto](https://github.com/MyCryptoHQ/MyCrypto/blob/master/src/services/ApiService/Gas/eip1559.ts)
 pub fn eip1559_gas_price_estimator(base: U256, tips: Vec<Vec<U256>>) -> (U256, U256) {
     info!("base: {:?}", base);
     info!("tips: {:?}", tips);
 
     let max_priority_fee_per_gas = estimate_priority_fee(tips);
+
+    fallback_eip1559_gas_price_estimator(base, max_priority_fee_per_gas)
+}
+
+pub fn fallback_eip1559_gas_price_estimator(
+    base: U256,
+    max_priority_fee_per_gas: U256,
+) -> (U256, U256) {
+    info!("base: {:?}", base);
+    info!("max_priority_fee_per_gas: {:?}", max_priority_fee_per_gas);
 
     let potential_max_fee = base * 12 / 10;
 
