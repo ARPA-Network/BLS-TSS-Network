@@ -89,29 +89,40 @@ L1_CONTRACTS_DEPLOYMENT_BROADCAST_PATH = os.path.join(
     "run-latest.json",
 )
 
-CREATE_AND_SET_OP_CHAIN_MESSENGER_BROADCAST_PATH = os.path.join(
+
+# ! New - Generalize by making a general "OPStackChainMessenger contract" and "CreateAndSetChainMessengerScript" script
+CREATE_AND_SET_OP_STACK_CHAIN_MESSENGER_BROADCAST_PATH = os.path.join(
     CONTRACTS_DIR,
     "broadcast",
-    "CreateAndSetOPChainMessenger.s.sol",
+    "CreateAndSetOPStackChainMessenger.s.sol",
     L1_CHAIN_ID,
     "run-latest.json",
 )
 
-CREATE_AND_SET_BASE_CHAIN_MESSENGER_BROADCAST_PATH = os.path.join(
-    CONTRACTS_DIR,
-    "broadcast",
-    "CreateAndSetBaseChainMessenger.s.sol",
-    L1_CHAIN_ID,
-    "run-latest.json",
-)
+# ! Old
+# CREATE_AND_SET_OP_CHAIN_MESSENGER_BROADCAST_PATH = os.path.join(
+#     CONTRACTS_DIR,
+#     "broadcast",
+#     "CreateAndSetOPChainMessenger.s.sol",
+#     L1_CHAIN_ID,
+#     "run-latest.json",
+# )
 
-CREATE_AND_SET_REDSTONE_CHAIN_MESSENGER_BROADCAST_PATH = os.path.join(
-    CONTRACTS_DIR,
-    "broadcast",
-    "CreateAndSetRedstoneChainMessenger.s.sol",
-    L1_CHAIN_ID,
-    "run-latest.json",
-)
+# CREATE_AND_SET_BASE_CHAIN_MESSENGER_BROADCAST_PATH = os.path.join(
+#     CONTRACTS_DIR,
+#     "broadcast",
+#     "CreateAndSetBaseChainMessenger.s.sol",
+#     L1_CHAIN_ID,
+#     "run-latest.json",
+# )
+
+# CREATE_AND_SET_REDSTONE_CHAIN_MESSENGER_BROADCAST_PATH = os.path.join(
+#     CONTRACTS_DIR,
+#     "broadcast",
+#     "CreateAndSetRedstoneChainMessenger.s.sol",
+#     L1_CHAIN_ID,
+#     "run-latest.json",
+# )
 
 NODE_CLIENT_BINARY_PATH = os.path.join(ROOT_DIR, "target/release/node-client")
 
@@ -164,21 +175,28 @@ def get_l1_addresses():
 
         l1_addresses = {**l1_controller_addresses}
 
-        if os.path.exists(CREATE_AND_SET_OP_CHAIN_MESSENGER_BROADCAST_PATH):
-            l1_chain_op_messenger_addresses = get_addresses_from_json(
-                CREATE_AND_SET_OP_CHAIN_MESSENGER_BROADCAST_PATH
-            )
-            l1_addresses.update(l1_chain_op_messenger_addresses)
-        if os.path.exists(CREATE_AND_SET_BASE_CHAIN_MESSENGER_BROADCAST_PATH):
-            l1_chain_base_messenger_addresses = get_addresses_from_json(
-                CREATE_AND_SET_BASE_CHAIN_MESSENGER_BROADCAST_PATH
-            )
-            l1_addresses.update(l1_chain_base_messenger_addresses)
-        if os.path.exists(CREATE_AND_SET_REDSTONE_CHAIN_MESSENGER_BROADCAST_PATH):
-            l1_chain_redstone_messenger_addresses = get_addresses_from_json(
-                CREATE_AND_SET_REDSTONE_CHAIN_MESSENGER_BROADCAST_PATH
-            )
-            l1_addresses.update(l1_chain_redstone_messenger_addresses)
+        # ! New
+        l1_chain_op_stack_messenger_addresses = get_addresses_from_json(
+            CREATE_AND_SET_OP_STACK_CHAIN_MESSENGER_BROADCAST_PATH
+        )
+        l1_addresses.update(l1_chain_op_stack_messenger_addresses)
+
+        # ! Old - Generalize by making a general "OPStackChainMessenger contract" and "CreateAndSetChainMessengerScript" script
+        # if os.path.exists(CREATE_AND_SET_OP_CHAIN_MESSENGER_BROADCAST_PATH):
+        #     l1_chain_op_messenger_addresses = get_addresses_from_json(
+        #         CREATE_AND_SET_OP_CHAIN_MESSENGER_BROADCAST_PATH
+        #     )
+        #     l1_addresses.update(l1_chain_op_messenger_addresses)
+        # if os.path.exists(CREATE_AND_SET_BASE_CHAIN_MESSENGER_BROADCAST_PATH):
+        #     l1_chain_base_messenger_addresses = get_addresses_from_json(
+        #         CREATE_AND_SET_BASE_CHAIN_MESSENGER_BROADCAST_PATH
+        #     )
+        #     l1_addresses.update(l1_chain_base_messenger_addresses)
+        # if os.path.exists(CREATE_AND_SET_REDSTONE_CHAIN_MESSENGER_BROADCAST_PATH):
+        #     l1_chain_redstone_messenger_addresses = get_addresses_from_json(
+        #         CREATE_AND_SET_REDSTONE_CHAIN_MESSENGER_BROADCAST_PATH
+        #     )
+        #     l1_addresses.update(l1_chain_redstone_messenger_addresses)
 
     else:
         l1_addresses = get_addresses_from_json(L1_CONTRACTS_DEPLOYMENT_BROADCAST_PATH)
@@ -370,18 +388,25 @@ def deploy_contracts():
 
     # Deploy CreateAndSetChainMessenger script
     #! Generalize by making a general "OPStackChainMessenger contract" and "CreateAndSetChainMessengerScript" script
-    if REDSTONE_DEPLOYMENT:
-        print("Running Solidity Script: CreateAndSetRedstoneChainMessenger on L1...")
-        cmd = f"forge script script/CreateAndSetRedstoneChainMessenger.s.sol:CreateAndSetRedstoneChainMessengerScript --fork-url {L1_RPC} --broadcast"
-        cprint(cmd)
-    elif BASE_DEPLOYMENT:
-        print("Running Solidity Script: CreateAndSetBaseChainMessenger on L1...")
-        cmd = f"forge script script/CreateAndSetBaseChainMessenger.s.sol:CreateAndSetBaseChainMessengerScript --fork-url {L1_RPC} --broadcast"
-        cprint(cmd)
-    else:
-        print("Running Solidity Script: CreateAndSetOPChainMessenger on L1...")
-        cmd = f"forge script script/CreateAndSetOPChainMessenger.s.sol:CreateAndSetOPChainMessengerScript --fork-url {L1_RPC} --broadcast"
-        cprint(cmd)
+
+    # ! New
+    print("Running Solidity Script: CreateAndSetOPStackChainMessenger on L1...")
+    cmd = f"forge script script/CreateAndSetOPStackChainMessenger.s.sol:CreateAndSetOPStackChainMessengerScript --fork-url {L1_RPC} --broadcast"
+    cprint(cmd)
+
+    # ! Old
+    # if REDSTONE_DEPLOYMENT:
+    #     print("Running Solidity Script: CreateAndSetRedstoneChainMessenger on L1...")
+    #     cmd = f"forge script script/CreateAndSetRedstoneChainMessenger.s.sol:CreateAndSetRedstoneChainMessengerScript --fork-url {L1_RPC} --broadcast"
+    #     cprint(cmd)
+    # elif BASE_DEPLOYMENT:
+    #     print("Running Solidity Script: CreateAndSetBaseChainMessenger on L1...")
+    #     cmd = f"forge script script/CreateAndSetBaseChainMessenger.s.sol:CreateAndSetBaseChainMessengerScript --fork-url {L1_RPC} --broadcast"
+    #     cprint(cmd)
+    # else:
+    #     print("Running Solidity Script: CreateAndSetOPChainMessenger on L1...")
+    #     cmd = f"forge script script/CreateAndSetOPChainMessenger.s.sol:CreateAndSetOPChainMessengerScript --fork-url {L1_RPC} --broadcast"
+    #     cprint(cmd)
 
     run_command(
         [cmd],
@@ -395,32 +420,44 @@ def deploy_contracts():
         shell=True,
     )
 
-    if REDSTONE_DEPLOYMENT:
-        l1_chain_redstone_messenger_addresses = get_addresses_from_json(
-            CREATE_AND_SET_REDSTONE_CHAIN_MESSENGER_BROADCAST_PATH
-        )
-        l1_addresses.update(l1_chain_redstone_messenger_addresses)
-        set_key(
-            ENV_PATH,
-            "L1_CHAIN_MESSENGER_ADDRESS",
-            l1_addresses["RedstoneChainMessenger"],
-        )
-    elif BASE_DEPLOYMENT:
-        l1_chain_base_messenger_addresses = get_addresses_from_json(
-            CREATE_AND_SET_BASE_CHAIN_MESSENGER_BROADCAST_PATH
-        )
-        l1_addresses.update(l1_chain_base_messenger_addresses)
-        set_key(
-            ENV_PATH, "L1_CHAIN_MESSENGER_ADDRESS", l1_addresses["BaseChainMessenger"]
-        )
-    else:
-        l1_chain_op_messenger_addresses = get_addresses_from_json(
-            CREATE_AND_SET_OP_CHAIN_MESSENGER_BROADCAST_PATH
-        )
-        l1_addresses.update(l1_chain_op_messenger_addresses)
-        set_key(
-            ENV_PATH, "L1_CHAIN_MESSENGER_ADDRESS", l1_addresses["OPChainMessenger"]
-        )
+    # ! New
+    l1_chain_op_stack_messenger_addresses = get_addresses_from_json(
+        CREATE_AND_SET_OP_STACK_CHAIN_MESSENGER_BROADCAST_PATH
+    )
+
+    l1_addresses.update(l1_chain_op_stack_messenger_addresses)
+
+    set_key(
+        ENV_PATH, "L1_CHAIN_MESSENGER_ADDRESS", l1_addresses["OPStackChainMessenger"]
+    )
+
+    # ! Old
+    # if REDSTONE_DEPLOYMENT:
+    #     l1_chain_redstone_messenger_addresses = get_addresses_from_json(
+    #         CREATE_AND_SET_REDSTONE_CHAIN_MESSENGER_BROADCAST_PATH
+    #     )
+    #     l1_addresses.update(l1_chain_redstone_messenger_addresses)
+    #     set_key(
+    #         ENV_PATH,
+    #         "L1_CHAIN_MESSENGER_ADDRESS",
+    #         l1_addresses["RedstoneChainMessenger"],
+    #     )
+    # elif BASE_DEPLOYMENT:
+    #     l1_chain_base_messenger_addresses = get_addresses_from_json(
+    #         CREATE_AND_SET_BASE_CHAIN_MESSENGER_BROADCAST_PATH
+    #     )
+    #     l1_addresses.update(l1_chain_base_messenger_addresses)
+    #     set_key(
+    #         ENV_PATH, "L1_CHAIN_MESSENGER_ADDRESS", l1_addresses["BaseChainMessenger"]
+    #     )
+    # else:
+    #     l1_chain_op_messenger_addresses = get_addresses_from_json(
+    #         CREATE_AND_SET_OP_CHAIN_MESSENGER_BROADCAST_PATH
+    #     )
+    #     l1_addresses.update(l1_chain_op_messenger_addresses)
+    #     set_key(
+    #         ENV_PATH, "L1_CHAIN_MESSENGER_ADDRESS", l1_addresses["OPChainMessenger"]
+    #     )
 
     # 4. deploy remaining contracts (Controller Oracle Init, StakeNodeLocalTest)
     # forge script script/OPControllerOracleInitializationLocalTest.s.sol:OPControllerOracleInitializationLocalTestScript --fork-url http://localhost:9545 --broadcast
@@ -435,15 +472,18 @@ def deploy_contracts():
             "OP_ADAPTER_ADDRESS": l2_addresses["ERC1967Proxy"],
             "OP_ARPA_ADDRESS": l2_addresses["Arpa"],
             "OP_CONTROLLER_ORACLE_ADDRESS": l2_addresses["ControllerOracle"],
-            "L1_CHAIN_MESSENGER_ADDRESS": (
-                l1_addresses["BaseChainMessenger"]
-                if BASE_DEPLOYMENT
-                else (
-                    l1_addresses["RedstoneChainMessenger"]
-                    if REDSTONE_DEPLOYMENT
-                    else l1_addresses["OPChainMessenger"]
-                )
-            ),  # new
+            # ! New
+            "L1_CHAIN_MESSENGER_ADDRESS": l1_addresses["OPStackChainMessenger"],
+            # ! Old
+            # "L1_CHAIN_MESSENGER_ADDRESS": (
+            #     l1_addresses["BaseChainMessenger"]
+            #     if BASE_DEPLOYMENT
+            #     else (
+            #         l1_addresses["RedstoneChainMessenger"]
+            #         if REDSTONE_DEPLOYMENT
+            #         else l1_addresses["OPChainMessenger"]
+            #     )
+            # ),
         },
         cwd=CONTRACTS_DIR,
         capture_output=HIDE_OUTPUT,
@@ -625,7 +665,7 @@ def deploy_nodes():  # ! Deploy Nodes
     nodes_grouped = wait_command(
         [cmd],
         wait_time=12,
-        max_attempts=45,  # updated form 25 to 45
+        max_attempts=50,  # updated form 25 to 45
         shell=True,
     )
 
@@ -711,7 +751,7 @@ def test_request_randomness():  # ! Integration Testing
     l2_group_info = wait_command(
         [cmd],
         wait_time=15,
-        max_attempts=200,
+        max_attempts=10,
         fail_value=non_relayed_group,
         shell=True,
     )
