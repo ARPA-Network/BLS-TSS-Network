@@ -38,9 +38,7 @@ L1_RPC = get_key(ENV_PATH, "L1_RPC")
 L1_WS_RPC = get_key(ENV_PATH, "L1_WS_RPC")
 
 # Deployment flags
-LOCAL_TEST = (
-    get_key(ENV_PATH, "LOCAL_TEST").lower() == "true"
-)
+LOCAL_TEST = get_key(ENV_PATH, "LOCAL_TEST").lower() == "true"
 ARPA_EXISTS = (
     get_key(ENV_PATH, "ARPA_EXISTS").lower() == "true"
 )  # bool True if ARPA_EXISTS is true in .env
@@ -48,11 +46,10 @@ L2_ONLY = (
     get_key(ENV_PATH, "L2_ONLY").lower() == "true"
 )  # bool True if L2_ONLY is true in .env
 BASE_DEPLOYMENT = (
-    get_key(ENV_PATH, "OP_CHAIN_ID") == "8453" or get_key(ENV_PATH, "OP_CHAIN_ID") == "84531"
+    get_key(ENV_PATH, "OP_CHAIN_ID") == "8453"
+    or get_key(ENV_PATH, "OP_CHAIN_ID") == "84531"
 )
-REDSTONE_DEPLOYMENT = (
-    get_key(ENV_PATH, "OP_CHAIN_ID") == "17001"
-)
+REDSTONE_DEPLOYMENT = get_key(ENV_PATH, "OP_CHAIN_ID") == "17001"
 # Admin Private Key used to Relay Groups manually during L2_ONLY deployment
 ADMIN_PRIVATE_KEY = get_key(ENV_PATH, "ADMIN_PRIVATE_KEY")
 VERBOSE_OUTPUT = get_key(ENV_PATH, "VERBOSE_OUTPUT").lower() == "true"
@@ -307,15 +304,6 @@ def wait_command(
         time.sleep(wait_time)
 
 
-def print_node_key_info():
-    mnemonic = get_key(ENV_PATH, "STAKING_NODES_MNEMONIC")
-    for index in [10, 11, 12]:
-        private_key, public_key = print_keypair(mnemonic, index)
-        print("\nIndex: {}".format(index))
-        print("Public key: {}".format(public_key))
-        print("Private key: {}".format(private_key))
-
-
 def deploy_contracts():
     ##################################
     ###### Contract Deployment #######
@@ -380,8 +368,8 @@ def deploy_contracts():
         set_key(ENV_PATH, "ADAPTER_ADDRESS", l1_addresses["ERC1967Proxy"])
         l1_controller_relayer = EXISTING_L1_CONTROLLER_RELAYER
 
-
     # Deploy CreateAndSetChainMessenger script
+    #! Generalize by making a general "OPStackChainMessenger contract" and "CreateAndSetChainMessengerScript" script
     if REDSTONE_DEPLOYMENT:
         print("Running Solidity Script: CreateAndSetRedstoneChainMessenger on L1...")
         cmd = f"forge script script/CreateAndSetRedstoneChainMessenger.s.sol:CreateAndSetRedstoneChainMessengerScript --fork-url {L1_RPC} --broadcast"
@@ -390,11 +378,11 @@ def deploy_contracts():
         print("Running Solidity Script: CreateAndSetBaseChainMessenger on L1...")
         cmd = f"forge script script/CreateAndSetBaseChainMessenger.s.sol:CreateAndSetBaseChainMessengerScript --fork-url {L1_RPC} --broadcast"
         cprint(cmd)
-    else: 
+    else:
         print("Running Solidity Script: CreateAndSetOPChainMessenger on L1...")
         cmd = f"forge script script/CreateAndSetOPChainMessenger.s.sol:CreateAndSetOPChainMessengerScript --fork-url {L1_RPC} --broadcast"
         cprint(cmd)
-    
+
     run_command(
         [cmd],
         env={
@@ -413,7 +401,9 @@ def deploy_contracts():
         )
         l1_addresses.update(l1_chain_redstone_messenger_addresses)
         set_key(
-            ENV_PATH, "L1_CHAIN_MESSENGER_ADDRESS", l1_addresses["RedstoneChainMessenger"]
+            ENV_PATH,
+            "L1_CHAIN_MESSENGER_ADDRESS",
+            l1_addresses["RedstoneChainMessenger"],
         )
     elif BASE_DEPLOYMENT:
         l1_chain_base_messenger_addresses = get_addresses_from_json(
@@ -445,7 +435,15 @@ def deploy_contracts():
             "OP_ADAPTER_ADDRESS": l2_addresses["ERC1967Proxy"],
             "OP_ARPA_ADDRESS": l2_addresses["Arpa"],
             "OP_CONTROLLER_ORACLE_ADDRESS": l2_addresses["ControllerOracle"],
-            "L1_CHAIN_MESSENGER_ADDRESS": l1_addresses["BaseChainMessenger"] if BASE_DEPLOYMENT else (l1_addresses["RedstoneChainMessenger"] if REDSTONE_DEPLOYMENT else l1_addresses["OPChainMessenger"]),  # new
+            "L1_CHAIN_MESSENGER_ADDRESS": (
+                l1_addresses["BaseChainMessenger"]
+                if BASE_DEPLOYMENT
+                else (
+                    l1_addresses["RedstoneChainMessenger"]
+                    if REDSTONE_DEPLOYMENT
+                    else l1_addresses["OPChainMessenger"]
+                )
+            ),  # new
         },
         cwd=CONTRACTS_DIR,
         capture_output=HIDE_OUTPUT,
@@ -495,6 +493,15 @@ def deploy_contracts():
     print_addresses()
 
 
+def print_node_key_info():
+    mnemonic = get_key(ENV_PATH, "STAKING_NODES_MNEMONIC")
+    for index in [1, 2, 3]:
+        private_key, public_key = print_keypair(mnemonic, index)
+        print("\nIndex: {}".format(index))
+        print("Public key: {}".format(public_key))
+        print("Private key: {}".format(private_key))
+
+
 def deploy_nodes():  # ! Deploy Nodes
     with open(ADDRESSES_JSON_PATH, "r") as f:
         addresses = json.load(f)
@@ -511,7 +518,7 @@ def deploy_nodes():  # ! Deploy Nodes
     # computer node private key sfrom staking node mnemonic
     mnemonic = get_key(ENV_PATH, "STAKING_NODES_MNEMONIC")
     node_private_keys = []
-    for index in [10, 11, 12]:
+    for index in [1, 2, 3]:
         private_key, public_key = print_keypair(mnemonic, index)
         node_private_keys.append(private_key)
         # print("\nIndex: {}".format(index))
@@ -556,7 +563,7 @@ def deploy_nodes():  # ! Deploy Nodes
     print("Starting Node 1!")
     if LOCAL_TEST:
         cmd = f"cargo run --release --bin node-client -- -c {NODE_CLIENT_DIR}/config_1.yml > /dev/null 2>&1 &"
-    else: 
+    else:
         cmd = f"docker run -d \
             --name node1 \
             -p 50061:50061 -p 50091:50091 \
@@ -574,7 +581,7 @@ def deploy_nodes():  # ! Deploy Nodes
     print("Starting Node 2!")
     if LOCAL_TEST:
         cmd = f"cargo run --release --bin node-client -- -c {NODE_CLIENT_DIR}/config_2.yml > /dev/null 2>&1 &"
-    else: 
+    else:
         cmd = f"docker run -d \
             --name node2 \
             -p 50062:50062 -p 50092:50092 \
@@ -592,7 +599,7 @@ def deploy_nodes():  # ! Deploy Nodes
     print("Starting Node 3!")
     if LOCAL_TEST:
         cmd = f"cargo run --release --bin node-client -- -c {NODE_CLIENT_DIR}/config_3.yml > /dev/null 2>&1 &"
-    else: 
+    else:
         cmd = f"docker run -d \
             --name node3 \
             -p 50063:50063 -p 50093:50093 \
@@ -618,7 +625,7 @@ def deploy_nodes():  # ! Deploy Nodes
     nodes_grouped = wait_command(
         [cmd],
         wait_time=12,
-        max_attempts=25,
+        max_attempts=45,  # updated form 25 to 45
         shell=True,
     )
 
@@ -658,7 +665,9 @@ def deploy_nodes():  # ! Deploy Nodes
     print("\nDKG Proccess Completed Succesfully!")
     print(f"Coordinator Value: {coordinator}\n")
 
-    time.sleep(30)  # wait for group info to propogate from L1 to L2
+    # time.sleep(
+    #     90
+    # )  # wait for group info to propogate from L1 to L2 (30 was insufficient)
 
 
 def get_last_randomness(address: str, rpc: str) -> str:
@@ -694,13 +703,27 @@ def test_request_randomness():  # ! Integration Testing
     )
     # print(l1_group_into)
 
-    print("L2 Group Info:")
+    print("Waiting for group to relay from L1 to L2...")
+    non_relayed_group = "0x00000000000000000000000000000000000000000000000000000000000000200000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000018000000000000000000000000000000000000000000000000000000000000001a000000000000000000000000000000000000000000000000000000000000001c000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
+
     cmd = f"cast call {l2_addresses['ControllerOracle']} \"getGroup(uint256)\" 0 --rpc-url {L2_RPC}"
     cprint(cmd)
-    l2_group_info = run_command(
+    l2_group_info = wait_command(
         [cmd],
+        wait_time=15,
+        max_attempts=200,
+        fail_value=non_relayed_group,
         shell=True,
     )
+    if l2_group_info:
+        print(f"Group relayed from L1 to L2!")
+        print("L2 Group Info:")
+        print(l2_group_info)
+
+    # l2_group_info = run_command(
+    #     [cmd],
+    #     shell=True,
+    # )
     # print(l2_group_into)
 
     ############################################
@@ -713,7 +736,7 @@ def test_request_randomness():  # ! Integration Testing
     l1_prev_randomness = get_last_randomness(l1_addresses["ERC1967Proxy"], L1_RPC)
 
     # 2. Deploy L1 user contract and request randomness
-    print("Deploying L1 user contract and requesting randomness...")
+    print("\nDeploying L1 user contract and requesting randomness...")
     cmd = f"forge script script/GetRandomNumberLocalTest.s.sol:GetRandomNumberLocalTestScript --fork-url {L1_RPC} --broadcast"
     cprint(cmd)
     run_command(
@@ -883,13 +906,15 @@ def main():
     ## For L2 only deployments, use the following prior to the first deployment.
     # deploy_controller_relayer()
 
-    ## if you want to manually call relayGroups(L2controllerOracleAddress)
+    ## if you dgwant to manually call relayGroups(L2controllerOracleAddress)
     # relay_groups("0x2E2Ed0Cfd3AD2f1d34481277b3204d807Ca2F8c2")
 
     ## Main deployment script
     deploy_contracts()
     deploy_nodes()
     test_request_randomness()
+
+    # print_node_key_info()
 
 
 if __name__ == "__main__":
