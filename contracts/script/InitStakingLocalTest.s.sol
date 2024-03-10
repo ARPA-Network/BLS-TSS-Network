@@ -4,6 +4,7 @@ pragma solidity ^0.8.18;
 import {Script} from "forge-std/Script.sol";
 import {Staking} from "Staking-v0.1/Staking.sol";
 import {Arpa} from "./ArpaLocalTest.sol";
+import "openzeppelin-contracts/contracts/utils/Strings.sol";
 
 contract InitStakingLocalTestScript is Script {
     uint256 internal _deployerPrivateKey = vm.envUint("ADMIN_PRIVATE_KEY");
@@ -16,9 +17,10 @@ contract InitStakingLocalTestScript is Script {
     uint256 internal _operatorStakeAmount = vm.envUint("OPERATOR_STAKE_AMOUNT");
 
     address[] internal _operators;
-    string internal _mnemonic = vm.envString("STAKING_NODES_MNEMONIC");
-    uint32 internal _stakingNodesIndexOffset = uint32(vm.envUint("STAKING_NODES_INDEX_OFFSET"));
-    uint32 internal _stakingNodesIndexLength = uint32(vm.envUint("STAKING_NODES_INDEX_LENGTH"));
+    // string internal _mnemonic = vm.envString("STAKING_NODES_MNEMONIC");
+    // uint32 internal _stakingNodesIndexOffset = uint32(vm.envUint("STAKING_NODES_INDEX_OFFSET"));
+    // uint32 internal _stakingNodesIndexLength = uint32(vm.envUint("STAKING_NODES_INDEX_LENGTH"));
+    uint32 internal _nodePrivateKeyCount = uint32(vm.envUint("NODE_PRIVATE_KEY_COUNT")); // ! New
 
     bool internal _local_test = vm.envBool("LOCAL_TEST");
 
@@ -34,9 +36,14 @@ contract InitStakingLocalTestScript is Script {
             payable(vm.addr(_userPrivateKey)).transfer(100 ether); // ! commented out during testnet deployment.
         }
 
-        // add operators
-        for (uint32 i = _stakingNodesIndexOffset; i < _stakingNodesIndexOffset + _stakingNodesIndexLength; i++) {
-            address operator = vm.rememberKey(vm.deriveKey(_mnemonic, i));
+        // add operators (NEW)
+        for (uint32 i = 1; i <= _nodePrivateKeyCount; i++) {
+            string memory keyName = string(abi.encodePacked("NODE_PRIVATE_KEY_", Strings.toString(i)));
+
+            // string memory privateKey = vm.envString(keyName);
+            uint256 privateKey = vm.envUint(keyName);
+            // address operator = vm.addr(privateKey);
+            address operator = vm.rememberKey(privateKey);
             _operators.push(operator);
             if (_local_test == true) {
                 address payable toOperator = payable(operator); // ! commented out during testnet deployment.
@@ -44,6 +51,17 @@ contract InitStakingLocalTestScript is Script {
                 toOperator.transfer(100 ether); // ! commented out during testnet deployment.
             }
         }
+
+        // // add operators (OLD)
+        // for (uint32 i = _stakingNodesIndexOffset; i < _stakingNodesIndexOffset + _stakingNodesIndexLength; i++) {
+        //     address operator = vm.rememberKey(vm.deriveKey(_mnemonic, i));
+        //     _operators.push(operator);
+        //     if (_local_test == true) {
+        //         address payable toOperator = payable(operator); // ! commented out during testnet deployment.
+        //         vm.broadcast(_deployerPrivateKey); // ! commented out during testnet deployment.
+        //         toOperator.transfer(100 ether); // ! commented out during testnet deployment.
+        //     }
+        // }
 
         vm.broadcast(_deployerPrivateKey);
         _staking.addOperators(_operators);

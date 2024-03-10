@@ -552,26 +552,39 @@ def deploy_nodes():  # ! Deploy Nodes
     ###### ARPA Network Deployment #######
     ######################################
 
-    # update config.yml files with correect L1 controller and adapter addresses
-    config_files = ["config_1.yml", "config_2.yml", "config_3.yml"]
-
-    # computer node private key sfrom staking node mnemonic
-    mnemonic = get_key(ENV_PATH, "STAKING_NODES_MNEMONIC")
+    # get node private keys from .env
     node_private_keys = []
-    for index in [1, 2, 3]:
-        private_key, public_key = print_keypair(mnemonic, index)
-        node_private_keys.append(private_key)
-        # print("\nIndex: {}".format(index))
-        # print("Public key: {}".format(public_key))
-        # print("Private key: {}".format(private_key))
+    i = 1
+    while True:
+        key_name = f"NODE_PRIVATE_KEY_{i}"
+        key_value = get_key(ENV_PATH, key_name)
+        if key_value is None:
+            break
+        # strip the prepending 0x from the key
+        if key_value.startswith("0x"):
+            key_value = key_value[2:]
+        node_private_keys.append(key_value)
+        i += 1
 
-    # update config files
+    print(f"{len(node_private_keys)} private keys found in .env")
+
+    node_private_key_count = get_key(ENV_PATH, "NODE_PRIVATE_KEY_COUNT")
+    if len(node_private_keys) != int(node_private_key_count):
+        cprint(
+            f"WARNING: NODE_PRIVATE_KEY_COUNT in .env ({node_private_key_count}) does not match the number of private keys found ({len(node_private_keys)}). Exiting..."
+        )
+
+    # prep yaml writer
     yaml = ruamel.yaml.YAML()
     yaml.preserve_quotes = True  # preserves quotes
     yaml.indent(sequence=4, offset=2)  # set indentation
 
-    for i, file in enumerate(config_files):
-        file_path = os.path.join(NODE_CLIENT_DIR, file)
+    # create config files for an arbitrary number of private_keys
+    config_files = []  # used when deploying nodes later
+    for i, private_key in enumerate(node_private_keys):
+        config_file = f"config_{i+1}.yml"
+        config_files.append(config_file)
+        file_path = os.path.join(NODE_CLIENT_DIR, config_file)
         with open(file_path, "r") as f:
             data = yaml.load(f)
         # L1
@@ -593,67 +606,39 @@ def deploy_nodes():  # ! Deploy Nodes
         data["relayed_chains"][0]["chain_id"] = int(L2_CHAIN_ID)
 
         # node private key
-        data["account"]["private_key"] = node_private_keys[i]
+        data["account"]["private_key"] = private_key
 
         with open(file_path, "w") as f:
             yaml.dump(data, f)
 
-    # start randcast nodes
+        print(f"Node-client config file {config_file} created successfully!")
+
+    # deploy nodes
     print("Starting randcast nodes...")
-    print("Starting Node 1!")
-    if LOCAL_TEST:
-        cmd = f"cargo run --release --bin node-client -- -c {NODE_CLIENT_DIR}/config_1.yml > /dev/null 2>&1 &"
-    else:
-        cmd = f"docker run -d \
-            --name node1 \
-            -p 50061:50061 -p 50091:50091 \
-            -v {ROOT_DIR}/docker/node-client/config_1.yml:/app/config.yml \
-            -v {ROOT_DIR}/docker/node-client/db:/app/db \
-            -v {ROOT_DIR}/docker/node-client/log/1:/app/log/1 \
-            ghcr.io/arpa-network/node-client:latest"
-    cprint(cmd)
-    run_command(
-        [cmd],
-        cwd=NODE_CLIENT_DIR,
-        shell=True,
-    )
+    PORT_1 = 50061
+    PORT_2 = 50091
+    for i, config_file in enumerate(config_files, start=1):
+        print(f"Starting Node #{i} using: {config_file}!")
+        if LOCAL_TEST:
+            cmd = f"cargo run --release --bin node-client -- -c {NODE_CLIENT_DIR}/{config_file} > /dev/null 2>&1 &"
+        else:
+            cmd = (
+                f"docker run -d "
+                f"--name node{i} "
+                f"-p {PORT_1 + i-1}:{PORT_1 + i-1} -p {PORT_2 + i-1}:{PORT_2 + i-1} "
+                f"-v {ROOT_DIR}/docker/node-client/{config_file}:/app/config.yml "
+                f"-v {ROOT_DIR}/docker/node-client/db:/app/db "
+                f"-v {ROOT_DIR}/docker/node-client/log/{i}:/app/log/{i} "
+                f"ghcr.io/arpa-network/node-client:latest"
+            )
+        cprint(cmd)
+        run_command(
+            [cmd],
+            cwd=NODE_CLIENT_DIR,
+            shell=True,
+        )
 
-    print("Starting Node 2!")
-    if LOCAL_TEST:
-        cmd = f"cargo run --release --bin node-client -- -c {NODE_CLIENT_DIR}/config_2.yml > /dev/null 2>&1 &"
-    else:
-        cmd = f"docker run -d \
-            --name node2 \
-            -p 50062:50062 -p 50092:50092 \
-            -v {ROOT_DIR}/docker/node-client/config_2.yml:/app/config.yml \
-            -v {ROOT_DIR}/docker/node-client/db:/app/db \
-            -v {ROOT_DIR}/docker/node-client/log/2:/app/log/2 \
-            ghcr.io/arpa-network/node-client:latest"
-    cprint(cmd)
-    run_command(
-        [cmd],
-        cwd=NODE_CLIENT_DIR,
-        shell=True,
-    )
-
-    print("Starting Node 3!")
-    if LOCAL_TEST:
-        cmd = f"cargo run --release --bin node-client -- -c {NODE_CLIENT_DIR}/config_3.yml > /dev/null 2>&1 &"
-    else:
-        cmd = f"docker run -d \
-            --name node3 \
-            -p 50063:50063 -p 50093:50093 \
-            -v {ROOT_DIR}/docker/node-client/config_3.yml:/app/config.yml \
-            -v {ROOT_DIR}/docker/node-client/db:/app/db \
-            -v {ROOT_DIR}/docker/node-client/log/3:/app/log/3 \
-            ghcr.io/arpa-network/node-client:latest"
-    cprint(cmd)
-    run_command(
-        [cmd],
-        cwd=NODE_CLIENT_DIR,
-        shell=True,
-    )
-
+    # Wait for nodes to group
     if L2_ONLY:
         return  # no need to wait for nodes to group
 
@@ -705,9 +690,160 @@ def deploy_nodes():  # ! Deploy Nodes
     print("\nDKG Proccess Completed Succesfully!")
     print(f"Coordinator Value: {coordinator}\n")
 
-    # time.sleep(
-    #     90
-    # )  # wait for group info to propogate from L1 to L2 (30 was insufficient)
+    # #! Old node deploy
+
+    # # update config.yml files with correect L1 controller and adapter addresses
+    # config_files = ["config_1.yml", "config_2.yml", "config_3.yml"]
+
+    # # computer node private key sfrom staking node mnemonic
+    # mnemonic = get_key(ENV_PATH, "STAKING_NODES_MNEMONIC")
+    # node_private_keys = []
+    # for index in [1, 2, 3]:
+    #     private_key, public_key = print_keypair(mnemonic, index)
+    #     node_private_keys.append(private_key)
+    #     # print("\nIndex: {}".format(index))
+    #     # print("Public key: {}".format(public_key))
+    #     # print("Private key: {}".format(private_key))
+
+    # # update config files
+    # yaml = ruamel.yaml.YAML()
+    # yaml.preserve_quotes = True  # preserves quotes
+    # yaml.indent(sequence=4, offset=2)  # set indentation
+
+    # for i, file in enumerate(config_files):
+    #     file_path = os.path.join(NODE_CLIENT_DIR, file)
+    #     with open(file_path, "r") as f:
+    #         data = yaml.load(f)
+    #     # L1
+    #     data["adapter_address"] = l1_addresses["ERC1967Proxy"]
+    #     data["controller_address"] = l1_addresses["Controller"]
+    #     data["controller_relayer_address"] = l1_addresses["ControllerRelayer"]
+    #     # L2
+    #     data["relayed_chains"][0]["controller_oracle_address"] = l2_addresses[
+    #         "ControllerOracle"
+    #     ]
+    #     data["relayed_chains"][0]["adapter_address"] = l2_addresses["ERC1967Proxy"]
+
+    #     # update rpc endpoints
+    #     data["provider_endpoint"] = L1_WS_RPC
+    #     data["relayed_chains"][0]["provider_endpoint"] = L2_WS_RPC
+
+    #     # Update Chain ID
+    #     data["chain_id"] = int(L1_CHAIN_ID)
+    #     data["relayed_chains"][0]["chain_id"] = int(L2_CHAIN_ID)
+
+    #     # node private key
+    #     data["account"]["private_key"] = node_private_keys[i]
+
+    #     with open(file_path, "w") as f:
+    #         yaml.dump(data, f)
+
+    # # start randcast nodes
+    # print("Starting randcast nodes...")
+    # print("Starting Node 1!")
+    # if LOCAL_TEST:
+    #     cmd = f"cargo run --release --bin node-client -- -c {NODE_CLIENT_DIR}/config_1.yml > /dev/null 2>&1 &"
+    # else:
+    #     cmd = f"docker run -d \
+    #         --name node1 \
+    #         -p 50061:50061 -p 50091:50091 \
+    #         -v {ROOT_DIR}/docker/node-client/config_1.yml:/app/config.yml \
+    #         -v {ROOT_DIR}/docker/node-client/db:/app/db \
+    #         -v {ROOT_DIR}/docker/node-client/log/1:/app/log/1 \
+    #         ghcr.io/arpa-network/node-client:latest"
+    # cprint(cmd)
+    # run_command(
+    #     [cmd],
+    #     cwd=NODE_CLIENT_DIR,
+    #     shell=True,
+    # )
+
+    # print("Starting Node 2!")
+    # if LOCAL_TEST:
+    #     cmd = f"cargo run --release --bin node-client -- -c {NODE_CLIENT_DIR}/config_2.yml > /dev/null 2>&1 &"
+    # else:
+    #     cmd = f"docker run -d \
+    #         --name node2 \
+    #         -p 50062:50062 -p 50092:50092 \
+    #         -v {ROOT_DIR}/docker/node-client/config_2.yml:/app/config.yml \
+    #         -v {ROOT_DIR}/docker/node-client/db:/app/db \
+    #         -v {ROOT_DIR}/docker/node-client/log/2:/app/log/2 \
+    #         ghcr.io/arpa-network/node-client:latest"
+    # cprint(cmd)
+    # run_command(
+    #     [cmd],
+    #     cwd=NODE_CLIENT_DIR,
+    #     shell=True,
+    # )
+
+    # print("Starting Node 3!")
+    # if LOCAL_TEST:
+    #     cmd = f"cargo run --release --bin node-client -- -c {NODE_CLIENT_DIR}/config_3.yml > /dev/null 2>&1 &"
+    # else:
+    #     cmd = f"docker run -d \
+    #         --name node3 \
+    #         -p 50063:50063 -p 50093:50093 \
+    #         -v {ROOT_DIR}/docker/node-client/config_3.yml:/app/config.yml \
+    #         -v {ROOT_DIR}/docker/node-client/db:/app/db \
+    #         -v {ROOT_DIR}/docker/node-client/log/3:/app/log/3 \
+    #         ghcr.io/arpa-network/node-client:latest"
+    # cprint(cmd)
+    # run_command(
+    #     [cmd],
+    #     cwd=NODE_CLIENT_DIR,
+    #     shell=True,
+    # )
+
+    # if L2_ONLY:
+    #     return  # no need to wait for nodes to group
+
+    # # wait for succesful grouping (fail after 1m without grouping)
+    # print("Waiting for nodes to group... ")
+    # time.sleep(5)  # wait for node.log file to be created
+    # cmd = f"cat {NODE_CLIENT_DIR}/log/1/node.log | grep 'available'"
+    # cprint(cmd)
+    # nodes_grouped = wait_command(
+    #     [cmd],
+    #     wait_time=12,
+    #     max_attempts=50,  # updated form 25 to 45
+    #     shell=True,
+    # )
+
+    # if nodes_grouped:
+    #     print("\nNodes grouped succesfully!")
+    #     print("Output:\n", nodes_grouped, "\n")
+    # else:
+    #     print("Nodes failed to group!")
+    #     # print out logs
+    #     run_command(
+    #         [
+    #             f"cat {NODE_CLIENT_DIR}/log/1/node.log | tail",
+    #         ],
+    #         shell=True,
+    #     )
+    #     print("Quitting...")
+    #     sys.exit(1)
+
+    # # Wait for DKG Proccess to Finish
+    # print(
+    #     "Waiting for DKG Proccess to complete (group 0 coordinator should zero out)..."
+    # )
+    # # call controller.getCoordinator(). If it returns 0, we know dkg proccess finished and post proccess dkg has been called
+    # # function getCoordinator(uint256 groupIndex) public view override(IController) returns (address) {
+    # #     return _coordinators[groupIndex];
+    # # }
+    # cmd = f"cast call {l1_addresses['Controller']} 'getCoordinator(uint256)' 0 --rpc-url {L1_RPC}"
+    # cprint(cmd)
+
+    # coordinator = wait_command(
+    #     [cmd],
+    #     wait_time=12,
+    #     max_attempts=42,
+    #     shell=True,
+    #     success_value="0x0000000000000000000000000000000000000000000000000000000000000000",
+    # )
+    # print("\nDKG Proccess Completed Succesfully!")
+    # print(f"Coordinator Value: {coordinator}\n")
 
 
 def get_last_randomness(address: str, rpc: str) -> str:
