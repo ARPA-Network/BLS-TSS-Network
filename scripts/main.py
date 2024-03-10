@@ -552,6 +552,12 @@ def deploy_nodes():  # ! Deploy Nodes
     ###### ARPA Network Deployment #######
     ######################################
 
+    # Prep config files
+
+    # delet all config files in NODE_CLIENT_DIR
+    os.system(f"rm -f {NODE_CLIENT_DIR}/config_*")
+    config_template_file = os.path.join(NODE_CLIENT_DIR, "template.yml")
+
     # get node private keys from .env
     node_private_keys = []
     i = 1
@@ -564,6 +570,9 @@ def deploy_nodes():  # ! Deploy Nodes
         if key_value.startswith("0x"):
             key_value = key_value[2:]
         node_private_keys.append(key_value)
+        # copy template.yml to config_i.yml
+        config_file = f"config_{i}.yml"
+        os.system(f"cp {config_template_file} {NODE_CLIENT_DIR}/{config_file}")
         i += 1
 
     print(f"{len(node_private_keys)} private keys found in .env")
@@ -587,6 +596,11 @@ def deploy_nodes():  # ! Deploy Nodes
         file_path = os.path.join(NODE_CLIENT_DIR, config_file)
         with open(file_path, "r") as f:
             data = yaml.load(f)
+
+        # set node_id, data_path, and log_file_path
+        data["data_path"] = f"./db/data{i+1}.sqlite"
+        data["logger"]["node_id"] = i + 1
+        data["logger"]["log_file_path"] = f"log/{i+1}/"
         # L1
         data["adapter_address"] = l1_addresses["ERC1967Proxy"]
         data["controller_address"] = l1_addresses["Controller"]

@@ -1,0 +1,122 @@
+node_advertised_committer_rpc_endpoint: "172.17.0.1:50061"
+
+node_committer_rpc_endpoint: "0.0.0.0:50061"
+
+node_management_rpc_endpoint: "0.0.0.0:50091"
+
+node_management_rpc_token: "for_test"
+
+provider_endpoint: "wss://holesky.gateway.tenderly.co/4X987cMYL0drsf7LIZXlSr"
+
+chain_id: 17000
+
+controller_address: "0x80FC77fE37d5c1c81B072d16C7e9ae438a854C00"
+
+controller_relayer_address: "0x5dDdF1A16b1347a32475A2EEE44882443cbc4790"
+
+adapter_address: "0xf6f449C580A668073c1742b8Bd07796D20129f7A"
+
+data_path: "./db/data1.sqlite"
+
+logger:
+  node_id: 1
+  context_logging: false
+  log_file_path: log/1/
+  rolling_file_size: 10 gb
+
+account:
+  private_key: redacted
+
+listeners:
+  - l_type: Block
+    interval_millis: 0
+    use_jitter: true
+  - l_type: NewRandomnessTask
+    interval_millis: 0
+    use_jitter: true
+  - l_type: PreGrouping
+    interval_millis: 0
+    use_jitter: true
+  - l_type: PostCommitGrouping
+    interval_millis: 1000
+    use_jitter: true
+  - l_type: PostGrouping
+    interval_millis: 1000
+    use_jitter: true
+  - l_type: ReadyToHandleRandomnessTask
+    interval_millis: 1000
+    use_jitter: true
+  - l_type: RandomnessSignatureAggregation
+    interval_millis: 2000
+    use_jitter: false
+
+time_limits:
+  block_time: 3
+  dkg_timeout_duration: 40
+  randomness_task_exclusive_window: 10
+  listener_interval_millis: 1000
+  dkg_wait_for_phase_interval_millis: 1000
+  provider_polling_interval_millis: 1000
+  provider_reset_descriptor:
+    interval_millis: 5000
+    max_attempts: 17280
+    use_jitter: false
+  contract_transaction_retry_descriptor:
+    base: 2
+    factor: 1000
+    max_attempts: 3
+    use_jitter: true
+  contract_view_retry_descriptor:
+    base: 2
+    factor: 500
+    max_attempts: 5
+    use_jitter: true
+  commit_partial_signature_retry_descriptor:
+    base: 2
+    factor: 1000
+    max_attempts: 5
+    use_jitter: false
+
+relayed_chains:
+  - chain_id: 17001
+    description: "OP"
+    provider_endpoint: "wss://rpc.holesky.redstone.xyz/ws"
+    controller_oracle_address: "0x2F78B0a3A49a0452C0FEF66865292d7c1fC6FBf6"
+    adapter_address: "0xa3b1F7d15036F9150ce5e28eC948FDfA67c9555B"
+    listeners:
+      - l_type: Block
+        interval_millis: 0
+        use_jitter: true
+      - l_type: NewRandomnessTask
+        interval_millis: 0
+        use_jitter: true
+      - l_type: ReadyToHandleRandomnessTask
+        interval_millis: 1000
+        use_jitter: true
+      - l_type: RandomnessSignatureAggregation
+        interval_millis: 2000
+        use_jitter: false
+    time_limits:
+      block_time: 3
+      randomness_task_exclusive_window: 10
+      listener_interval_millis: 1000
+      provider_polling_interval_millis: 1000
+      provider_reset_descriptor:
+        interval_millis: 5000
+        max_attempts: 17280
+        use_jitter: false
+      contract_transaction_retry_descriptor:
+        base: 2
+        factor: 1000
+        max_attempts: 3
+        use_jitter: true
+      contract_view_retry_descriptor:
+        base: 2
+        factor: 500
+        max_attempts: 5
+        use_jitter: true
+      commit_partial_signature_retry_descriptor:
+        base: 2
+        factor: 1000
+        max_attempts: 5
+        use_jitter: false
