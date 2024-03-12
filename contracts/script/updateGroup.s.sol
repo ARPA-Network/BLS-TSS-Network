@@ -24,7 +24,7 @@ contract GetGroupFromL1AndUpdateL2Script is Script {
         // create and select fork for L2
         vm.createSelectFork(_l2RPC);
         vm.startBroadcast(_deployerPrivateKey);
-        group.epoch = group.epoch + 1; // this is needed, otherwise you get GroupObsolete error.
+        group.epoch = group.epoch + 2; // this is needed, otherwise you get GroupObsolete error.
         // update L2 Group with L1 Group Info
         ControllerOracle(ControllerOracleAddress).updateGroup(_commiterAddress, group);
         group = ControllerOracle(ControllerOracleAddress).getGroup(0);

@@ -51,6 +51,8 @@ BASE_DEPLOYMENT = (
     or get_key(ENV_PATH, "OP_CHAIN_ID") == "84531"
 )
 REDSTONE_DEPLOYMENT = get_key(ENV_PATH, "OP_CHAIN_ID") == "17001"
+LOOTCHAIN_DEPLOYMENT = get_key(ENV_PATH, "OP_CHAIN_ID") == "9088912"
+
 # Admin Private Key used to Relay Groups manually during L2_ONLY deployment
 ADMIN_PRIVATE_KEY = get_key(ENV_PATH, "ADMIN_PRIVATE_KEY")
 VERBOSE_OUTPUT = get_key(ENV_PATH, "VERBOSE_OUTPUT").lower() == "true"
@@ -335,6 +337,9 @@ def deploy_contracts():
     # # forge script script/OPControllerOracleLocalTest.s.sol:OPControllerOracleLocalTestScript --fork-url http://localhost:9545 --broadcast
     print("Running Solidity Script: OPControllerOracleLocalTest on L2...")
     cmd = f"forge script script/OPControllerOracleLocalTest.s.sol:OPControllerOracleLocalTestScript --fork-url {L2_RPC} --broadcast"
+    if LOOTCHAIN_DEPLOYMENT:
+        cmd = cmd + " --slow --legacy"
+
     cprint(cmd)
     run_command(
         [cmd], env={}, cwd=CONTRACTS_DIR, capture_output=HIDE_OUTPUT, shell=True
@@ -466,6 +471,8 @@ def deploy_contracts():
         "Running Solidity Script: OPControllerOracleInitializationLocalTestScript on L2..."
     )
     cmd = f"forge script script/OPControllerOracleInitializationLocalTest.s.sol:OPControllerOracleInitializationLocalTestScript --fork-url {L2_RPC} --broadcast"
+    if LOOTCHAIN_DEPLOYMENT:
+        cmd = cmd + " --slow --legacy"
     cprint(cmd)
     run_command(
         [cmd],
@@ -651,6 +658,7 @@ def deploy_nodes():  # ! Deploy Nodes
                 f"-v {ROOT_DIR}/docker/node-client/{config_file}:/app/config.yml "
                 f"-v {ROOT_DIR}/docker/node-client/db:/app/db "
                 f"-v {ROOT_DIR}/docker/node-client/log/{i}:/app/log/{i} "
+                f"--network=host "
                 f"ghcr.io/arpa-network/node-client:latest"
             )
         cprint(cmd)
@@ -743,6 +751,9 @@ def test_request_randomness():
     non_relayed_group = "0x00000000000000000000000000000000000000000000000000000000000000200000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000018000000000000000000000000000000000000000000000000000000000000001a000000000000000000000000000000000000000000000000000000000000001c000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
 
     cmd = f"cast call {l2_addresses['ControllerOracle']} \"getGroup(uint256)\" 0 --rpc-url {L2_RPC}"
+    if LOOTCHAIN_DEPLOYMENT:
+        cmd = cmd + " --slow --legacy"
+
     cprint(cmd)
     l2_group_info = wait_command(
         [cmd],
@@ -807,6 +818,8 @@ def test_request_randomness():
 
     # forge script script/OPGetRandomNumberLocalTest.s.sol:OPGetRandomNumberLocalTestScript --fork-url http://localhost:9545 --broadcast
     cmd = f"forge script script/OPGetRandomNumberLocalTest.s.sol:OPGetRandomNumberLocalTestScript --fork-url {L2_RPC} --broadcast"
+    if LOOTCHAIN_DEPLOYMENT:
+        cmd = cmd + " --slow --legacy"
     cprint(cmd)
     run_command(
         [cmd],
@@ -823,6 +836,8 @@ def test_request_randomness():
 
     print("Waiting for randomness to be updated...")
     cmd = f'cast call {l2_addresses["ERC1967Proxy"]} "getLastRandomness()(uint256)" --rpc-url {L2_RPC}'
+    if LOOTCHAIN_DEPLOYMENT:
+        cmd = cmd + " --slow --legacy"
     cprint(cmd)
     l2_cur_randomness = wait_command(
         [cmd],
@@ -907,6 +922,8 @@ def relay_groups(controller_oracle_address):
         non_relayed_group = "0x00000000000000000000000000000000000000000000000000000000000000200000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000018000000000000000000000000000000000000000000000000000000000000001a000000000000000000000000000000000000000000000000000000000000001c000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
 
         cmd = f'cast call {controller_oracle_address} "getGroup(uint256)" {group_index} --rpc-url {L2_RPC}'
+        if LOOTCHAIN_DEPLOYMENT:
+            cmd = cmd + " --slow --legacy"
         cprint(cmd)
 
         l2_group_info = wait_command(
@@ -963,10 +980,10 @@ def update_group(controller_address, controller_oracle_address, group_index):
 
 
 def main():
-    # Main deployment script
-    # deploy_contracts()
-    # deploy_nodes()
-    # test_request_randomness()
+    # # Main deployment script
+    deploy_contracts()
+    deploy_nodes()
+    test_request_randomness()
 
     ## For L2 only deployments, use the following prior to the first deployment.
     # deploy_controller_relayer()
@@ -977,11 +994,12 @@ def main():
     ## Get public/private key info from node mnemonic
     # print_node_key_info()
 
-    update_group(
-        "0x647c919280A1cE898cBf8BD72c8a912165B4f70a",  # controller_address
-        "0x6789dD361406E3DFC3a52BAfFD4C05958d25deDe",  # controller_oracle_address
-        0,  # group_index
-    )
+    ## Manually Update Group from L1 to L2
+    # update_group(
+    #     "0x647c919280A1cE898cBf8BD72c8a912165B4f70a",  # controller_address
+    #     "0x6789dD361406E3DFC3a52BAfFD4C05958d25deDe",  # controller_oracle_address
+    #     0,  # group_index
+    # )
 
 
 if __name__ == "__main__":
