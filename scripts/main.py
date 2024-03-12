@@ -589,12 +589,19 @@ def deploy_nodes():  # ! Deploy Nodes
 
     # create config files for an arbitrary number of private_keys
     config_files = []  # used when deploying nodes later
+    PORT_1 = 50061  # node rpc endpoint starting port
+    PORT_2 = 50091  # node management rpc endpoint starting port
     for i, private_key in enumerate(node_private_keys):
         config_file = f"config_{i+1}.yml"
         config_files.append(config_file)
         file_path = os.path.join(NODE_CLIENT_DIR, config_file)
         with open(file_path, "r") as f:
             data = yaml.load(f)
+
+        # set node commiter and node management rpc endpoints # ! new
+        data["node_advertised_committer_rpc_endpoint"] = f"172.17.0.1:{PORT_1 + i}"
+        data["node_committer_rpc_endpoint"] = f"0.0.0.0:{PORT_1 + i}"
+        data["node_management_rpc_endpoint"] = f"0.0.0.0:{PORT_2 + i}"
 
         # set node_id, data_path, and log_file_path
         data["data_path"] = f"./db/data{i+1}.sqlite"
@@ -640,7 +647,7 @@ def deploy_nodes():  # ! Deploy Nodes
             cmd = (
                 f"docker run -d "
                 f"--name node{i} "
-                f"-p {PORT_1 + i-1}:{PORT_1 + i-1} -p {PORT_2 + i-1}:{PORT_2 + i-1} "
+                # f"-p {PORT_1 + i-1}:{PORT_1 + i-1} -p {PORT_2 + i-1}:{PORT_2 + i-1} "
                 f"-v {ROOT_DIR}/docker/node-client/{config_file}:/app/config.yml "
                 f"-v {ROOT_DIR}/docker/node-client/db:/app/db "
                 f"-v {ROOT_DIR}/docker/node-client/log/{i}:/app/log/{i} "
@@ -665,7 +672,7 @@ def deploy_nodes():  # ! Deploy Nodes
     nodes_grouped = wait_command(
         [cmd],
         wait_time=12,
-        max_attempts=50,  # updated form 25 to 45
+        max_attempts=60,  # fails on 50 sometimes, upped to 60.
         shell=True,
     )
 
@@ -915,7 +922,52 @@ def relay_groups(controller_oracle_address):
             print(l2_group_info)
 
 
+def update_group(controller_address, controller_oracle_address, group_index):
+    """
+    Get group info from L1 and update group on L2 using updateGroup.s.sol solidity script
+    """
+
+    # Compute the admin wallet address
+    cmd = f"cast wallet address --private-key {ADMIN_PRIVATE_KEY}"
+    cprint(cmd.replace(ADMIN_PRIVATE_KEY, "***"))
+    admin_wallet_address = (
+        run_command(
+            [cmd],
+            shell=True,
+            capture_output=True,
+        )
+        .stdout.strip()
+        .decode("utf-8")
+    )
+
+    print(f"Admin wallet address: {admin_wallet_address}")
+
+    # construct the forge script
+    cmd = f"forge script script/updateGroup.s.sol:GetGroupFromL1AndUpdateL2Script --broadcast"
+
+    cprint(cmd)
+
+    run_command(
+        [cmd],
+        env={
+            "ADMIN_PRIVATE_KEY": ADMIN_PRIVATE_KEY,
+            "ADMIN_ADDRESS": admin_wallet_address,
+            "CONTROLLER_ADDRESS": controller_address,
+            "OP_CONTROLLER_ORACLE_ADDRESS": controller_oracle_address,
+            "L1_RPC": L1_RPC,
+            "OP_RPC": L2_RPC,
+        },
+        cwd=CONTRACTS_DIR,
+        shell=True,
+    )
+
+
 def main():
+    # Main deployment script
+    # deploy_contracts()
+    # deploy_nodes()
+    # test_request_randomness()
+
     ## For L2 only deployments, use the following prior to the first deployment.
     # deploy_controller_relayer()
 
@@ -925,10 +977,11 @@ def main():
     ## Get public/private key info from node mnemonic
     # print_node_key_info()
 
-    ## Main deployment script
-    deploy_contracts()
-    deploy_nodes()
-    test_request_randomness()
+    update_group(
+        "0x647c919280A1cE898cBf8BD72c8a912165B4f70a",  # controller_address
+        "0x6789dD361406E3DFC3a52BAfFD4C05958d25deDe",  # controller_oracle_address
+        0,  # group_index
+    )
 
 
 if __name__ == "__main__":
