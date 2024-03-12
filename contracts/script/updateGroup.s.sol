@@ -8,7 +8,7 @@ import {ControllerOracle} from "../src/ControllerOracle.sol";
 contract GetGroupFromL1AndUpdateL2Script is Script {
     uint256 internal _deployerPrivateKey = vm.envUint("ADMIN_PRIVATE_KEY");
 
-    function run() external {'
+    function run() external {
         // get env variables
         address _commiterAddress = vm.envAddress("ADMIN_ADDRESS");
         address _controllerAddress = vm.envAddress("CONTROLLER_ADDRESS");
