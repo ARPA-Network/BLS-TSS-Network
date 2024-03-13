@@ -29,6 +29,7 @@ use migration::SelectStatement;
 use migration::UpdateStatement;
 use result::BaseSignatureResultDBClient;
 use result::RedstoneSignatureResultDBClient;
+use result::LootSignatureResultDBClient;
 use sea_orm::ConnectOptions;
 use sea_orm::ConnectionTrait;
 use sea_orm::DatabaseBackend;
@@ -38,6 +39,7 @@ use sea_orm::Statement;
 use std::time::Duration;
 use task::BaseBLSTasksDBClient;
 use task::RedstoneBLSTasksDBClient;
+use task::LootBLSTasksDBClient;
 use threshold_bls::group::Curve;
 
 pub const OP_MAINNET_CHAIN_ID: usize = 10;
@@ -48,6 +50,8 @@ pub const BASE_MAINNET_CHAIN_ID: usize = 8453;
 pub const BASE_GOERLI_TESTNET_CHAIN_ID: usize = 84531;
 pub const BASE_SEPOLIA_TESTNET_CHAIN_ID: usize = 84532;
 pub const REDSTONE_HOLESKY_TESTNET_CHAIN_ID: usize = 17001;
+pub const LOOT_MAINNET_CHAIN_ID: usize = 5151706;
+pub const LOOT_TESTNET_CHAIN_ID: usize = 9088912;
 
 impl SqliteDB {
     pub async fn build(
@@ -109,6 +113,10 @@ impl SqliteDB {
             REDSTONE_HOLESKY_TESTNET_CHAIN_ID => Ok(Box::new(
                 self.get_redstone_bls_tasks_client::<RandomnessTask>(),
             )),
+            LOOT_MAINNET_CHAIN_ID
+            | LOOT_TESTNET_CHAIN_ID => {
+                Ok(Box::new(self.get_loot_bls_tasks_client::<RandomnessTask>()))
+            }
             _ => Err(DataAccessError::InvalidChainId(chain_id)),
         }
     }
@@ -131,6 +139,8 @@ impl SqliteDB {
             REDSTONE_HOLESKY_TESTNET_CHAIN_ID => Ok(Box::new(
                 self.get_redstone_randomness_result_client().await?,
             )),
+            LOOT_MAINNET_CHAIN_ID
+            | LOOT_TESTNET_CHAIN_ID => Ok(Box::new(self.get_loot_randomness_result_client().await?)),
             _ => Err(DataAccessError::InvalidChainId(chain_id)),
         }
     }
@@ -189,6 +199,8 @@ impl BLSTasksHandler<RandomnessTask> for BLSTasksDBClient<RandomnessTask> {}
 impl BLSTasksHandler<RandomnessTask> for OPBLSTasksDBClient<RandomnessTask> {}
 impl BLSTasksHandler<RandomnessTask> for BaseBLSTasksDBClient<RandomnessTask> {}
 impl BLSTasksHandler<RandomnessTask> for RedstoneBLSTasksDBClient<RandomnessTask> {}
+impl BLSTasksHandler<RandomnessTask> for LootBLSTasksDBClient<RandomnessTask> {}
+
 impl SignatureResultCacheHandler<RandomnessResultCache>
     for SignatureResultDBClient<RandomnessResultCache>
 {
@@ -203,6 +215,10 @@ impl SignatureResultCacheHandler<RandomnessResultCache>
 }
 impl SignatureResultCacheHandler<RandomnessResultCache>
     for RedstoneSignatureResultDBClient<RandomnessResultCache>
+{
+}
+impl SignatureResultCacheHandler<RandomnessResultCache>
+    for LootSignatureResultDBClient<RandomnessResultCache>
 {
 }
 
