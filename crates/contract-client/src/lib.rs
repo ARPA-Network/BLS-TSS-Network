@@ -57,8 +57,12 @@ pub trait TransactionCaller {
                 .estimate_eip1559_fees(Some(eip1559_gas_price_estimator))
                 .await
             {
-                Ok((max_fee, max_priority_fee)) => (max_fee, max_priority_fee),
-                Err(_) => {
+                // if max_priority_fee is zero, it usually means that the chain is a testnet,
+                // we will use the legacy method to set a priority fee, to avoid the transaction being underpriced
+                Ok((max_fee, max_priority_fee)) if !max_priority_fee.is_zero() => {
+                    (max_fee, max_priority_fee)
+                }
+                _ => {
                     // try to estimate the gas price using the legacy method
                     let base_fee_per_gas = client
                         .get_block(BlockNumber::Latest)

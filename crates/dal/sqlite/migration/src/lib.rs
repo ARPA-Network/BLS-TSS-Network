@@ -20,6 +20,10 @@ mod m20240129_000017_create_redstone_randomness_task_table;
 mod m20240129_000018_create_redstone_randomness_task_index;
 mod m20240129_000019_create_redstone_randomness_result_table;
 mod m20240129_000020_create_redstone_randomness_result_index;
+mod m20240312_000021_create_loot_randomness_task_table;
+mod m20240312_000022_create_loot_randomness_task_index;
+mod m20240312_000023_create_loot_randomness_result_table;
+mod m20240312_000024_create_loot_randomness_result_index;
 
 pub use m20220920_000001_create_node_info_table::NodeInfo;
 pub use m20220920_000002_create_group_info_table::GroupInfo;
@@ -33,6 +37,8 @@ pub use m20231115_000013_create_base_randomness_task_table::BaseRandomnessTask;
 pub use m20231115_000015_create_base_randomness_result_table::BaseRandomnessResult;
 pub use m20240129_000017_create_redstone_randomness_task_table::RedstoneRandomnessTask;
 pub use m20240129_000019_create_redstone_randomness_result_table::RedstoneRandomnessResult;
+pub use m20240312_000021_create_loot_randomness_task_table::LootRandomnessTask;
+pub use m20240312_000023_create_loot_randomness_result_table::LootRandomnessResult;
 
 pub struct Migrator;
 
@@ -60,6 +66,10 @@ impl MigratorTrait for Migrator {
             Box::new(m20240129_000018_create_redstone_randomness_task_index::Migration),
             Box::new(m20240129_000019_create_redstone_randomness_result_table::Migration),
             Box::new(m20240129_000020_create_redstone_randomness_result_index::Migration),
+            Box::new(m20240312_000021_create_loot_randomness_task_table::Migration),
+            Box::new(m20240312_000022_create_loot_randomness_task_index::Migration),
+            Box::new(m20240312_000023_create_loot_randomness_result_table::Migration),
+            Box::new(m20240312_000024_create_loot_randomness_result_index::Migration),
         ]
     }
 }
