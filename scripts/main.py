@@ -40,6 +40,8 @@ L1_WS_RPC = get_key(ENV_PATH, "L1_WS_RPC")
 
 # Deployment flags
 LOCAL_TEST = get_key(ENV_PATH, "LOCAL_TEST").lower() == "true"
+
+
 ARPA_EXISTS = (
     get_key(ENV_PATH, "ARPA_EXISTS").lower() == "true"
 )  # bool True if ARPA_EXISTS is true in .env
@@ -127,7 +129,8 @@ CREATE_AND_SET_OP_STACK_CHAIN_MESSENGER_BROADCAST_PATH = os.path.join(
 #     "run-latest.json",
 # )
 
-NODE_CLIENT_BINARY_PATH = os.path.join(ROOT_DIR, "target/release/node-client")
+NODE_CLIENT_RELEASE_BINARY_PATH = os.path.join(ROOT_DIR, "target/release/node-client")
+NODE_CLIENT_DEBUG_BINARY_PATH = os.path.join(ROOT_DIR, "target/debug/node-client")
 
 
 def cprint(text: str, color: str = "green"):
@@ -648,7 +651,8 @@ def deploy_nodes():  # ! Deploy Nodes
         print(f"Starting Node #{i} using: {config_file}!")
         if LOCAL_TEST:
             # cmd = f"cargo run --release --bin node-client -- -c {NODE_CLIENT_DIR}/{config_file} > /dev/null 2>&1 &"
-            cmd = f"{NODE_CLIENT_BINARY_PATH} -c {NODE_CLIENT_DIR}/{config_file} > /dev/null 2>&1 &"  #! temp fix
+            # cmd = f"{NODE_CLIENT_RELEASE_BINARY_PATH} -c {NODE_CLIENT_DIR}/{config_file} > /dev/null 2>&1 &"  # release binary
+            cmd = f"{NODE_CLIENT_DEBUG_BINARY_PATH} -c {NODE_CLIENT_DIR}/{config_file} > /dev/null 2>&1 &"  # debug binary
 
         else:
             cmd = (
