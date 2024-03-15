@@ -5,7 +5,7 @@ use ::ethers::providers::{Middleware, ProviderError};
 use ::ethers::types::{BlockNumber, U64};
 use ::ethers::{prelude::builders::ContractCall, types::H256};
 use arpa_core::{
-    eip1559_gas_price_estimator, fallback_eip1559_gas_price_estimator, jitter,
+    eip1559_gas_price_estimator, fallback_eip1559_gas_price_estimator, jitter, supports_eip1559,
     ExponentialBackoffRetryDescriptor,
 };
 use async_trait::async_trait;
@@ -17,13 +17,6 @@ use tokio_retry::{Retry, RetryIf};
 pub mod contract_stub;
 pub mod error;
 pub mod ethers;
-
-const LOOT_MAINNET_CHAIN_ID: usize = 5151706;
-const LOOT_TESTNET_CHAIN_ID: usize = 9088912;
-
-fn supports_eip1559(chain_id: usize) -> bool {
-    chain_id != LOOT_MAINNET_CHAIN_ID && chain_id != LOOT_TESTNET_CHAIN_ID
-}
 
 #[async_trait]
 pub trait ServiceClient<C> {

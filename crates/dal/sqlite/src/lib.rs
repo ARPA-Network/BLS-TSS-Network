@@ -14,6 +14,16 @@ pub use crate::types::DBError;
 pub use crate::types::DBResult;
 pub use crate::types::SqliteDB;
 use arpa_core::RandomnessTask;
+use arpa_core::BASE_GOERLI_TESTNET_CHAIN_ID;
+use arpa_core::BASE_MAINNET_CHAIN_ID;
+use arpa_core::BASE_SEPOLIA_TESTNET_CHAIN_ID;
+use arpa_core::LOOT_MAINNET_CHAIN_ID;
+use arpa_core::LOOT_TESTNET_CHAIN_ID;
+use arpa_core::OP_DEVNET_CHAIN_ID;
+use arpa_core::OP_GOERLI_TESTNET_CHAIN_ID;
+use arpa_core::OP_MAINNET_CHAIN_ID;
+use arpa_core::OP_SEPOLIA_TESTNET_CHAIN_ID;
+use arpa_core::REDSTONE_HOLESKY_TESTNET_CHAIN_ID;
 use arpa_dal::cache::RandomnessResultCache;
 use arpa_dal::error::DataAccessError;
 use arpa_dal::error::DataAccessResult;
@@ -28,8 +38,8 @@ use migration::MigratorTrait;
 use migration::SelectStatement;
 use migration::UpdateStatement;
 use result::BaseSignatureResultDBClient;
-use result::RedstoneSignatureResultDBClient;
 use result::LootSignatureResultDBClient;
+use result::RedstoneSignatureResultDBClient;
 use sea_orm::ConnectOptions;
 use sea_orm::ConnectionTrait;
 use sea_orm::DatabaseBackend;
@@ -38,20 +48,9 @@ use sea_orm::QueryResult;
 use sea_orm::Statement;
 use std::time::Duration;
 use task::BaseBLSTasksDBClient;
-use task::RedstoneBLSTasksDBClient;
 use task::LootBLSTasksDBClient;
+use task::RedstoneBLSTasksDBClient;
 use threshold_bls::group::Curve;
-
-pub const OP_MAINNET_CHAIN_ID: usize = 10;
-pub const OP_GOERLI_TESTNET_CHAIN_ID: usize = 420;
-pub const OP_SEPOLIA_TESTNET_CHAIN_ID: usize = 11155420;
-pub const OP_DEVNET_CHAIN_ID: usize = 901;
-pub const BASE_MAINNET_CHAIN_ID: usize = 8453;
-pub const BASE_GOERLI_TESTNET_CHAIN_ID: usize = 84531;
-pub const BASE_SEPOLIA_TESTNET_CHAIN_ID: usize = 84532;
-pub const REDSTONE_HOLESKY_TESTNET_CHAIN_ID: usize = 17001;
-pub const LOOT_MAINNET_CHAIN_ID: usize = 5151706;
-pub const LOOT_TESTNET_CHAIN_ID: usize = 9088912;
 
 impl SqliteDB {
     pub async fn build(
@@ -113,8 +112,7 @@ impl SqliteDB {
             REDSTONE_HOLESKY_TESTNET_CHAIN_ID => Ok(Box::new(
                 self.get_redstone_bls_tasks_client::<RandomnessTask>(),
             )),
-            LOOT_MAINNET_CHAIN_ID
-            | LOOT_TESTNET_CHAIN_ID => {
+            LOOT_MAINNET_CHAIN_ID | LOOT_TESTNET_CHAIN_ID => {
                 Ok(Box::new(self.get_loot_bls_tasks_client::<RandomnessTask>()))
             }
             _ => Err(DataAccessError::InvalidChainId(chain_id)),
@@ -139,8 +137,9 @@ impl SqliteDB {
             REDSTONE_HOLESKY_TESTNET_CHAIN_ID => Ok(Box::new(
                 self.get_redstone_randomness_result_client().await?,
             )),
-            LOOT_MAINNET_CHAIN_ID
-            | LOOT_TESTNET_CHAIN_ID => Ok(Box::new(self.get_loot_randomness_result_client().await?)),
+            LOOT_MAINNET_CHAIN_ID | LOOT_TESTNET_CHAIN_ID => {
+                Ok(Box::new(self.get_loot_randomness_result_client().await?))
+            }
             _ => Err(DataAccessError::InvalidChainId(chain_id)),
         }
     }

@@ -5,6 +5,20 @@ use log::info;
 /// The threshold max change/difference (in %) at which we will ignore the fee history values
 /// under it.
 pub const EIP1559_FEE_ESTIMATION_THRESHOLD_MAX_CHANGE: i64 = 200;
+pub const OP_MAINNET_CHAIN_ID: usize = 10;
+pub const OP_GOERLI_TESTNET_CHAIN_ID: usize = 420;
+pub const OP_SEPOLIA_TESTNET_CHAIN_ID: usize = 11155420;
+pub const OP_DEVNET_CHAIN_ID: usize = 901;
+pub const BASE_MAINNET_CHAIN_ID: usize = 8453;
+pub const BASE_GOERLI_TESTNET_CHAIN_ID: usize = 84531;
+pub const BASE_SEPOLIA_TESTNET_CHAIN_ID: usize = 84532;
+pub const REDSTONE_HOLESKY_TESTNET_CHAIN_ID: usize = 17001;
+pub const LOOT_MAINNET_CHAIN_ID: usize = 5151706;
+pub const LOOT_TESTNET_CHAIN_ID: usize = 9088912;
+
+pub fn supports_eip1559(chain_id: usize) -> bool {
+    chain_id != LOOT_MAINNET_CHAIN_ID && chain_id != LOOT_TESTNET_CHAIN_ID
+}
 
 pub fn format_now_date() -> String {
     let fmt = "%Y-%m-%d %H:%M:%S";
