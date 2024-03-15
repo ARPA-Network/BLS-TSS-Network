@@ -18,6 +18,13 @@ pub mod contract_stub;
 pub mod error;
 pub mod ethers;
 
+const LOOT_MAINNET_CHAIN_ID: usize = 5151706;
+const LOOT_TESTNET_CHAIN_ID: usize = 9088912;
+
+fn supports_eip1559(chain_id: usize) -> bool {
+    chain_id != LOOT_MAINNET_CHAIN_ID && chain_id != LOOT_TESTNET_CHAIN_ID
+}
+
 #[async_trait]
 pub trait ServiceClient<C> {
     async fn prepare_service_client(&self) -> ContractClientResult<C>;
@@ -51,8 +58,12 @@ pub trait TransactionCaller {
                 })
                 .take(contract_transaction_retry_descriptor.max_attempts);
 
+        // transform the trx to legacy if the chain does not support EIP-1559
+        if !supports_eip1559(chain_id) {
+            call = call.legacy();
+        }
         // set gas price for EIP-1559 trxs
-        if let Some(tx) = call.tx.as_eip1559_mut() {
+        else if let Some(tx) = call.tx.as_eip1559_mut() {
             let (max_fee, max_priority_fee) = match client
                 .estimate_eip1559_fees(Some(eip1559_gas_price_estimator))
                 .await
