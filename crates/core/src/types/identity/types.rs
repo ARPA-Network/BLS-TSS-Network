@@ -1,6 +1,7 @@
 use crate::{
-    eip1559_gas_price_estimator, ChainProviderManager, ExponentialBackoffRetryDescriptor,
-    RelayedChainIdentity, DEFAULT_WEBSOCKET_PROVIDER_RECONNECT_TIMES,
+    eip1559_gas_price_estimator, supports_eip1559, ChainProviderManager,
+    ExponentialBackoffRetryDescriptor, RelayedChainIdentity,
+    DEFAULT_WEBSOCKET_PROVIDER_RECONNECT_TIMES,
 };
 
 use super::{ChainIdentity, MainChainIdentity};
@@ -87,6 +88,9 @@ impl ChainIdentity for GeneralMainChainIdentity {
     }
 
     async fn get_current_gas_price(&self) -> Result<U256, ProviderError> {
+        if !supports_eip1559(self.chain_id) {
+            return self.signer.provider().get_gas_price().await;
+        }
         let (max_fee, _) = self
             .signer
             .provider()
@@ -221,6 +225,9 @@ impl ChainIdentity for GeneralRelayedChainIdentity {
     }
 
     async fn get_current_gas_price(&self) -> Result<U256, ProviderError> {
+        if !supports_eip1559(self.chain_id) {
+            return self.signer.provider().get_gas_price().await;
+        }
         let (max_fee, _) = self
             .signer
             .provider()
