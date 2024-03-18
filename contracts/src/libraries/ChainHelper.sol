@@ -14,6 +14,7 @@ library ChainHelper {
     uint256 public constant REDSTONE_HOLESKY_TESTNET_CHAIN_ID = 17001;
     uint256 public constant LOOT_MAINNET_CHAIN_ID = 5151706;
     uint256 public constant LOOT_GOERLI_TESTNET_CHAIN_ID = 9088912;
+    uint256 public constant TAIKO_KATLA_TEST_CHAIN_ID = 167008;
 
     uint32 public constant BASIC_FULFILLMENT_L1_GAS_USED = 5016;
     uint32 public constant FULFILLMENT_GAS_PER_PARTICIPANT = 652;
@@ -27,7 +28,7 @@ library ChainHelper {
                 || chainId == REDSTONE_HOLESKY_TESTNET_CHAIN_ID
         ) {
             return 2;
-        } else if (chainId == OP_DEVNET_L1_CHAIN_ID) {
+        } else if (chainId == OP_DEVNET_L1_CHAIN_ID || chainId == TAIKO_KATLA_TEST_CHAIN_ID) {
             return 3;
         } else if (chainId == LOOT_MAINNET_CHAIN_ID) {
             return 5;

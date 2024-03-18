@@ -15,6 +15,7 @@ pub const BASE_SEPOLIA_TESTNET_CHAIN_ID: usize = 84532;
 pub const REDSTONE_HOLESKY_TESTNET_CHAIN_ID: usize = 17001;
 pub const LOOT_MAINNET_CHAIN_ID: usize = 5151706;
 pub const LOOT_TESTNET_CHAIN_ID: usize = 9088912;
+pub const TAIKO_KATLA_TEST_CHAIN_ID: usize = 167008;
 
 pub fn supports_eip1559(chain_id: usize) -> bool {
     chain_id != LOOT_MAINNET_CHAIN_ID && chain_id != LOOT_TESTNET_CHAIN_ID

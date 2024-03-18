@@ -24,6 +24,10 @@ mod m20240312_000021_create_loot_randomness_task_table;
 mod m20240312_000022_create_loot_randomness_task_index;
 mod m20240312_000023_create_loot_randomness_result_table;
 mod m20240312_000024_create_loot_randomness_result_index;
+mod m20240318_000025_create_taiko_randomness_task_table;
+mod m20240318_000026_create_taiko_randomness_task_index;
+mod m20240318_000027_create_taiko_randomness_result_table;
+mod m20240318_000028_create_taiko_randomness_result_index;
 
 pub use m20220920_000001_create_node_info_table::NodeInfo;
 pub use m20220920_000002_create_group_info_table::GroupInfo;
@@ -39,7 +43,8 @@ pub use m20240129_000017_create_redstone_randomness_task_table::RedstoneRandomne
 pub use m20240129_000019_create_redstone_randomness_result_table::RedstoneRandomnessResult;
 pub use m20240312_000021_create_loot_randomness_task_table::LootRandomnessTask;
 pub use m20240312_000023_create_loot_randomness_result_table::LootRandomnessResult;
-
+pub use m20240318_000025_create_taiko_randomness_task_table::TaikoRandomnessTask;
+pub use m20240318_000027_create_taiko_randomness_result_table::TaikoRandomnessResult;
 pub struct Migrator;
 
 #[async_trait::async_trait]
@@ -70,6 +75,10 @@ impl MigratorTrait for Migrator {
             Box::new(m20240312_000022_create_loot_randomness_task_index::Migration),
             Box::new(m20240312_000023_create_loot_randomness_result_table::Migration),
             Box::new(m20240312_000024_create_loot_randomness_result_index::Migration),
+            Box::new(m20240318_000025_create_taiko_randomness_task_table::Migration),
+            Box::new(m20240318_000026_create_taiko_randomness_task_index::Migration),
+            Box::new(m20240318_000027_create_taiko_randomness_result_table::Migration),
+            Box::new(m20240318_000028_create_taiko_randomness_result_index::Migration),
         ]
     }
 }

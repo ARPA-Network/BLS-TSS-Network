@@ -24,6 +24,7 @@ use arpa_core::OP_GOERLI_TESTNET_CHAIN_ID;
 use arpa_core::OP_MAINNET_CHAIN_ID;
 use arpa_core::OP_SEPOLIA_TESTNET_CHAIN_ID;
 use arpa_core::REDSTONE_HOLESKY_TESTNET_CHAIN_ID;
+use arpa_core::TAIKO_KATLA_TEST_CHAIN_ID;
 use arpa_dal::cache::RandomnessResultCache;
 use arpa_dal::error::DataAccessError;
 use arpa_dal::error::DataAccessResult;
@@ -40,6 +41,7 @@ use migration::UpdateStatement;
 use result::BaseSignatureResultDBClient;
 use result::LootSignatureResultDBClient;
 use result::RedstoneSignatureResultDBClient;
+use result::TaikoSignatureResultDBClient;
 use sea_orm::ConnectOptions;
 use sea_orm::ConnectionTrait;
 use sea_orm::DatabaseBackend;
@@ -50,6 +52,7 @@ use std::time::Duration;
 use task::BaseBLSTasksDBClient;
 use task::LootBLSTasksDBClient;
 use task::RedstoneBLSTasksDBClient;
+use task::TaikoBLSTasksDBClient;
 use threshold_bls::group::Curve;
 
 impl SqliteDB {
@@ -114,7 +117,10 @@ impl SqliteDB {
             )),
             LOOT_MAINNET_CHAIN_ID | LOOT_TESTNET_CHAIN_ID => {
                 Ok(Box::new(self.get_loot_bls_tasks_client::<RandomnessTask>()))
-            }
+            },
+            TAIKO_KATLA_TEST_CHAIN_ID => Ok(Box::new(
+                self.get_taiko_bls_tasks_client::<RandomnessTask>()
+            )),
             _ => Err(DataAccessError::InvalidChainId(chain_id)),
         }
     }
@@ -139,7 +145,10 @@ impl SqliteDB {
             )),
             LOOT_MAINNET_CHAIN_ID | LOOT_TESTNET_CHAIN_ID => {
                 Ok(Box::new(self.get_loot_randomness_result_client().await?))
-            }
+            },
+            TAIKO_KATLA_TEST_CHAIN_ID => Ok(Box::new(
+                self.get_taiko_randomness_result_client().await?
+            )),
             _ => Err(DataAccessError::InvalidChainId(chain_id)),
         }
     }
@@ -199,6 +208,7 @@ impl BLSTasksHandler<RandomnessTask> for OPBLSTasksDBClient<RandomnessTask> {}
 impl BLSTasksHandler<RandomnessTask> for BaseBLSTasksDBClient<RandomnessTask> {}
 impl BLSTasksHandler<RandomnessTask> for RedstoneBLSTasksDBClient<RandomnessTask> {}
 impl BLSTasksHandler<RandomnessTask> for LootBLSTasksDBClient<RandomnessTask> {}
+impl BLSTasksHandler<RandomnessTask> for TaikoBLSTasksDBClient<RandomnessTask> {}
 
 impl SignatureResultCacheHandler<RandomnessResultCache>
     for SignatureResultDBClient<RandomnessResultCache>
@@ -218,6 +228,10 @@ impl SignatureResultCacheHandler<RandomnessResultCache>
 }
 impl SignatureResultCacheHandler<RandomnessResultCache>
     for LootSignatureResultDBClient<RandomnessResultCache>
+{
+}
+impl SignatureResultCacheHandler<RandomnessResultCache>
+    for TaikoSignatureResultDBClient<RandomnessResultCache>
 {
 }
 
