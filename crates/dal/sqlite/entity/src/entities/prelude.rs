@@ -12,4 +12,6 @@ pub use super::redstone_randomness_result::Entity as RedstoneRandomnessResult;
 pub use super::redstone_randomness_task::Entity as RedstoneRandomnessTask;
 pub use super::loot_randomness_result::Entity as LootRandomnessResult;
 pub use super::loot_randomness_task::Entity as LootRandomnessTask;
+pub use super::taiko_randomness_result::Entity as TaikoRandomnessResult;
+pub use super::taiko_randomness_task::Entity as TaikoRandomnessTask;
 

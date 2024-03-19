@@ -14,3 +14,5 @@ pub mod redstone_randomness_result;
 pub mod redstone_randomness_task;
 pub mod loot_randomness_result;
 pub mod loot_randomness_task;
+pub mod taiko_randomness_result;
+pub mod taiko_randomness_task;
