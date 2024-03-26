@@ -5,7 +5,7 @@
 ```bash
 # manually build images
 cd BLS-TSS-Network
-cargo build --bin node-client --release
+# cargo build --bin node-client --release   # i think the build is happening in docker now
 docker build -t node-client ./docker/node-client
 
 # tag imges for docker hub
@@ -16,6 +16,9 @@ docker push arpachainio/node-client:latest
 
 # pull images
 docker pull arpachainio/node-client:latest
+
+## pull for ghr 
+docker pull ghcr.io/arpa-network/node-client:latest
 ```
 
 ## Run containers from dockerhub

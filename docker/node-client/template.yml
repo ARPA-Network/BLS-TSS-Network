@@ -1,31 +1,31 @@
-node_advertised_committer_rpc_endpoint: "172.17.0.1:50062"
+node_advertised_committer_rpc_endpoint: "172.17.0.1:50061"
 
-node_committer_rpc_endpoint: "0.0.0.0:50062"
+node_committer_rpc_endpoint: "0.0.0.0:50061"
 
-node_management_rpc_endpoint: "0.0.0.0:50092"
+node_management_rpc_endpoint: "0.0.0.0:50091"
 
 node_management_rpc_token: "for_test"
 
-provider_endpoint: "ws://127.0.0.1:8546"
+provider_endpoint: "wss://holesky.gateway.tenderly.co/4X987cMYL0drsf7LIZXlSr"
 
-chain_id: 900
+chain_id: 17000
 
-controller_address: "0x5eb3Bc0a489C5A8288765d2336659EbCA68FCd00"
+controller_address: "0x80FC77fE37d5c1c81B072d16C7e9ae438a854C00"
 
-controller_relayer_address: "0x82e01223d51Eb87e16A03E24687EDF0F294da6f1"
+controller_relayer_address: "0x5dDdF1A16b1347a32475A2EEE44882443cbc4790"
 
-adapter_address: "0x4c5859f0F772848b2D91F1D83E2Fe57935348029"
+adapter_address: "0xf6f449C580A668073c1742b8Bd07796D20129f7A"
 
-data_path: "./db/data2.sqlite"
+data_path: "./db/data1.sqlite"
 
 logger:
-  node_id: 2
+  node_id: 1
   context_logging: false
-  log_file_path: log/2/
+  log_file_path: log/1/
   rolling_file_size: 10 gb
 
 account:
-  private_key: 701b615bbdfb9de65240bc28bd21bbc0d996645a3dd57e7b12bc2bdf6f192c82
+  private_key: redacted
 
 listeners:
   - l_type: Block
@@ -78,11 +78,11 @@ time_limits:
     use_jitter: false
 
 relayed_chains:
-  - chain_id: 901
+  - chain_id: 17001
     description: "OP"
-    provider_endpoint: "ws://127.0.0.1:9546"
-    controller_oracle_address: "0xCf7Ed3AccA5a467e9e704C703E8D87F634fB0Fc9"
-    adapter_address: "0x5FC8d32690cc91D4c39d9d3abcBD16989F875707"
+    provider_endpoint: "wss://rpc.holesky.redstone.xyz/ws"
+    controller_oracle_address: "0x2F78B0a3A49a0452C0FEF66865292d7c1fC6FBf6"
+    adapter_address: "0xa3b1F7d15036F9150ce5e28eC948FDfA67c9555B"
     listeners:
       - l_type: Block
         interval_millis: 0
