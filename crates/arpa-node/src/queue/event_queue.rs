@@ -22,7 +22,7 @@ impl EventQueue {
 
 impl EventSubscriber for EventQueue {
     fn subscribe(&mut self, topic: Topic, subscriber: Box<dyn DebuggableSubscriber>) {
-        self.subscribers.entry(topic).or_insert_with(Vec::new);
+        self.subscribers.entry(topic).or_default();
 
         self.subscribers.get_mut(&topic).unwrap().push(subscriber);
     }

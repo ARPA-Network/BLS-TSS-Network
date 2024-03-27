@@ -117,9 +117,9 @@ impl SqliteDB {
             )),
             LOOT_MAINNET_CHAIN_ID | LOOT_TESTNET_CHAIN_ID => {
                 Ok(Box::new(self.get_loot_bls_tasks_client::<RandomnessTask>()))
-            },
+            }
             TAIKO_KATLA_TEST_CHAIN_ID => Ok(Box::new(
-                self.get_taiko_bls_tasks_client::<RandomnessTask>()
+                self.get_taiko_bls_tasks_client::<RandomnessTask>(),
             )),
             _ => Err(DataAccessError::InvalidChainId(chain_id)),
         }
@@ -145,10 +145,10 @@ impl SqliteDB {
             )),
             LOOT_MAINNET_CHAIN_ID | LOOT_TESTNET_CHAIN_ID => {
                 Ok(Box::new(self.get_loot_randomness_result_client().await?))
-            },
-            TAIKO_KATLA_TEST_CHAIN_ID => Ok(Box::new(
-                self.get_taiko_randomness_result_client().await?
-            )),
+            }
+            TAIKO_KATLA_TEST_CHAIN_ID => {
+                Ok(Box::new(self.get_taiko_randomness_result_client().await?))
+            }
             _ => Err(DataAccessError::InvalidChainId(chain_id)),
         }
     }
@@ -551,7 +551,7 @@ pub mod sqlite_tests {
 
         let (mut board, phase0s) = test_helper::setup::<G2Curve, G2Scheme, _>(n, t, rng);
 
-        let mut outputs = test_helper::run_dkg::<G2Curve, G2Scheme>(&mut board, phase0s).await;
+        let mut outputs = test_helper::run_dkg::<G2Curve>(&mut board, phase0s).await;
 
         let output = outputs.remove(0);
 

@@ -4,7 +4,6 @@ pub mod server;
 use crate::error::NodeResult;
 use arpa_core::{BLSTaskType, ExponentialBackoffRetryDescriptor};
 use arpa_dal::GroupInfoHandler;
-use async_trait::async_trait;
 use ethers::types::Address;
 use std::sync::Arc;
 use threshold_bls::group::Curve;

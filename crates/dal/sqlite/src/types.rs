@@ -5,10 +5,10 @@ use arpa_dal::cache::RandomnessResultCache;
 use arpa_dal::error::DataAccessError;
 use arpa_dal::BLSResultCacheState;
 use entity::base_randomness_task;
+use entity::loot_randomness_task;
 use entity::op_randomness_task;
 use entity::randomness_task;
 use entity::redstone_randomness_task;
-use entity::loot_randomness_task;
 use entity::taiko_randomness_task;
 use ethers_core::types::Address;
 use ethers_core::types::U256;
@@ -159,9 +159,7 @@ pub(crate) fn redstone_model_to_randomness_task(
     }
 }
 
-pub(crate) fn loot_model_to_randomness_task(
-    model: loot_randomness_task::Model,
-) -> RandomnessTask {
+pub(crate) fn loot_model_to_randomness_task(model: loot_randomness_task::Model) -> RandomnessTask {
     RandomnessTask {
         request_id: model.request_id,
         subscription_id: model.subscription_id as u64,

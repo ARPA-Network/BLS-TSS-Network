@@ -420,7 +420,7 @@ impl CurveType for BN254Curve {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use serde::{de::DeserializeOwned, Serialize};
+    use serde::de::DeserializeOwned;
     use static_assertions::assert_impl_all;
 
     assert_impl_all!(G1: Serialize, DeserializeOwned, Clone);

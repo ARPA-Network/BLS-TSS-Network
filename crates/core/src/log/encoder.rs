@@ -167,7 +167,6 @@ impl ser::Serialize for Mdc {
 #[cfg(test)]
 mod test {
     use super::*;
-    use log::Level;
     use log4rs::encode::writer::simple::SimpleWriter;
 
     #[test]

@@ -403,11 +403,8 @@ pub mod tests {
         common::tests::{check2, full_dkg, id_out, id_resp, invalid2, invalid_shares, setup_group},
         default_threshold,
     };
-    use std::fmt::Debug;
-    use threshold_bls::curve::bn254::{G1Curve as BCurve, G1};
-
-    use serde::{de::DeserializeOwned, Serialize};
     use static_assertions::assert_impl_all;
+    use threshold_bls::curve::bn254::{G1Curve as BCurve, G1};
 
     assert_impl_all!(Group<BCurve>: Serialize, DeserializeOwned, Clone, Debug);
     assert_impl_all!(DKGInfo<BCurve>: Serialize, DeserializeOwned, Clone, Debug);

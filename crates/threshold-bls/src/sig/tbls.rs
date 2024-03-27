@@ -100,7 +100,7 @@ mod tests {
         curve::bls12381::PairingCurve as PCurve,
         sig::{
             bls::{G1Scheme, G2Scheme},
-            Scheme, SignatureScheme,
+            Scheme,
         },
     };
 

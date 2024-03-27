@@ -107,7 +107,6 @@ pub fn rocket() -> rocket::Rocket<rocket::Build> {
 mod tests {
     use super::*;
     use rocket::http::ContentType;
-    use rocket::http::Status;
     use rocket::local::blocking::Client;
 
     #[test]

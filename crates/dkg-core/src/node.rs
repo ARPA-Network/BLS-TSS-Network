@@ -187,7 +187,6 @@ mod tests {
         },
         test_helpers::InMemoryBoard,
     };
-    use rand::RngCore;
     use threshold_bls::{
         curve::bn254::{self, PairingCurve as BN254},
         poly::Idx,

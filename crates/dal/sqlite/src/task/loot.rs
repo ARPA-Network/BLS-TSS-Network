@@ -8,8 +8,8 @@ use arpa_dal::error::DataAccessResult;
 use arpa_dal::error::RandomnessTaskError;
 use arpa_dal::{BLSTasksFetcher, BLSTasksUpdater};
 use async_trait::async_trait;
-use entity::prelude::LootRandomnessTask;
 use entity::loot_randomness_task;
+use entity::prelude::LootRandomnessTask;
 use sea_orm::{
     ActiveModelTrait, ColumnTrait, DbBackend, DbConn, DbErr, EntityTrait, FromQueryResult,
     QueryFilter, Set, Statement,

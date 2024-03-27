@@ -70,10 +70,9 @@ mod tests {
 
     #[cfg(feature = "bls12_381")]
     use crate::curve::bls12381::PairingCurve as PCurve;
-    use crate::poly::{Idx, Poly};
+    use crate::poly::Idx;
     use crate::sig::{
         bls::{G1Scheme, G2Scheme},
-        tbls::Share,
         SignatureScheme,
     };
 
