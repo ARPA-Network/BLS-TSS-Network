@@ -97,7 +97,6 @@ pub struct GeneralRandomnessHandler<
     commit_partial_signature_retry_descriptor: ExponentialBackoffRetryDescriptor,
 }
 
-#[async_trait]
 impl<
         PC: Curve + Sync + Send,
         S: SignatureScheme + ThresholdScheme<Public = PC::Point, Private = PC::Scalar> + Sync + Send,

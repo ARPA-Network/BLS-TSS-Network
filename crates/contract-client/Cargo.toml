@@ -18,8 +18,8 @@ serde = "1.0.106"
 log = "0.4"
 async-trait = "0.1.35"
 bincode = "1.2.1"
-tonic = "0.9"
-prost = "0.11"
+tonic = "0.11"
+prost = "0.12"
 ethers = { workspace = true, features = ["abigen", "rustls", "ws"] }
 rustc-hex = "2.1.0"
 tokio-retry = "0.3"
@@ -29,8 +29,8 @@ name = "arpa_contract_client"
 path = "src/lib.rs"
 
 [build-dependencies]
-tonic-build = "0.9"
-prost-build = "0.11"
+tonic-build = "0.11"
+prost-build = "0.12"
 ethers-contract-abigen.workspace = true
 
 [dev-dependencies]

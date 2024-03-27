@@ -4,7 +4,6 @@ use ethers_core::{k256::ecdsa::SigningKey, types::Address};
 use ethers_signers::{coins_bip39::English, LocalWallet, MnemonicBuilder, Wallet};
 use serde::de;
 use serde::{Deserialize, Serialize};
-use std::convert::TryFrom;
 use std::env;
 use std::fmt::{self};
 use std::time::Duration;

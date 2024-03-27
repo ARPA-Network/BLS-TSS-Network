@@ -23,7 +23,6 @@ use arpa_dal::error::DataAccessError;
 use arpa_log::debug;
 use hyper::http::HeaderValue;
 use rustc_hex::FromHexError;
-use std::convert::TryInto;
 use std::sync::Arc;
 use std::{
     task::{Context, Poll},

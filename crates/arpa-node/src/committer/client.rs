@@ -61,7 +61,6 @@ impl CommitterClient for GeneralCommitterClient {
     }
 }
 
-#[async_trait]
 impl ServiceClient<CommitterServiceClient<tonic::transport::Channel>> for GeneralCommitterClient {
     async fn prepare_service_client(
         &self,
@@ -72,7 +71,6 @@ impl ServiceClient<CommitterServiceClient<tonic::transport::Channel>> for Genera
     }
 }
 
-#[async_trait]
 impl CommitterService for GeneralCommitterClient {
     async fn commit_partial_signature(
         self,

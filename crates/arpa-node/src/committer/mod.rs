@@ -10,13 +10,11 @@ use std::sync::Arc;
 use threshold_bls::group::Curve;
 use tokio::sync::RwLock;
 
-#[async_trait]
 pub trait ServiceClient<C> {
     async fn prepare_service_client(&self) -> NodeResult<C>;
 }
 
-#[async_trait]
-pub(crate) trait CommitterService {
+pub trait CommitterService {
     async fn commit_partial_signature(
         self,
         chain_id: usize,
@@ -27,7 +25,7 @@ pub(crate) trait CommitterService {
     ) -> NodeResult<bool>;
 }
 
-pub(crate) trait CommitterClient {
+pub trait CommitterClient {
     fn get_id_address(&self) -> Address;
 
     fn get_committer_id_address(&self) -> Address;
@@ -42,7 +40,6 @@ pub(crate) trait CommitterClient {
     ) -> Self;
 }
 
-#[async_trait]
 pub(crate) trait CommitterClientHandler<C: CommitterClient + Sync + Send, PC: Curve> {
     async fn get_id_address(&self) -> Address;
 
