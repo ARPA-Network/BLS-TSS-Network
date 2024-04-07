@@ -4,24 +4,25 @@ pragma solidity ^0.8.18;
 pragma experimental ABIEncoderV2;
 
 import {ICoordinator} from "../src/interfaces/ICoordinator.sol";
-import {RandcastTestHelper, IController, Controller, ControllerForTest, ERC20} from "./RandcastTestHelper.sol";
+import {
+    RandcastTestHelper,
+    IController,
+    Controller,
+    ControllerForTest,
+    ERC20,
+    INodeRegistry,
+    NodeRegistry
+} from "./RandcastTestHelper.sol";
 import {BLS} from "../src/libraries/BLS.sol";
 
 // Suggested usage: forge test --match-contract ControllerTest --optimize -vv
 
 contract ControllerTest is RandcastTestHelper {
-    uint256 internal _disqualifiedNodePenaltyAmount = 1000;
-    uint256 internal _defaultNumberOfCommitters = 3;
-    uint256 internal _defaultDkgPhaseDuration = 10;
-    uint256 internal _groupMaxCapacity = 10;
-    uint256 internal _idealNumberOfGroups = 5;
-    uint256 internal _pendingBlockAfterQuit = 100;
-    uint256 internal _dkgPostProcessReward = 100;
-    uint64 internal _lastOutput = 0x2222222222222222;
-
     address internal _owner = _admin;
 
     function setUp() public {
+        _lastOutput = 0x2222222222222222;
+
         // deal nodes
         vm.deal(_node1, 1 * 10 ** 18);
         vm.deal(_node2, 1 * 10 ** 18);
@@ -57,47 +58,56 @@ contract ControllerTest is RandcastTestHelper {
         _prepareStakingContract(_stakingDeployer, address(_arpa), operators);
 
         vm.prank(_owner);
-        _controller = new ControllerForTest(address(_arpa), _lastOutput);
+        _controller = new ControllerForTest(_lastOutput);
+
+        vm.prank(_admin);
+        _nodeRegistry = new NodeRegistry();
+
+        vm.prank(_admin);
+        _nodeRegistry.initialize(address(_arpa));
+
+        vm.prank(_admin);
+        _nodeRegistry.setNodeRegistryConfig(
+            address(_controller), address(_staking), _operatorStakeAmount, _pendingBlockAfterQuit
+        );
 
         vm.prank(_owner);
         _controller.setControllerConfig(
-            address(_staking),
+            address(_nodeRegistry),
             address(0),
-            _operatorStakeAmount,
             _disqualifiedNodePenaltyAmount,
             _defaultNumberOfCommitters,
             _defaultDkgPhaseDuration,
             _groupMaxCapacity,
             _idealNumberOfGroups,
-            _pendingBlockAfterQuit,
             _dkgPostProcessReward
         );
 
         vm.prank(_stakingDeployer);
-        _staking.setController(address(_controller));
+        _staking.setController(address(_nodeRegistry));
     }
 
     function testNodeRegister() public {
         // Fail on bad dkg public key
         vm.expectRevert(abi.encodeWithSelector(BLS.InvalidPublicKey.selector));
         vm.prank(_node1);
-        _controller.nodeRegister(_badKey);
+        _nodeRegistry.nodeRegister(_badKey);
 
         // Register _node1
         vm.prank(_node1);
-        _controller.nodeRegister(_dkgPubkey1);
+        _nodeRegistry.nodeRegister(_dkgPubkey1);
 
         // Assert _node1 state is correct
-        IController.Node memory n = _controller.getNode(_node1);
+        INodeRegistry.Node memory n = _nodeRegistry.getNode(_node1);
         assertEq(n.idAddress, _node1);
         assertEq(n.dkgPublicKey, _dkgPubkey1);
         assertEq(n.state, true);
         assertEq(n.pendingUntilBlock, 0);
 
         // fail on already registered node
-        vm.expectRevert(abi.encodeWithSelector(Controller.NodeAlreadyRegistered.selector));
+        vm.expectRevert(abi.encodeWithSelector(NodeRegistry.NodeAlreadyRegistered.selector));
         vm.prank(_node1);
-        _controller.nodeRegister(_dkgPubkey1);
+        _nodeRegistry.nodeRegister(_dkgPubkey1);
     }
 
     function testRemoveFromGroup() public {
@@ -117,26 +127,26 @@ contract ControllerTest is RandcastTestHelper {
 
         // Add 4th node, should create new group
         vm.prank(_node4);
-        _controller.nodeRegister(_dkgPubkey4);
+        _nodeRegistry.nodeRegister(_dkgPubkey4);
         emit log_named_uint("groupCount", _controller.getGroupCount());
         printGroupInfo(1);
 
         // The below needs further testing
         // Test needsRebalance
         vm.prank(_node5);
-        _controller.nodeRegister(_dkgPubkey5);
+        _nodeRegistry.nodeRegister(_dkgPubkey5);
         vm.prank(_node6);
-        _controller.nodeRegister(_dkgPubkey6);
+        _nodeRegistry.nodeRegister(_dkgPubkey6);
         vm.prank(_node7);
-        _controller.nodeRegister(_dkgPubkey7);
+        _nodeRegistry.nodeRegister(_dkgPubkey7);
         vm.prank(_node8);
-        _controller.nodeRegister(_dkgPubkey8);
+        _nodeRegistry.nodeRegister(_dkgPubkey8);
         vm.prank(_node9);
-        _controller.nodeRegister(_dkgPubkey9);
+        _nodeRegistry.nodeRegister(_dkgPubkey9);
         vm.prank(_node10);
-        _controller.nodeRegister(_dkgPubkey10);
+        _nodeRegistry.nodeRegister(_dkgPubkey10);
         vm.prank(_node11);
-        _controller.nodeRegister(_dkgPubkey11);
+        _nodeRegistry.nodeRegister(_dkgPubkey11);
         emit log("+++++++++++++++++++++++");
         printGroupInfo(0);
         printGroupInfo(1);
@@ -177,18 +187,18 @@ contract ControllerTest is RandcastTestHelper {
 
         // Register Node 1
         vm.prank(_node1);
-        _controller.nodeRegister(_dkgPubkey1);
+        _nodeRegistry.nodeRegister(_dkgPubkey1);
         // printGroupInfo(groupIndex);
         // printNodeInfo(_node1);
 
         // Register Node 2
         vm.prank(_node2);
-        _controller.nodeRegister(_dkgPubkey2);
+        _nodeRegistry.nodeRegister(_dkgPubkey2);
         // printGroupInfo(groupIndex);
 
         // Register Node 3
         vm.prank(_node3);
-        _controller.nodeRegister(_dkgPubkey3);
+        _nodeRegistry.nodeRegister(_dkgPubkey3);
         // printGroupInfo(groupIndex);
 
         // check group struct is correct
@@ -232,7 +242,7 @@ contract ControllerTest is RandcastTestHelper {
 
         // Add 4th node, should create new group
         vm.prank(_node4);
-        _controller.nodeRegister(_dkgPubkey4);
+        _nodeRegistry.nodeRegister(_dkgPubkey4);
         emit log_named_uint("groupCount", _controller.getGroupCount());
         printGroupInfo(2);
     }
@@ -432,7 +442,7 @@ contract ControllerTest is RandcastTestHelper {
         // Succesful post process dkg: HAPPY PATH
         vm.startPrank(_node1);
         _controller.postProcessDkg(groupIndex, groupEpoch);
-        (, uint256 nodeArpaRewards) = _controller.getNodeWithdrawableTokens(_node1);
+        (, uint256 nodeArpaRewards) = _nodeRegistry.getNodeWithdrawableTokens(_node1);
         emit log_named_uint("_node1 rewards", nodeArpaRewards);
         assertEq(nodeArpaRewards, _dkgPostProcessReward);
 
@@ -464,12 +474,12 @@ contract ControllerTest is RandcastTestHelper {
     function testNodeQuit() public {
         // call nodeQuit with unregistered node: Fail
         vm.prank(_node1);
-        vm.expectRevert(abi.encodeWithSelector(Controller.NodeNotRegistered.selector));
-        _controller.nodeQuit();
+        vm.expectRevert(abi.encodeWithSelector(NodeRegistry.NodeNotRegistered.selector));
+        _nodeRegistry.nodeQuit();
 
         // register node, confirm initial stake amount
         vm.prank(_node1);
-        _controller.nodeRegister(_dkgPubkey1);
+        _nodeRegistry.nodeRegister(_dkgPubkey1);
         assertEq(1, _controller.getGroup(0).members.length);
         // TODO
         // assertEq(operatorStakeAmount, staker.getLockedAmount(_node1));
@@ -478,7 +488,7 @@ contract ControllerTest is RandcastTestHelper {
 
         // Quit node: Success
         vm.prank(_node1);
-        _controller.nodeQuit();
+        _nodeRegistry.nodeQuit();
         // assert member length is 0
         assertEq(0, _controller.getGroup(0).members.length);
         // TODO

@@ -7,6 +7,7 @@ import {ERC20} from "openzeppelin-contracts/contracts/token/ERC20/ERC20.sol";
 import {ERC1967Proxy} from "openzeppelin-contracts/contracts/proxy/ERC1967/ERC1967Proxy.sol";
 import {UUPSUpgradeable} from "openzeppelin-contracts-upgradeable/contracts/proxy/utils/UUPSUpgradeable.sol";
 import {Controller} from "../../src/Controller.sol";
+import {NodeRegistry} from "../../src/NodeRegistry.sol";
 import {Adapter} from "../../src/Adapter.sol";
 import {IControllerOwner} from "../../src/interfaces/IControllerOwner.sol";
 import {IAdapterOwner} from "../../src/interfaces/IAdapterOwner.sol";
@@ -17,6 +18,7 @@ import {MockUpgradedAdapter} from "./MockUpgradedAdapter.sol";
 // solhint-disable-next-line max-states-count
 contract ProxyTest is Test {
     Controller internal _controller;
+    NodeRegistry internal _nodeRegistry;
     ERC1967Proxy internal _adapter;
     Adapter internal _adapterImpl;
     Staking internal _staking;
@@ -93,26 +95,36 @@ contract ProxyTest is Test {
         _controller = new Controller();
 
         vm.prank(_admin);
-        _controller.initialize(address(_staking), _lastOutput);
+        _controller.initialize(_lastOutput);
+
+        vm.prank(_admin);
+        _nodeRegistry = new NodeRegistry();
+
+        vm.prank(_admin);
+        _nodeRegistry.initialize(address(_arpa));
+
+        vm.prank(_admin);
+        _nodeRegistry.setNodeRegistryConfig(
+            address(_controller), address(_staking), _operatorStakeAmount, _pendingBlockAfterQuit
+        );
 
         vm.prank(_admin);
         _adapterImpl = new Adapter();
 
         vm.prank(_admin);
-        _adapter =
-        new ERC1967Proxy(address(_adapterImpl), abi.encodeWithSignature("initialize(address)", address(_controller)));
+        _adapter = new ERC1967Proxy(
+            address(_adapterImpl), abi.encodeWithSignature("initialize(address)", address(_controller))
+        );
 
         vm.prank(_admin);
         IControllerOwner(address(_controller)).setControllerConfig(
-            address(_staking),
+            address(_nodeRegistry),
             address(_adapter),
-            _operatorStakeAmount,
             _disqualifiedNodePenaltyAmount,
             _defaultNumberOfCommitters,
             _defaultDkgPhaseDuration,
             _groupMaxCapacity,
             _idealNumberOfGroups,
-            _pendingBlockAfterQuit,
             _dkgPostProcessReward
         );
 
@@ -147,7 +159,7 @@ contract ProxyTest is Test {
         );
 
         vm.prank(_admin);
-        _staking.setController(address(_controller));
+        _staking.setController(address(_nodeRegistry));
     }
 
     function testAdapterProxy() public {

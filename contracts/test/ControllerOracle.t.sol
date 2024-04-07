@@ -3,22 +3,13 @@ pragma solidity ^0.8.18;
 
 pragma experimental ABIEncoderV2;
 
-import {Strings, RandcastTestHelper, ERC20, ControllerForTest, IController} from "./RandcastTestHelper.sol";
+import {
+    Strings, RandcastTestHelper, ERC20, ControllerForTest, IController, NodeRegistry
+} from "./RandcastTestHelper.sol";
 import {ControllerOracle, IControllerOracle} from "../src/ControllerOracle.sol";
 import {MockL2CrossDomainMessenger} from "./MockL2CrossDomainMessenger.sol";
 
 contract ControllerOracleTest is RandcastTestHelper {
-    uint256 internal _disqualifiedNodePenaltyAmount = 1000;
-    uint256 internal _defaultNumberOfCommitters = 3;
-    uint256 internal _defaultDkgPhaseDuration = 10;
-    uint256 internal _groupMaxCapacity = 10;
-    uint256 internal _idealNumberOfGroups = 5;
-    uint256 internal _pendingBlockAfterQuit = 100;
-    uint256 internal _dkgPostProcessReward = 100;
-    uint64 internal _lastOutput = 0x2222222222222222;
-
-    address internal _owner = _admin;
-
     function setUp() public {
         // deal nodes
         vm.deal(_node1, 1 * 10 ** 18);
@@ -32,10 +23,10 @@ contract ControllerOracleTest is RandcastTestHelper {
         vm.deal(_node9, 1 * 10 ** 18);
         vm.deal(_node10, 1 * 10 ** 18);
 
-        // deal _owner and create _controller
-        vm.deal(_owner, 1 * 10 ** 18);
+        // deal _admin and create _controller
+        vm.deal(_admin, 1 * 10 ** 18);
 
-        vm.prank(_owner);
+        vm.prank(_admin);
         _arpa = new ERC20("arpa token", "ARPA");
 
         address[] memory operators = new address[](10);
@@ -51,45 +42,56 @@ contract ControllerOracleTest is RandcastTestHelper {
         operators[9] = _node10;
         _prepareStakingContract(_stakingDeployer, address(_arpa), operators);
 
-        _controller = new ControllerForTest(address(_arpa), _lastOutput);
+        vm.prank(_admin);
+        _controller = new ControllerForTest(_lastOutput);
 
+        vm.prank(_admin);
+        _nodeRegistry = new NodeRegistry();
+
+        vm.prank(_admin);
+        _nodeRegistry.initialize(address(_arpa));
+
+        vm.prank(_admin);
+        _nodeRegistry.setNodeRegistryConfig(
+            address(_controller), address(_staking), _operatorStakeAmount, _pendingBlockAfterQuit
+        );
+
+        vm.prank(_admin);
         _controller.setControllerConfig(
-            address(_staking),
+            address(_nodeRegistry),
             address(0),
-            _operatorStakeAmount,
             _disqualifiedNodePenaltyAmount,
             _defaultNumberOfCommitters,
             _defaultDkgPhaseDuration,
             _groupMaxCapacity,
             _idealNumberOfGroups,
-            _pendingBlockAfterQuit,
             _dkgPostProcessReward
         );
 
         vm.prank(_stakingDeployer);
-        _staking.setController(address(_controller));
+        _staking.setController(address(_nodeRegistry));
 
         // Register Nodes to max capacity of one group
         vm.prank(_node1);
-        _controller.nodeRegister(_dkgPubkey1);
+        _nodeRegistry.nodeRegister(_dkgPubkey1);
         vm.prank(_node2);
-        _controller.nodeRegister(_dkgPubkey2);
+        _nodeRegistry.nodeRegister(_dkgPubkey2);
         vm.prank(_node3);
-        _controller.nodeRegister(_dkgPubkey3);
+        _nodeRegistry.nodeRegister(_dkgPubkey3);
         vm.prank(_node4);
-        _controller.nodeRegister(_dkgPubkey4);
+        _nodeRegistry.nodeRegister(_dkgPubkey4);
         vm.prank(_node5);
-        _controller.nodeRegister(_dkgPubkey5);
+        _nodeRegistry.nodeRegister(_dkgPubkey5);
         vm.prank(_node6);
-        _controller.nodeRegister(_dkgPubkey6);
+        _nodeRegistry.nodeRegister(_dkgPubkey6);
         vm.prank(_node7);
-        _controller.nodeRegister(_dkgPubkey7);
+        _nodeRegistry.nodeRegister(_dkgPubkey7);
         vm.prank(_node8);
-        _controller.nodeRegister(_dkgPubkey8);
+        _nodeRegistry.nodeRegister(_dkgPubkey8);
         vm.prank(_node9);
-        _controller.nodeRegister(_dkgPubkey9);
+        _nodeRegistry.nodeRegister(_dkgPubkey9);
         vm.prank(_node10);
-        _controller.nodeRegister(_dkgPubkey10);
+        _nodeRegistry.nodeRegister(_dkgPubkey10);
     }
 
     struct Params {
@@ -187,15 +189,15 @@ contract ControllerOracleTest is RandcastTestHelper {
         address l2CrossDomainMessenger = address(0x90002);
         address adapterContractAddress = address(0x90102);
 
-        vm.prank(_owner);
+        vm.prank(_admin);
         ControllerOracle controllerOracle = new ControllerOracle();
-        vm.prank(_owner);
+        vm.prank(_admin);
         controllerOracle.initialize(address(_arpa), chainMessenger, l2CrossDomainMessenger, adapterContractAddress, 42);
         vm.expectEmit(true, true, true, true);
-        emit GroupUpdated(1, 0, 8, _owner);
+        emit GroupUpdated(1, 0, 8, _admin);
 
-        vm.prank(_owner);
-        controllerOracle.updateGroup(_owner, abi.decode(group, (IControllerOracle.Group)));
+        vm.prank(_admin);
+        controllerOracle.updateGroup(_admin, abi.decode(group, (IControllerOracle.Group)));
 
         printGroupInfo(controllerOracle.getGroup(0));
     }

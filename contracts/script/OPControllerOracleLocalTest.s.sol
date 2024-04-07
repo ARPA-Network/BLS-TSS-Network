@@ -7,7 +7,6 @@ import {Adapter} from "../src/Adapter.sol";
 import {IAdapterOwner} from "../src/interfaces/IAdapterOwner.sol";
 import {Arpa} from "./ArpaLocalTest.sol";
 import {IERC20} from "openzeppelin-contracts/contracts/token/ERC20/IERC20.sol";
-import {ERC20} from "openzeppelin-contracts/contracts/token/ERC20/ERC20.sol";
 import {ERC1967Proxy} from "openzeppelin-contracts/contracts/proxy/ERC1967/ERC1967Proxy.sol";
 
 // solhint-disable-next-line max-states-count
@@ -39,14 +38,14 @@ contract OPControllerOracleLocalTestScript is Script {
     uint256 internal _flatFeePromotionStartTimestamp = vm.envUint("FLAT_FEE_PROMOTION_START_TIMESTAMP");
     uint256 internal _flatFeePromotionEndTimestamp = vm.envUint("FLAT_FEE_PROMOTION_END_TIMESTAMP");
 
-    bool internal _arpa_exists = vm.envBool("ARPA_EXISTS");
+    bool internal _arpaExists = vm.envBool("ARPA_EXISTS");
 
     function run() external {
         ControllerOracle controllerOracle;
         ERC1967Proxy adapter;
         Adapter adapterImpl;
 
-        if (!_arpa_exists) {
+        if (!_arpaExists) {
             IERC20 arpa;
             vm.broadcast(_deployerPrivateKey);
             arpa = new Arpa();
@@ -59,8 +58,9 @@ contract OPControllerOracleLocalTestScript is Script {
         adapterImpl = new Adapter();
 
         vm.broadcast(_deployerPrivateKey);
-        adapter =
-        new ERC1967Proxy(address(adapterImpl),abi.encodeWithSignature("initialize(address)", address(controllerOracle)));
+        adapter = new ERC1967Proxy(
+            address(adapterImpl), abi.encodeWithSignature("initialize(address)", address(controllerOracle))
+        );
 
         vm.broadcast(_deployerPrivateKey);
         IAdapterOwner(address(adapter)).setAdapterConfig(

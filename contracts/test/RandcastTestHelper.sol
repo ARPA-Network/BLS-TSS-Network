@@ -3,9 +3,12 @@ pragma solidity ^0.8.18;
 
 import {Test} from "forge-std/Test.sol";
 import {IController} from "../src/interfaces/IController.sol";
+import {INodeRegistry} from "../src/interfaces/INodeRegistry.sol";
+import {IAdapterOwner} from "../src/interfaces/IAdapterOwner.sol";
 import {IAdapter} from "../src/interfaces/IAdapter.sol";
 import {AdapterForTest, Adapter} from "./AdapterForTest.sol";
 import {Staking} from "Staking-v0.1/Staking.sol";
+import {NodeRegistry} from "../src/NodeRegistry.sol";
 import {ControllerForTest, Controller} from "./ControllerForTest.sol";
 import {IERC20} from "openzeppelin-contracts/contracts/token/ERC20/IERC20.sol";
 import {ERC20} from "openzeppelin-contracts/contracts/token/ERC20/ERC20.sol";
@@ -14,6 +17,7 @@ import {ERC1967Proxy} from "openzeppelin-contracts/contracts/proxy/ERC1967/ERC19
 
 //solhint-disable-next-line max-states-count
 abstract contract RandcastTestHelper is Test {
+    NodeRegistry internal _nodeRegistry;
     ControllerForTest internal _controller;
     ERC1967Proxy internal _adapter;
     AdapterForTest internal _adapterImpl;
@@ -80,6 +84,39 @@ abstract contract RandcastTestHelper is Test {
 
     uint256 internal _rewardAmount = 1_500_00 * 1e18;
 
+    // Controller params
+    uint256 internal _disqualifiedNodePenaltyAmount = 1000;
+    uint256 internal _defaultNumberOfCommitters = 3;
+    uint256 internal _defaultDkgPhaseDuration = 10;
+    uint256 internal _groupMaxCapacity = 10;
+    uint256 internal _idealNumberOfGroups = 5;
+    uint256 internal _pendingBlockAfterQuit = 100;
+    uint256 internal _dkgPostProcessReward = 100;
+    uint256 internal _lastOutput = 2222222222222222;
+    // Adapter params
+    uint16 internal _minimumRequestConfirmations = 6;
+    uint32 internal _maxGasLimit = 2000000;
+    uint32 internal _gasAfterPaymentCalculation = 50000;
+    uint32 internal _gasExceptCallback = 550000;
+    uint256 internal _signatureTaskExclusiveWindow = 10;
+    uint256 internal _rewardPerSignature = 50;
+    uint256 internal _committerRewardPerSignature = 100;
+    uint16 internal _flatFeePromotionGlobalPercentage = 100;
+    bool internal _isFlatFeePromotionEnabledPermanently = false;
+    uint256 internal _flatFeePromotionStartTimestamp = 0;
+    uint256 internal _flatFeePromotionEndTimestamp = 0;
+
+    uint32 internal _fulfillmentFlatFeeEthPPMTier1 = 250000;
+    uint32 internal _fulfillmentFlatFeeEthPPMTier2 = 250000;
+    uint32 internal _fulfillmentFlatFeeEthPPMTier3 = 250000;
+    uint32 internal _fulfillmentFlatFeeEthPPMTier4 = 250000;
+    uint32 internal _fulfillmentFlatFeeEthPPMTier5 = 250000;
+    uint24 internal _reqsForTier2 = 0;
+    uint24 internal _reqsForTier3 = 0;
+    uint24 internal _reqsForTier4 = 0;
+    uint24 internal _reqsForTier5 = 0;
+
+    // Group params
     uint256 internal _t = 3;
     uint256 internal _n = 5;
 
@@ -501,7 +538,87 @@ abstract contract RandcastTestHelper is Test {
         _staking.stake(_operatorStakeAmount);
     }
 
-    function prepareAnAvailableGroupByKeys(
+    function _prepareRandcastContracts() internal {
+        vm.prank(_admin);
+        _arpa = new ERC20("arpa token", "ARPA");
+
+        address[] memory operators = new address[](5);
+        operators[0] = _node1;
+        operators[1] = _node2;
+        operators[2] = _node3;
+        operators[3] = _node4;
+        operators[4] = _node5;
+        _prepareStakingContract(_stakingDeployer, address(_arpa), operators);
+
+        vm.prank(_admin);
+        _controller = new ControllerForTest(_lastOutput);
+
+        vm.prank(_admin);
+        _nodeRegistry = new NodeRegistry();
+
+        vm.prank(_admin);
+        _nodeRegistry.initialize(address(_arpa));
+
+        vm.prank(_admin);
+        _nodeRegistry.setNodeRegistryConfig(
+            address(_controller), address(_staking), _operatorStakeAmount, _pendingBlockAfterQuit
+        );
+
+        vm.prank(_admin);
+        _adapterImpl = new AdapterForTest();
+
+        vm.prank(_admin);
+        _adapter = new ERC1967Proxy(
+            address(_adapterImpl), abi.encodeWithSignature("initialize(address)", address(_controller))
+        );
+
+        vm.prank(_admin);
+        _controller.setControllerConfig(
+            address(_nodeRegistry),
+            address(_adapter),
+            _disqualifiedNodePenaltyAmount,
+            _defaultNumberOfCommitters,
+            _defaultDkgPhaseDuration,
+            _groupMaxCapacity,
+            _idealNumberOfGroups,
+            _dkgPostProcessReward
+        );
+
+        vm.prank(_admin);
+        IAdapterOwner(address(_adapter)).setAdapterConfig(
+            _minimumRequestConfirmations,
+            _maxGasLimit,
+            _gasAfterPaymentCalculation,
+            _gasExceptCallback,
+            _signatureTaskExclusiveWindow,
+            _rewardPerSignature,
+            _committerRewardPerSignature
+        );
+
+        vm.broadcast(_admin);
+        IAdapterOwner(address(_adapter)).setFlatFeeConfig(
+            IAdapterOwner.FeeConfig(
+                _fulfillmentFlatFeeEthPPMTier1,
+                _fulfillmentFlatFeeEthPPMTier2,
+                _fulfillmentFlatFeeEthPPMTier3,
+                _fulfillmentFlatFeeEthPPMTier4,
+                _fulfillmentFlatFeeEthPPMTier5,
+                _reqsForTier2,
+                _reqsForTier3,
+                _reqsForTier4,
+                _reqsForTier5
+            ),
+            _flatFeePromotionGlobalPercentage,
+            _isFlatFeePromotionEnabledPermanently,
+            _flatFeePromotionStartTimestamp,
+            _flatFeePromotionEndTimestamp
+        );
+
+        vm.prank(_stakingDeployer);
+        _staking.setController(address(_nodeRegistry));
+    }
+
+    function _prepareAnAvailableGroupByKeys(
         address[] memory nodes,
         bytes[] memory dkgPartialPubKeys,
         bytes[] memory pubKeys,
@@ -515,7 +632,7 @@ abstract contract RandcastTestHelper is Test {
         for (uint256 i = 0; i < nodes.length; i++) {
             vm.deal(nodes[i], 1 * 10 ** 18);
             vm.prank(nodes[i]);
-            _controller.nodeRegister(pubKeys[i]);
+            _nodeRegistry.nodeRegister(pubKeys[i]);
         }
 
         for (uint256 i = 0; i < nodes.length; i++) {
@@ -552,7 +669,7 @@ abstract contract RandcastTestHelper is Test {
         _publicKeys1[3] = _dkgPubkey4;
         _publicKeys1[4] = _dkgPubkey5;
 
-        prepareAnAvailableGroupByKeys(_nodesGroup1, _dkgPartialPubKeysGroup1, _publicKeys1, _publicKey, 0);
+        _prepareAnAvailableGroupByKeys(_nodesGroup1, _dkgPartialPubKeysGroup1, _publicKeys1, _publicKey, 0);
     }
 
     function printGroupInfo(uint256 groupIndex) public {
@@ -639,7 +756,7 @@ abstract contract RandcastTestHelper is Test {
         emit log_named_address("printing info for node", nodeAddress);
         emit log("----------------------------------------");
 
-        IController.Node memory node = _controller.getNode(nodeAddress);
+        INodeRegistry.Node memory node = _nodeRegistry.getNode(nodeAddress);
 
         emit log_named_address("n.idAddress", node.idAddress);
         emit log_named_bytes("n.dkgPublicKey", node.dkgPublicKey);

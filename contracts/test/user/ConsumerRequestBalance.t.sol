@@ -6,16 +6,7 @@ import {GetShuffledArrayExample} from "Randcast-User-Contract/user/examples/GetS
 import {RollDiceExample, GeneralRandcastConsumerBase} from "Randcast-User-Contract/user/examples/RollDiceExample.sol";
 import {AdvancedGetShuffledArrayExample} from "Randcast-User-Contract/user/examples/AdvancedGetShuffledArrayExample.sol";
 import {GeneralRandcastConsumerBase} from "Randcast-User-Contract/user/GeneralRandcastConsumerBase.sol";
-import {
-    IAdapter,
-    Adapter,
-    RandcastTestHelper,
-    ERC20,
-    ControllerForTest,
-    AdapterForTest,
-    ERC1967Proxy
-} from "../RandcastTestHelper.sol";
-import {IAdapterOwner} from "../../src/interfaces/IAdapterOwner.sol";
+import {IAdapter, Adapter, RandcastTestHelper} from "../RandcastTestHelper.sol";
 
 //solhint-disable-next-line max-states-count
 contract ConsumerRequestBalanceTest is RandcastTestHelper {
@@ -24,105 +15,21 @@ contract ConsumerRequestBalanceTest is RandcastTestHelper {
     RollDiceExample internal _rollDiceExample;
     AdvancedGetShuffledArrayExample internal _advancedGetShuffledArrayExample;
 
-    uint256 internal _disqualifiedNodePenaltyAmount = 1000;
-    uint256 internal _defaultNumberOfCommitters = 3;
-    uint256 internal _defaultDkgPhaseDuration = 10;
-    uint256 internal _groupMaxCapacity = 10;
-    uint256 internal _idealNumberOfGroups = 5;
-    uint256 internal _pendingBlockAfterQuit = 100;
-    uint256 internal _dkgPostProcessReward = 100;
-    uint256 internal _lastOutput = 2222222222222222;
-
-    uint16 internal _minimumRequestConfirmations = 6;
-    uint32 internal _maxGasLimit = 2000000;
-    uint32 internal _gasAfterPaymentCalculation = 50000;
-    uint32 internal _gasExceptCallback = 550000;
-    uint256 internal _signatureTaskExclusiveWindow = 10;
-    uint256 internal _rewardPerSignature = 50;
-    uint256 internal _committerRewardPerSignature = 100;
-
-    uint16 internal _flatFeePromotionGlobalPercentage = 100;
-    bool internal _isFlatFeePromotionEnabledPermanently = false;
-    uint256 internal _flatFeePromotionStartTimestamp = 0;
-    uint256 internal _flatFeePromotionEndTimestamp = 0;
-
     function setUp() public {
         skip(1000);
-        vm.prank(_admin);
-        _arpa = new ERC20("arpa token", "ARPA");
-
-        address[] memory operators = new address[](5);
-        operators[0] = _node1;
-        operators[1] = _node2;
-        operators[2] = _node3;
-        operators[3] = _node4;
-        operators[4] = _node5;
-        _prepareStakingContract(_stakingDeployer, address(_arpa), operators);
-
-        vm.prank(_admin);
-        _controller = new ControllerForTest(address(_arpa), _lastOutput);
-
-        vm.prank(_admin);
-        _adapterImpl = new AdapterForTest();
-
-        vm.prank(_admin);
-        _adapter =
-            new ERC1967Proxy(address(_adapterImpl),abi.encodeWithSignature("initialize(address)",address(_controller)));
+        _prepareRandcastContracts();
 
         vm.prank(_user);
-        _getRandomNumberExample = new GetRandomNumberExample(
-            address(_adapter)
-        );
+        _getRandomNumberExample = new GetRandomNumberExample(address(_adapter));
 
         vm.prank(_user);
         _rollDiceExample = new RollDiceExample(address(_adapter));
 
         vm.prank(_user);
-        _getShuffledArrayExample = new GetShuffledArrayExample(
-            address(_adapter)
-        );
+        _getShuffledArrayExample = new GetShuffledArrayExample(address(_adapter));
 
         vm.prank(_user);
-        _advancedGetShuffledArrayExample = new AdvancedGetShuffledArrayExample(
-            address(_adapter)
-        );
-
-        vm.prank(_admin);
-        _controller.setControllerConfig(
-            address(_staking),
-            address(_adapter),
-            _operatorStakeAmount,
-            _disqualifiedNodePenaltyAmount,
-            _defaultNumberOfCommitters,
-            _defaultDkgPhaseDuration,
-            _groupMaxCapacity,
-            _idealNumberOfGroups,
-            _pendingBlockAfterQuit,
-            _dkgPostProcessReward
-        );
-
-        vm.prank(_admin);
-        IAdapterOwner(address(_adapter)).setAdapterConfig(
-            _minimumRequestConfirmations,
-            _maxGasLimit,
-            _gasAfterPaymentCalculation,
-            _gasExceptCallback,
-            _signatureTaskExclusiveWindow,
-            _rewardPerSignature,
-            _committerRewardPerSignature
-        );
-
-        vm.prank(_admin);
-        IAdapterOwner(address(_adapter)).setFlatFeeConfig(
-            IAdapterOwner.FeeConfig(250000, 250000, 250000, 250000, 250000, 0, 0, 0, 0),
-            _flatFeePromotionGlobalPercentage,
-            _isFlatFeePromotionEnabledPermanently,
-            _flatFeePromotionStartTimestamp,
-            _flatFeePromotionEndTimestamp
-        );
-
-        vm.prank(_stakingDeployer);
-        _staking.setController(address(_controller));
+        _advancedGetShuffledArrayExample = new AdvancedGetShuffledArrayExample(address(_adapter));
 
         prepareAnAvailableGroup();
     }

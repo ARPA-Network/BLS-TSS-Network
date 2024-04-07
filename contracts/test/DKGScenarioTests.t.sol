@@ -3,20 +3,18 @@ pragma solidity ^0.8.18;
 
 pragma experimental ABIEncoderV2;
 
-import {RandcastTestHelper, ERC20, ControllerForTest, IController, Controller} from "./RandcastTestHelper.sol";
+import {
+    RandcastTestHelper,
+    ERC20,
+    ControllerForTest,
+    IController,
+    Controller,
+    NodeRegistry
+} from "./RandcastTestHelper.sol";
 import {ICoordinator} from "../src/interfaces/ICoordinator.sol";
 import {BLS} from "../src/libraries/BLS.sol";
 
 contract DKGScenarioTest is RandcastTestHelper {
-    uint256 internal _disqualifiedNodePenaltyAmount = 1000;
-    uint256 internal _defaultNumberOfCommitters = 3;
-    uint256 internal _defaultDkgPhaseDuration = 10;
-    uint256 internal _groupMaxCapacity = 10;
-    uint256 internal _idealNumberOfGroups = 5;
-    uint256 internal _pendingBlockAfterQuit = 100;
-    uint256 internal _dkgPostProcessReward = 100;
-    uint64 internal _lastOutput = 0x2222222222222222;
-
     address internal _owner = _admin;
 
     function setUp() public {
@@ -41,35 +39,44 @@ contract DKGScenarioTest is RandcastTestHelper {
         operators[4] = _node5;
         _prepareStakingContract(_stakingDeployer, address(_arpa), operators);
 
-        _controller = new ControllerForTest(address(_arpa), _lastOutput);
+        _controller = new ControllerForTest(_lastOutput);
+
+        vm.prank(_admin);
+        _nodeRegistry = new NodeRegistry();
+
+        vm.prank(_admin);
+        _nodeRegistry.initialize(address(_arpa));
+
+        vm.prank(_admin);
+        _nodeRegistry.setNodeRegistryConfig(
+            address(_controller), address(_staking), _operatorStakeAmount, _pendingBlockAfterQuit
+        );
 
         _controller.setControllerConfig(
-            address(_staking),
+            address(_nodeRegistry),
             address(0),
-            _operatorStakeAmount,
             _disqualifiedNodePenaltyAmount,
             _defaultNumberOfCommitters,
             _defaultDkgPhaseDuration,
             _groupMaxCapacity,
             _idealNumberOfGroups,
-            _pendingBlockAfterQuit,
             _dkgPostProcessReward
         );
 
         vm.prank(_stakingDeployer);
-        _staking.setController(address(_controller));
+        _staking.setController(address(_nodeRegistry));
 
         // Register Nodes
         vm.prank(_node1);
-        _controller.nodeRegister(_dkgPubkey1);
+        _nodeRegistry.nodeRegister(_dkgPubkey1);
         vm.prank(_node2);
-        _controller.nodeRegister(_dkgPubkey2);
+        _nodeRegistry.nodeRegister(_dkgPubkey2);
         vm.prank(_node3);
-        _controller.nodeRegister(_dkgPubkey3);
+        _nodeRegistry.nodeRegister(_dkgPubkey3);
         vm.prank(_node4);
-        _controller.nodeRegister(_dkgPubkey4);
+        _nodeRegistry.nodeRegister(_dkgPubkey4);
         vm.prank(_node5);
-        _controller.nodeRegister(_dkgPubkey5);
+        _nodeRegistry.nodeRegister(_dkgPubkey5);
     }
 
     struct Params {

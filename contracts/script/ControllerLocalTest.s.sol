@@ -5,6 +5,7 @@ import {Script} from "forge-std/Script.sol";
 import {Controller} from "../src/Controller.sol";
 import {ControllerRelayer} from "../src/ControllerRelayer.sol";
 import {IControllerOwner} from "../src/interfaces/IControllerOwner.sol";
+import {NodeRegistry} from "../src/NodeRegistry.sol";
 import {Adapter} from "../src/Adapter.sol";
 import {IAdapterOwner} from "../src/interfaces/IAdapterOwner.sol";
 import {Arpa} from "./ArpaLocalTest.sol";
@@ -67,6 +68,7 @@ contract ControllerLocalTestScript is Script {
 
     function run() external {
         Controller controller;
+        NodeRegistry nodeRegistry;
         ControllerRelayer controllerRelayer;
         ERC1967Proxy adapter;
         Adapter adapterImpl;
@@ -98,7 +100,18 @@ contract ControllerLocalTestScript is Script {
         controller = new Controller();
 
         vm.broadcast(_deployerPrivateKey);
-        controller.initialize(address(arpa), _lastOutput);
+        controller.initialize(_lastOutput);
+
+        vm.broadcast(_deployerPrivateKey);
+        nodeRegistry = new NodeRegistry();
+
+        vm.broadcast(_deployerPrivateKey);
+        nodeRegistry.initialize(address(arpa));
+
+        vm.broadcast(_deployerPrivateKey);
+        nodeRegistry.setNodeRegistryConfig(
+            address(controller), address(staking), _operatorStakeAmount, _pendingBlockAfterQuit
+        );
 
         vm.broadcast(_deployerPrivateKey);
         adapterImpl = new Adapter();
@@ -109,15 +122,13 @@ contract ControllerLocalTestScript is Script {
 
         vm.broadcast(_deployerPrivateKey);
         IControllerOwner(address(controller)).setControllerConfig(
-            address(staking),
+            address(nodeRegistry),
             address(adapter),
-            _operatorStakeAmount,
             _disqualifiedNodePenaltyAmount,
             _defaultNumberOfCommitters,
             _defaultDkgPhaseDuration,
             _groupMaxCapacity,
             _idealNumberOfGroups,
-            _pendingBlockAfterQuit,
             _dkgPostProcessReward
         );
 
@@ -152,7 +163,7 @@ contract ControllerLocalTestScript is Script {
         );
 
         vm.broadcast(_deployerPrivateKey);
-        staking.setController(address(controller));
+        staking.setController(address(nodeRegistry));
 
         vm.broadcast(_deployerPrivateKey);
         controllerRelayer = new ControllerRelayer(address(controller));

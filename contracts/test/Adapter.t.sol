@@ -9,7 +9,8 @@ import {
     Adapter,
     ControllerForTest,
     AdapterForTest,
-    ERC1967Proxy
+    ERC1967Proxy,
+    NodeRegistry
 } from "./RandcastTestHelper.sol";
 import {ERC20} from "openzeppelin-contracts/contracts/token/ERC20/ERC20.sol";
 
@@ -18,115 +19,15 @@ contract AdapterTest is RandcastTestHelper {
     GetRandomNumberExample internal _getRandomNumberExample;
     uint64 internal _subId;
 
-    uint256 internal _disqualifiedNodePenaltyAmount = 1000;
-    uint256 internal _defaultNumberOfCommitters = 3;
-    uint256 internal _defaultDkgPhaseDuration = 10;
-    uint256 internal _groupMaxCapacity = 10;
-    uint256 internal _idealNumberOfGroups = 5;
-    uint256 internal _pendingBlockAfterQuit = 100;
-    uint256 internal _dkgPostProcessReward = 100;
-    uint256 internal _lastOutput = 2222222222222222;
-
-    uint16 internal _minimumRequestConfirmations = 3;
-    uint32 internal _maxGasLimit = 2000000;
-    uint32 internal _gasAfterPaymentCalculation = 50000;
-    uint32 internal _gasExceptCallback = 550000;
-    uint256 internal _signatureTaskExclusiveWindow = 10;
-    uint256 internal _rewardPerSignature = 50;
-    uint256 internal _committerRewardPerSignature = 100;
-
-    uint32 internal _fulfillmentFlatFeeEthPPMTier1 = 250000;
-    uint32 internal _fulfillmentFlatFeeEthPPMTier2 = 250000;
-    uint32 internal _fulfillmentFlatFeeEthPPMTier3 = 250000;
-    uint32 internal _fulfillmentFlatFeeEthPPMTier4 = 250000;
-    uint32 internal _fulfillmentFlatFeeEthPPMTier5 = 250000;
-    uint24 internal _reqsForTier2 = 0;
-    uint24 internal _reqsForTier3 = 0;
-    uint24 internal _reqsForTier4 = 0;
-    uint24 internal _reqsForTier5 = 0;
-
-    uint16 internal _flatFeePromotionGlobalPercentage = 100;
-    bool internal _isFlatFeePromotionEnabledPermanently = false;
-    uint256 internal _flatFeePromotionStartTimestamp = 0;
-    uint256 internal _flatFeePromotionEndTimestamp = 0;
-
     uint256 internal _plentyOfEthBalance = 1e6 * 1e18;
 
     function setUp() public {
+        _minimumRequestConfirmations = 3;
         skip(1000);
-
-        vm.prank(_admin);
-        _arpa = new ERC20("_arpa token", "ARPA");
-
-        address[] memory operators = new address[](5);
-        operators[0] = _node1;
-        operators[1] = _node2;
-        operators[2] = _node3;
-        operators[3] = _node4;
-        operators[4] = _node5;
-        _prepareStakingContract(_stakingDeployer, address(_arpa), operators);
-
-        vm.prank(_admin);
-        _controller = new ControllerForTest(address(_arpa), _lastOutput);
-
-        vm.prank(_admin);
-        _adapterImpl = new AdapterForTest();
-
-        vm.prank(_admin);
-        _adapter =
-            new ERC1967Proxy(address(_adapterImpl),abi.encodeWithSignature("initialize(address)",address(_controller)));
+        _prepareRandcastContracts();
 
         vm.prank(_user);
-        _getRandomNumberExample = new GetRandomNumberExample(
-            address(_adapter)
-        );
-
-        vm.prank(_admin);
-        _controller.setControllerConfig(
-            address(_staking),
-            address(_adapter),
-            _operatorStakeAmount,
-            _disqualifiedNodePenaltyAmount,
-            _defaultNumberOfCommitters,
-            _defaultDkgPhaseDuration,
-            _groupMaxCapacity,
-            _idealNumberOfGroups,
-            _pendingBlockAfterQuit,
-            _dkgPostProcessReward
-        );
-
-        vm.prank(_admin);
-        IAdapterOwner(address(_adapter)).setAdapterConfig(
-            _minimumRequestConfirmations,
-            _maxGasLimit,
-            _gasAfterPaymentCalculation,
-            _gasExceptCallback,
-            _signatureTaskExclusiveWindow,
-            _rewardPerSignature,
-            _committerRewardPerSignature
-        );
-
-        vm.broadcast(_admin);
-        IAdapterOwner(address(_adapter)).setFlatFeeConfig(
-            IAdapterOwner.FeeConfig(
-                _fulfillmentFlatFeeEthPPMTier1,
-                _fulfillmentFlatFeeEthPPMTier2,
-                _fulfillmentFlatFeeEthPPMTier3,
-                _fulfillmentFlatFeeEthPPMTier4,
-                _fulfillmentFlatFeeEthPPMTier5,
-                _reqsForTier2,
-                _reqsForTier3,
-                _reqsForTier4,
-                _reqsForTier5
-            ),
-            _flatFeePromotionGlobalPercentage,
-            _isFlatFeePromotionEnabledPermanently,
-            _flatFeePromotionStartTimestamp,
-            _flatFeePromotionEndTimestamp
-        );
-
-        vm.prank(_stakingDeployer);
-        _staking.setController(address(_controller));
+        _getRandomNumberExample = new GetRandomNumberExample(address(_adapter));
 
         _subId = _prepareSubscription(_user, address(_getRandomNumberExample), _plentyOfEthBalance);
     }

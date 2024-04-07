@@ -4,6 +4,7 @@ broadcast/
 .vscode
 .idea
 /test/PersonalTest.sol
+/script/UpgradeAdapter.s.sol
 
 # coverage 
 lcov.info

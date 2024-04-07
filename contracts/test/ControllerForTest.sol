@@ -3,18 +3,19 @@ pragma solidity ^0.8.18;
 
 import {Controller, GroupLib} from "../src/Controller.sol";
 // solhint-disable-next-line no-global-import
+import {INodeRegistry} from "../src/interfaces/INodeRegistry.sol";
 import "../src/utils/Utils.sol" as Utils;
 
 contract ControllerForTest is Controller {
     using GroupLib for GroupLib.GroupData;
 
-    constructor(address arpa, uint256 lastOutput) {
-        initialize(arpa, lastOutput);
+    constructor(uint256 lastOutput) {
+        initialize(lastOutput);
     }
 
     // Give node staking reward penalty and freezeNode
     function slashNodeForTest(address nodeIdAddress, uint256 stakingPenalty, uint256 pendingBlock) public {
-        _slashNode(nodeIdAddress, stakingPenalty, pendingBlock);
+        INodeRegistry(_config.nodeRegistryContractAddress).slashNode(nodeIdAddress, stakingPenalty, pendingBlock);
     }
 
     function removeFromGroupForTest(uint256 memberIndex, uint256 groupIndex)

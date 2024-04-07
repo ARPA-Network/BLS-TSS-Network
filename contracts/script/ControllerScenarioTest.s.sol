@@ -7,6 +7,7 @@ import {ControllerProxy} from "../src/ControllerProxy.sol";
 import {ControllerRelayer} from "../src/ControllerRelayer.sol";
 import {OPChainMessenger} from "../src/OPChainMessenger.sol";
 import {IControllerOwner} from "../src/interfaces/IControllerOwner.sol";
+import {NodeRegistry} from "../src/NodeRegistry.sol";
 import {Adapter} from "../src/Adapter.sol";
 import {IAdapterOwner} from "../src/interfaces/IAdapterOwner.sol";
 import {Arpa} from "./ArpaLocalTest.sol";
@@ -66,6 +67,7 @@ contract ControllerScenarioTest is Script {
 
     function run() external {
         Controller controller;
+        NodeRegistry nodeRegistry;
         ControllerRelayer controllerRelayer;
         OPChainMessenger opChainMessenger;
         ControllerProxy proxy;
@@ -98,7 +100,18 @@ contract ControllerScenarioTest is Script {
         proxy = new ControllerProxy(address(controller));
 
         vm.broadcast(_deployerPrivateKey);
-        IControllerOwner(address(proxy)).initialize(address(arpa), _lastOutput);
+        nodeRegistry = new NodeRegistry();
+
+        vm.broadcast(_deployerPrivateKey);
+        nodeRegistry.initialize(address(arpa));
+
+        vm.broadcast(_deployerPrivateKey);
+        nodeRegistry.setNodeRegistryConfig(
+            address(controller), address(staking), _operatorStakeAmount, _pendingBlockAfterQuit
+        );
+
+        vm.broadcast(_deployerPrivateKey);
+        IControllerOwner(address(proxy)).initialize(_lastOutput);
 
         vm.broadcast(_deployerPrivateKey);
         adapterImpl = new Adapter();
@@ -108,15 +121,13 @@ contract ControllerScenarioTest is Script {
 
         vm.broadcast(_deployerPrivateKey);
         IControllerOwner(address(proxy)).setControllerConfig(
-            address(staking),
+            address(nodeRegistry),
             address(adapter),
-            _operatorStakeAmount,
             _disqualifiedNodePenaltyAmount,
             _defaultNumberOfCommitters,
             _defaultDkgPhaseDuration,
             _groupMaxCapacity,
             _idealNumberOfGroups,
-            _pendingBlockAfterQuit,
             _dkgPostProcessReward
         );
 
@@ -152,7 +163,7 @@ contract ControllerScenarioTest is Script {
         );
 
         vm.broadcast(_deployerPrivateKey);
-        staking.setController(address(proxy));
+        staking.setController(address(nodeRegistry));
 
         vm.broadcast(_deployerPrivateKey);
         controllerRelayer = new ControllerRelayer(address(proxy));
