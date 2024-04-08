@@ -4,10 +4,11 @@ pragma solidity ^0.8.18;
 import {IERC20, SafeERC20} from "openzeppelin-contracts/contracts/token/ERC20/utils/SafeERC20.sol";
 import {OwnableUpgradeable} from "openzeppelin-contracts-upgradeable/contracts/access/OwnableUpgradeable.sol";
 import {Initializable} from "openzeppelin-contracts-upgradeable/contracts/proxy/utils/Initializable.sol";
-import {INodeRegistry} from "./interfaces/INodeRegistry.sol";
+import {INodeRegistry, ISignatureUtils} from "./interfaces/INodeRegistry.sol";
 import {INodeRegistryOwner} from "./interfaces/INodeRegistryOwner.sol";
 import {IController} from "./interfaces/IController.sol";
 import {INodeStaking} from "Staking-v0.1/interfaces/INodeStaking.sol";
+import {IEigenlayerCoordinator} from "./interfaces/IEigenlayerCoordinator.sol";
 import {BLS} from "./libraries/BLS.sol";
 
 contract NodeRegistry is Initializable, INodeRegistry, INodeRegistryOwner, OwnableUpgradeable {
@@ -19,6 +20,8 @@ contract NodeRegistry is Initializable, INodeRegistry, INodeRegistryOwner, Ownab
     // *NodeRegistry Config*
     NodeRegistryConfig private _config;
     IERC20 private _arpa;
+    /// @notice Indicates whether the network is deployed on Eigenlayer
+    bool private _isEigenlayer;
 
     // *Node State Variables*
     mapping(address => Node) private _nodes; // maps node address to Node Struct
@@ -40,9 +43,11 @@ contract NodeRegistry is Initializable, INodeRegistry, INodeRegistryOwner, Ownab
     error NodeStillPending(uint256 pendingUntilBlock);
     error SenderNotController();
     error InvalidZeroAddress();
+    error OperatorUnderStaking();
 
-    function initialize(address arpa) public override(INodeRegistryOwner) initializer {
+    function initialize(address arpa, bool isEigenlayer) public override(INodeRegistryOwner) initializer {
         _arpa = IERC20(arpa);
+        _isEigenlayer = isEigenlayer;
 
         __Ownable_init();
     }
@@ -61,7 +66,10 @@ contract NodeRegistry is Initializable, INodeRegistry, INodeRegistryOwner, Ownab
     // =============
     // INodeRegistry
     // =============
-    function nodeRegister(bytes calldata dkgPublicKey) external override(INodeRegistry) {
+    function nodeRegister(
+        bytes calldata dkgPublicKey,
+        ISignatureUtils.SignatureWithSaltAndExpiry memory operatorSignature
+    ) external override(INodeRegistry) {
         if (_nodes[msg.sender].idAddress != address(0)) {
             revert NodeAlreadyRegistered();
         }
@@ -70,8 +78,17 @@ contract NodeRegistry is Initializable, INodeRegistry, INodeRegistryOwner, Ownab
         if (!BLS.isValidPublicKey(publicKey)) {
             revert BLS.InvalidPublicKey();
         }
-        // Lock staking amount in Staking contract
-        INodeStaking(_config.stakingContractAddress).lock(msg.sender, _config.nodeStakingAmount);
+
+        if (_isEigenlayer) {
+            uint256 share = IEigenlayerCoordinator(_config.stakingContractAddress).getOperatorShare(msg.sender);
+            if (share < _config.nodeStakingAmount) {
+                revert OperatorUnderStaking();
+            }
+            IEigenlayerCoordinator(_config.stakingContractAddress).registerOperator(msg.sender, operatorSignature);
+        } else {
+            // Lock staking amount in Staking contract
+            INodeStaking(_config.stakingContractAddress).lock(msg.sender, _config.nodeStakingAmount);
+        }
 
         // Populate Node struct and insert into nodes
         Node storage n = _nodes[msg.sender];
@@ -102,10 +119,17 @@ contract NodeRegistry is Initializable, INodeRegistry, INodeRegistryOwner, Ownab
             revert NodeStillPending(node.pendingUntilBlock);
         }
 
-        // lock up to staking amount in Staking contract
-        uint256 lockedAmount = INodeStaking(_config.stakingContractAddress).getLockedAmount(msg.sender);
-        if (lockedAmount < _config.nodeStakingAmount) {
-            INodeStaking(_config.stakingContractAddress).lock(msg.sender, _config.nodeStakingAmount - lockedAmount);
+        if (_isEigenlayer) {
+            uint256 share = IEigenlayerCoordinator(_config.stakingContractAddress).getOperatorShare(msg.sender);
+            if (share < _config.nodeStakingAmount) {
+                revert OperatorUnderStaking();
+            }
+        } else {
+            // lock up to staking amount in Staking contract
+            uint256 lockedAmount = INodeStaking(_config.stakingContractAddress).getLockedAmount(msg.sender);
+            if (lockedAmount < _config.nodeStakingAmount) {
+                INodeStaking(_config.stakingContractAddress).lock(msg.sender, _config.nodeStakingAmount - lockedAmount);
+            }
         }
 
         node.state = true;
@@ -126,8 +150,12 @@ contract NodeRegistry is Initializable, INodeRegistry, INodeRegistryOwner, Ownab
 
         _freezeNode(msg.sender, _config.pendingBlockAfterQuit);
 
-        // unlock staking amount in Staking contract
-        INodeStaking(_config.stakingContractAddress).unlock(msg.sender, _config.nodeStakingAmount);
+        if (_isEigenlayer) {
+            IEigenlayerCoordinator(_config.stakingContractAddress).deregisterOperator(msg.sender);
+        } else {
+            // unlock staking amount in Staking contract
+            INodeStaking(_config.stakingContractAddress).unlock(msg.sender, _config.nodeStakingAmount);
+        }
 
         emit NodeQuit(msg.sender);
     }
@@ -189,8 +217,14 @@ contract NodeRegistry is Initializable, INodeRegistry, INodeRegistryOwner, Ownab
             revert SenderNotController();
         }
 
-        // slash staking reward in Staking contract
-        INodeStaking(_config.stakingContractAddress).slashDelegationReward(nodeIdAddress, stakingRewardPenalty);
+        if (_isEigenlayer) {
+            IEigenlayerCoordinator(_config.stakingContractAddress).slashDelegationStaking(
+                nodeIdAddress, stakingRewardPenalty
+            );
+        } else {
+            // slash staking reward in Staking contract
+            INodeStaking(_config.stakingContractAddress).slashDelegationReward(nodeIdAddress, stakingRewardPenalty);
+        }
 
         // remove node from group if handleGroup is true and deactivate it
         _freezeNode(nodeIdAddress, pendingBlock);
@@ -238,6 +272,10 @@ contract NodeRegistry is Initializable, INodeRegistry, INodeRegistryOwner, Ownab
             _config.nodeStakingAmount,
             _config.pendingBlockAfterQuit
         );
+    }
+
+    function isDeployedOnEigenlayer() external view returns (bool) {
+        return _isEigenlayer;
     }
 
     // =============

@@ -71,7 +71,7 @@ contract ExtendedDKGScenarioTest is RandcastTestHelper {
         _nodeRegistry = new NodeRegistry();
 
         vm.prank(_admin);
-        _nodeRegistry.initialize(address(_arpa));
+        _nodeRegistry.initialize(address(_arpa), false);
 
         vm.prank(_admin);
         _nodeRegistry.setNodeRegistryConfig(
@@ -134,7 +134,7 @@ contract ExtendedDKGScenarioTest is RandcastTestHelper {
     // Take in a uint256 specifying node index, call node register using info from _testNodes mapping
     function registerIndex(uint256 nodeIndex) public {
         vm.prank(_testNodes[nodeIndex].nodeAddress);
-        _nodeRegistry.nodeRegister(_testNodes[nodeIndex]._publicKey);
+        _nodeRegistry.nodeRegister(_testNodes[nodeIndex]._publicKey, _emptyOperatorSignature);
     }
 
     // * Commit DKG Helper Functions

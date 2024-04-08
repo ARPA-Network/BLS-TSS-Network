@@ -364,6 +364,7 @@ def deploy_contracts():
         set_key(ENV_PATH, "STAKING_ADDRESS", l1_addresses["Staking"])
         set_key(ENV_PATH, "CONTROLLER_ADDRESS", l1_addresses["Controller"])
         set_key(ENV_PATH, "ADAPTER_ADDRESS", l1_addresses["ERC1967Proxy"])
+        set_key(ENV_PATH, "NODE_REGISTRY_ADDRESS", l1_addresses["NodeRegistry"])
         l1_controller_relayer = l1_addresses["ControllerRelayer"]
 
     else:  # l2_only == True

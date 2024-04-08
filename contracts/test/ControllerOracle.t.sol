@@ -49,7 +49,7 @@ contract ControllerOracleTest is RandcastTestHelper {
         _nodeRegistry = new NodeRegistry();
 
         vm.prank(_admin);
-        _nodeRegistry.initialize(address(_arpa));
+        _nodeRegistry.initialize(address(_arpa), false);
 
         vm.prank(_admin);
         _nodeRegistry.setNodeRegistryConfig(
@@ -73,25 +73,25 @@ contract ControllerOracleTest is RandcastTestHelper {
 
         // Register Nodes to max capacity of one group
         vm.prank(_node1);
-        _nodeRegistry.nodeRegister(_dkgPubkey1);
+        _nodeRegistry.nodeRegister(_dkgPubkey1, _emptyOperatorSignature);
         vm.prank(_node2);
-        _nodeRegistry.nodeRegister(_dkgPubkey2);
+        _nodeRegistry.nodeRegister(_dkgPubkey2, _emptyOperatorSignature);
         vm.prank(_node3);
-        _nodeRegistry.nodeRegister(_dkgPubkey3);
+        _nodeRegistry.nodeRegister(_dkgPubkey3, _emptyOperatorSignature);
         vm.prank(_node4);
-        _nodeRegistry.nodeRegister(_dkgPubkey4);
+        _nodeRegistry.nodeRegister(_dkgPubkey4, _emptyOperatorSignature);
         vm.prank(_node5);
-        _nodeRegistry.nodeRegister(_dkgPubkey5);
+        _nodeRegistry.nodeRegister(_dkgPubkey5, _emptyOperatorSignature);
         vm.prank(_node6);
-        _nodeRegistry.nodeRegister(_dkgPubkey6);
+        _nodeRegistry.nodeRegister(_dkgPubkey6, _emptyOperatorSignature);
         vm.prank(_node7);
-        _nodeRegistry.nodeRegister(_dkgPubkey7);
+        _nodeRegistry.nodeRegister(_dkgPubkey7, _emptyOperatorSignature);
         vm.prank(_node8);
-        _nodeRegistry.nodeRegister(_dkgPubkey8);
+        _nodeRegistry.nodeRegister(_dkgPubkey8, _emptyOperatorSignature);
         vm.prank(_node9);
-        _nodeRegistry.nodeRegister(_dkgPubkey9);
+        _nodeRegistry.nodeRegister(_dkgPubkey9, _emptyOperatorSignature);
         vm.prank(_node10);
-        _nodeRegistry.nodeRegister(_dkgPubkey10);
+        _nodeRegistry.nodeRegister(_dkgPubkey10, _emptyOperatorSignature);
     }
 
     struct Params {

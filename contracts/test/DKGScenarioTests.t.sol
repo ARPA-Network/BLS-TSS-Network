@@ -45,7 +45,7 @@ contract DKGScenarioTest is RandcastTestHelper {
         _nodeRegistry = new NodeRegistry();
 
         vm.prank(_admin);
-        _nodeRegistry.initialize(address(_arpa));
+        _nodeRegistry.initialize(address(_arpa), false);
 
         vm.prank(_admin);
         _nodeRegistry.setNodeRegistryConfig(
@@ -68,15 +68,15 @@ contract DKGScenarioTest is RandcastTestHelper {
 
         // Register Nodes
         vm.prank(_node1);
-        _nodeRegistry.nodeRegister(_dkgPubkey1);
+        _nodeRegistry.nodeRegister(_dkgPubkey1, _emptyOperatorSignature);
         vm.prank(_node2);
-        _nodeRegistry.nodeRegister(_dkgPubkey2);
+        _nodeRegistry.nodeRegister(_dkgPubkey2, _emptyOperatorSignature);
         vm.prank(_node3);
-        _nodeRegistry.nodeRegister(_dkgPubkey3);
+        _nodeRegistry.nodeRegister(_dkgPubkey3, _emptyOperatorSignature);
         vm.prank(_node4);
-        _nodeRegistry.nodeRegister(_dkgPubkey4);
+        _nodeRegistry.nodeRegister(_dkgPubkey4, _emptyOperatorSignature);
         vm.prank(_node5);
-        _nodeRegistry.nodeRegister(_dkgPubkey5);
+        _nodeRegistry.nodeRegister(_dkgPubkey5, _emptyOperatorSignature);
     }
 
     struct Params {

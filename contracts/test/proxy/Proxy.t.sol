@@ -101,7 +101,7 @@ contract ProxyTest is Test {
         _nodeRegistry = new NodeRegistry();
 
         vm.prank(_admin);
-        _nodeRegistry.initialize(address(_arpa));
+        _nodeRegistry.initialize(address(_arpa), false);
 
         vm.prank(_admin);
         _nodeRegistry.setNodeRegistryConfig(

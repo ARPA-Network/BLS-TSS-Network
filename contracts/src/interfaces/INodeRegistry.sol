@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.18;
 
+import {ISignatureUtils} from "./ISignatureUtils.sol";
+
 interface INodeRegistry {
     struct Node {
         address idAddress;
@@ -17,7 +19,10 @@ interface INodeRegistry {
     }
 
     // node transaction
-    function nodeRegister(bytes calldata dkgPublicKey) external;
+    function nodeRegister(
+        bytes calldata dkgPublicKey,
+        ISignatureUtils.SignatureWithSaltAndExpiry memory operatorSignature
+    ) external;
 
     function nodeActivate() external;
 
@@ -49,4 +54,6 @@ interface INodeRegistry {
             uint256 nodeStakingAmount,
             uint256 pendingBlockAfterQuit
         );
+
+    function isDeployedOnEigenlayer() external view returns (bool);
 }

@@ -64,7 +64,7 @@ contract ControllerTest is RandcastTestHelper {
         _nodeRegistry = new NodeRegistry();
 
         vm.prank(_admin);
-        _nodeRegistry.initialize(address(_arpa));
+        _nodeRegistry.initialize(address(_arpa), false);
 
         vm.prank(_admin);
         _nodeRegistry.setNodeRegistryConfig(
@@ -91,11 +91,11 @@ contract ControllerTest is RandcastTestHelper {
         // Fail on bad dkg public key
         vm.expectRevert(abi.encodeWithSelector(BLS.InvalidPublicKey.selector));
         vm.prank(_node1);
-        _nodeRegistry.nodeRegister(_badKey);
+        _nodeRegistry.nodeRegister(_badKey, _emptyOperatorSignature);
 
         // Register _node1
         vm.prank(_node1);
-        _nodeRegistry.nodeRegister(_dkgPubkey1);
+        _nodeRegistry.nodeRegister(_dkgPubkey1, _emptyOperatorSignature);
 
         // Assert _node1 state is correct
         INodeRegistry.Node memory n = _nodeRegistry.getNode(_node1);
@@ -107,7 +107,7 @@ contract ControllerTest is RandcastTestHelper {
         // fail on already registered node
         vm.expectRevert(abi.encodeWithSelector(NodeRegistry.NodeAlreadyRegistered.selector));
         vm.prank(_node1);
-        _nodeRegistry.nodeRegister(_dkgPubkey1);
+        _nodeRegistry.nodeRegister(_dkgPubkey1, _emptyOperatorSignature);
     }
 
     function testRemoveFromGroup() public {
@@ -127,26 +127,26 @@ contract ControllerTest is RandcastTestHelper {
 
         // Add 4th node, should create new group
         vm.prank(_node4);
-        _nodeRegistry.nodeRegister(_dkgPubkey4);
+        _nodeRegistry.nodeRegister(_dkgPubkey4, _emptyOperatorSignature);
         emit log_named_uint("groupCount", _controller.getGroupCount());
         printGroupInfo(1);
 
         // The below needs further testing
         // Test needsRebalance
         vm.prank(_node5);
-        _nodeRegistry.nodeRegister(_dkgPubkey5);
+        _nodeRegistry.nodeRegister(_dkgPubkey5, _emptyOperatorSignature);
         vm.prank(_node6);
-        _nodeRegistry.nodeRegister(_dkgPubkey6);
+        _nodeRegistry.nodeRegister(_dkgPubkey6, _emptyOperatorSignature);
         vm.prank(_node7);
-        _nodeRegistry.nodeRegister(_dkgPubkey7);
+        _nodeRegistry.nodeRegister(_dkgPubkey7, _emptyOperatorSignature);
         vm.prank(_node8);
-        _nodeRegistry.nodeRegister(_dkgPubkey8);
+        _nodeRegistry.nodeRegister(_dkgPubkey8, _emptyOperatorSignature);
         vm.prank(_node9);
-        _nodeRegistry.nodeRegister(_dkgPubkey9);
+        _nodeRegistry.nodeRegister(_dkgPubkey9, _emptyOperatorSignature);
         vm.prank(_node10);
-        _nodeRegistry.nodeRegister(_dkgPubkey10);
+        _nodeRegistry.nodeRegister(_dkgPubkey10, _emptyOperatorSignature);
         vm.prank(_node11);
-        _nodeRegistry.nodeRegister(_dkgPubkey11);
+        _nodeRegistry.nodeRegister(_dkgPubkey11, _emptyOperatorSignature);
         emit log("+++++++++++++++++++++++");
         printGroupInfo(0);
         printGroupInfo(1);
@@ -187,18 +187,18 @@ contract ControllerTest is RandcastTestHelper {
 
         // Register Node 1
         vm.prank(_node1);
-        _nodeRegistry.nodeRegister(_dkgPubkey1);
+        _nodeRegistry.nodeRegister(_dkgPubkey1, _emptyOperatorSignature);
         // printGroupInfo(groupIndex);
         // printNodeInfo(_node1);
 
         // Register Node 2
         vm.prank(_node2);
-        _nodeRegistry.nodeRegister(_dkgPubkey2);
+        _nodeRegistry.nodeRegister(_dkgPubkey2, _emptyOperatorSignature);
         // printGroupInfo(groupIndex);
 
         // Register Node 3
         vm.prank(_node3);
-        _nodeRegistry.nodeRegister(_dkgPubkey3);
+        _nodeRegistry.nodeRegister(_dkgPubkey3, _emptyOperatorSignature);
         // printGroupInfo(groupIndex);
 
         // check group struct is correct
@@ -242,7 +242,7 @@ contract ControllerTest is RandcastTestHelper {
 
         // Add 4th node, should create new group
         vm.prank(_node4);
-        _nodeRegistry.nodeRegister(_dkgPubkey4);
+        _nodeRegistry.nodeRegister(_dkgPubkey4, _emptyOperatorSignature);
         emit log_named_uint("groupCount", _controller.getGroupCount());
         printGroupInfo(2);
     }
@@ -479,7 +479,7 @@ contract ControllerTest is RandcastTestHelper {
 
         // register node, confirm initial stake amount
         vm.prank(_node1);
-        _nodeRegistry.nodeRegister(_dkgPubkey1);
+        _nodeRegistry.nodeRegister(_dkgPubkey1, _emptyOperatorSignature);
         assertEq(1, _controller.getGroup(0).members.length);
         // TODO
         // assertEq(operatorStakeAmount, staker.getLockedAmount(_node1));

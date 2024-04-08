@@ -11,9 +11,9 @@ import {Adapter} from "../src/Adapter.sol";
 import {IAdapterOwner} from "../src/interfaces/IAdapterOwner.sol";
 import {Arpa} from "./ArpaLocalTest.sol";
 import {IERC20} from "openzeppelin-contracts/contracts/token/ERC20/IERC20.sol";
-import {ERC20} from "openzeppelin-contracts/contracts/token/ERC20/ERC20.sol";
 import {ERC1967Proxy} from "openzeppelin-contracts/contracts/proxy/ERC1967/ERC1967Proxy.sol";
 import {Staking} from "Staking-v0.1/Staking.sol";
+import {EigenlayerCoordinator} from "../src/EigenlayerCoordinator.sol";
 
 // solhint-disable-next-line max-states-count
 contract ControllerLocalTestScript is Script {
@@ -70,6 +70,11 @@ contract ControllerLocalTestScript is Script {
     bool internal _arpaExists = vm.envBool("ARPA_EXISTS");
     address internal _existingArpaAddress = vm.envAddress("EXISTING_L1_ARPA_ADDRESS");
 
+    bool internal _isEigenlayer = vm.envBool("IS_EIGENLAYER");
+    address internal _stETHStrategyAddress = vm.envAddress("STETH_STRATEGY_ADDRESS");
+    address internal _avsDirectory = vm.envAddress("AVS_DIRECTORY_ADDRESS");
+    address internal _delegationManager = vm.envAddress("DELEGATION_MANAGER_ADDRESS");
+
     function run() external {
         Controller controller;
         NodeRegistry nodeRegistry;
@@ -79,7 +84,9 @@ contract ControllerLocalTestScript is Script {
         ERC1967Proxy adapter;
         Adapter adapterImpl;
         Staking staking;
+        EigenlayerCoordinator eigenlayerCoordinator;
         IERC20 arpa;
+        address stakingAddress;
 
         if (_arpaExists == false) {
             vm.broadcast(_deployerPrivateKey);
@@ -88,19 +95,41 @@ contract ControllerLocalTestScript is Script {
             arpa = IERC20(_existingArpaAddress);
         }
 
-        Staking.PoolConstructorParams memory params = Staking.PoolConstructorParams(
-            IERC20(address(arpa)),
-            _initialMaxPoolSize,
-            _initialMaxCommunityStakeAmount,
-            _minCommunityStakeAmount,
-            _operatorStakeAmount,
-            _minInitialOperatorCount,
-            _minRewardDuration,
-            _delegationRateDenominator,
-            _unstakeFreezingDuration
-        );
         vm.broadcast(_deployerPrivateKey);
-        staking = new Staking(params);
+        nodeRegistry = new NodeRegistry();
+
+        vm.broadcast(_deployerPrivateKey);
+        nodeRegistry.initialize(address(arpa), _isEigenlayer);
+
+        if (_isEigenlayer) {
+            vm.broadcast(_deployerPrivateKey);
+            eigenlayerCoordinator = new EigenlayerCoordinator();
+            stakingAddress = address(eigenlayerCoordinator);
+
+            vm.broadcast(_deployerPrivateKey);
+            eigenlayerCoordinator.initialize(
+                address(nodeRegistry), _stETHStrategyAddress, _avsDirectory, _delegationManager
+            );
+        } else {
+            Staking.PoolConstructorParams memory params = Staking.PoolConstructorParams(
+                IERC20(address(arpa)),
+                _initialMaxPoolSize,
+                _initialMaxCommunityStakeAmount,
+                _minCommunityStakeAmount,
+                _operatorStakeAmount,
+                _minInitialOperatorCount,
+                _minRewardDuration,
+                _delegationRateDenominator,
+                _unstakeFreezingDuration
+            );
+
+            vm.broadcast(_deployerPrivateKey);
+            staking = new Staking(params);
+            stakingAddress = address(staking);
+
+            vm.broadcast(_deployerPrivateKey);
+            staking.setController(address(nodeRegistry));
+        }
 
         vm.broadcast(_deployerPrivateKey);
         controller = new Controller();
@@ -109,14 +138,8 @@ contract ControllerLocalTestScript is Script {
         controller.initialize(_lastOutput);
 
         vm.broadcast(_deployerPrivateKey);
-        nodeRegistry = new NodeRegistry();
-
-        vm.broadcast(_deployerPrivateKey);
-        nodeRegistry.initialize(address(arpa));
-
-        vm.broadcast(_deployerPrivateKey);
         nodeRegistry.setNodeRegistryConfig(
-            address(controller), address(staking), _operatorStakeAmount, _pendingBlockAfterQuit
+            address(controller), stakingAddress, _operatorStakeAmount, _pendingBlockAfterQuit
         );
 
         vm.broadcast(_deployerPrivateKey);
@@ -167,9 +190,6 @@ contract ControllerLocalTestScript is Script {
             _flatFeePromotionStartTimestamp,
             _flatFeePromotionEndTimestamp
         );
-
-        vm.broadcast(_deployerPrivateKey);
-        staking.setController(address(nodeRegistry));
 
         vm.broadcast(_deployerPrivateKey);
         controllerRelayer = new ControllerRelayer(address(controller));

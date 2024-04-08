@@ -16,5 +16,5 @@ interface INodeRegistryOwner {
         uint256 pendingBlockAfterQuit
     ) external;
 
-    function initialize(address arpa) external;
+    function initialize(address arpa, bool isEigenlayer) external;
 }

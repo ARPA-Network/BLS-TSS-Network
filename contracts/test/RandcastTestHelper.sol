@@ -8,7 +8,7 @@ import {IAdapterOwner} from "../src/interfaces/IAdapterOwner.sol";
 import {IAdapter} from "../src/interfaces/IAdapter.sol";
 import {AdapterForTest, Adapter} from "./AdapterForTest.sol";
 import {Staking} from "Staking-v0.1/Staking.sol";
-import {NodeRegistry} from "../src/NodeRegistry.sol";
+import {NodeRegistry, ISignatureUtils} from "../src/NodeRegistry.sol";
 import {ControllerForTest, Controller} from "./ControllerForTest.sol";
 import {IERC20} from "openzeppelin-contracts/contracts/token/ERC20/IERC20.sol";
 import {ERC20} from "openzeppelin-contracts/contracts/token/ERC20/ERC20.sol";
@@ -119,6 +119,9 @@ abstract contract RandcastTestHelper is Test {
     // Group params
     uint256 internal _t = 3;
     uint256 internal _n = 5;
+
+    ISignatureUtils.SignatureWithSaltAndExpiry internal _emptyOperatorSignature =
+        ISignatureUtils.SignatureWithSaltAndExpiry("", 0, 0);
 
     bytes internal _partialPublicKey1 =
         hex"18348db3ede7292fc88600b96e4d3edba371027a5533ef42fadeae694b2a3cd12bfcdf2dacb1d9fe8ff626c65edae4da2f052d385acd0354ec08e20a22b0debe2ef44d4f6630495e64cbecec26259fb2eb6ca4ca62ee0cafbdabc34cfabac32123262af20af318c9cf267ced51e649ed07c9285c16b58f8d12fcc32b5665f1c9";
@@ -557,7 +560,7 @@ abstract contract RandcastTestHelper is Test {
         _nodeRegistry = new NodeRegistry();
 
         vm.prank(_admin);
-        _nodeRegistry.initialize(address(_arpa));
+        _nodeRegistry.initialize(address(_arpa), false);
 
         vm.prank(_admin);
         _nodeRegistry.setNodeRegistryConfig(
@@ -632,7 +635,7 @@ abstract contract RandcastTestHelper is Test {
         for (uint256 i = 0; i < nodes.length; i++) {
             vm.deal(nodes[i], 1 * 10 ** 18);
             vm.prank(nodes[i]);
-            _nodeRegistry.nodeRegister(pubKeys[i]);
+            _nodeRegistry.nodeRegister(pubKeys[i], _emptyOperatorSignature);
         }
 
         for (uint256 i = 0; i < nodes.length; i++) {
