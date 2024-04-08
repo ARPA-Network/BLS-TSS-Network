@@ -2,10 +2,11 @@ use arpa_contract_client::adapter::AdapterViews;
 use arpa_contract_client::contract_stub::adapter::Adapter as AdapterContract;
 use arpa_contract_client::contract_stub::ierc20::IERC20 as ArpaContract;
 use arpa_contract_client::contract_stub::staking::Staking as StakingContract;
-use arpa_contract_client::controller::{ControllerTransactions, ControllerViews};
 use arpa_contract_client::ethers::adapter::AdapterClient;
 use arpa_contract_client::ethers::controller::ControllerClient;
 use arpa_contract_client::ethers::controller_oracle::ControllerOracleClient;
+use arpa_contract_client::ethers::node_registry::NodeRegistryClient;
+use arpa_contract_client::node_registry::{NodeRegistryTransactions, NodeRegistryViews};
 use arpa_contract_client::{ServiceClient, TransactionCaller, ViewCaller};
 use arpa_core::{
     address_to_string, build_wallet_from_config, pad_to_bytes32, Config, ConfigError,
@@ -66,6 +67,7 @@ struct Context<PC: Curve> {
     chain_identities: BTreeMap<usize, ChainIdentityHandlerType<PC>>,
     db: SqliteDB,
     staking_contract_address: Option<Address>,
+    node_registry_address: Option<Address>,
     show_address: bool,
     history_file_path: PathBuf,
 }
@@ -79,8 +81,8 @@ impl<PC: Curve> Context<PC> {
     }
 
     pub async fn staking_contract_address(&mut self) -> anyhow::Result<Address> {
-        let main_chain_id = self.config.get_main_chain_id();
         if self.staking_contract_address.is_none() {
+            let main_chain_id = self.config.get_main_chain_id();
             let client = self
                 .chain_identities
                 .get(&main_chain_id)
@@ -103,6 +105,34 @@ impl<PC: Curve> Context<PC> {
             return Ok(staking_contract_address);
         }
         Ok(self.staking_contract_address.unwrap())
+    }
+
+    pub async fn node_registry_address(&mut self) -> anyhow::Result<Address> {
+        if self.node_registry_address.is_none() {
+            let main_chain_id = self.config.get_main_chain_id();
+            let client = self
+                .chain_identities
+                .get(&main_chain_id)
+                .unwrap()
+                .build_controller_client();
+
+            let controller_contract = client.prepare_service_client().await?;
+
+            let node_registry_address = ControllerClient::call_contract_view(
+                main_chain_id,
+                "controller_config",
+                controller_contract.get_controller_config(),
+                self.config.get_time_limits().contract_view_retry_descriptor,
+            )
+            .await?
+            .1;
+
+            self.node_registry_address = Some(node_registry_address);
+
+            return Ok(node_registry_address);
+        }
+
+        Ok(self.node_registry_address.unwrap())
     }
 }
 
@@ -366,12 +396,12 @@ async fn send<PC: Curve>(
         }
         Some(("register", _sub_matches)) => {
             let main_chain_id = context.config.get_main_chain_id();
+            let node_registry_address = context.node_registry_address().await?;
             let client = context
                 .chain_identity(main_chain_id)?
-                .build_controller_client();
+                .build_node_registry_client(node_registry_address);
 
-            let node =
-                ControllerViews::<G2Curve>::get_node(&client, context.wallet.address()).await?;
+            let node = NodeRegistryViews::get_node(&client, context.wallet.address()).await?;
 
             if node.id_address != Address::zero() {
                 return Ok(Some("Node already registered".to_string()));
@@ -394,12 +424,12 @@ async fn send<PC: Curve>(
         }
         Some(("activate", _sub_matches)) => {
             let main_chain_id = context.config.get_main_chain_id();
+            let node_registry_address = context.node_registry_address().await?;
             let client = context
                 .chain_identity(main_chain_id)?
-                .build_controller_client();
+                .build_node_registry_client(node_registry_address);
 
-            let node =
-                ControllerViews::<G2Curve>::get_node(&client, context.wallet.address()).await?;
+            let node = NodeRegistryViews::get_node(&client, context.wallet.address()).await?;
 
             if node.id_address == Address::zero() {
                 return Ok(Some("Node has not registered".to_string()));
@@ -431,12 +461,12 @@ async fn send<PC: Curve>(
         }
         Some(("quit", _sub_matches)) => {
             let main_chain_id = context.config.get_main_chain_id();
+            let node_registry_address = context.node_registry_address().await?;
             let client = context
                 .chain_identity(main_chain_id)?
-                .build_controller_client();
+                .build_node_registry_client(node_registry_address);
 
-            let node =
-                ControllerViews::<G2Curve>::get_node(&client, context.wallet.address()).await?;
+            let node = NodeRegistryViews::get_node(&client, context.wallet.address()).await?;
 
             if node.id_address == Address::zero() {
                 return Ok(Some("Node has not registered".to_string()));
@@ -464,12 +494,12 @@ async fn send<PC: Curve>(
         }
         Some(("change-dkg-public-key", _sub_matches)) => {
             let main_chain_id = context.config.get_main_chain_id();
+            let node_registry_address = context.node_registry_address().await?;
             let client = context
                 .chain_identity(main_chain_id)?
-                .build_controller_client();
+                .build_node_registry_client(node_registry_address);
 
-            let node =
-                ControllerViews::<G2Curve>::get_node(&client, context.wallet.address()).await?;
+            let node = NodeRegistryViews::get_node(&client, context.wallet.address()).await?;
 
             if node.id_address == Address::zero() {
                 return Ok(Some("Node has not registered".to_string()));
@@ -514,12 +544,13 @@ async fn send<PC: Curve>(
             if recipient == Address::zero() {
                 return Ok(Some("Invalid recipient address".to_string()));
             }
-
             if *chain_id == context.config.get_main_chain_id() {
-                let client = context.chain_identity(*chain_id)?.build_controller_client();
+                let node_registry_address = context.node_registry_address().await?;
+                let client = context
+                    .chain_identity(*chain_id)?
+                    .build_node_registry_client(node_registry_address);
 
-                let node =
-                    ControllerViews::<G2Curve>::get_node(&client, context.wallet.address()).await?;
+                let node = NodeRegistryViews::get_node(&client, context.wallet.address()).await?;
 
                 if node.id_address == Address::zero() {
                     return Ok(Some("Node has not registered".to_string()));
@@ -584,12 +615,12 @@ async fn call<PC: Curve>(
             let main_chain_id = context.config.get_main_chain_id();
             let id_address = sub_matches.get_one::<String>("id-address").unwrap();
             let id_address = id_address.parse::<Address>()?;
-
+            let node_registry_address = context.node_registry_address().await?;
             let client = context
                 .chain_identity(main_chain_id)?
-                .build_controller_client();
+                .build_node_registry_client(node_registry_address);
 
-            let node = ControllerViews::<G2Curve>::get_node(&client, id_address).await?;
+            let node = NodeRegistryViews::get_node(&client, id_address).await?;
 
             Ok(Some(format!("{:#?}", node)))
         }
@@ -848,15 +879,18 @@ async fn call<PC: Curve>(
             let node_address = node_address.parse::<Address>()?;
 
             if *chain_id == context.config.get_main_chain_id() {
-                let client = context.chain_identity(*chain_id)?.build_controller_client();
+                let node_registry_address = context.node_registry_address().await?;
+                let client = context
+                    .chain_identity(*chain_id)?
+                    .build_node_registry_client(node_registry_address);
 
-                let controller_contract = client.prepare_service_client().await?;
+                let node_registry_contract = client.prepare_service_client().await?;
 
                 let (node_withdrawable_eth, node_withdrawable_arpa) =
-                    ControllerClient::call_contract_view(
+                    NodeRegistryClient::call_contract_view(
                         *chain_id,
                         "node_withdrawable_tokens",
-                        controller_contract.get_node_withdrawable_tokens(node_address),
+                        node_registry_contract.get_node_withdrawable_tokens(node_address),
                         context.config.contract_view_retry_descriptor(*chain_id)?,
                     )
                     .await?;
@@ -897,15 +931,13 @@ async fn call<PC: Curve>(
             let controller_contract = client.prepare_service_client().await?;
 
             let (
-                staking_contract_address,
+                node_registry_contract_address,
                 adapter_contract_address,
-                node_staking_amount,
                 disqualified_node_penalty_amount,
                 default_number_of_committers,
                 default_dkg_phase_duration,
                 group_max_capacity,
                 ideal_number_of_groups,
-                pending_block_after_quit,
                 dkg_post_process_reward,
             ) = ControllerClient::call_contract_view(
                 main_chain_id,
@@ -917,18 +949,16 @@ async fn call<PC: Curve>(
             )
             .await?;
 
-            Ok(Some(format!("staking_contract_address: {:#?}, adapter_contract_address: {:#?}, node_staking_amount: {:#?}, \
+            Ok(Some(format!("node_registry_contract_address: {:#?}, adapter_contract_address: {:#?}, \
             disqualified_node_penalty_amount: {:#?}, default_number_of_committers: {:#?}, default_dkg_phase_duration: {:#?}, \
-            group_max_capacity: {:#?}, ideal_number_of_groups: {:#?}, pending_block_after_quit: {:#?}, dkg_post_process_reward: {:#?}",  
-            staking_contract_address,
+            group_max_capacity: {:#?}, ideal_number_of_groups: {:#?}, dkg_post_process_reward: {:#?}",  
+            node_registry_contract_address,
             adapter_contract_address,
-            node_staking_amount,
             disqualified_node_penalty_amount,
             default_number_of_committers,
             default_dkg_phase_duration,
             group_max_capacity,
             ideal_number_of_groups,
-            pending_block_after_quit,
             dkg_post_process_reward,)))
         }
         Some(("fulfillments-as-committer", sub_matches)) => {
@@ -1579,6 +1609,7 @@ async fn main() -> anyhow::Result<()> {
         chain_identities,
         db,
         staking_contract_address: None,
+        node_registry_address: None,
         show_address: false,
         history_file_path: opt.history_file_path.clone(),
     };

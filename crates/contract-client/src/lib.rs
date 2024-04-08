@@ -219,9 +219,36 @@ pub trait ViewCaller {
     }
 }
 
+pub mod node_registry {
+    use crate::error::ContractClientResult;
+    use arpa_core::Node;
+    use async_trait::async_trait;
+    use ethers::core::types::Address;
+    use ethers::types::H256;
+
+    #[async_trait]
+    pub trait NodeRegistryTransactions {
+        async fn node_register(&self, id_public_key: Vec<u8>) -> ContractClientResult<H256>;
+    }
+
+    #[async_trait]
+    pub trait NodeRegistryViews {
+        async fn get_node(&self, id_address: Address) -> ContractClientResult<Node>;
+    }
+
+    pub trait NodeRegistryClientBuilder {
+        type NodeRegistryService: NodeRegistryTransactions + NodeRegistryViews + Send + Sync;
+
+        fn build_node_registry_client(
+            &self,
+            node_registry_address: Address,
+        ) -> Self::NodeRegistryService;
+    }
+}
+
 pub mod controller {
     use crate::error::ContractClientResult;
-    use arpa_core::{DKGTask, Group, Node};
+    use arpa_core::{DKGTask, Group};
     use async_trait::async_trait;
     use ethers::core::types::Address;
     use ethers::types::H256;
@@ -230,8 +257,6 @@ pub mod controller {
 
     #[async_trait]
     pub trait ControllerTransactions {
-        async fn node_register(&self, id_public_key: Vec<u8>) -> ContractClientResult<H256>;
-
         async fn commit_dkg(
             &self,
             group_index: usize,
@@ -250,11 +275,11 @@ pub mod controller {
 
     #[async_trait]
     pub trait ControllerViews<C: Curve> {
-        async fn get_node(&self, id_address: Address) -> ContractClientResult<Node>;
-
         async fn get_group(&self, group_index: usize) -> ContractClientResult<Group<C>>;
 
         async fn get_coordinator(&self, group_index: usize) -> ContractClientResult<Address>;
+
+        async fn get_node_registry_address(&self) -> ContractClientResult<Address>;
     }
 
     #[async_trait]

@@ -11,7 +11,7 @@ use crate::{
 use crate::{TransactionCaller, ViewCaller};
 use arpa_core::{
     u256_to_vec, ChainIdentity, DKGTask, ExponentialBackoffRetryDescriptor,
-    GeneralMainChainIdentity, GeneralRelayedChainIdentity, Group, MainChainIdentity, Member, Node,
+    GeneralMainChainIdentity, GeneralRelayedChainIdentity, Group, MainChainIdentity, Member,
     WsWalletSigner,
 };
 use async_trait::async_trait;
@@ -89,23 +89,6 @@ impl ViewCaller for ControllerClient {}
 
 #[async_trait]
 impl ControllerTransactions for ControllerClient {
-    async fn node_register(&self, id_public_key: Vec<u8>) -> ContractClientResult<H256> {
-        let controller_contract =
-            ServiceClient::<ControllerContract>::prepare_service_client(self).await?;
-
-        let call = controller_contract.node_register(id_public_key.into());
-
-        ControllerClient::call_contract_transaction(
-            self.chain_id,
-            "node_register",
-            controller_contract.client_ref(),
-            call,
-            self.contract_transaction_retry_descriptor,
-            true,
-        )
-        .await
-    }
-
     async fn commit_dkg(
         &self,
         group_index: usize,
@@ -174,25 +157,6 @@ impl<C: Curve> ControllerViews<C> for ControllerClient {
         .map(parse_contract_group)
     }
 
-    async fn get_node(&self, id_address: Address) -> ContractClientResult<Node> {
-        let controller_contract =
-            ServiceClient::<ControllerContract>::prepare_service_client(self).await?;
-
-        ControllerClient::call_contract_view(
-            self.chain_id,
-            "get_node",
-            controller_contract.get_node(id_address),
-            self.contract_view_retry_descriptor,
-        )
-        .await
-        .map(|n| Node {
-            id_address: n.id_address,
-            id_public_key: n.dkg_public_key.to_vec(),
-            state: n.state,
-            pending_until_block: n.pending_until_block.as_usize(),
-        })
-    }
-
     async fn get_coordinator(&self, group_index: usize) -> ContractClientResult<Address> {
         let controller_contract =
             ServiceClient::<ControllerContract>::prepare_service_client(self).await?;
@@ -204,6 +168,21 @@ impl<C: Curve> ControllerViews<C> for ControllerClient {
             self.contract_view_retry_descriptor,
         )
         .await
+    }
+
+    async fn get_node_registry_address(&self) -> ContractClientResult<Address> {
+        let controller_contract =
+            ServiceClient::<ControllerContract>::prepare_service_client(self).await?;
+
+        let config = ControllerClient::call_contract_view(
+            self.chain_id,
+            "get_controller_config",
+            controller_contract.get_controller_config(),
+            self.contract_view_retry_descriptor,
+        )
+        .await?;
+
+        Ok(config.0)
     }
 }
 

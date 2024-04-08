@@ -8,6 +8,8 @@ provider_endpoint: "ws://127.0.0.1:8546"
 
 chain_id: 900
 
+is_eigenlayer: false
+
 controller_address: "0x5eb3Bc0a489C5A8288765d2336659EbCA68FCd00"
 
 controller_relayer_address: "0x82e01223d51Eb87e16A03E24687EDF0F294da6f1"

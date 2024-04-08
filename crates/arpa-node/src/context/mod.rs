@@ -17,8 +17,9 @@ use arpa_contract_client::{
     ethers::{
         adapter::AdapterClient, controller::ControllerClient,
         controller_oracle::ControllerOracleClient, controller_relayer::ControllerRelayerClient,
-        coordinator::CoordinatorClient,
+        coordinator::CoordinatorClient, node_registry::NodeRegistryClient,
     },
+    node_registry::NodeRegistryClientBuilder,
 };
 use arpa_core::{ChainIdentity, ChainProviderManager, Config, RandomnessTask, SchedulerResult};
 use arpa_dal::cache::RandomnessResultCache;
@@ -37,6 +38,7 @@ use tokio::sync::RwLock;
 pub trait ChainIdentityHandler<PC: Curve>:
     ChainIdentity
     + ChainProviderManager
+    + NodeRegistryClientBuilder
     + ControllerClientBuilder<PC>
     + ControllerRelayerClientBuilder
     + ControllerOracleClientBuilder<PC>
@@ -51,6 +53,7 @@ pub trait ChainIdentityHandler<PC: Curve>:
 pub type ChainIdentityHandlerType<PC> = Box<
     dyn ChainIdentityHandler<
         PC,
+        NodeRegistryService = NodeRegistryClient,
         ControllerService = ControllerClient,
         ControllerRelayerService = ControllerRelayerClient,
         ControllerOracleService = ControllerOracleClient,

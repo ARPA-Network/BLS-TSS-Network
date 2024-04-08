@@ -66,6 +66,7 @@ struct ConfigHolder {
     pub node_management_rpc_token: String,
     pub provider_endpoint: String,
     pub chain_id: usize,
+    pub is_eigenlayer: Option<bool>,
     pub controller_address: String,
     pub controller_relayer_address: String,
     pub adapter_address: String,
@@ -89,6 +90,7 @@ impl Default for ConfigHolder {
             node_management_rpc_token: "for_test".to_string(),
             provider_endpoint: "localhost:8545".to_string(),
             chain_id: 0,
+            is_eigenlayer: Some(false),
             controller_address: PLACEHOLDER_ADDRESS.to_string(),
             controller_relayer_address: PLACEHOLDER_ADDRESS.to_string(),
             adapter_address: PLACEHOLDER_ADDRESS.to_string(),
@@ -425,6 +427,7 @@ pub struct Config {
     node_management_rpc_token: String,
     provider_endpoint: String,
     chain_id: usize,
+    is_eigenlayer: bool,
     controller_address: String,
     controller_relayer_address: String,
     adapter_address: String,
@@ -461,6 +464,11 @@ impl From<ConfigHolder> for Config {
         };
         let provider_endpoint = config_holder.provider_endpoint.clone();
         let chain_id = config_holder.chain_id;
+        let is_eigenlayer = if config_holder.is_eigenlayer.is_none() {
+            false
+        } else {
+            config_holder.is_eigenlayer.unwrap()
+        };
         let controller_address = config_holder.controller_address.clone();
         let controller_relayer_address = config_holder.controller_relayer_address.clone();
         let adapter_address = config_holder.adapter_address.clone();
@@ -555,6 +563,7 @@ impl From<ConfigHolder> for Config {
             node_management_rpc_token,
             provider_endpoint,
             chain_id,
+            is_eigenlayer,
             controller_address,
             controller_relayer_address,
             adapter_address,
@@ -589,6 +598,10 @@ impl Config {
             serde_yaml::from_str(config_str).expect("Error loading configuration file");
 
         config.into()
+    }
+
+    pub fn is_eigenlayer(&self) -> bool {
+        self.is_eigenlayer
     }
 
     pub fn get_main_chain_id(&self) -> usize {

@@ -1,4 +1,6 @@
-use arpa_contract_client::controller::{ControllerClientBuilder, ControllerTransactions};
+use arpa_contract_client::controller::ControllerClientBuilder;
+use arpa_contract_client::controller::ControllerViews;
+use arpa_contract_client::node_registry::{NodeRegistryClientBuilder, NodeRegistryTransactions};
 use arpa_core::build_wallet_from_config;
 use arpa_core::log::encoder::JsonEncoder;
 use arpa_core::Config;
@@ -134,6 +136,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let id_address = wallet.address();
 
     let is_new_run = !data_path.exists();
+
+    let is_eigenlayer = config.is_eigenlayer();
 
     if let Some(parent) = data_path.parent() {
         fs::create_dir_all(parent)?;
@@ -310,11 +314,19 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let handle = context.deploy().await?;
 
-    if is_new_run {
-        let client =
+    if is_new_run && !is_eigenlayer {
+        let controller_client =
             ControllerClientBuilder::<G2Curve>::build_controller_client(&main_chain_identity);
 
-        client
+        let node_registry_address =
+            ControllerViews::<G2Curve>::get_node_registry_address(&controller_client).await?;
+
+        let node_registry_client = NodeRegistryClientBuilder::build_node_registry_client(
+            &main_chain_identity,
+            node_registry_address,
+        );
+
+        node_registry_client
             .node_register(dkg_public_key_to_register.unwrap())
             .await?;
     }

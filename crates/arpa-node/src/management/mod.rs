@@ -132,24 +132,25 @@ where
     <S as SignatureScheme>::Error: Sync + Send,
 {
     async fn node_register(&self) -> NodeResult<()> {
-        let client = self
-            .get_main_chain()
-            .get_chain_identity()
-            .read()
-            .await
-            .build_controller_client();
+        // TODO
+        // let client = self
+        //     .get_main_chain()
+        //     .get_chain_identity()
+        //     .read()
+        //     .await
+        //     .build_controller_client();
 
-        let dkg_public_key = self
-            .get_main_chain()
-            .get_node_cache()
-            .read()
-            .await
-            .get_dkg_public_key()?
-            .to_owned();
+        // let dkg_public_key = self
+        //     .get_main_chain()
+        //     .get_node_cache()
+        //     .read()
+        //     .await
+        //     .get_dkg_public_key()?
+        //     .to_owned();
 
-        client
-            .node_register(bincode::serialize(&dkg_public_key).unwrap())
-            .await?;
+        // client
+        //     .node_register(bincode::serialize(&dkg_public_key).unwrap())
+        //     .await?;
 
         Ok(())
     }
