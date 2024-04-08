@@ -62,25 +62,20 @@ library GroupLib {
         }
     }
 
-    function nodeLeave(GroupData storage groupData, address idAddress, uint256 lastOutput)
+    function nodeLeave(GroupData storage groupData, uint256 groupIndex, uint256 memberIndex, uint256 lastOutput)
         public
         returns (uint256[] memory groupIndicesToEmitEvent)
     {
         groupIndicesToEmitEvent = new uint256[](0);
 
-        (int256 groupIndex, int256 memberIndex) = getBelongingGroupByMemberAddress(groupData, idAddress);
-
-        if (groupIndex != -1) {
-            (bool needRebalance, bool needEmitGroupEvent) =
-                removeFromGroup(groupData, uint256(memberIndex), uint256(groupIndex));
-            if (needEmitGroupEvent) {
-                groupIndicesToEmitEvent = new uint256[](1);
-                groupIndicesToEmitEvent[0] = uint256(groupIndex);
-                return groupIndicesToEmitEvent;
-            }
-            if (needRebalance) {
-                return arrangeMembersInGroup(groupData, uint256(groupIndex), lastOutput);
-            }
+        (bool needRebalance, bool needEmitGroupEvent) = removeFromGroup(groupData, memberIndex, groupIndex);
+        if (needEmitGroupEvent) {
+            groupIndicesToEmitEvent = new uint256[](1);
+            groupIndicesToEmitEvent[0] = groupIndex;
+            return groupIndicesToEmitEvent;
+        }
+        if (needRebalance) {
+            return arrangeMembersInGroup(groupData, uint256(groupIndex), lastOutput);
         }
     }
 
@@ -118,9 +113,7 @@ library GroupLib {
 
                 // Create indexMemberMap: Iterate through group.members and create mapping: memberIndex -> nodeIdAddress
                 // Create qualifiedIndices: Iterate through group, add all member indexes found in majorityMembers.
-                uint256[] memory qualifiedIndices = new uint256[](
-                        majorityMembers.length
-                    );
+                uint256[] memory qualifiedIndices = new uint256[](majorityMembers.length);
 
                 for (uint256 j = 0; j < majorityMembers.length; j++) {
                     for (uint256 i = 0; i < g.members.length; i++) {
@@ -322,7 +315,7 @@ library GroupLib {
         returns (bool rebalanceSuccess, uint256 groupIndexToRebalance)
     {
         // get all group indices excluding the current groupIndex
-        uint256[] memory groupIndices = new uint256[](groupData.groupCount -1);
+        uint256[] memory groupIndices = new uint256[](groupData.groupCount - 1);
         uint256 index = 0;
         for (uint256 i = 0; i < groupData.groupCount; i++) {
             if (i != groupIndex) {

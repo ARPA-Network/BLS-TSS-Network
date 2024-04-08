@@ -69,6 +69,7 @@ contract Controller is Initializable, IController, IControllerOwner, OwnableUpgr
     error SenderNotAdapter();
     error SenderNotNodeRegistry();
     error DuplicatedDisqualifiedNode();
+    error CannotLeaveGroupDuringDkg();
 
     function initialize(uint256 lastOutput) public initializer {
         _lastOutput = lastOutput;
@@ -133,10 +134,19 @@ contract Controller is Initializable, IController, IControllerOwner, OwnableUpgr
             revert SenderNotNodeRegistry();
         }
 
-        uint256[] memory groupIndicesToEmitEvent = _groupData.nodeLeave(nodeIdAddress, _lastOutput);
+        (int256 groupIndex, int256 memberIndex) = _groupData.getBelongingGroupByMemberAddress(nodeIdAddress);
 
-        for (uint256 i = 0; i < groupIndicesToEmitEvent.length; i++) {
-            _emitGroupEvent(groupIndicesToEmitEvent[i]);
+        if (groupIndex != -1) {
+            if (_coordinators[uint256(groupIndex)] != address(0)) {
+                revert CannotLeaveGroupDuringDkg();
+            }
+
+            uint256[] memory groupIndicesToEmitEvent =
+                _groupData.nodeLeave(uint256(groupIndex), uint256(memberIndex), _lastOutput);
+
+            for (uint256 i = 0; i < groupIndicesToEmitEvent.length; i++) {
+                _emitGroupEvent(groupIndicesToEmitEvent[i]);
+            }
         }
     }
 
