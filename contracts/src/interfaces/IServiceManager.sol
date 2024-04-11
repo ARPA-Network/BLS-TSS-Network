@@ -3,7 +3,7 @@ pragma solidity ^0.8.18;
 
 import {ISignatureUtils} from "./ISignatureUtils.sol";
 
-interface IEigenlayerCoordinator {
+interface IServiceManager {
     function registerOperator(address operator, ISignatureUtils.SignatureWithSaltAndExpiry memory operatorSignature)
         external;
 

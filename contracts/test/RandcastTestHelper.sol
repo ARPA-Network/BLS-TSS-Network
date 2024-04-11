@@ -8,6 +8,7 @@ import {IAdapterOwner} from "../src/interfaces/IAdapterOwner.sol";
 import {IAdapter} from "../src/interfaces/IAdapter.sol";
 import {AdapterForTest, Adapter} from "./AdapterForTest.sol";
 import {Staking} from "Staking-v0.1/Staking.sol";
+import {ServiceManager} from "../src/eigenlayer/ServiceManager.sol";
 import {NodeRegistry, ISignatureUtils} from "../src/NodeRegistry.sol";
 import {ControllerForTest, Controller} from "./ControllerForTest.sol";
 import {IERC20} from "openzeppelin-contracts/contracts/token/ERC20/IERC20.sol";
@@ -23,6 +24,7 @@ abstract contract RandcastTestHelper is Test {
     AdapterForTest internal _adapterImpl;
     IERC20 internal _arpa;
     Staking internal _staking;
+    ServiceManager internal _serviceManager;
 
     address internal _admin = address(0xABCD);
     address internal _stakingDeployer = address(0xBCDE);
@@ -70,6 +72,8 @@ abstract contract RandcastTestHelper is Test {
     uint256 internal _minCommunityStakeAmount = 1e12;
     /// @notice The minimum stake amount that an operator can stake
     uint256 internal _operatorStakeAmount = 500_00 * 1e18;
+    /// @notice The minimum stake amount that an eigenlayer operator must stake
+    uint256 internal _eigenlayerOperatorStakeAmount = 500_00 * 1e18;
     /// @notice The minimum number of node operators required to initialize the
     /// _staking pool.
     uint256 internal _minInitialOperatorCount = 1;
@@ -557,14 +561,25 @@ abstract contract RandcastTestHelper is Test {
         _controller = new ControllerForTest(_lastOutput);
 
         vm.prank(_admin);
+        _serviceManager = new ServiceManager();
+
+        vm.prank(_admin);
+        _serviceManager.initialize(address(_staking), address(0), address(0), address(0));
+
+        vm.prank(_admin);
         _nodeRegistry = new NodeRegistry();
 
         vm.prank(_admin);
-        _nodeRegistry.initialize(address(_arpa), false);
+        _nodeRegistry.initialize(address(_arpa));
 
         vm.prank(_admin);
         _nodeRegistry.setNodeRegistryConfig(
-            address(_controller), address(_staking), _operatorStakeAmount, _pendingBlockAfterQuit
+            address(_controller),
+            address(_staking),
+            address(_serviceManager),
+            _operatorStakeAmount,
+            _eigenlayerOperatorStakeAmount,
+            _pendingBlockAfterQuit
         );
 
         vm.prank(_admin);
@@ -635,7 +650,7 @@ abstract contract RandcastTestHelper is Test {
         for (uint256 i = 0; i < nodes.length; i++) {
             vm.deal(nodes[i], 1 * 10 ** 18);
             vm.prank(nodes[i]);
-            _nodeRegistry.nodeRegister(pubKeys[i], _emptyOperatorSignature);
+            _nodeRegistry.nodeRegister(pubKeys[i], false, _emptyOperatorSignature);
         }
 
         for (uint256 i = 0; i < nodes.length; i++) {

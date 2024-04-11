@@ -8,7 +8,7 @@ import {INodeRegistry, ISignatureUtils} from "./interfaces/INodeRegistry.sol";
 import {INodeRegistryOwner} from "./interfaces/INodeRegistryOwner.sol";
 import {IController} from "./interfaces/IController.sol";
 import {INodeStaking} from "Staking-v0.1/interfaces/INodeStaking.sol";
-import {IEigenlayerCoordinator} from "./interfaces/IEigenlayerCoordinator.sol";
+import {IServiceManager} from "./interfaces/IServiceManager.sol";
 import {BLS} from "./libraries/BLS.sol";
 
 contract NodeRegistry is Initializable, INodeRegistry, INodeRegistryOwner, OwnableUpgradeable {
@@ -20,8 +20,6 @@ contract NodeRegistry is Initializable, INodeRegistry, INodeRegistryOwner, Ownab
     // *NodeRegistry Config*
     NodeRegistryConfig private _config;
     IERC20 private _arpa;
-    /// @notice Indicates whether the network is deployed on Eigenlayer
-    bool private _isEigenlayer;
 
     // *Node State Variables*
     mapping(address => Node) private _nodes; // maps node address to Node Struct
@@ -45,9 +43,8 @@ contract NodeRegistry is Initializable, INodeRegistry, INodeRegistryOwner, Ownab
     error InvalidZeroAddress();
     error OperatorUnderStaking();
 
-    function initialize(address arpa, bool isEigenlayer) public override(INodeRegistryOwner) initializer {
+    function initialize(address arpa) public override(INodeRegistryOwner) initializer {
         _arpa = IERC20(arpa);
-        _isEigenlayer = isEigenlayer;
 
         __Ownable_init();
     }
@@ -55,11 +52,18 @@ contract NodeRegistry is Initializable, INodeRegistry, INodeRegistryOwner, Ownab
     function setNodeRegistryConfig(
         address controllerContractAddress,
         address stakingContractAddress,
-        uint256 nodeStakingAmount,
+        address serviceManagerContractAddress,
+        uint256 nativeNodeStakingAmount,
+        uint256 eigenlayerNodeStakingAmount,
         uint256 pendingBlockAfterQuit
     ) external override(INodeRegistryOwner) onlyOwner {
         _config = NodeRegistryConfig(
-            controllerContractAddress, stakingContractAddress, nodeStakingAmount, pendingBlockAfterQuit
+            controllerContractAddress,
+            stakingContractAddress,
+            serviceManagerContractAddress,
+            nativeNodeStakingAmount,
+            eigenlayerNodeStakingAmount,
+            pendingBlockAfterQuit
         );
     }
 
@@ -68,6 +72,7 @@ contract NodeRegistry is Initializable, INodeRegistry, INodeRegistryOwner, Ownab
     // =============
     function nodeRegister(
         bytes calldata dkgPublicKey,
+        bool isEigenlayerNode,
         ISignatureUtils.SignatureWithSaltAndExpiry memory operatorSignature
     ) external override(INodeRegistry) {
         if (_nodes[msg.sender].idAddress != address(0)) {
@@ -79,15 +84,15 @@ contract NodeRegistry is Initializable, INodeRegistry, INodeRegistryOwner, Ownab
             revert BLS.InvalidPublicKey();
         }
 
-        if (_isEigenlayer) {
-            uint256 share = IEigenlayerCoordinator(_config.stakingContractAddress).getOperatorShare(msg.sender);
-            if (share < _config.nodeStakingAmount) {
+        if (isEigenlayerNode) {
+            uint256 share = IServiceManager(_config.stakingContractAddress).getOperatorShare(msg.sender);
+            if (share < _config.nativeNodeStakingAmount) {
                 revert OperatorUnderStaking();
             }
-            IEigenlayerCoordinator(_config.stakingContractAddress).registerOperator(msg.sender, operatorSignature);
+            IServiceManager(_config.stakingContractAddress).registerOperator(msg.sender, operatorSignature);
         } else {
             // Lock staking amount in Staking contract
-            INodeStaking(_config.stakingContractAddress).lock(msg.sender, _config.nodeStakingAmount);
+            INodeStaking(_config.stakingContractAddress).lock(msg.sender, _config.nativeNodeStakingAmount);
         }
 
         // Populate Node struct and insert into nodes
@@ -95,6 +100,7 @@ contract NodeRegistry is Initializable, INodeRegistry, INodeRegistryOwner, Ownab
         n.idAddress = msg.sender;
         n.dkgPublicKey = dkgPublicKey;
         n.state = true;
+        n.isEigenlayerNode = isEigenlayerNode;
 
         // Initialize withdrawable eths and arpa rewards to save gas for adapter call
         _withdrawableEths[msg.sender] = _BALANCE_BASE;
@@ -119,16 +125,18 @@ contract NodeRegistry is Initializable, INodeRegistry, INodeRegistryOwner, Ownab
             revert NodeStillPending(node.pendingUntilBlock);
         }
 
-        if (_isEigenlayer) {
-            uint256 share = IEigenlayerCoordinator(_config.stakingContractAddress).getOperatorShare(msg.sender);
-            if (share < _config.nodeStakingAmount) {
+        if (node.isEigenlayerNode) {
+            uint256 share = IServiceManager(_config.stakingContractAddress).getOperatorShare(msg.sender);
+            if (share < _config.nativeNodeStakingAmount) {
                 revert OperatorUnderStaking();
             }
         } else {
             // lock up to staking amount in Staking contract
             uint256 lockedAmount = INodeStaking(_config.stakingContractAddress).getLockedAmount(msg.sender);
-            if (lockedAmount < _config.nodeStakingAmount) {
-                INodeStaking(_config.stakingContractAddress).lock(msg.sender, _config.nodeStakingAmount - lockedAmount);
+            if (lockedAmount < _config.nativeNodeStakingAmount) {
+                INodeStaking(_config.stakingContractAddress).lock(
+                    msg.sender, _config.nativeNodeStakingAmount - lockedAmount
+                );
             }
         }
 
@@ -150,11 +158,11 @@ contract NodeRegistry is Initializable, INodeRegistry, INodeRegistryOwner, Ownab
 
         _freezeNode(msg.sender, _config.pendingBlockAfterQuit);
 
-        if (_isEigenlayer) {
-            IEigenlayerCoordinator(_config.stakingContractAddress).deregisterOperator(msg.sender);
+        if (node.isEigenlayerNode) {
+            IServiceManager(_config.stakingContractAddress).deregisterOperator(msg.sender);
         } else {
             // unlock staking amount in Staking contract
-            INodeStaking(_config.stakingContractAddress).unlock(msg.sender, _config.nodeStakingAmount);
+            INodeStaking(_config.stakingContractAddress).unlock(msg.sender, _config.nativeNodeStakingAmount);
         }
 
         emit NodeQuit(msg.sender);
@@ -217,10 +225,10 @@ contract NodeRegistry is Initializable, INodeRegistry, INodeRegistryOwner, Ownab
             revert SenderNotController();
         }
 
-        if (_isEigenlayer) {
-            IEigenlayerCoordinator(_config.stakingContractAddress).slashDelegationStaking(
-                nodeIdAddress, stakingRewardPenalty
-            );
+        Node storage node = _nodes[nodeIdAddress];
+
+        if (node.isEigenlayerNode) {
+            IServiceManager(_config.stakingContractAddress).slashDelegationStaking(nodeIdAddress, stakingRewardPenalty);
         } else {
             // slash staking reward in Staking contract
             INodeStaking(_config.stakingContractAddress).slashDelegationReward(nodeIdAddress, stakingRewardPenalty);
@@ -262,20 +270,18 @@ contract NodeRegistry is Initializable, INodeRegistry, INodeRegistryOwner, Ownab
         returns (
             address controllerContractAddress,
             address stakingContractAddress,
-            uint256 nodeStakingAmount,
+            uint256 nativeNodeStakingAmount,
+            uint256 eigenlayerNodeStakingAmount,
             uint256 pendingBlockAfterQuit
         )
     {
         return (
             _config.controllerContractAddress,
             _config.stakingContractAddress,
-            _config.nodeStakingAmount,
+            _config.nativeNodeStakingAmount,
+            _config.eigenlayerNodeStakingAmount,
             _config.pendingBlockAfterQuit
         );
-    }
-
-    function isDeployedOnEigenlayer() external view returns (bool) {
-        return _isEigenlayer;
     }
 
     // =============

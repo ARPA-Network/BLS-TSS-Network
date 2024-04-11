@@ -45,11 +45,16 @@ contract DKGScenarioTest is RandcastTestHelper {
         _nodeRegistry = new NodeRegistry();
 
         vm.prank(_admin);
-        _nodeRegistry.initialize(address(_arpa), false);
+        _nodeRegistry.initialize(address(_arpa));
 
         vm.prank(_admin);
         _nodeRegistry.setNodeRegistryConfig(
-            address(_controller), address(_staking), _operatorStakeAmount, _pendingBlockAfterQuit
+            address(_controller),
+            address(_staking),
+            address(_serviceManager),
+            _operatorStakeAmount,
+            _eigenlayerOperatorStakeAmount,
+            _pendingBlockAfterQuit
         );
 
         _controller.setControllerConfig(
@@ -68,15 +73,15 @@ contract DKGScenarioTest is RandcastTestHelper {
 
         // Register Nodes
         vm.prank(_node1);
-        _nodeRegistry.nodeRegister(_dkgPubkey1, _emptyOperatorSignature);
+        _nodeRegistry.nodeRegister(_dkgPubkey1, false, _emptyOperatorSignature);
         vm.prank(_node2);
-        _nodeRegistry.nodeRegister(_dkgPubkey2, _emptyOperatorSignature);
+        _nodeRegistry.nodeRegister(_dkgPubkey2, false, _emptyOperatorSignature);
         vm.prank(_node3);
-        _nodeRegistry.nodeRegister(_dkgPubkey3, _emptyOperatorSignature);
+        _nodeRegistry.nodeRegister(_dkgPubkey3, false, _emptyOperatorSignature);
         vm.prank(_node4);
-        _nodeRegistry.nodeRegister(_dkgPubkey4, _emptyOperatorSignature);
+        _nodeRegistry.nodeRegister(_dkgPubkey4, false, _emptyOperatorSignature);
         vm.prank(_node5);
-        _nodeRegistry.nodeRegister(_dkgPubkey5, _emptyOperatorSignature);
+        _nodeRegistry.nodeRegister(_dkgPubkey5, false, _emptyOperatorSignature);
     }
 
     struct Params {
@@ -375,9 +380,9 @@ contract DKGScenarioTest is RandcastTestHelper {
 
         // assert _node1, _node2, and _node3 were slashed
         assertEq(nodeInGroup(_node1, 0), true);
-        // assertEq(nodeStakingAmount, _staking.getDelegationReward(_node1));
+        // assertEq(nativeNodeStakingAmount, _staking.getDelegationReward(_node1));
         // assertEq(nodeInGroup(_node1, 0), false);
-        // // assertEq(nodeStakingAmount - _disqualifiedNodePenaltyAmount, _staking.getDelegationReward(_node1));
+        // // assertEq(nativeNodeStakingAmount - _disqualifiedNodePenaltyAmount, _staking.getDelegationReward(_node1));
     }
 
     // * PPDKG with 3 Disqualified Nodes

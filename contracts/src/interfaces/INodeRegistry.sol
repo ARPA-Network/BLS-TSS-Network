@@ -7,6 +7,7 @@ interface INodeRegistry {
     struct Node {
         address idAddress;
         bytes dkgPublicKey;
+        bool isEigenlayerNode;
         bool state;
         uint256 pendingUntilBlock;
     }
@@ -14,13 +15,16 @@ interface INodeRegistry {
     struct NodeRegistryConfig {
         address controllerContractAddress;
         address stakingContractAddress;
-        uint256 nodeStakingAmount;
+        address serviceManagerContractAddress;
+        uint256 nativeNodeStakingAmount;
+        uint256 eigenlayerNodeStakingAmount;
         uint256 pendingBlockAfterQuit;
     }
 
     // node transaction
     function nodeRegister(
         bytes calldata dkgPublicKey,
+        bool isEigenlayerNode,
         ISignatureUtils.SignatureWithSaltAndExpiry memory operatorSignature
     ) external;
 
@@ -51,9 +55,8 @@ interface INodeRegistry {
         returns (
             address controllerContractAddress,
             address stakingContractAddress,
-            uint256 nodeStakingAmount,
+            uint256 nativeNodeStakingAmount,
+            uint256 eigenlayerNodeStakingAmount,
             uint256 pendingBlockAfterQuit
         );
-
-    function isDeployedOnEigenlayer() external view returns (bool);
 }

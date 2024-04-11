@@ -62,6 +62,7 @@ HIDE_OUTPUT = not VERBOSE_OUTPUT  # if verbose_output = false, hide_output = tru
 EXISTING_OP_ARPA_ADDRESS = get_key(ENV_PATH, "EXISTING_OP_ARPA_ADDRESS")
 EXISTING_L1_ARPA_ADDRESS = get_key(ENV_PATH, "EXISTING_L1_ARPA_ADDRESS")
 EXISTING_L1_STAKING_ADDRESS = get_key(ENV_PATH, "EXISTING_L1_STAKING_ADDRESS")
+EXISTING_L1_SERVICE_MANAGER_ADDRESS=get_key(ENV_PATH, "EXISTING_L1_SERVICE_MANAGER_ADDRESS")
 EXISTING_L1_CONTROLLER_ADDRESS = get_key(ENV_PATH, "EXISTING_L1_CONTROLLER_ADDRESS")
 EXISTING_L1_ADAPTER_ADDRESS = get_key(ENV_PATH, "EXISTING_L1_ADAPTER_ADDRESS")
 EXISTING_L1_CONTROLLER_RELAYER = get_key(ENV_PATH, "EXISTING_L1_CONTROLLER_RELAYER")
@@ -161,6 +162,7 @@ def get_l1_addresses():
     if L2_ONLY:
         l1_controller_addresses["Arpa"] = EXISTING_L1_ARPA_ADDRESS
         l1_controller_addresses["Staking"] = EXISTING_L1_STAKING_ADDRESS
+        l1_controller_addresses["ServiceManager"] = EXISTING_L1_SERVICE_MANAGER_ADDRESS
         l1_controller_addresses["Controller"] = EXISTING_L1_CONTROLLER_ADDRESS
         l1_controller_addresses["ERC1967Proxy"] = EXISTING_L1_ADAPTER_ADDRESS
         l1_controller_addresses["ControllerRelayer"] = EXISTING_L1_CONTROLLER_RELAYER
@@ -361,24 +363,28 @@ def deploy_contracts():
             l1_addresses["Arpa"] = EXISTING_L1_ARPA_ADDRESS
 
         set_key(ENV_PATH, "ARPA_ADDRESS", l1_addresses["Arpa"])
-        set_key(ENV_PATH, "STAKING_ADDRESS", l1_addresses["Staking"])
         set_key(ENV_PATH, "CONTROLLER_ADDRESS", l1_addresses["Controller"])
         set_key(ENV_PATH, "ADAPTER_ADDRESS", l1_addresses["ERC1967Proxy"])
         set_key(ENV_PATH, "NODE_REGISTRY_ADDRESS", l1_addresses["NodeRegistry"])
+        set_key(ENV_PATH, "SERVICE_MANAGER_ADDRESS", l1_addresses["ServiceManager"])
+        set_key(ENV_PATH, "STAKING_ADDRESS", l1_addresses["Staking"])
+
         l1_controller_relayer = l1_addresses["ControllerRelayer"]
 
     else:  # l2_only == True
         l1_controller_addresses = {}
         l1_controller_addresses["Arpa"] = EXISTING_L1_ARPA_ADDRESS
         l1_controller_addresses["Staking"] = EXISTING_L1_STAKING_ADDRESS
+        l1_controller_addresses["ServiceManager"] = EXISTING_L1_SERVICE_MANAGER_ADDRESS
         l1_controller_addresses["Controller"] = EXISTING_L1_CONTROLLER_ADDRESS
         l1_controller_addresses["ERC1967Proxy"] = EXISTING_L1_ADAPTER_ADDRESS
 
         l1_addresses = {**l1_controller_addresses}
         set_key(ENV_PATH, "ARPA_ADDRESS", l1_addresses["Arpa"])
-        set_key(ENV_PATH, "STAKING_ADDRESS", l1_addresses["Staking"])
         set_key(ENV_PATH, "CONTROLLER_ADDRESS", l1_addresses["Controller"])
         set_key(ENV_PATH, "ADAPTER_ADDRESS", l1_addresses["ERC1967Proxy"])
+        set_key(ENV_PATH, "SERVICE_MANAGER_ADDRESS", l1_addresses["ServiceManager"])
+        set_key(ENV_PATH, "STAKING_ADDRESS", l1_addresses["Staking"])
         l1_controller_relayer = EXISTING_L1_CONTROLLER_RELAYER
 
 

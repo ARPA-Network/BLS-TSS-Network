@@ -13,6 +13,7 @@ import {IControllerOwner} from "../../src/interfaces/IControllerOwner.sol";
 import {IAdapterOwner} from "../../src/interfaces/IAdapterOwner.sol";
 import {IAdapter} from "../../src/interfaces/IAdapter.sol";
 import {Staking} from "Staking-v0.1/Staking.sol";
+import {ServiceManager} from "../../src/eigenlayer/ServiceManager.sol";
 import {MockUpgradedAdapter} from "./MockUpgradedAdapter.sol";
 
 // solhint-disable-next-line max-states-count
@@ -22,6 +23,7 @@ contract ProxyTest is Test {
     ERC1967Proxy internal _adapter;
     Adapter internal _adapterImpl;
     Staking internal _staking;
+    ServiceManager internal _serviceManager;
     IERC20 internal _arpa;
 
     address internal _admin = address(0xABCD);
@@ -32,6 +34,7 @@ contract ProxyTest is Test {
     uint256 internal _initialMaxCommunityStakeAmount = 2_500_00 * 1e18;
     uint256 internal _minCommunityStakeAmount = 1e12;
     uint256 internal _operatorStakeAmount = 500_00 * 1e18;
+    uint256 internal _eigenlayerOperatorStakeAmount = 500_00 * 1e18;
     uint256 internal _minInitialOperatorCount = 1;
     uint256 internal _minRewardDuration = 1 days;
     uint256 internal _delegationRateDenominator = 20;
@@ -92,6 +95,12 @@ contract ProxyTest is Test {
         _staking = new Staking(params);
 
         vm.prank(_admin);
+        _serviceManager = new ServiceManager();
+
+        vm.prank(_admin);
+        _serviceManager.initialize(address(_staking), address(0), address(0), address(0));
+
+        vm.prank(_admin);
         _controller = new Controller();
 
         vm.prank(_admin);
@@ -101,11 +110,16 @@ contract ProxyTest is Test {
         _nodeRegistry = new NodeRegistry();
 
         vm.prank(_admin);
-        _nodeRegistry.initialize(address(_arpa), false);
+        _nodeRegistry.initialize(address(_arpa));
 
         vm.prank(_admin);
         _nodeRegistry.setNodeRegistryConfig(
-            address(_controller), address(_staking), _operatorStakeAmount, _pendingBlockAfterQuit
+            address(_controller),
+            address(_staking),
+            address(_serviceManager),
+            _operatorStakeAmount,
+            _eigenlayerOperatorStakeAmount,
+            _pendingBlockAfterQuit
         );
 
         vm.prank(_admin);

@@ -56,6 +56,7 @@ contract ControllerScenarioTest is Script {
     uint256 internal _initialMaxCommunityStakeAmount = vm.envUint("INITIAL_MAX_COMMUNITY_STAKE_AMOUNT");
     uint256 internal _minCommunityStakeAmount = vm.envUint("MIN_COMMUNITY_STAKE_AMOUNT");
     uint256 internal _operatorStakeAmount = vm.envUint("OPERATOR_STAKE_AMOUNT");
+    uint256 internal _eigenlayerOperatorStakeAmount = vm.envUint("EIGENLAYER_OPERATOR_STAKE_AMOUNT");
     uint256 internal _minInitialOperatorCount = vm.envUint("MIN_INITIAL_OPERATOR_COUNT");
     uint256 internal _minRewardDuration = vm.envUint("MIN_REWARD_DURATION");
     uint256 internal _delegationRateDenominator = vm.envUint("DELEGATION_RATE_DENOMINATOR");
@@ -65,7 +66,6 @@ contract ControllerScenarioTest is Script {
     address internal _opControllerOracleAddress = vm.envAddress("OP_CONTROLLER_ORACLE_ADDRESS");
     address internal _opL1CrossDomainMessengerAddress = vm.envAddress("OP_L1_CROSS_DOMAIN_MESSENGER_ADDRESS");
 
-    bool internal _isEigenlayer = vm.envBool("IS_EIGENLAYER");
     address internal _stETHStrategyAddress = vm.envAddress("STETH_STRATEGY_ADDRESS");
     address internal _avsDirectory = vm.envAddress("AVS_DIRECTORY_ADDRESS");
     address internal _delegationManager = vm.envAddress("DELEGATION_MANAGER_ADDRESS");
@@ -81,7 +81,6 @@ contract ControllerScenarioTest is Script {
         Staking staking;
         ServiceManager serviceManager;
         IERC20 arpa;
-        address stakingAddress;
 
         vm.broadcast(_deployerPrivateKey);
         arpa = new Arpa();
@@ -90,35 +89,31 @@ contract ControllerScenarioTest is Script {
         nodeRegistry = new NodeRegistry();
 
         vm.broadcast(_deployerPrivateKey);
-        nodeRegistry.initialize(address(arpa), _isEigenlayer);
+        nodeRegistry.initialize(address(arpa));
 
-        if (_isEigenlayer) {
-            vm.broadcast(_deployerPrivateKey);
-            serviceManager = new ServiceManager();
-            stakingAddress = address(serviceManager);
+        vm.broadcast(_deployerPrivateKey);
+        serviceManager = new ServiceManager();
 
-            vm.broadcast(_deployerPrivateKey);
-            serviceManager.initialize(address(nodeRegistry), _stETHStrategyAddress, _avsDirectory, _delegationManager);
-        } else {
-            Staking.PoolConstructorParams memory params = Staking.PoolConstructorParams(
-                IERC20(address(arpa)),
-                _initialMaxPoolSize,
-                _initialMaxCommunityStakeAmount,
-                _minCommunityStakeAmount,
-                _operatorStakeAmount,
-                _minInitialOperatorCount,
-                _minRewardDuration,
-                _delegationRateDenominator,
-                _unstakeFreezingDuration
-            );
+        vm.broadcast(_deployerPrivateKey);
+        serviceManager.initialize(address(nodeRegistry), _stETHStrategyAddress, _avsDirectory, _delegationManager);
 
-            vm.broadcast(_deployerPrivateKey);
-            staking = new Staking(params);
-            stakingAddress = address(staking);
+        Staking.PoolConstructorParams memory params = Staking.PoolConstructorParams(
+            IERC20(address(arpa)),
+            _initialMaxPoolSize,
+            _initialMaxCommunityStakeAmount,
+            _minCommunityStakeAmount,
+            _operatorStakeAmount,
+            _minInitialOperatorCount,
+            _minRewardDuration,
+            _delegationRateDenominator,
+            _unstakeFreezingDuration
+        );
 
-            vm.broadcast(_deployerPrivateKey);
-            staking.setController(address(nodeRegistry));
-        }
+        vm.broadcast(_deployerPrivateKey);
+        staking = new Staking(params);
+
+        vm.broadcast(_deployerPrivateKey);
+        staking.setController(address(nodeRegistry));
 
         vm.broadcast(_deployerPrivateKey);
         controller = new Controller();
@@ -128,7 +123,12 @@ contract ControllerScenarioTest is Script {
 
         vm.broadcast(_deployerPrivateKey);
         nodeRegistry.setNodeRegistryConfig(
-            address(controller), stakingAddress, _operatorStakeAmount, _pendingBlockAfterQuit
+            address(controller),
+            address(staking),
+            address(serviceManager),
+            _operatorStakeAmount,
+            _eigenlayerOperatorStakeAmount,
+            _pendingBlockAfterQuit
         );
 
         vm.broadcast(_deployerPrivateKey);
