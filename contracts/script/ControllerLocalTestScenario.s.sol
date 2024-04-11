@@ -13,7 +13,7 @@ import {Arpa} from "./ArpaLocalTest.sol";
 import {IERC20} from "openzeppelin-contracts/contracts/token/ERC20/IERC20.sol";
 import {ERC1967Proxy} from "openzeppelin-contracts/contracts/proxy/ERC1967/ERC1967Proxy.sol";
 import {Staking} from "Staking-v0.1/Staking.sol";
-import {EigenlayerCoordinator} from "../src/EigenlayerCoordinator.sol";
+import {ServiceManager} from "../src/eigenlayer/ServiceManager.sol";
 
 // solhint-disable-next-line max-states-count
 contract ControllerLocalTestScript is Script {
@@ -84,7 +84,7 @@ contract ControllerLocalTestScript is Script {
         ERC1967Proxy adapter;
         Adapter adapterImpl;
         Staking staking;
-        EigenlayerCoordinator eigenlayerCoordinator;
+        ServiceManager serviceManager;
         IERC20 arpa;
         address stakingAddress;
 
@@ -103,13 +103,11 @@ contract ControllerLocalTestScript is Script {
 
         if (_isEigenlayer) {
             vm.broadcast(_deployerPrivateKey);
-            eigenlayerCoordinator = new EigenlayerCoordinator();
-            stakingAddress = address(eigenlayerCoordinator);
+            serviceManager = new ServiceManager();
+            stakingAddress = address(serviceManager);
 
             vm.broadcast(_deployerPrivateKey);
-            eigenlayerCoordinator.initialize(
-                address(nodeRegistry), _stETHStrategyAddress, _avsDirectory, _delegationManager
-            );
+            serviceManager.initialize(address(nodeRegistry), _stETHStrategyAddress, _avsDirectory, _delegationManager);
         } else {
             Staking.PoolConstructorParams memory params = Staking.PoolConstructorParams(
                 IERC20(address(arpa)),
