@@ -4,9 +4,20 @@ pragma solidity ^0.8.18;
 pragma experimental ABIEncoderV2;
 
 import {
-    Strings, RandcastTestHelper, ERC20, ControllerForTest, IController, NodeRegistry
+    Strings,
+    RandcastTestHelper,
+    ERC20,
+    ControllerForTest,
+    IController,
+    IControllerOwner,
+    NodeRegistry,
+    INodeRegistry,
+    INodeRegistryOwner,
+    ServiceManager,
+    ERC1967Proxy
 } from "./RandcastTestHelper.sol";
 import {ControllerOracle, IControllerOracle} from "../src/ControllerOracle.sol";
+import {IControllerForTest} from "./IControllerForTest.sol";
 import {MockL2CrossDomainMessenger} from "./MockL2CrossDomainMessenger.sol";
 
 contract ControllerOracleTest is RandcastTestHelper {
@@ -43,16 +54,36 @@ contract ControllerOracleTest is RandcastTestHelper {
         _prepareStakingContract(_stakingDeployer, address(_arpa), operators);
 
         vm.prank(_admin);
-        _controller = new ControllerForTest(_lastOutput);
+        _controllerImpl = new ControllerForTest();
 
         vm.prank(_admin);
-        _nodeRegistry = new NodeRegistry();
+        _controller =
+            new ERC1967Proxy(address(_controllerImpl), abi.encodeWithSignature("initialize(uint256)", _lastOutput));
 
         vm.prank(_admin);
-        _nodeRegistry.initialize(address(_arpa));
+        _nodeRegistryImpl = new NodeRegistry();
 
         vm.prank(_admin);
-        _nodeRegistry.setNodeRegistryConfig(
+        _nodeRegistry =
+            new ERC1967Proxy(address(_nodeRegistryImpl), abi.encodeWithSignature("initialize(address)", address(_arpa)));
+
+        vm.prank(_admin);
+        _serviceManagerImpl = new ServiceManager();
+
+        vm.prank(_admin);
+        _serviceManager = new ERC1967Proxy(
+            address(_serviceManagerImpl),
+            abi.encodeWithSignature(
+                "initialize(address,address,address,address)",
+                address(_nodeRegistry),
+                address(0),
+                address(0),
+                address(0)
+            )
+        );
+
+        vm.prank(_admin);
+        INodeRegistryOwner(address(_nodeRegistry)).setNodeRegistryConfig(
             address(_controller),
             address(_staking),
             address(_serviceManager),
@@ -62,7 +93,7 @@ contract ControllerOracleTest is RandcastTestHelper {
         );
 
         vm.prank(_admin);
-        _controller.setControllerConfig(
+        IControllerOwner(address(_controller)).setControllerConfig(
             address(_nodeRegistry),
             address(0),
             _disqualifiedNodePenaltyAmount,
@@ -78,25 +109,25 @@ contract ControllerOracleTest is RandcastTestHelper {
 
         // Register Nodes to max capacity of one group
         vm.prank(_node1);
-        _nodeRegistry.nodeRegister(_dkgPubkey1, false, _emptyOperatorSignature);
+        INodeRegistry(address(_nodeRegistry)).nodeRegister(_dkgPubkey1, false, _emptyOperatorSignature);
         vm.prank(_node2);
-        _nodeRegistry.nodeRegister(_dkgPubkey2, false, _emptyOperatorSignature);
+        INodeRegistry(address(_nodeRegistry)).nodeRegister(_dkgPubkey2, false, _emptyOperatorSignature);
         vm.prank(_node3);
-        _nodeRegistry.nodeRegister(_dkgPubkey3, false, _emptyOperatorSignature);
+        INodeRegistry(address(_nodeRegistry)).nodeRegister(_dkgPubkey3, false, _emptyOperatorSignature);
         vm.prank(_node4);
-        _nodeRegistry.nodeRegister(_dkgPubkey4, false, _emptyOperatorSignature);
+        INodeRegistry(address(_nodeRegistry)).nodeRegister(_dkgPubkey4, false, _emptyOperatorSignature);
         vm.prank(_node5);
-        _nodeRegistry.nodeRegister(_dkgPubkey5, false, _emptyOperatorSignature);
+        INodeRegistry(address(_nodeRegistry)).nodeRegister(_dkgPubkey5, false, _emptyOperatorSignature);
         vm.prank(_node6);
-        _nodeRegistry.nodeRegister(_dkgPubkey6, false, _emptyOperatorSignature);
+        INodeRegistry(address(_nodeRegistry)).nodeRegister(_dkgPubkey6, false, _emptyOperatorSignature);
         vm.prank(_node7);
-        _nodeRegistry.nodeRegister(_dkgPubkey7, false, _emptyOperatorSignature);
+        INodeRegistry(address(_nodeRegistry)).nodeRegister(_dkgPubkey7, false, _emptyOperatorSignature);
         vm.prank(_node8);
-        _nodeRegistry.nodeRegister(_dkgPubkey8, false, _emptyOperatorSignature);
+        INodeRegistry(address(_nodeRegistry)).nodeRegister(_dkgPubkey8, false, _emptyOperatorSignature);
         vm.prank(_node9);
-        _nodeRegistry.nodeRegister(_dkgPubkey9, false, _emptyOperatorSignature);
+        INodeRegistry(address(_nodeRegistry)).nodeRegister(_dkgPubkey9, false, _emptyOperatorSignature);
         vm.prank(_node10);
-        _nodeRegistry.nodeRegister(_dkgPubkey10, false, _emptyOperatorSignature);
+        INodeRegistry(address(_nodeRegistry)).nodeRegister(_dkgPubkey10, false, _emptyOperatorSignature);
     }
 
     struct Params {
@@ -116,7 +147,7 @@ contract ControllerOracleTest is RandcastTestHelper {
             if (params[i].shouldRevert) {
                 vm.expectRevert(params[i].revertMessage);
             }
-            _controller.commitDkg(
+            IControllerForTest(address(_controller)).commitDkg(
                 IController.CommitDkgParams(
                     params[i].groupIndex,
                     params[i].groupEpoch,
@@ -149,10 +180,10 @@ contract ControllerOracleTest is RandcastTestHelper {
         dkgHelper(params);
 
         assertEq(checkIsStrictlyMajorityConsensusReached(0), true);
-        assertEq(_controller.getGroup(0).members.length, 10);
-        assertEq(_controller.getGroup(0).size, 10);
+        assertEq(IControllerForTest(address(_controller)).getGroup(0).members.length, 10);
+        assertEq(IControllerForTest(address(_controller)).getGroup(0).size, 10);
 
-        bytes memory group = abi.encode(_controller.getGroup(0));
+        bytes memory group = abi.encode(IControllerForTest(address(_controller)).getGroup(0));
 
         address chainMessenger = address(0x90001);
         MockL2CrossDomainMessenger l2CrossDomainMessenger = new MockL2CrossDomainMessenger(chainMessenger);
@@ -185,10 +216,10 @@ contract ControllerOracleTest is RandcastTestHelper {
         dkgHelper(params);
 
         assertEq(checkIsStrictlyMajorityConsensusReached(0), true);
-        assertEq(_controller.getGroup(0).members.length, 10);
-        assertEq(_controller.getGroup(0).size, 10);
+        assertEq(IControllerForTest(address(_controller)).getGroup(0).members.length, 10);
+        assertEq(IControllerForTest(address(_controller)).getGroup(0).size, 10);
 
-        bytes memory group = abi.encode(_controller.getGroup(0));
+        bytes memory group = abi.encode(IControllerForTest(address(_controller)).getGroup(0));
 
         address chainMessenger = address(0x90001);
         address l2CrossDomainMessenger = address(0x90002);
@@ -224,10 +255,10 @@ contract ControllerOracleTest is RandcastTestHelper {
         dkgHelper(params);
 
         assertEq(checkIsStrictlyMajorityConsensusReached(0), true);
-        assertEq(_controller.getGroup(0).members.length, 10);
-        assertEq(_controller.getGroup(0).size, 10);
+        assertEq(IControllerForTest(address(_controller)).getGroup(0).members.length, 10);
+        assertEq(IControllerForTest(address(_controller)).getGroup(0).size, 10);
 
-        bytes memory group = abi.encode(_controller.getGroup(0));
+        bytes memory group = abi.encode(IControllerForTest(address(_controller)).getGroup(0));
 
         address chainMessenger = address(0x90001);
         MockL2CrossDomainMessenger l2CrossDomainMessenger = new MockL2CrossDomainMessenger(chainMessenger);
@@ -247,7 +278,7 @@ contract ControllerOracleTest is RandcastTestHelper {
     }
 
     function printGroupInfo(IControllerOracle.Group memory g) public {
-        uint256 groupCount = _controller.getGroupCount();
+        uint256 groupCount = IControllerForTest(address(_controller)).getGroupCount();
         emit log("----------------------------------------");
         emit log_named_uint("printing group info for: groupIndex", g.index);
         emit log("----------------------------------------");

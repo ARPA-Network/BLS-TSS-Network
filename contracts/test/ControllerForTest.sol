@@ -9,10 +9,6 @@ import "../src/utils/Utils.sol" as Utils;
 contract ControllerForTest is Controller {
     using GroupLib for GroupLib.GroupData;
 
-    constructor(uint256 lastOutput) {
-        initialize(lastOutput);
-    }
-
     // Give node staking reward penalty and freezeNode
     function slashNodeForTest(address nodeIdAddress, uint256 stakingPenalty, uint256 pendingBlock) public {
         INodeRegistry(_config.nodeRegistryContractAddress).slashNode(nodeIdAddress, stakingPenalty, pendingBlock);

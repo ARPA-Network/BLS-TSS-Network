@@ -6,6 +6,7 @@ import {Controller} from "../src/Controller.sol";
 import {ControllerRelayer} from "../src/ControllerRelayer.sol";
 import {IControllerOwner} from "../src/interfaces/IControllerOwner.sol";
 import {NodeRegistry} from "../src/NodeRegistry.sol";
+import {INodeRegistryOwner} from "../src/interfaces/INodeRegistryOwner.sol";
 import {Adapter} from "../src/Adapter.sol";
 import {IAdapterOwner} from "../src/interfaces/IAdapterOwner.sol";
 import {Arpa} from "./ArpaLocalTest.sol";
@@ -72,13 +73,16 @@ contract ControllerLocalTestScript is Script {
     address internal _delegationManager = vm.envAddress("DELEGATION_MANAGER_ADDRESS");
 
     function run() external {
-        Controller controller;
-        NodeRegistry nodeRegistry;
-        ControllerRelayer controllerRelayer;
-        ERC1967Proxy adapter;
+        NodeRegistry nodeRegistryImpl;
+        ERC1967Proxy nodeRegistry;
+        Controller controllerImpl;
+        ERC1967Proxy controller;
         Adapter adapterImpl;
+        ERC1967Proxy adapter;
+        ServiceManager serviceManagerImpl;
+        ERC1967Proxy serviceManager;
+        ControllerRelayer controllerRelayer;
         Staking staking;
-        ServiceManager serviceManager;
         IERC20 arpa;
 
         if (_arpaExists == false) {
@@ -89,16 +93,26 @@ contract ControllerLocalTestScript is Script {
         }
 
         vm.broadcast(_deployerPrivateKey);
-        nodeRegistry = new NodeRegistry();
+        nodeRegistryImpl = new NodeRegistry();
 
         vm.broadcast(_deployerPrivateKey);
-        nodeRegistry.initialize(address(arpa));
+        nodeRegistry =
+            new ERC1967Proxy(address(nodeRegistryImpl), abi.encodeWithSignature("initialize(address)", address(arpa)));
 
         vm.broadcast(_deployerPrivateKey);
-        serviceManager = new ServiceManager();
+        serviceManagerImpl = new ServiceManager();
 
         vm.broadcast(_deployerPrivateKey);
-        serviceManager.initialize(address(nodeRegistry), _stETHStrategyAddress, _avsDirectory, _delegationManager);
+        serviceManager = new ERC1967Proxy(
+            address(serviceManagerImpl),
+            abi.encodeWithSignature(
+                "initialize(address,address,address,address)",
+                address(nodeRegistry),
+                _stETHStrategyAddress,
+                _avsDirectory,
+                _delegationManager
+            )
+        );
 
         Staking.PoolConstructorParams memory params = Staking.PoolConstructorParams(
             IERC20(address(arpa)),
@@ -119,13 +133,14 @@ contract ControllerLocalTestScript is Script {
         staking.setController(address(nodeRegistry));
 
         vm.broadcast(_deployerPrivateKey);
-        controller = new Controller();
+        controllerImpl = new Controller();
 
         vm.broadcast(_deployerPrivateKey);
-        controller.initialize(_lastOutput);
+        controller =
+            new ERC1967Proxy(address(controllerImpl), abi.encodeWithSignature("initialize(uint256)", _lastOutput));
 
         vm.broadcast(_deployerPrivateKey);
-        nodeRegistry.setNodeRegistryConfig(
+        INodeRegistryOwner(address(nodeRegistry)).setNodeRegistryConfig(
             address(controller),
             address(staking),
             address(serviceManager),

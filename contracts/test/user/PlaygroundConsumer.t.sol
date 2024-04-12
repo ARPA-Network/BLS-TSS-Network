@@ -3,7 +3,7 @@ pragma solidity ^0.8.18;
 
 import {SharedConsumer} from "Randcast-User-Contract/user/SharedConsumer.sol";
 import {ISharedConsumer} from "Randcast-User-Contract/interfaces/ISharedConsumer.sol";
-import {Adapter, RandcastTestHelper, AdapterForTest, ERC1967Proxy} from "../RandcastTestHelper.sol";
+import {IAdapter, RandcastTestHelper, AdapterForTest, ERC1967Proxy} from "../RandcastTestHelper.sol";
 
 //solhint-disable-next-line max-states-count
 contract RandcastPlaygroundConsumerTest is RandcastTestHelper {
@@ -42,7 +42,7 @@ contract RandcastPlaygroundConsumerTest is RandcastTestHelper {
         bytes32 requestId =
             ISharedConsumer(address(_shareConsumer)).drawTickets{value: gasFee}(ticketNumber, winnerNumber, 0, 0, 6);
 
-        Adapter.RequestDetail memory rd = AdapterForTest(address(_adapter)).getPendingRequest(requestId);
+        IAdapter.RequestDetail memory rd = AdapterForTest(address(_adapter)).getPendingRequest(requestId);
         bytes memory rawSeed = abi.encodePacked(rd.seed);
         emit log_named_bytes("rawSeed", rawSeed);
 
@@ -73,7 +73,7 @@ contract RandcastPlaygroundConsumerTest is RandcastTestHelper {
         vm.prank(_user);
         bytes32 requestId = ISharedConsumer(address(_shareConsumer)).rollDice{value: gasFee}(bunch, size, 0, 0, 0);
 
-        Adapter.RequestDetail memory rd = AdapterForTest(address(_adapter)).getPendingRequest(requestId);
+        IAdapter.RequestDetail memory rd = AdapterForTest(address(_adapter)).getPendingRequest(requestId);
         bytes memory rawSeed = abi.encodePacked(rd.seed);
         emit log_named_bytes("rawSeed", rawSeed);
 
@@ -99,7 +99,7 @@ contract RandcastPlaygroundConsumerTest is RandcastTestHelper {
         vm.prank(_user);
         bytes32 requestId = ISharedConsumer(address(_shareConsumer)).drawTickets(ticketNumber, winnerNumber, 1, 0, 0);
 
-        Adapter.RequestDetail memory rd = AdapterForTest(address(_adapter)).getPendingRequest(requestId);
+        IAdapter.RequestDetail memory rd = AdapterForTest(address(_adapter)).getPendingRequest(requestId);
         bytes memory rawSeed = abi.encodePacked(rd.seed);
         emit log_named_bytes("rawSeed", rawSeed);
 

@@ -10,6 +10,7 @@ import {Controller} from "../../src/Controller.sol";
 import {NodeRegistry} from "../../src/NodeRegistry.sol";
 import {Adapter} from "../../src/Adapter.sol";
 import {IControllerOwner} from "../../src/interfaces/IControllerOwner.sol";
+import {INodeRegistryOwner} from "../../src/interfaces/INodeRegistryOwner.sol";
 import {IAdapterOwner} from "../../src/interfaces/IAdapterOwner.sol";
 import {IAdapter} from "../../src/interfaces/IAdapter.sol";
 import {Staking} from "Staking-v0.1/Staking.sol";
@@ -18,12 +19,15 @@ import {MockUpgradedAdapter} from "./MockUpgradedAdapter.sol";
 
 // solhint-disable-next-line max-states-count
 contract ProxyTest is Test {
-    Controller internal _controller;
-    NodeRegistry internal _nodeRegistry;
-    ERC1967Proxy internal _adapter;
+    NodeRegistry internal _nodeRegistryImpl;
+    ERC1967Proxy internal _nodeRegistry;
+    Controller internal _controllerImpl;
+    ERC1967Proxy internal _controller;
     Adapter internal _adapterImpl;
+    ERC1967Proxy internal _adapter;
+    ServiceManager internal _serviceManagerImpl;
+    ERC1967Proxy internal _serviceManager;
     Staking internal _staking;
-    ServiceManager internal _serviceManager;
     IERC20 internal _arpa;
 
     address internal _admin = address(0xABCD);
@@ -95,25 +99,36 @@ contract ProxyTest is Test {
         _staking = new Staking(params);
 
         vm.prank(_admin);
-        _serviceManager = new ServiceManager();
+        _controllerImpl = new Controller();
 
         vm.prank(_admin);
-        _serviceManager.initialize(address(_staking), address(0), address(0), address(0));
+        _controller =
+            new ERC1967Proxy(address(_controllerImpl), abi.encodeWithSignature("initialize(uint256)", _lastOutput));
 
         vm.prank(_admin);
-        _controller = new Controller();
+        _nodeRegistryImpl = new NodeRegistry();
 
         vm.prank(_admin);
-        _controller.initialize(_lastOutput);
+        _nodeRegistry =
+            new ERC1967Proxy(address(_nodeRegistryImpl), abi.encodeWithSignature("initialize(address)", address(_arpa)));
 
         vm.prank(_admin);
-        _nodeRegistry = new NodeRegistry();
+        _serviceManagerImpl = new ServiceManager();
 
         vm.prank(_admin);
-        _nodeRegistry.initialize(address(_arpa));
+        _serviceManager = new ERC1967Proxy(
+            address(_serviceManagerImpl),
+            abi.encodeWithSignature(
+                "initialize(address,address,address,address)",
+                address(_nodeRegistry),
+                address(0),
+                address(0),
+                address(0)
+            )
+        );
 
         vm.prank(_admin);
-        _nodeRegistry.setNodeRegistryConfig(
+        INodeRegistryOwner(address(_nodeRegistry)).setNodeRegistryConfig(
             address(_controller),
             address(_staking),
             address(_serviceManager),

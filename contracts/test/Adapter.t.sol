@@ -2,17 +2,8 @@
 pragma solidity ^0.8.18;
 
 import {GetRandomNumberExample} from "Randcast-User-Contract/user/examples/GetRandomNumberExample.sol";
-import {IAdapterOwner} from "../src/interfaces/IAdapterOwner.sol";
-import {
-    RandcastTestHelper,
-    IAdapter,
-    Adapter,
-    ControllerForTest,
-    AdapterForTest,
-    ERC1967Proxy,
-    NodeRegistry
-} from "./RandcastTestHelper.sol";
-import {ERC20} from "openzeppelin-contracts/contracts/token/ERC20/ERC20.sol";
+import {RandcastTestHelper, IAdapter, AdapterForTest} from "./RandcastTestHelper.sol";
+import {Adapter} from "../src/Adapter.sol";
 
 // solhint-disable-next-line max-states-count
 contract AdapterTest is RandcastTestHelper {
@@ -81,7 +72,7 @@ contract AdapterTest is RandcastTestHelper {
 
             assertEq(inflightCost, _inflightCost);
 
-            Adapter.RequestDetail memory rd = AdapterForTest(address(_adapter)).getPendingRequest(requestId);
+            IAdapter.RequestDetail memory rd = AdapterForTest(address(_adapter)).getPendingRequest(requestId);
             bytes memory actualSeed = abi.encodePacked(rd.seed, rd.blockNum);
 
             emit log_named_bytes("actualSeed", actualSeed);
@@ -100,7 +91,7 @@ contract AdapterTest is RandcastTestHelper {
         bytes32 requestId = _getRandomNumberExample.getRandomNumber();
         emit log_bytes32(requestId);
 
-        Adapter.RequestDetail memory rd = AdapterForTest(address(_adapter)).getPendingRequest(requestId);
+        IAdapter.RequestDetail memory rd = AdapterForTest(address(_adapter)).getPendingRequest(requestId);
         bytes memory rawSeed = abi.encodePacked(rd.seed);
         emit log_named_bytes("rawSeed", rawSeed);
 
@@ -120,7 +111,7 @@ contract AdapterTest is RandcastTestHelper {
         bytes32 requestId = _getRandomNumberExample.getRandomNumber();
         emit log_bytes32(requestId);
 
-        Adapter.RequestDetail memory rd = AdapterForTest(address(_adapter)).getPendingRequest(requestId);
+        IAdapter.RequestDetail memory rd = AdapterForTest(address(_adapter)).getPendingRequest(requestId);
 
         bytes32 pendingRequest = IAdapter(address(_adapter)).getPendingRequestCommitment(requestId);
         assertEq(

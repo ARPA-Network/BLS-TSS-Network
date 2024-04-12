@@ -6,7 +6,8 @@ import {GetShuffledArrayExample} from "Randcast-User-Contract/user/examples/GetS
 import {RollDiceExample, GeneralRandcastConsumerBase} from "Randcast-User-Contract/user/examples/RollDiceExample.sol";
 import {AdvancedGetShuffledArrayExample} from "Randcast-User-Contract/user/examples/AdvancedGetShuffledArrayExample.sol";
 import {GeneralRandcastConsumerBase} from "Randcast-User-Contract/user/GeneralRandcastConsumerBase.sol";
-import {IAdapter, Adapter, RandcastTestHelper} from "../RandcastTestHelper.sol";
+import {IAdapter, RandcastTestHelper} from "../RandcastTestHelper.sol";
+import {Adapter} from "../../src/Adapter.sol";
 
 //solhint-disable-next-line max-states-count
 contract ConsumerRequestBalanceTest is RandcastTestHelper {

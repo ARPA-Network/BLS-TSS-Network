@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.18;
 
+import {UUPSUpgradeable} from "openzeppelin-contracts-upgradeable/contracts/proxy/utils/UUPSUpgradeable.sol";
 import {OwnableUpgradeable} from "openzeppelin-contracts-upgradeable/contracts/access/OwnableUpgradeable.sol";
-import {Initializable} from "openzeppelin-contracts-upgradeable/contracts/proxy/utils/Initializable.sol";
 import {IController} from "./interfaces/IController.sol";
 import {IControllerOwner} from "./interfaces/IControllerOwner.sol";
 import {IAdapter} from "./interfaces/IAdapter.sol";
@@ -12,7 +12,7 @@ import {BLS} from "./libraries/BLS.sol";
 import {GroupLib} from "./libraries/GroupLib.sol";
 import {Coordinator} from "./Coordinator.sol";
 
-contract Controller is Initializable, IController, IControllerOwner, OwnableUpgradeable {
+contract Controller is UUPSUpgradeable, IController, IControllerOwner, OwnableUpgradeable {
     using GroupLib for GroupLib.GroupData;
 
     // *Controller Config*
@@ -71,11 +71,19 @@ contract Controller is Initializable, IController, IControllerOwner, OwnableUpgr
     error DuplicatedDisqualifiedNode();
     error CannotLeaveGroupDuringDkg();
 
+    /// @custom:oz-upgrades-unsafe-allow constructor
+    constructor() {
+        _disableInitializers();
+    }
+
     function initialize(uint256 lastOutput) public initializer {
         _lastOutput = lastOutput;
 
         __Ownable_init();
     }
+
+    // solhint-disable-next-line no-empty-blocks
+    function _authorizeUpgrade(address) internal override onlyOwner {}
 
     // =============
     // IControllerOwner

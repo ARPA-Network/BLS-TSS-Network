@@ -1,12 +1,12 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.18;
 
+import {UUPSUpgradeable} from "openzeppelin-contracts-upgradeable/contracts/proxy/utils/UUPSUpgradeable.sol";
 import {OwnableUpgradeable} from "openzeppelin-contracts-upgradeable/contracts/access/OwnableUpgradeable.sol";
-import {Initializable} from "openzeppelin-contracts-upgradeable/contracts/proxy/utils/Initializable.sol";
 import {ISignatureUtils, IAVSDirectory} from "../interfaces/IAVSDirectory.sol";
 import {IDelegationManager} from "../interfaces/IDelegationManager.sol";
 
-contract ServiceManager is Initializable, OwnableUpgradeable {
+contract ServiceManager is UUPSUpgradeable, OwnableUpgradeable {
     // *Constants*
 
     // *NodeRegistry Config*
@@ -31,6 +31,11 @@ contract ServiceManager is Initializable, OwnableUpgradeable {
     // *Errors*
     error SenderNotNodeRegistry();
 
+    /// @custom:oz-upgrades-unsafe-allow constructor
+    constructor() {
+        _disableInitializers();
+    }
+
     function initialize(
         address _nodeRegistryAddress,
         address _stETHStrategyAddress,
@@ -44,6 +49,9 @@ contract ServiceManager is Initializable, OwnableUpgradeable {
 
         __Ownable_init();
     }
+
+    // solhint-disable-next-line no-empty-blocks
+    function _authorizeUpgrade(address) internal override onlyOwner {}
 
     function updateAVSMetadataURI(string memory _metadataURI) public virtual onlyOwner {
         avsDirectory.updateAVSMetadataURI(_metadataURI);

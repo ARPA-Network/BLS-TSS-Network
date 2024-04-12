@@ -5,7 +5,7 @@ import {GetRandomNumberExample} from "Randcast-User-Contract/user/examples/GetRa
 import {GetShuffledArrayExample} from "Randcast-User-Contract/user/examples/GetShuffledArrayExample.sol";
 import {RollDiceExample} from "Randcast-User-Contract/user/examples/RollDiceExample.sol";
 import {AdvancedGetShuffledArrayExample} from "Randcast-User-Contract/user/examples/AdvancedGetShuffledArrayExample.sol";
-import {Adapter, RandcastTestHelper, AdapterForTest} from "../RandcastTestHelper.sol";
+import {IAdapter, RandcastTestHelper, AdapterForTest} from "../RandcastTestHelper.sol";
 
 //solhint-disable-next-line max-states-count
 contract RandcastConsumerExampleTest is RandcastTestHelper {
@@ -53,7 +53,7 @@ contract RandcastConsumerExampleTest is RandcastTestHelper {
             vm.prank(_user);
             bytes32 requestId = _getRandomNumberExample.getRandomNumber();
 
-            Adapter.RequestDetail memory rd = AdapterForTest(address(_adapter)).getPendingRequest(requestId);
+            IAdapter.RequestDetail memory rd = AdapterForTest(address(_adapter)).getPendingRequest(requestId);
             bytes memory rawSeed = abi.encodePacked(rd.seed);
             emit log_named_bytes("rawSeed", rawSeed);
 
@@ -76,7 +76,7 @@ contract RandcastConsumerExampleTest is RandcastTestHelper {
         vm.prank(_user);
         bytes32 requestId = _rollDiceExample.rollDice(bunch);
 
-        Adapter.RequestDetail memory rd = AdapterForTest(address(_adapter)).getPendingRequest(requestId);
+        IAdapter.RequestDetail memory rd = AdapterForTest(address(_adapter)).getPendingRequest(requestId);
         bytes memory rawSeed = abi.encodePacked(rd.seed);
         emit log_named_bytes("rawSeed", rawSeed);
 
@@ -97,7 +97,7 @@ contract RandcastConsumerExampleTest is RandcastTestHelper {
         vm.prank(_user);
         bytes32 requestId = _getShuffledArrayExample.getShuffledArray(upper);
 
-        Adapter.RequestDetail memory rd = AdapterForTest(address(_adapter)).getPendingRequest(requestId);
+        IAdapter.RequestDetail memory rd = AdapterForTest(address(_adapter)).getPendingRequest(requestId);
         bytes memory rawSeed = abi.encodePacked(rd.seed);
         emit log_named_bytes("rawSeed", rawSeed);
 
@@ -130,7 +130,7 @@ contract RandcastConsumerExampleTest is RandcastTestHelper {
             upper, subId, seed, requestConfirmations, rdGasLimit, rdMaxGasPrice
         );
 
-        Adapter.RequestDetail memory rd = AdapterForTest(address(_adapter)).getPendingRequest(requestId);
+        IAdapter.RequestDetail memory rd = AdapterForTest(address(_adapter)).getPendingRequest(requestId);
         bytes memory rawSeed = abi.encodePacked(rd.seed);
         emit log_named_bytes("rawSeed", rawSeed);
 

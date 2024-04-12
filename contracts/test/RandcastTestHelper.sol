@@ -3,14 +3,16 @@ pragma solidity ^0.8.18;
 
 import {Test} from "forge-std/Test.sol";
 import {IController} from "../src/interfaces/IController.sol";
+import {IControllerOwner} from "../src/interfaces/IControllerOwner.sol";
 import {INodeRegistry} from "../src/interfaces/INodeRegistry.sol";
+import {INodeRegistryOwner} from "../src/interfaces/INodeRegistryOwner.sol";
 import {IAdapterOwner} from "../src/interfaces/IAdapterOwner.sol";
 import {IAdapter} from "../src/interfaces/IAdapter.sol";
-import {AdapterForTest, Adapter} from "./AdapterForTest.sol";
+import {AdapterForTest} from "./AdapterForTest.sol";
 import {Staking} from "Staking-v0.1/Staking.sol";
 import {ServiceManager} from "../src/eigenlayer/ServiceManager.sol";
 import {NodeRegistry, ISignatureUtils} from "../src/NodeRegistry.sol";
-import {ControllerForTest, Controller} from "./ControllerForTest.sol";
+import {ControllerForTest} from "./ControllerForTest.sol";
 import {IERC20} from "openzeppelin-contracts/contracts/token/ERC20/IERC20.sol";
 import {ERC20} from "openzeppelin-contracts/contracts/token/ERC20/ERC20.sol";
 import {Strings} from "openzeppelin-contracts/contracts/utils/Strings.sol";
@@ -18,13 +20,16 @@ import {ERC1967Proxy} from "openzeppelin-contracts/contracts/proxy/ERC1967/ERC19
 
 //solhint-disable-next-line max-states-count
 abstract contract RandcastTestHelper is Test {
-    NodeRegistry internal _nodeRegistry;
-    ControllerForTest internal _controller;
-    ERC1967Proxy internal _adapter;
+    NodeRegistry internal _nodeRegistryImpl;
+    ERC1967Proxy internal _nodeRegistry;
+    ControllerForTest internal _controllerImpl;
+    ERC1967Proxy internal _controller;
     AdapterForTest internal _adapterImpl;
+    ERC1967Proxy internal _adapter;
+    ServiceManager internal _serviceManagerImpl;
+    ERC1967Proxy internal _serviceManager;
     IERC20 internal _arpa;
     Staking internal _staking;
-    ServiceManager internal _serviceManager;
 
     address internal _admin = address(0xABCD);
     address internal _stakingDeployer = address(0xBCDE);
@@ -558,22 +563,36 @@ abstract contract RandcastTestHelper is Test {
         _prepareStakingContract(_stakingDeployer, address(_arpa), operators);
 
         vm.prank(_admin);
-        _controller = new ControllerForTest(_lastOutput);
+        _controllerImpl = new ControllerForTest();
 
         vm.prank(_admin);
-        _serviceManager = new ServiceManager();
+        _controller =
+            new ERC1967Proxy(address(_controllerImpl), abi.encodeWithSignature("initialize(uint256)", _lastOutput));
 
         vm.prank(_admin);
-        _serviceManager.initialize(address(_staking), address(0), address(0), address(0));
+        _nodeRegistryImpl = new NodeRegistry();
 
         vm.prank(_admin);
-        _nodeRegistry = new NodeRegistry();
+        _nodeRegistry =
+            new ERC1967Proxy(address(_nodeRegistryImpl), abi.encodeWithSignature("initialize(address)", address(_arpa)));
 
         vm.prank(_admin);
-        _nodeRegistry.initialize(address(_arpa));
+        _serviceManagerImpl = new ServiceManager();
 
         vm.prank(_admin);
-        _nodeRegistry.setNodeRegistryConfig(
+        _serviceManager = new ERC1967Proxy(
+            address(_serviceManagerImpl),
+            abi.encodeWithSignature(
+                "initialize(address,address,address,address)",
+                address(_nodeRegistry),
+                address(0),
+                address(0),
+                address(0)
+            )
+        );
+
+        vm.prank(_admin);
+        INodeRegistryOwner(address(_nodeRegistry)).setNodeRegistryConfig(
             address(_controller),
             address(_staking),
             address(_serviceManager),
@@ -591,7 +610,7 @@ abstract contract RandcastTestHelper is Test {
         );
 
         vm.prank(_admin);
-        _controller.setControllerConfig(
+        IControllerOwner(address(_controller)).setControllerConfig(
             address(_nodeRegistry),
             address(_adapter),
             _disqualifiedNodePenaltyAmount,
@@ -650,7 +669,7 @@ abstract contract RandcastTestHelper is Test {
         for (uint256 i = 0; i < nodes.length; i++) {
             vm.deal(nodes[i], 1 * 10 ** 18);
             vm.prank(nodes[i]);
-            _nodeRegistry.nodeRegister(pubKeys[i], false, _emptyOperatorSignature);
+            INodeRegistry(address(_nodeRegistry)).nodeRegister(pubKeys[i], false, _emptyOperatorSignature);
         }
 
         for (uint256 i = 0; i < nodes.length; i++) {
@@ -658,7 +677,7 @@ abstract contract RandcastTestHelper is Test {
                 groupIndex, groupEpoch, groupPublicKey, dkgPartialPubKeys[i], disqualifiedNodes
             );
             vm.prank(nodes[i]);
-            _controller.commitDkg(params);
+            IController(address(_controller)).commitDkg(params);
         }
     }
 
@@ -691,9 +710,9 @@ abstract contract RandcastTestHelper is Test {
     }
 
     function printGroupInfo(uint256 groupIndex) public {
-        IController.Group memory g = _controller.getGroup(groupIndex);
+        IController.Group memory g = IController(address(_controller)).getGroup(groupIndex);
 
-        uint256 groupCount = _controller.getGroupCount();
+        uint256 groupCount = IController(address(_controller)).getGroupCount();
         emit log("----------------------------------------");
         emit log_named_uint("printing group info for: groupIndex", groupIndex);
         emit log("----------------------------------------");
@@ -763,7 +782,7 @@ abstract contract RandcastTestHelper is Test {
             }
         }
         // print coordinator info
-        address coordinatorAddress = _controller.getCoordinator(groupIndex);
+        address coordinatorAddress = IController(address(_controller)).getCoordinator(groupIndex);
         emit log_named_address("\nCoordinator", coordinatorAddress);
     }
 
@@ -774,7 +793,7 @@ abstract contract RandcastTestHelper is Test {
         emit log_named_address("printing info for node", nodeAddress);
         emit log("----------------------------------------");
 
-        INodeRegistry.Node memory node = _nodeRegistry.getNode(nodeAddress);
+        INodeRegistry.Node memory node = INodeRegistry(address(_nodeRegistry)).getNode(nodeAddress);
 
         emit log_named_address("n.idAddress", node.idAddress);
         emit log_named_bytes("n.dkgPublicKey", node.dkgPublicKey);
@@ -789,7 +808,7 @@ abstract contract RandcastTestHelper is Test {
             )
         );
 
-        IController.Member memory m = _controller.getMember(groupIndex, memberIndex);
+        IController.Member memory m = IController(address(_controller)).getMember(groupIndex, memberIndex);
 
         // emit log_named_uint("m.index", m.index);
         emit log_named_address("m.nodeIdAddress", m.nodeIdAddress);
@@ -822,14 +841,14 @@ abstract contract RandcastTestHelper is Test {
     }
 
     function checkIsStrictlyMajorityConsensusReached(uint256 groupIndex) public view returns (bool) {
-        IController.Group memory g = _controller.getGroup(groupIndex);
+        IController.Group memory g = IController(address(_controller)).getGroup(groupIndex);
         return g.isStrictlyMajorityConsensusReached;
     }
 
     function nodeInGroup(address nodeIdAddress, uint256 groupIndex) public view returns (bool) {
         bool nodeFound = false;
-        for (uint256 i = 0; i < _controller.getGroup(groupIndex).members.length; i++) {
-            if (nodeIdAddress == _controller.getGroup(0).members[i].nodeIdAddress) {
+        for (uint256 i = 0; i < IController(address(_controller)).getGroup(groupIndex).members.length; i++) {
+            if (nodeIdAddress == IController(address(_controller)).getGroup(0).members[i].nodeIdAddress) {
                 nodeFound = true;
             }
         }
