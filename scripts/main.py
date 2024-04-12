@@ -27,6 +27,7 @@ ENV_EXAMPLE_PATH = os.path.join(CONTRACTS_DIR, ".env.example")
 ENV_PATH = os.path.join(CONTRACTS_DIR, ".env")
 ADDRESSES_JSON_PATH = os.path.join(SCRIPT_DIR, "addresses.json")
 NODE_CLIENT_DIR = os.path.join(ROOT_DIR, "docker/node-client")
+NODE_CLIENT_BINARY_DIR = os.path.join(ROOT_DIR, "target/release")
 
 
 # RPC INFO
@@ -38,9 +39,9 @@ L1_RPC = get_key(ENV_PATH, "L1_RPC")
 L1_WS_RPC = get_key(ENV_PATH, "L1_WS_RPC")
 
 # Deployment flags
-LOCAL_TEST = (
-    get_key(ENV_PATH, "LOCAL_TEST").lower() == "true"
-)
+LOCAL_TEST = get_key(ENV_PATH, "LOCAL_TEST").lower() == "true"
+
+
 ARPA_EXISTS = (
     get_key(ENV_PATH, "ARPA_EXISTS").lower() == "true"
 )  # bool True if ARPA_EXISTS is true in .env
@@ -48,11 +49,12 @@ L2_ONLY = (
     get_key(ENV_PATH, "L2_ONLY").lower() == "true"
 )  # bool True if L2_ONLY is true in .env
 BASE_DEPLOYMENT = (
-    get_key(ENV_PATH, "OP_CHAIN_ID") == "8453" or get_key(ENV_PATH, "OP_CHAIN_ID") == "84531"
+    get_key(ENV_PATH, "OP_CHAIN_ID") == "8453"
+    or get_key(ENV_PATH, "OP_CHAIN_ID") == "84531"
 )
-REDSTONE_DEPLOYMENT = (
-    get_key(ENV_PATH, "OP_CHAIN_ID") == "17001"
-)
+REDSTONE_DEPLOYMENT = get_key(ENV_PATH, "OP_CHAIN_ID") == "17001"
+LOOTCHAIN_DEPLOYMENT = get_key(ENV_PATH, "OP_CHAIN_ID") == "9088912"
+
 # Admin Private Key used to Relay Groups manually during L2_ONLY deployment
 ADMIN_PRIVATE_KEY = get_key(ENV_PATH, "ADMIN_PRIVATE_KEY")
 VERBOSE_OUTPUT = get_key(ENV_PATH, "VERBOSE_OUTPUT").lower() == "true"
@@ -93,31 +95,43 @@ L1_CONTRACTS_DEPLOYMENT_BROADCAST_PATH = os.path.join(
     "run-latest.json",
 )
 
-CREATE_AND_SET_OP_CHAIN_MESSENGER_BROADCAST_PATH = os.path.join(
+
+# ! New - Generalize by making a general "OPStackChainMessenger contract" and "CreateAndSetChainMessengerScript" script
+CREATE_AND_SET_OP_STACK_CHAIN_MESSENGER_BROADCAST_PATH = os.path.join(
     CONTRACTS_DIR,
     "broadcast",
-    "CreateAndSetOPChainMessenger.s.sol",
+    "CreateAndSetOPStackChainMessenger.s.sol",
     L1_CHAIN_ID,
     "run-latest.json",
 )
 
-CREATE_AND_SET_BASE_CHAIN_MESSENGER_BROADCAST_PATH = os.path.join(
-    CONTRACTS_DIR,
-    "broadcast",
-    "CreateAndSetBaseChainMessenger.s.sol",
-    L1_CHAIN_ID,
-    "run-latest.json",
-)
+# ! Old
+# CREATE_AND_SET_OP_CHAIN_MESSENGER_BROADCAST_PATH = os.path.join(
+#     CONTRACTS_DIR,
+#     "broadcast",
+#     "CreateAndSetOPChainMessenger.s.sol",
+#     L1_CHAIN_ID,
+#     "run-latest.json",
+# )
 
-CREATE_AND_SET_REDSTONE_CHAIN_MESSENGER_BROADCAST_PATH = os.path.join(
-    CONTRACTS_DIR,
-    "broadcast",
-    "CreateAndSetRedstoneChainMessenger.s.sol",
-    L1_CHAIN_ID,
-    "run-latest.json",
-)
+# CREATE_AND_SET_BASE_CHAIN_MESSENGER_BROADCAST_PATH = os.path.join(
+#     CONTRACTS_DIR,
+#     "broadcast",
+#     "CreateAndSetBaseChainMessenger.s.sol",
+#     L1_CHAIN_ID,
+#     "run-latest.json",
+# )
 
-NODE_CLIENT_BINARY_PATH = os.path.join(ROOT_DIR, "target/release/node-client")
+# CREATE_AND_SET_REDSTONE_CHAIN_MESSENGER_BROADCAST_PATH = os.path.join(
+#     CONTRACTS_DIR,
+#     "broadcast",
+#     "CreateAndSetRedstoneChainMessenger.s.sol",
+#     L1_CHAIN_ID,
+#     "run-latest.json",
+# )
+
+NODE_CLIENT_RELEASE_BINARY_PATH = os.path.join(ROOT_DIR, "target/release/node-client")
+NODE_CLIENT_DEBUG_BINARY_PATH = os.path.join(ROOT_DIR, "target/debug/node-client")
 
 
 def cprint(text: str, color: str = "green"):
@@ -169,21 +183,28 @@ def get_l1_addresses():
 
         l1_addresses = {**l1_controller_addresses}
 
-        if os.path.exists(CREATE_AND_SET_OP_CHAIN_MESSENGER_BROADCAST_PATH):
-            l1_chain_op_messenger_addresses = get_addresses_from_json(
-                CREATE_AND_SET_OP_CHAIN_MESSENGER_BROADCAST_PATH
-            )
-            l1_addresses.update(l1_chain_op_messenger_addresses)
-        if os.path.exists(CREATE_AND_SET_BASE_CHAIN_MESSENGER_BROADCAST_PATH):
-            l1_chain_base_messenger_addresses = get_addresses_from_json(
-                CREATE_AND_SET_BASE_CHAIN_MESSENGER_BROADCAST_PATH
-            )
-            l1_addresses.update(l1_chain_base_messenger_addresses)
-        if os.path.exists(CREATE_AND_SET_REDSTONE_CHAIN_MESSENGER_BROADCAST_PATH):
-            l1_chain_redstone_messenger_addresses = get_addresses_from_json(
-                CREATE_AND_SET_REDSTONE_CHAIN_MESSENGER_BROADCAST_PATH
-            )
-            l1_addresses.update(l1_chain_redstone_messenger_addresses)
+        # ! New
+        l1_chain_op_stack_messenger_addresses = get_addresses_from_json(
+            CREATE_AND_SET_OP_STACK_CHAIN_MESSENGER_BROADCAST_PATH
+        )
+        l1_addresses.update(l1_chain_op_stack_messenger_addresses)
+
+        # ! Old - Generalize by making a general "OPStackChainMessenger contract" and "CreateAndSetChainMessengerScript" script
+        # if os.path.exists(CREATE_AND_SET_OP_CHAIN_MESSENGER_BROADCAST_PATH):
+        #     l1_chain_op_messenger_addresses = get_addresses_from_json(
+        #         CREATE_AND_SET_OP_CHAIN_MESSENGER_BROADCAST_PATH
+        #     )
+        #     l1_addresses.update(l1_chain_op_messenger_addresses)
+        # if os.path.exists(CREATE_AND_SET_BASE_CHAIN_MESSENGER_BROADCAST_PATH):
+        #     l1_chain_base_messenger_addresses = get_addresses_from_json(
+        #         CREATE_AND_SET_BASE_CHAIN_MESSENGER_BROADCAST_PATH
+        #     )
+        #     l1_addresses.update(l1_chain_base_messenger_addresses)
+        # if os.path.exists(CREATE_AND_SET_REDSTONE_CHAIN_MESSENGER_BROADCAST_PATH):
+        #     l1_chain_redstone_messenger_addresses = get_addresses_from_json(
+        #         CREATE_AND_SET_REDSTONE_CHAIN_MESSENGER_BROADCAST_PATH
+        #     )
+        #     l1_addresses.update(l1_chain_redstone_messenger_addresses)
 
     else:
         l1_addresses = get_addresses_from_json(L1_CONTRACTS_DEPLOYMENT_BROADCAST_PATH)
@@ -309,15 +330,6 @@ def wait_command(
         time.sleep(wait_time)
 
 
-def print_node_key_info():
-    mnemonic = get_key(ENV_PATH, "STAKING_NODES_MNEMONIC")
-    for index in [10, 11, 12]:
-        private_key, public_key = print_keypair(mnemonic, index)
-        print("\nIndex: {}".format(index))
-        print("Public key: {}".format(public_key))
-        print("Private key: {}".format(private_key))
-
-
 def deploy_contracts():
     ##################################
     ###### Contract Deployment #######
@@ -330,6 +342,9 @@ def deploy_contracts():
     # # forge script script/OPControllerOracleLocalTest.s.sol:OPControllerOracleLocalTestScript --fork-url http://localhost:9545 --broadcast
     print("Running Solidity Script: OPControllerOracleLocalTest on L2...")
     cmd = f"forge script script/OPControllerOracleLocalTest.s.sol:OPControllerOracleLocalTestScript --fork-url {L2_RPC} --broadcast"
+    if LOOTCHAIN_DEPLOYMENT:
+        cmd = cmd + " --slow --legacy"
+
     cprint(cmd)
     run_command(
         [cmd], env={}, cwd=CONTRACTS_DIR, capture_output=HIDE_OUTPUT, shell=True
@@ -387,21 +402,28 @@ def deploy_contracts():
         set_key(ENV_PATH, "STAKING_ADDRESS", l1_addresses["Staking"])
         l1_controller_relayer = EXISTING_L1_CONTROLLER_RELAYER
 
-
     # Deploy CreateAndSetChainMessenger script
-    if REDSTONE_DEPLOYMENT:
-        print("Running Solidity Script: CreateAndSetRedstoneChainMessenger on L1...")
-        cmd = f"forge script script/CreateAndSetRedstoneChainMessenger.s.sol:CreateAndSetRedstoneChainMessengerScript --fork-url {L1_RPC} --broadcast"
-        cprint(cmd)
-    elif BASE_DEPLOYMENT:
-        print("Running Solidity Script: CreateAndSetBaseChainMessenger on L1...")
-        cmd = f"forge script script/CreateAndSetBaseChainMessenger.s.sol:CreateAndSetBaseChainMessengerScript --fork-url {L1_RPC} --broadcast"
-        cprint(cmd)
-    else: 
-        print("Running Solidity Script: CreateAndSetOPChainMessenger on L1...")
-        cmd = f"forge script script/CreateAndSetOPChainMessenger.s.sol:CreateAndSetOPChainMessengerScript --fork-url {L1_RPC} --broadcast"
-        cprint(cmd)
-    
+    #! Generalize by making a general "OPStackChainMessenger contract" and "CreateAndSetChainMessengerScript" script
+
+    # ! New
+    print("Running Solidity Script: CreateAndSetOPStackChainMessenger on L1...")
+    cmd = f"forge script script/CreateAndSetOPStackChainMessenger.s.sol:CreateAndSetOPStackChainMessengerScript --fork-url {L1_RPC} --broadcast"
+    cprint(cmd)
+
+    # ! Old
+    # if REDSTONE_DEPLOYMENT:
+    #     print("Running Solidity Script: CreateAndSetRedstoneChainMessenger on L1...")
+    #     cmd = f"forge script script/CreateAndSetRedstoneChainMessenger.s.sol:CreateAndSetRedstoneChainMessengerScript --fork-url {L1_RPC} --broadcast"
+    #     cprint(cmd)
+    # elif BASE_DEPLOYMENT:
+    #     print("Running Solidity Script: CreateAndSetBaseChainMessenger on L1...")
+    #     cmd = f"forge script script/CreateAndSetBaseChainMessenger.s.sol:CreateAndSetBaseChainMessengerScript --fork-url {L1_RPC} --broadcast"
+    #     cprint(cmd)
+    # else:
+    #     print("Running Solidity Script: CreateAndSetOPChainMessenger on L1...")
+    #     cmd = f"forge script script/CreateAndSetOPChainMessenger.s.sol:CreateAndSetOPChainMessengerScript --fork-url {L1_RPC} --broadcast"
+    #     cprint(cmd)
+
     run_command(
         [cmd],
         env={
@@ -414,30 +436,44 @@ def deploy_contracts():
         shell=True,
     )
 
-    if REDSTONE_DEPLOYMENT:
-        l1_chain_redstone_messenger_addresses = get_addresses_from_json(
-            CREATE_AND_SET_REDSTONE_CHAIN_MESSENGER_BROADCAST_PATH
-        )
-        l1_addresses.update(l1_chain_redstone_messenger_addresses)
-        set_key(
-            ENV_PATH, "L1_CHAIN_MESSENGER_ADDRESS", l1_addresses["RedstoneChainMessenger"]
-        )
-    elif BASE_DEPLOYMENT:
-        l1_chain_base_messenger_addresses = get_addresses_from_json(
-            CREATE_AND_SET_BASE_CHAIN_MESSENGER_BROADCAST_PATH
-        )
-        l1_addresses.update(l1_chain_base_messenger_addresses)
-        set_key(
-            ENV_PATH, "L1_CHAIN_MESSENGER_ADDRESS", l1_addresses["BaseChainMessenger"]
-        )
-    else:
-        l1_chain_op_messenger_addresses = get_addresses_from_json(
-            CREATE_AND_SET_OP_CHAIN_MESSENGER_BROADCAST_PATH
-        )
-        l1_addresses.update(l1_chain_op_messenger_addresses)
-        set_key(
-            ENV_PATH, "L1_CHAIN_MESSENGER_ADDRESS", l1_addresses["OPChainMessenger"]
-        )
+    # ! New
+    l1_chain_op_stack_messenger_addresses = get_addresses_from_json(
+        CREATE_AND_SET_OP_STACK_CHAIN_MESSENGER_BROADCAST_PATH
+    )
+
+    l1_addresses.update(l1_chain_op_stack_messenger_addresses)
+
+    set_key(
+        ENV_PATH, "L1_CHAIN_MESSENGER_ADDRESS", l1_addresses["OPStackChainMessenger"]
+    )
+
+    # ! Old
+    # if REDSTONE_DEPLOYMENT:
+    #     l1_chain_redstone_messenger_addresses = get_addresses_from_json(
+    #         CREATE_AND_SET_REDSTONE_CHAIN_MESSENGER_BROADCAST_PATH
+    #     )
+    #     l1_addresses.update(l1_chain_redstone_messenger_addresses)
+    #     set_key(
+    #         ENV_PATH,
+    #         "L1_CHAIN_MESSENGER_ADDRESS",
+    #         l1_addresses["RedstoneChainMessenger"],
+    #     )
+    # elif BASE_DEPLOYMENT:
+    #     l1_chain_base_messenger_addresses = get_addresses_from_json(
+    #         CREATE_AND_SET_BASE_CHAIN_MESSENGER_BROADCAST_PATH
+    #     )
+    #     l1_addresses.update(l1_chain_base_messenger_addresses)
+    #     set_key(
+    #         ENV_PATH, "L1_CHAIN_MESSENGER_ADDRESS", l1_addresses["BaseChainMessenger"]
+    #     )
+    # else:
+    #     l1_chain_op_messenger_addresses = get_addresses_from_json(
+    #         CREATE_AND_SET_OP_CHAIN_MESSENGER_BROADCAST_PATH
+    #     )
+    #     l1_addresses.update(l1_chain_op_messenger_addresses)
+    #     set_key(
+    #         ENV_PATH, "L1_CHAIN_MESSENGER_ADDRESS", l1_addresses["OPChainMessenger"]
+    #     )
 
     # 4. deploy remaining contracts (Controller Oracle Init, StakeNodeLocalTest)
     # forge script script/OPControllerOracleInitializationLocalTest.s.sol:OPControllerOracleInitializationLocalTestScript --fork-url http://localhost:9545 --broadcast
@@ -445,6 +481,8 @@ def deploy_contracts():
         "Running Solidity Script: OPControllerOracleInitializationLocalTestScript on L2..."
     )
     cmd = f"forge script script/OPControllerOracleInitializationLocalTest.s.sol:OPControllerOracleInitializationLocalTestScript --fork-url {L2_RPC} --broadcast"
+    if LOOTCHAIN_DEPLOYMENT:
+        cmd = cmd + " --slow --legacy"
     cprint(cmd)
     run_command(
         [cmd],
@@ -452,7 +490,18 @@ def deploy_contracts():
             "OP_ADAPTER_ADDRESS": l2_addresses["ERC1967Proxy"],
             "OP_ARPA_ADDRESS": l2_addresses["Arpa"],
             "OP_CONTROLLER_ORACLE_ADDRESS": l2_addresses["ControllerOracle"],
-            "L1_CHAIN_MESSENGER_ADDRESS": l1_addresses["BaseChainMessenger"] if BASE_DEPLOYMENT else (l1_addresses["RedstoneChainMessenger"] if REDSTONE_DEPLOYMENT else l1_addresses["OPChainMessenger"]),  # new
+            # ! New
+            "L1_CHAIN_MESSENGER_ADDRESS": l1_addresses["OPStackChainMessenger"],
+            # ! Old
+            # "L1_CHAIN_MESSENGER_ADDRESS": (
+            #     l1_addresses["BaseChainMessenger"]
+            #     if BASE_DEPLOYMENT
+            #     else (
+            #         l1_addresses["RedstoneChainMessenger"]
+            #         if REDSTONE_DEPLOYMENT
+            #         else l1_addresses["OPChainMessenger"]
+            #     )
+            # ),
         },
         cwd=CONTRACTS_DIR,
         capture_output=HIDE_OUTPUT,
@@ -492,7 +541,7 @@ def deploy_contracts():
         )
 
     else:  # l2_only == True
-        # ! determine number of available groups and relay groups
+        # determine number of available groups and relay groups
         print(
             "Determining number of available groups and relayinig those groups from L1 to L2..."
         )
@@ -500,6 +549,15 @@ def deploy_contracts():
 
     # Print addresses to addresses.json
     print_addresses()
+
+
+def print_node_key_info():
+    mnemonic = get_key(ENV_PATH, "STAKING_NODES_MNEMONIC")
+    for index in [1, 2, 3, 4, 5]:
+        private_key, public_key = print_keypair(mnemonic, index)
+        print("\nIndex: {}".format(index))
+        print("Public key: {}".format(public_key))
+        print("Private key: {}".format(private_key))
 
 
 def deploy_nodes():  # ! Deploy Nodes
@@ -512,28 +570,60 @@ def deploy_nodes():  # ! Deploy Nodes
     ###### ARPA Network Deployment #######
     ######################################
 
-    # update config.yml files with correect L1 controller and adapter addresses
-    config_files = ["config_1.yml", "config_2.yml", "config_3.yml"]
+    # delete all config files in NODE_CLIENT_DIR
+    os.system(f"rm -f {NODE_CLIENT_DIR}/config_*")
+    config_template_file = os.path.join(NODE_CLIENT_DIR, "template.yml")
 
-    # computer node private key sfrom staking node mnemonic
-    mnemonic = get_key(ENV_PATH, "STAKING_NODES_MNEMONIC")
+    # get node private keys from .env
     node_private_keys = []
-    for index in [10, 11, 12]:
-        private_key, public_key = print_keypair(mnemonic, index)
-        node_private_keys.append(private_key)
-        # print("\nIndex: {}".format(index))
-        # print("Public key: {}".format(public_key))
-        # print("Private key: {}".format(private_key))
+    i = 1
+    while True:
+        key_name = f"NODE_PRIVATE_KEY_{i}"
+        key_value = get_key(ENV_PATH, key_name)
+        if key_value is None:
+            break
+        # strip the prepending 0x from the key
+        if key_value.startswith("0x"):
+            key_value = key_value[2:]
+        node_private_keys.append(key_value)
+        # copy template.yml to config_i.yml
+        config_file = f"config_{i}.yml"
+        os.system(f"cp {config_template_file} {NODE_CLIENT_DIR}/{config_file}")
+        i += 1
 
-    # update config files
+    print(f"{len(node_private_keys)} private keys found in .env")
+
+    node_private_key_count = get_key(ENV_PATH, "NODE_PRIVATE_KEY_COUNT")
+    if len(node_private_keys) != int(node_private_key_count):
+        cprint(
+            f"WARNING: NODE_PRIVATE_KEY_COUNT in .env ({node_private_key_count}) does not match the number of private keys found ({len(node_private_keys)}). Exiting..."
+        )
+
+    # prep yaml writer
     yaml = ruamel.yaml.YAML()
     yaml.preserve_quotes = True  # preserves quotes
     yaml.indent(sequence=4, offset=2)  # set indentation
 
-    for i, file in enumerate(config_files):
-        file_path = os.path.join(NODE_CLIENT_DIR, file)
+    # create config files for an arbitrary number of private_keys
+    config_files = []  # used when deploying nodes later
+    PORT_1 = 50061  # node rpc endpoint starting port
+    PORT_2 = 50091  # node management rpc endpoint starting port
+    for i, private_key in enumerate(node_private_keys):
+        config_file = f"config_{i+1}.yml"
+        config_files.append(config_file)
+        file_path = os.path.join(NODE_CLIENT_DIR, config_file)
         with open(file_path, "r") as f:
             data = yaml.load(f)
+
+        # set node commiter and node management rpc endpoints # ! new
+        data["node_advertised_committer_rpc_endpoint"] = f"172.17.0.1:{PORT_1 + i}"
+        data["node_committer_rpc_endpoint"] = f"0.0.0.0:{PORT_1 + i}"
+        data["node_management_rpc_endpoint"] = f"0.0.0.0:{PORT_2 + i}"
+
+        # set node_id, data_path, and log_file_path
+        data["data_path"] = f"./db/data{i+1}.sqlite"
+        data["logger"]["node_id"] = i + 1
+        data["logger"]["log_file_path"] = f"log/{i+1}/"
         # L1
         data["adapter_address"] = l1_addresses["ERC1967Proxy"]
         data["controller_address"] = l1_addresses["Controller"]
@@ -553,67 +643,43 @@ def deploy_nodes():  # ! Deploy Nodes
         data["relayed_chains"][0]["chain_id"] = int(L2_CHAIN_ID)
 
         # node private key
-        data["account"]["private_key"] = node_private_keys[i]
+        data["account"]["private_key"] = private_key
 
         with open(file_path, "w") as f:
             yaml.dump(data, f)
 
-    # start randcast nodes
+        print(f"Node-client config file {config_file} created successfully!")
+
+    # deploy nodes
     print("Starting randcast nodes...")
-    print("Starting Node 1!")
-    if LOCAL_TEST:
-        cmd = f"cargo run --release --bin node-client -- -c {NODE_CLIENT_DIR}/config_1.yml > /dev/null 2>&1 &"
-    else: 
-        cmd = f"docker run -d \
-            --name node1 \
-            -p 50061:50061 -p 50091:50091 \
-            -v {ROOT_DIR}/docker/node-client/config_1.yml:/app/config.yml \
-            -v {ROOT_DIR}/docker/node-client/db:/app/db \
-            -v {ROOT_DIR}/docker/node-client/log/1:/app/log/1 \
-            ghcr.io/arpa-network/node-client:latest"
-    cprint(cmd)
-    run_command(
-        [cmd],
-        cwd=NODE_CLIENT_DIR,
-        shell=True,
-    )
+    PORT_1 = 50061
+    PORT_2 = 50091
+    for i, config_file in enumerate(config_files, start=1):
+        print(f"Starting Node #{i} using: {config_file}!")
+        if LOCAL_TEST:
+            # cmd = f"cargo run --release --bin node-client -- -c {NODE_CLIENT_DIR}/{config_file} > /dev/null 2>&1 &"
+            # cmd = f"{NODE_CLIENT_RELEASE_BINARY_PATH} -c {NODE_CLIENT_DIR}/{config_file} > /dev/null 2>&1 &"  # release binary
+            cmd = f"{NODE_CLIENT_DEBUG_BINARY_PATH} -c {NODE_CLIENT_DIR}/{config_file} > /dev/null 2>&1 &"  # debug binary
 
-    print("Starting Node 2!")
-    if LOCAL_TEST:
-        cmd = f"cargo run --release --bin node-client -- -c {NODE_CLIENT_DIR}/config_2.yml > /dev/null 2>&1 &"
-    else: 
-        cmd = f"docker run -d \
-            --name node2 \
-            -p 50062:50062 -p 50092:50092 \
-            -v {ROOT_DIR}/docker/node-client/config_2.yml:/app/config.yml \
-            -v {ROOT_DIR}/docker/node-client/db:/app/db \
-            -v {ROOT_DIR}/docker/node-client/log/2:/app/log/2 \
-            ghcr.io/arpa-network/node-client:latest"
-    cprint(cmd)
-    run_command(
-        [cmd],
-        cwd=NODE_CLIENT_DIR,
-        shell=True,
-    )
+        else:
+            cmd = (
+                f"docker run -d "
+                f"--name node{i} "
+                # f"-p {PORT_1 + i-1}:{PORT_1 + i-1} -p {PORT_2 + i-1}:{PORT_2 + i-1} "
+                f"-v {ROOT_DIR}/docker/node-client/{config_file}:/app/config.yml "
+                f"-v {ROOT_DIR}/docker/node-client/db:/app/db "
+                f"-v {ROOT_DIR}/docker/node-client/log/{i}:/app/log/{i} "
+                f"--network=host "
+                f"ghcr.io/arpa-network/node-client:latest"
+            )
+        cprint(cmd)
+        run_command(
+            [cmd],
+            cwd=NODE_CLIENT_DIR,
+            shell=True,
+        )
 
-    print("Starting Node 3!")
-    if LOCAL_TEST:
-        cmd = f"cargo run --release --bin node-client -- -c {NODE_CLIENT_DIR}/config_3.yml > /dev/null 2>&1 &"
-    else: 
-        cmd = f"docker run -d \
-            --name node3 \
-            -p 50063:50063 -p 50093:50093 \
-            -v {ROOT_DIR}/docker/node-client/config_3.yml:/app/config.yml \
-            -v {ROOT_DIR}/docker/node-client/db:/app/db \
-            -v {ROOT_DIR}/docker/node-client/log/3:/app/log/3 \
-            ghcr.io/arpa-network/node-client:latest"
-    cprint(cmd)
-    run_command(
-        [cmd],
-        cwd=NODE_CLIENT_DIR,
-        shell=True,
-    )
-
+    # Wait for nodes to group
     if L2_ONLY:
         return  # no need to wait for nodes to group
 
@@ -625,7 +691,7 @@ def deploy_nodes():  # ! Deploy Nodes
     nodes_grouped = wait_command(
         [cmd],
         wait_time=12,
-        max_attempts=25,
+        max_attempts=60,  # fails on 50 sometimes, upped to 60.
         shell=True,
     )
 
@@ -649,9 +715,6 @@ def deploy_nodes():  # ! Deploy Nodes
         "Waiting for DKG Proccess to complete (group 0 coordinator should zero out)..."
     )
     # call controller.getCoordinator(). If it returns 0, we know dkg proccess finished and post proccess dkg has been called
-    # function getCoordinator(uint256 groupIndex) public view override(IController) returns (address) {
-    #     return _coordinators[groupIndex];
-    # }
     cmd = f"cast call {l1_addresses['Controller']} 'getCoordinator(uint256)' 0 --rpc-url {L1_RPC}"
     cprint(cmd)
 
@@ -665,8 +728,6 @@ def deploy_nodes():  # ! Deploy Nodes
     print("\nDKG Proccess Completed Succesfully!")
     print(f"Coordinator Value: {coordinator}\n")
 
-    time.sleep(30)  # wait for group info to propogate from L1 to L2
-
 
 def get_last_randomness(address: str, rpc: str) -> str:
     last_randomness_l1 = wait_command(
@@ -678,11 +739,7 @@ def get_last_randomness(address: str, rpc: str) -> str:
     return last_randomness_l1
 
 
-def test_request_randomness():  # ! Integration Testing
-    # l1_addresses = get_addresses_from_json(L1_CONTRACTS_DEPLOYMENT_BROADCAST_PATH)
-    # l2_addresses = get_addresses_from_json(OP_CONTRACTS_DEPLOYMENT_BROADCAST_PATH)
-    # # pprint(l1_addresses)
-    # # pprint(l2_addresses)
+def test_request_randomness():
 
     # get l1_addresses and l2_addresses from addresses.json
     with open(ADDRESSES_JSON_PATH, "r") as f:
@@ -701,26 +758,33 @@ def test_request_randomness():  # ! Integration Testing
     )
     # print(l1_group_into)
 
-    print("L2 Group Info:")
+    print("Waiting for group to relay from L1 to L2...")
+    non_relayed_group = "0x00000000000000000000000000000000000000000000000000000000000000200000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000018000000000000000000000000000000000000000000000000000000000000001a000000000000000000000000000000000000000000000000000000000000001c000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
+
     cmd = f"cast call {l2_addresses['ControllerOracle']} \"getGroup(uint256)\" 0 --rpc-url {L2_RPC}"
+
     cprint(cmd)
-    l2_group_info = run_command(
+    l2_group_info = wait_command(
         [cmd],
+        wait_time=15,
+        max_attempts=10,
+        fail_value=non_relayed_group,
         shell=True,
     )
-    # print(l2_group_into)
+    if l2_group_info:
+        print(f"Group relayed from L1 to L2!")
+        print("L2 Group Info:")
+        print(l2_group_info)
 
     ############################################
     ###### L1 Request Randomness Testing #######
     ############################################
 
-    # 1. Get last randomness
-
-    # get L1 previous randomness
+    # 1. Get L1 previous randomness
     l1_prev_randomness = get_last_randomness(l1_addresses["ERC1967Proxy"], L1_RPC)
 
     # 2. Deploy L1 user contract and request randomness
-    print("Deploying L1 user contract and requesting randomness...")
+    print("\nDeploying L1 user contract and requesting randomness...")
     cmd = f"forge script script/GetRandomNumberLocalTest.s.sol:GetRandomNumberLocalTestScript --fork-url {L1_RPC} --broadcast"
     cprint(cmd)
     run_command(
@@ -763,6 +827,8 @@ def test_request_randomness():  # ! Integration Testing
 
     # forge script script/OPGetRandomNumberLocalTest.s.sol:OPGetRandomNumberLocalTestScript --fork-url http://localhost:9545 --broadcast
     cmd = f"forge script script/OPGetRandomNumberLocalTest.s.sol:OPGetRandomNumberLocalTestScript --fork-url {L2_RPC} --broadcast"
+    if LOOTCHAIN_DEPLOYMENT:
+        cmd = cmd + " --slow --legacy"
     cprint(cmd)
     run_command(
         [cmd],
@@ -779,6 +845,8 @@ def test_request_randomness():  # ! Integration Testing
 
     print("Waiting for randomness to be updated...")
     cmd = f'cast call {l2_addresses["ERC1967Proxy"]} "getLastRandomness()(uint256)" --rpc-url {L2_RPC}'
+    if LOOTCHAIN_DEPLOYMENT:
+        cmd = cmd + " --slow --legacy"
     cprint(cmd)
     l2_cur_randomness = wait_command(
         [cmd],
@@ -832,15 +900,7 @@ def deploy_controller_relayer():
 
 
 def relay_groups(controller_oracle_address):
-    # with open(ADDRESSES_JSON_PATH, "r") as f:
-    #     addresses = json.load(f)
-    #     l1_addresses = addresses["L1 Addresses"]
-    #     l2_addresses = addresses["L2 Addresses"]
-    #     pprint(l1_addresses)
-    #     pprint(l2_addresses)
-
     # Use cast send to create a new controller relayer contract
-
     # determine number of available groups by calling getValidGroupIndices()
     print("Getting available group indices...")
     cmd = f'cast call {EXISTING_L1_CONTROLLER_ADDRESS} "getValidGroupIndices()(uint256[])" --rpc-url {L1_RPC}'
@@ -871,6 +931,8 @@ def relay_groups(controller_oracle_address):
         non_relayed_group = "0x00000000000000000000000000000000000000000000000000000000000000200000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000018000000000000000000000000000000000000000000000000000000000000001a000000000000000000000000000000000000000000000000000000000000001c000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
 
         cmd = f'cast call {controller_oracle_address} "getGroup(uint256)" {group_index} --rpc-url {L2_RPC}'
+        if LOOTCHAIN_DEPLOYMENT:
+            cmd = cmd + " --slow --legacy"
         cprint(cmd)
 
         l2_group_info = wait_command(
@@ -886,17 +948,67 @@ def relay_groups(controller_oracle_address):
             print(l2_group_info)
 
 
+def update_group(controller_address, controller_oracle_address, group_index):
+    """
+    Get group info from L1 and update group on L2 using updateGroup.s.sol solidity script
+    """
+
+    # Compute the admin wallet address
+    cmd = f"cast wallet address --private-key {ADMIN_PRIVATE_KEY}"
+    cprint(cmd.replace(ADMIN_PRIVATE_KEY, "***"))
+    admin_wallet_address = (
+        run_command(
+            [cmd],
+            shell=True,
+            capture_output=True,
+        )
+        .stdout.strip()
+        .decode("utf-8")
+    )
+
+    print(f"Admin wallet address: {admin_wallet_address}")
+
+    # construct the forge script
+    cmd = f"forge script script/updateGroup.s.sol:GetGroupFromL1AndUpdateL2Script --broadcast"
+
+    cprint(cmd)
+
+    run_command(
+        [cmd],
+        env={
+            "ADMIN_PRIVATE_KEY": ADMIN_PRIVATE_KEY,
+            "ADMIN_ADDRESS": admin_wallet_address,
+            "CONTROLLER_ADDRESS": controller_address,
+            "OP_CONTROLLER_ORACLE_ADDRESS": controller_oracle_address,
+            "L1_RPC": L1_RPC,
+            "OP_RPC": L2_RPC,
+        },
+        cwd=CONTRACTS_DIR,
+        shell=True,
+    )
+
+
 def main():
-    ## For L2 only deployments, use the following prior to the first deployment.
-    # deploy_controller_relayer()
-
-    ## if you want to manually call relayGroups(L2controllerOracleAddress)
-    # relay_groups("0x2E2Ed0Cfd3AD2f1d34481277b3204d807Ca2F8c2")
-
-    ## Main deployment script
+    # # Main deployment script
     deploy_contracts()
     deploy_nodes()
     test_request_randomness()
+
+    ## For L2 only deployments, use the following prior to the first deployment.
+    # deploy_controller_relayer()
+
+    ## Manually call relayGroups(L2controllerOracleAddress)
+    # relay_groups("0x2E2Ed0Cfd3AD2f1d34481277b3204d807Ca2F8c2")
+
+    ## Get public/private key info from node mnemonic
+    # print_node_key_info()
+
+    ## Manually Update Group from L1 to L2
+    # update_group(
+    #     "0x647c919280A1cE898cBf8BD72c8a912165B4f70a",  # controller_address
+    #     "0x6789dD361406E3DFC3a52BAfFD4C05958d25deDe",  # controller_oracle_address
+    #     0,  # group_index
+    # )
 
 
 if __name__ == "__main__":
