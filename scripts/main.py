@@ -616,7 +616,7 @@ def deploy_nodes():  # ! Deploy Nodes
             data = yaml.load(f)
 
         # set node commiter and node management rpc endpoints # ! new
-        data["node_advertised_committer_rpc_endpoint"] = f"172.17.0.1:{PORT_1 + i}"
+        data["node_advertised_committer_rpc_endpoint"] = f"0.0.0.0:{PORT_1 + i}"
         data["node_committer_rpc_endpoint"] = f"0.0.0.0:{PORT_1 + i}"
         data["node_management_rpc_endpoint"] = f"0.0.0.0:{PORT_2 + i}"
 
