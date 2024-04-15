@@ -10,3 +10,4 @@ broadcast/
 lcov.info
 
 *.env
+deployment-addresses.json

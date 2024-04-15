@@ -1,4 +1,4 @@
-node_advertised_committer_rpc_endpoint: "172.17.0.1:50061"
+node_advertised_committer_rpc_endpoint: "0.0.0.0:50061"
 
 node_committer_rpc_endpoint: "0.0.0.0:50061"
 
@@ -6,9 +6,9 @@ node_management_rpc_endpoint: "0.0.0.0:50091"
 
 node_management_rpc_token: "for_test"
 
-provider_endpoint: "wss://holesky.gateway.tenderly.co/4X987cMYL0drsf7LIZXlSr"
+provider_endpoint: "ws://127.0.0.1:8546"
 
-chain_id: 17000
+chain_id: 900
 
 controller_address: "0x80FC77fE37d5c1c81B072d16C7e9ae438a854C00"
 
@@ -78,9 +78,9 @@ time_limits:
     use_jitter: false
 
 relayed_chains:
-  - chain_id: 17001
+  - chain_id: 901
     description: "OP"
-    provider_endpoint: "wss://rpc.holesky.redstone.xyz/ws"
+    provider_endpoint: "ws://127.0.0.1:9546"
     controller_oracle_address: "0x2F78B0a3A49a0452C0FEF66865292d7c1fC6FBf6"
     adapter_address: "0xa3b1F7d15036F9150ce5e28eC948FDfA67c9555B"
     listeners:
@@ -91,13 +91,13 @@ relayed_chains:
         interval_millis: 0
         use_jitter: true
       - l_type: ReadyToHandleRandomnessTask
-        interval_millis: 1000
+        interval_millis: 100
         use_jitter: true
       - l_type: RandomnessSignatureAggregation
-        interval_millis: 2000
+        interval_millis: 200
         use_jitter: false
     time_limits:
-      block_time: 3
+      block_time: 2
       randomness_task_exclusive_window: 10
       listener_interval_millis: 1000
       provider_polling_interval_millis: 1000
@@ -117,6 +117,6 @@ relayed_chains:
         use_jitter: true
       commit_partial_signature_retry_descriptor:
         base: 2
-        factor: 1000
-        max_attempts: 5
+        factor: 300
+        max_attempts: 20
         use_jitter: false

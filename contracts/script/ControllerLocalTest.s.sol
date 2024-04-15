@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.18;
 
-import {Script} from "forge-std/Script.sol";
+import {Deployer} from "./Deployer.s.sol";
 import {Controller} from "../src/Controller.sol";
 import {ControllerRelayer} from "../src/ControllerRelayer.sol";
 import {IControllerOwner} from "../src/interfaces/IControllerOwner.sol";
@@ -16,7 +16,7 @@ import {Staking} from "Staking-v0.1/Staking.sol";
 import {ServiceManager} from "../src/eigenlayer/ServiceManager.sol";
 
 // solhint-disable-next-line max-states-count
-contract ControllerLocalTestScript is Script {
+contract ControllerLocalTestScript is Deployer {
     uint256 internal _deployerPrivateKey = vm.envUint("ADMIN_PRIVATE_KEY");
 
     uint256 internal _disqualifiedNodePenaltyAmount = vm.envUint("DISQUALIFIED_NODE_PENALTY_AMOUNT");
@@ -85,22 +85,28 @@ contract ControllerLocalTestScript is Script {
         Staking staking;
         IERC20 arpa;
 
+        _checkDeploymentAddressesFile();
+
         if (_arpaExists == false) {
             vm.broadcast(_deployerPrivateKey);
             arpa = new Arpa();
+            _addDeploymentAddress(Network.L1, "Arpa", address(arpa));
         } else {
             arpa = IERC20(_existingArpaAddress);
         }
 
         vm.broadcast(_deployerPrivateKey);
         nodeRegistryImpl = new NodeRegistry();
+        _addDeploymentAddress(Network.L1, "NodeRegistryImpl", address(nodeRegistryImpl));
 
         vm.broadcast(_deployerPrivateKey);
         nodeRegistry =
             new ERC1967Proxy(address(nodeRegistryImpl), abi.encodeWithSignature("initialize(address)", address(arpa)));
+        _addDeploymentAddress(Network.L1, "NodeRegistry", address(nodeRegistry));
 
         vm.broadcast(_deployerPrivateKey);
         serviceManagerImpl = new ServiceManager();
+        _addDeploymentAddress(Network.L1, "ServiceManagerImpl", address(serviceManagerImpl));
 
         vm.broadcast(_deployerPrivateKey);
         serviceManager = new ERC1967Proxy(
@@ -113,6 +119,7 @@ contract ControllerLocalTestScript is Script {
                 _delegationManager
             )
         );
+        _addDeploymentAddress(Network.L1, "ServiceManager", address(serviceManager));
 
         Staking.PoolConstructorParams memory params = Staking.PoolConstructorParams(
             IERC20(address(arpa)),
@@ -128,16 +135,19 @@ contract ControllerLocalTestScript is Script {
 
         vm.broadcast(_deployerPrivateKey);
         staking = new Staking(params);
+        _addDeploymentAddress(Network.L1, "Staking", address(staking));
 
         vm.broadcast(_deployerPrivateKey);
         staking.setController(address(nodeRegistry));
 
         vm.broadcast(_deployerPrivateKey);
         controllerImpl = new Controller();
+        _addDeploymentAddress(Network.L1, "ControllerImpl", address(controllerImpl));
 
         vm.broadcast(_deployerPrivateKey);
         controller =
             new ERC1967Proxy(address(controllerImpl), abi.encodeWithSignature("initialize(uint256)", _lastOutput));
+        _addDeploymentAddress(Network.L1, "Controller", address(controller));
 
         vm.broadcast(_deployerPrivateKey);
         INodeRegistryOwner(address(nodeRegistry)).setNodeRegistryConfig(
@@ -151,10 +161,12 @@ contract ControllerLocalTestScript is Script {
 
         vm.broadcast(_deployerPrivateKey);
         adapterImpl = new Adapter();
+        _addDeploymentAddress(Network.L1, "AdapterImpl", address(adapterImpl));
 
         vm.broadcast(_deployerPrivateKey);
         adapter =
             new ERC1967Proxy(address(adapterImpl), abi.encodeWithSignature("initialize(address)", address(controller)));
+        _addDeploymentAddress(Network.L1, "Adapter", address(adapter));
 
         vm.broadcast(_deployerPrivateKey);
         IControllerOwner(address(controller)).setControllerConfig(
@@ -200,5 +212,6 @@ contract ControllerLocalTestScript is Script {
 
         vm.broadcast(_deployerPrivateKey);
         controllerRelayer = new ControllerRelayer(address(controller));
+        _addDeploymentAddress(Network.L1, "ControllerRelayer", address(controllerRelayer));
     }
 }

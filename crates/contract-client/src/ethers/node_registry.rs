@@ -91,7 +91,8 @@ impl NodeRegistryTransactions for NodeRegistryClient {
             expiry: 0u64.into(),
         };
 
-        let call = node_registry_contract.node_register(id_public_key.into(), empty_signature);
+        let call =
+            node_registry_contract.node_register(id_public_key.into(), false, empty_signature);
 
         NodeRegistryClient::call_contract_transaction(
             self.chain_id,
