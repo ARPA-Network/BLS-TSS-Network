@@ -5,8 +5,9 @@ import {UUPSUpgradeable} from "openzeppelin-contracts-upgradeable/contracts/prox
 import {OwnableUpgradeable} from "openzeppelin-contracts-upgradeable/contracts/access/OwnableUpgradeable.sol";
 import {ISignatureUtils, IAVSDirectory} from "../interfaces/IAVSDirectory.sol";
 import {IDelegationManager} from "../interfaces/IDelegationManager.sol";
+import {IServiceManager} from "../interfaces/IServiceManager.sol";
 
-contract ServiceManager is UUPSUpgradeable, OwnableUpgradeable {
+contract ServiceManager is UUPSUpgradeable, IServiceManager, OwnableUpgradeable {
     // *Constants*
 
     // *NodeRegistry Config*
@@ -38,14 +39,14 @@ contract ServiceManager is UUPSUpgradeable, OwnableUpgradeable {
 
     function initialize(
         address _nodeRegistryAddress,
-        address _stETHStrategyAddress,
+        address _strategyAddress,
         address _avsDirectory,
         address _delegationManager
     ) public initializer {
         nodeRegistryAddress = _nodeRegistryAddress;
         avsDirectory = IAVSDirectory(_avsDirectory);
         delegationManager = IDelegationManager(_delegationManager);
-        strategy.push(_stETHStrategyAddress);
+        strategy.push(_strategyAddress);
 
         __Ownable_init();
     }
