@@ -563,6 +563,7 @@ def deploy_contracts():
                     capture_output=HIDE_OUTPUT,
                     shell=True,
                 )
+                time.sleep(3)  # avoid replacement transaction underpriced
 
     else:  # l2_only == True
         # determine number of available groups and relay groups
