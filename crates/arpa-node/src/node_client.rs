@@ -99,12 +99,64 @@ fn init_logger(node_id: &str, context_logging: bool, log_file_path: &str, rollin
                 .filter(Box::new(ThresholdFilter::new(LevelFilter::Error)))
                 .build("err_file", Box::new(rolling_err_file)),
         )
-        .build(
-            Root::builder()
+        .logger(
+            log4rs::config::Logger::builder()
                 .appender("stdout")
                 .appender("file")
+                .build("node_client", LevelFilter::Info),
+        )
+        .logger(
+            log4rs::config::Logger::builder()
+                .appender("stdout")
+                .appender("file")
+                .build("arpa_node", LevelFilter::Info),
+        )
+        .logger(
+            log4rs::config::Logger::builder()
+                .appender("stdout")
+                .appender("file")
+                .build("arpa_core", LevelFilter::Info),
+        )
+        .logger(
+            log4rs::config::Logger::builder()
+                .appender("stdout")
+                .appender("file")
+                .build("arpa_contract_client", LevelFilter::Info),
+        )
+        .logger(
+            log4rs::config::Logger::builder()
+                .appender("stdout")
+                .appender("file")
+                .build("arpa_sqlite_db", LevelFilter::Info),
+        )
+        .logger(
+            log4rs::config::Logger::builder()
+                .appender("stdout")
+                .appender("file")
+                .build("arpa_dal", LevelFilter::Info),
+        )
+        .logger(
+            log4rs::config::Logger::builder()
+                .appender("stdout")
+                .appender("file")
+                .build("arpa_stats", LevelFilter::Info),
+        )
+        .logger(
+            log4rs::config::Logger::builder()
+                .appender("stdout")
+                .appender("file")
+                .build("dkg_core", LevelFilter::Info),
+        )
+        .logger(
+            log4rs::config::Logger::builder()
+                .appender("stdout")
+                .appender("file")
+                .build("threshold_bls", LevelFilter::Info),
+        )
+        .build(
+            Root::builder()
                 .appender("err_file")
-                .build(LevelFilter::Info),
+                .build(LevelFilter::Error),
         )
         .unwrap();
 

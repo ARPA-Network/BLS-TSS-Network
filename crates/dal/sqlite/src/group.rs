@@ -13,6 +13,7 @@ use async_trait::async_trait;
 use entity::group_info;
 use entity::prelude::GroupInfo;
 use ethers_core::types::Address;
+use log::info;
 use sea_orm::{ActiveModelTrait, DbConn, DbErr, EntityTrait, QueryOrder, Set};
 use std::collections::BTreeMap;
 use std::{marker::PhantomData, sync::Arc};
@@ -385,6 +386,11 @@ impl<C: Curve + Sync + Send> GroupInfoUpdater<C> for GroupInfoDBClient<C> {
             let e: DBError = e.into();
             e
         })?;
+
+        info!(
+            "dkg_status transfered from {:?} to {:?}",
+            current_dkg_status, dkg_status
+        );
 
         self.refresh_current_group_info().await?;
 
