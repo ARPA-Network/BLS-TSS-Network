@@ -55,6 +55,7 @@ interface INodeRegistry {
         returns (
             address controllerContractAddress,
             address stakingContractAddress,
+            address serviceManagerContractAddress,
             uint256 nativeNodeStakingAmount,
             uint256 eigenlayerNodeStakingAmount,
             uint256 pendingBlockAfterQuit

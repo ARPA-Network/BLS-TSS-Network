@@ -395,6 +395,7 @@ async fn send<PC: Curve>(
             )))
         }
         Some(("register", _sub_matches)) => {
+            // TODO support register from eigenlayer
             let main_chain_id = context.config.get_main_chain_id();
             let node_registry_address = context.node_registry_address().await?;
             let client = context
@@ -414,7 +415,7 @@ async fn send<PC: Curve>(
             let dkg_public_key = node_cache.get_dkg_public_key()?;
 
             let trx_hash = client
-                .node_register(bincode::serialize(&dkg_public_key)?)
+                .node_register(bincode::serialize(&dkg_public_key)?, false)
                 .await?;
 
             Ok(Some(format!(

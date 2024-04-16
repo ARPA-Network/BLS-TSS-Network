@@ -228,7 +228,11 @@ pub mod node_registry {
 
     #[async_trait]
     pub trait NodeRegistryTransactions {
-        async fn node_register(&self, id_public_key: Vec<u8>) -> ContractClientResult<H256>;
+        async fn node_register(
+            &self,
+            id_public_key: Vec<u8>,
+            is_eigenlayer: bool,
+        ) -> ContractClientResult<H256>;
     }
 
     #[async_trait]

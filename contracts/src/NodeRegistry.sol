@@ -278,6 +278,7 @@ contract NodeRegistry is UUPSUpgradeable, INodeRegistry, INodeRegistryOwner, Own
         returns (
             address controllerContractAddress,
             address stakingContractAddress,
+            address serviceManagerContractAddress,
             uint256 nativeNodeStakingAmount,
             uint256 eigenlayerNodeStakingAmount,
             uint256 pendingBlockAfterQuit
@@ -286,6 +287,7 @@ contract NodeRegistry is UUPSUpgradeable, INodeRegistry, INodeRegistryOwner, Own
         return (
             _config.controllerContractAddress,
             _config.stakingContractAddress,
+            _config.serviceManagerContractAddress,
             _config.nativeNodeStakingAmount,
             _config.eigenlayerNodeStakingAmount,
             _config.pendingBlockAfterQuit

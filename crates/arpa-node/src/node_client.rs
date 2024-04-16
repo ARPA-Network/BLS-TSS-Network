@@ -314,7 +314,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let handle = context.deploy().await?;
 
-    if is_new_run && !is_eigenlayer {
+    if is_new_run {
         let controller_client =
             ControllerClientBuilder::<G2Curve>::build_controller_client(&main_chain_identity);
 
@@ -327,7 +327,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         );
 
         node_registry_client
-            .node_register(dkg_public_key_to_register.unwrap())
+            .node_register(dkg_public_key_to_register.unwrap(), is_eigenlayer)
             .await?;
     }
 
