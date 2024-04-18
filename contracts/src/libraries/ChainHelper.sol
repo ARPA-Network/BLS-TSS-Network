@@ -11,6 +11,8 @@ library ChainHelper {
     uint256 public constant OP_DEVNET_L2_CHAIN_ID = 901;
     uint256 public constant BASE_MAINNET_CHAIN_ID = 8453;
     uint256 public constant BASE_SEPOLIA_TESTNET_CHAIN_ID = 84532;
+    uint256 public constant REDSTONE_MAINNET_CHAIN_ID = 690;
+    uint256 public constant REDSTONE_GARNET_TESTNET_CHAIN_ID = 17069;
     uint256 public constant REDSTONE_HOLESKY_TESTNET_CHAIN_ID = 17001;
     uint256 public constant LOOT_MAINNET_CHAIN_ID = 5151706;
     uint256 public constant LOOT_GOERLI_TESTNET_CHAIN_ID = 9088912;
@@ -25,7 +27,8 @@ library ChainHelper {
         if (
             chainId == OP_MAINNET_CHAIN_ID || chainId == OP_SEPOLIA_TESTNET_CHAIN_ID || chainId == OP_DEVNET_L2_CHAIN_ID
                 || chainId == BASE_MAINNET_CHAIN_ID || chainId == BASE_SEPOLIA_TESTNET_CHAIN_ID
-                || chainId == REDSTONE_HOLESKY_TESTNET_CHAIN_ID
+                || chainId == REDSTONE_HOLESKY_TESTNET_CHAIN_ID || chainId == REDSTONE_MAINNET_CHAIN_ID
+                || chainId == REDSTONE_GARNET_TESTNET_CHAIN_ID
         ) {
             return 2;
         } else if (chainId == OP_DEVNET_L1_CHAIN_ID || chainId == TAIKO_KATLA_TEST_CHAIN_ID) {
@@ -43,6 +46,7 @@ library ChainHelper {
         if (
             chainId == OP_MAINNET_CHAIN_ID || chainId == OP_SEPOLIA_TESTNET_CHAIN_ID || chainId == OP_DEVNET_L2_CHAIN_ID
                 || chainId == BASE_MAINNET_CHAIN_ID || chainId == BASE_SEPOLIA_TESTNET_CHAIN_ID
+                || chainId == REDSTONE_MAINNET_CHAIN_ID || chainId == REDSTONE_GARNET_TESTNET_CHAIN_ID
         ) {
             return IOPGasPriceOracle(OP_GAS_PRICE_ORACLE_ADDR).getL1Fee(msg.data);
         }
@@ -53,7 +57,8 @@ library ChainHelper {
         uint256 chainId = block.chainid;
         if (
             chainId == OP_MAINNET_CHAIN_ID || chainId == OP_SEPOLIA_TESTNET_CHAIN_ID || chainId == OP_DEVNET_L2_CHAIN_ID
-                || chainId == BASE_MAINNET_CHAIN_ID || chainId == BASE_SEPOLIA_TESTNET_CHAIN_ID
+                || chainId == BASE_MAINNET_CHAIN_ID || chainId == BASE_SEPOLIA_TESTNET_CHAIN_ID 
+                || chainId == REDSTONE_MAINNET_CHAIN_ID || chainId == REDSTONE_GARNET_TESTNET_CHAIN_ID
         ) {
             try IOPGasPriceOracle(OP_GAS_PRICE_ORACLE_ADDR).isEcotone() returns (bool isEcotone) {
                 if (isEcotone) {
@@ -79,6 +84,7 @@ library ChainHelper {
         if (
             chainId == OP_MAINNET_CHAIN_ID || chainId == OP_SEPOLIA_TESTNET_CHAIN_ID || chainId == OP_DEVNET_L2_CHAIN_ID
                 || chainId == BASE_MAINNET_CHAIN_ID || chainId == BASE_SEPOLIA_TESTNET_CHAIN_ID
+                || chainId == REDSTONE_MAINNET_CHAIN_ID || chainId == REDSTONE_GARNET_TESTNET_CHAIN_ID
         ) {
             return BASIC_FULFILLMENT_L1_GAS_USED + groupSize * FULFILLMENT_GAS_PER_PARTICIPANT;
         }
