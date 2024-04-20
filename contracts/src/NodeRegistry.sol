@@ -93,11 +93,11 @@ contract NodeRegistry is UUPSUpgradeable, INodeRegistry, INodeRegistryOwner, Own
         }
 
         if (isEigenlayerNode) {
-            uint256 share = IServiceManager(_config.stakingContractAddress).getOperatorShare(msg.sender);
-            if (share < _config.nativeNodeStakingAmount) {
+            uint256 share = IServiceManager(_config.serviceManagerContractAddress).getOperatorShare(msg.sender);
+            if (share < _config.eigenlayerNodeStakingAmount) {
                 revert OperatorUnderStaking();
             }
-            IServiceManager(_config.stakingContractAddress).registerOperator(msg.sender, operatorSignature);
+            IServiceManager(_config.serviceManagerContractAddress).registerOperator(msg.sender, operatorSignature);
         } else {
             // Lock staking amount in Staking contract
             INodeStaking(_config.stakingContractAddress).lock(msg.sender, _config.nativeNodeStakingAmount);
@@ -134,8 +134,8 @@ contract NodeRegistry is UUPSUpgradeable, INodeRegistry, INodeRegistryOwner, Own
         }
 
         if (node.isEigenlayerNode) {
-            uint256 share = IServiceManager(_config.stakingContractAddress).getOperatorShare(msg.sender);
-            if (share < _config.nativeNodeStakingAmount) {
+            uint256 share = IServiceManager(_config.serviceManagerContractAddress).getOperatorShare(msg.sender);
+            if (share < _config.eigenlayerNodeStakingAmount) {
                 revert OperatorUnderStaking();
             }
         } else {
@@ -167,7 +167,7 @@ contract NodeRegistry is UUPSUpgradeable, INodeRegistry, INodeRegistryOwner, Own
         _freezeNode(msg.sender, _config.pendingBlockAfterQuit);
 
         if (node.isEigenlayerNode) {
-            IServiceManager(_config.stakingContractAddress).deregisterOperator(msg.sender);
+            IServiceManager(_config.serviceManagerContractAddress).deregisterOperator(msg.sender);
         } else {
             // unlock staking amount in Staking contract
             INodeStaking(_config.stakingContractAddress).unlock(msg.sender, _config.nativeNodeStakingAmount);
@@ -236,7 +236,9 @@ contract NodeRegistry is UUPSUpgradeable, INodeRegistry, INodeRegistryOwner, Own
         Node storage node = _nodes[nodeIdAddress];
 
         if (node.isEigenlayerNode) {
-            IServiceManager(_config.stakingContractAddress).slashDelegationStaking(nodeIdAddress, stakingRewardPenalty);
+            IServiceManager(_config.serviceManagerContractAddress).slashDelegationStaking(
+                nodeIdAddress, stakingRewardPenalty
+            );
         } else {
             // slash staking reward in Staking contract
             INodeStaking(_config.stakingContractAddress).slashDelegationReward(nodeIdAddress, stakingRewardPenalty);

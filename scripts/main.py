@@ -229,6 +229,10 @@ def get_l1_addresses():
         l1_addresses.update(
             get_addresses_from_json(CONTRACTS_DEPLOYMENT_ADDRESSES_PATH)["L1"]
         )
+        l1_chain_op_stack_messenger_addresses = get_addresses_from_broadcast_json(
+            CREATE_AND_SET_OP_STACK_CHAIN_MESSENGER_BROADCAST_PATH
+        )
+        l1_addresses.update(l1_chain_op_stack_messenger_addresses)
         if ARPA_EXISTS:
             l1_addresses["Arpa"] = EXISTING_L1_ARPA_ADDRESS
     return l1_addresses
