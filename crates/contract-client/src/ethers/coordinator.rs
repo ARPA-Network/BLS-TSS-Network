@@ -232,7 +232,9 @@ pub mod coordinator_tests {
     use crate::error::ContractClientError;
     use arpa_core::eip1559_gas_price_estimator;
     use arpa_core::Config;
+    use arpa_core::GasMiddleware;
     use arpa_core::GeneralMainChainIdentity;
+    use arpa_core::GAS_RAISE_PERCENTAGE;
     use ethers::abi::Tokenize;
     use ethers::prelude::ContractError::Revert;
     use ethers::prelude::*;
@@ -265,13 +267,18 @@ pub mod coordinator_tests {
         let wallet: LocalWallet = anvil.keys()[0].clone().into();
 
         // 3. connect to the network
-        let provider = Provider::<Ws>::connect(anvil.ws_endpoint())
-            .await
-            .unwrap()
-            .interval(Duration::from_millis(3000));
+        let provider = Arc::new(
+            Provider::<Ws>::connect(anvil.ws_endpoint())
+                .await
+                .unwrap()
+                .interval(Duration::from_millis(3000)),
+        );
 
         // 4. instantiate the client with the wallet
-        let nonce_manager = NonceManagerMiddleware::new(Arc::new(provider), wallet.address());
+        let nonce_manager = NonceManagerMiddleware::new(
+            provider.wrap_into(|s| GasMiddleware::new(s, GAS_RAISE_PERCENTAGE).unwrap()),
+            wallet.address(),
+        );
 
         let client = Arc::new(SignerMiddleware::new(
             nonce_manager,

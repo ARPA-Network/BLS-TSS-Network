@@ -11,6 +11,8 @@ use std::{fs::read_to_string, path::PathBuf};
 
 pub const PLACEHOLDER_ADDRESS: Address = Address::zero();
 
+pub const GAS_RAISE_PERCENTAGE: u32 = 20;
+
 pub const DEFAULT_LISTENER_INTERVAL_MILLIS: u64 = 10000;
 pub const DEFAULT_LISTENER_USE_JITTER: bool = true;
 

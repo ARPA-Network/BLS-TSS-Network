@@ -3,6 +3,8 @@ use ethers_core::types::{Address, BlockNumber, U256};
 use ethers_providers::{Provider, ProviderError, Ws};
 use std::sync::Arc;
 
+mod gas_middleware;
+pub use gas_middleware::*;
 mod types;
 pub use types::*;
 

@@ -1,18 +1,19 @@
 use crate::{
     eip1559_gas_price_estimator, supports_eip1559, ChainProviderManager,
-    ExponentialBackoffRetryDescriptor, RelayedChainIdentity,
-    DEFAULT_WEBSOCKET_PROVIDER_RECONNECT_TIMES,
+    ExponentialBackoffRetryDescriptor, GasMiddleware, RelayedChainIdentity,
+    DEFAULT_WEBSOCKET_PROVIDER_RECONNECT_TIMES, GAS_RAISE_PERCENTAGE,
 };
 
 use super::{ChainIdentity, MainChainIdentity};
 use async_trait::async_trait;
 use ethers_core::types::{Address, BlockNumber, U256};
-use ethers_middleware::{NonceManagerMiddleware, SignerMiddleware};
+use ethers_middleware::{MiddlewareBuilder, NonceManagerMiddleware, SignerMiddleware};
 use ethers_providers::{Http, Middleware, Provider, ProviderError, Ws};
 use ethers_signers::{LocalWallet, Signer};
 use std::sync::Arc;
 
-pub type WsWalletSigner = SignerMiddleware<NonceManagerMiddleware<Arc<Provider<Ws>>>, LocalWallet>;
+pub type WsWalletSigner =
+    SignerMiddleware<NonceManagerMiddleware<GasMiddleware<Arc<Provider<Ws>>>>, LocalWallet>;
 pub type HttpWalletSigner =
     SignerMiddleware<NonceManagerMiddleware<Arc<Provider<Http>>>, LocalWallet>;
 
@@ -43,7 +44,10 @@ impl GeneralMainChainIdentity {
     ) -> Self {
         let wallet = wallet.with_chain_id(chain_id as u32);
 
-        let nonce_manager = NonceManagerMiddleware::new(provider, wallet.address());
+        let nonce_manager = NonceManagerMiddleware::new(
+            provider.wrap_into(|s| GasMiddleware::new(s, GAS_RAISE_PERCENTAGE).unwrap()),
+            wallet.address(),
+        );
 
         // instantiate the client with the wallet
         let signer = Arc::new(SignerMiddleware::new(nonce_manager, wallet));
@@ -143,7 +147,10 @@ impl ChainProviderManager for GeneralMainChainIdentity {
             .interval(self.get_provider().get_interval()),
         );
 
-        let nonce_manager = NonceManagerMiddleware::new(provider, self.get_id_address());
+        let nonce_manager = NonceManagerMiddleware::new(
+            provider.wrap_into(|s| GasMiddleware::new(s, GAS_RAISE_PERCENTAGE).unwrap()),
+            self.get_id_address(),
+        );
 
         let signer = Arc::new(SignerMiddleware::new(
             nonce_manager,
@@ -181,7 +188,10 @@ impl GeneralRelayedChainIdentity {
     ) -> Self {
         let wallet = wallet.with_chain_id(chain_id as u32);
 
-        let nonce_manager = NonceManagerMiddleware::new(provider, wallet.address());
+        let nonce_manager = NonceManagerMiddleware::new(
+            provider.wrap_into(|s| GasMiddleware::new(s, GAS_RAISE_PERCENTAGE).unwrap()),
+            wallet.address(),
+        );
 
         // instantiate the client with the wallet
         let signer = Arc::new(SignerMiddleware::new(nonce_manager, wallet));
@@ -275,7 +285,10 @@ impl ChainProviderManager for GeneralRelayedChainIdentity {
             .interval(self.get_provider().get_interval()),
         );
 
-        let nonce_manager = NonceManagerMiddleware::new(provider, self.get_id_address());
+        let nonce_manager = NonceManagerMiddleware::new(
+            provider.wrap_into(|s| GasMiddleware::new(s, GAS_RAISE_PERCENTAGE).unwrap()),
+            self.get_id_address(),
+        );
 
         let signer = Arc::new(SignerMiddleware::new(
             nonce_manager,
