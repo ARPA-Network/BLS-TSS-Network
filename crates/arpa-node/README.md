@@ -231,7 +231,11 @@ Configuration items in [`conf/config.yml`](conf/config.yml) are listed here:
 
 - node_management_rpc_token: Config token phrase for authenticaing management grpc requests by `authorization` header. (example: "arpa_network")
 
+- node_statistics_http_endpoint: Config endpoint to expose statistics http services. (example: "0.0.0.0:50081")
+
 - provider_endpoint: Config websocket endpoint to interact with chain provider. (example: "ws://127.0.0.1:8546")
+
+- is_eigenlayer: Config whether the node is registered as an eigenlayer operator, or a native staking operator. (example: false)
 
 - chain_id: Config chain id of main chain. (example: 31337)
 
