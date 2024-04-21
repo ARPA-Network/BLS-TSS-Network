@@ -64,6 +64,7 @@ struct ConfigHolder {
     pub node_advertised_committer_rpc_endpoint: Option<String>,
     pub node_management_rpc_endpoint: String,
     pub node_management_rpc_token: String,
+    pub node_statistics_http_endpoint: String,
     pub provider_endpoint: String,
     pub chain_id: usize,
     pub is_eigenlayer: Option<bool>,
@@ -86,8 +87,9 @@ impl Default for ConfigHolder {
         Self {
             node_committer_rpc_endpoint: "[::1]:50060".to_string(),
             node_advertised_committer_rpc_endpoint: Some("[::1]:50060".to_string()),
-            node_management_rpc_endpoint: "[::1]:50099".to_string(),
+            node_management_rpc_endpoint: "[::1]:50090".to_string(),
             node_management_rpc_token: "for_test".to_string(),
+            node_statistics_http_endpoint: "http://localhost:50080".to_string(),
             provider_endpoint: "localhost:8545".to_string(),
             chain_id: 0,
             is_eigenlayer: Some(false),
@@ -425,6 +427,7 @@ pub struct Config {
     node_advertised_committer_rpc_endpoint: String,
     node_management_rpc_endpoint: String,
     node_management_rpc_token: String,
+    node_statistics_http_endpoint: String,
     provider_endpoint: String,
     chain_id: usize,
     is_eigenlayer: bool,
@@ -462,6 +465,7 @@ impl From<ConfigHolder> for Config {
         } else {
             config_holder.node_management_rpc_token.clone()
         };
+        let node_statistics_http_endpoint = config_holder.node_statistics_http_endpoint.clone();
         let provider_endpoint = config_holder.provider_endpoint.clone();
         let chain_id = config_holder.chain_id;
         let is_eigenlayer = if config_holder.is_eigenlayer.is_none() {
@@ -561,6 +565,7 @@ impl From<ConfigHolder> for Config {
             node_advertised_committer_rpc_endpoint,
             node_management_rpc_endpoint,
             node_management_rpc_token,
+            node_statistics_http_endpoint,
             provider_endpoint,
             chain_id,
             is_eigenlayer,
@@ -626,6 +631,10 @@ impl Config {
 
     pub fn get_node_management_rpc_token(&self) -> &str {
         &self.node_management_rpc_token
+    }
+
+    pub fn get_node_statistics_http_endpoint(&self) -> &str {
+        &self.node_statistics_http_endpoint
     }
 
     pub fn get_provider_endpoint(&self) -> &str {
@@ -931,6 +940,7 @@ pub enum TaskType {
     Listener(usize, ListenerType),
     Subscriber(usize, SubscriberType),
     RpcServer(RpcServerType),
+    HttpServer(HttpServerType),
 }
 
 impl std::fmt::Display for TaskType {
@@ -947,6 +957,7 @@ impl std::fmt::Display for TaskType {
                 .field("subscriber", s)
                 .finish(),
             TaskType::RpcServer(r) => f.debug_struct("TaskType").field("rpc server", r).finish(),
+            TaskType::HttpServer(h) => f.debug_struct("TaskType").field("http server", h).finish(),
         }
     }
 }
@@ -1035,6 +1046,19 @@ impl std::fmt::Display for RpcServerType {
         match self {
             RpcServerType::Committer => write!(f, "Committer"),
             RpcServerType::Management => write!(f, "Management"),
+        }
+    }
+}
+
+#[derive(Debug, Eq, Clone, Copy, Hash, PartialEq)]
+pub enum HttpServerType {
+    Statistics,
+}
+
+impl std::fmt::Display for HttpServerType {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        match self {
+            HttpServerType::Statistics => write!(f, "Statistics"),
         }
     }
 }

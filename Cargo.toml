@@ -10,7 +10,6 @@ members = [
     "crates/dal/sqlite",
     "crates/contract-client",
     "crates/user-cli",
-    "crates/stats",
 ]
 
 resolver = "2"

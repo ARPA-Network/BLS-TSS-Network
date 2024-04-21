@@ -136,3 +136,16 @@ pub(crate) trait ManagementServerStarter<
         context: Arc<RwLock<C>>,
     ) -> SchedulerResult<()>;
 }
+
+pub(crate) trait StatisticsServerStarter<
+    C: Context<PC, S>,
+    PC: Curve,
+    S: SignatureScheme + ThresholdScheme<Public = PC::Point, Private = PC::Scalar>,
+>
+{
+    fn start_statistics_server(
+        &mut self,
+        rpc_endpoint: String,
+        context: Arc<RwLock<C>>,
+    ) -> SchedulerResult<()>;
+}

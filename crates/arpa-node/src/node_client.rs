@@ -139,12 +139,6 @@ fn init_logger(node_id: &str, context_logging: bool, log_file_path: &str, rollin
             log4rs::config::Logger::builder()
                 .appender("stdout")
                 .appender("file")
-                .build("arpa_stats", LevelFilter::Info),
-        )
-        .logger(
-            log4rs::config::Logger::builder()
-                .appender("stdout")
-                .appender("file")
                 .build("dkg_core", LevelFilter::Info),
         )
         .logger(

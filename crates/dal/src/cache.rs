@@ -1,5 +1,8 @@
 use crate::error::{DataAccessResult, GroupError, NodeInfoError};
-use crate::{BLSResultCacheState, BlockInfoHandler, ContextInfoUpdater};
+use crate::{
+    BLSResultCacheState, BLSTasksHandler, BlockInfoHandler, ContextInfoUpdater, GroupInfoHandler,
+    NodeInfoHandler, SignatureResultCacheHandler,
+};
 
 use super::{
     BLSTasksFetcher, BLSTasksUpdater, BlockInfoFetcher, BlockInfoUpdater, GroupInfoFetcher,
@@ -751,4 +754,12 @@ impl SignatureResultCacheUpdater<RandomnessResultCache>
 
         Ok(())
     }
+}
+
+impl<PC: Curve + 'static> NodeInfoHandler<PC> for InMemoryNodeInfoCache<PC> {}
+impl<PC: Curve + 'static> GroupInfoHandler<PC> for InMemoryGroupInfoCache<PC> {}
+impl BLSTasksHandler<RandomnessTask> for InMemoryBLSTasksQueue<RandomnessTask> {}
+impl SignatureResultCacheHandler<RandomnessResultCache>
+    for InMemorySignatureResultCache<RandomnessResultCache>
+{
 }

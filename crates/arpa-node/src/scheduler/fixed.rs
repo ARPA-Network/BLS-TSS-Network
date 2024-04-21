@@ -19,11 +19,11 @@ impl SimpleFixedTaskScheduler {
 }
 
 impl TaskScheduler for SimpleFixedTaskScheduler {
-    fn add_task<T>(&mut self, task_type: TaskType, future: T) -> SchedulerResult<()>
-    where
-        T: Future<Output = ()> + Send + 'static,
-        T::Output: Send + 'static,
-    {
+    fn add_task(
+        &mut self,
+        task_type: TaskType,
+        future: impl Future + Send + 'static,
+    ) -> SchedulerResult<()> {
         if self.fixed_tasks.contains_key(&task_type) {
             return Err(SchedulerError::TaskAlreadyExisted);
         }

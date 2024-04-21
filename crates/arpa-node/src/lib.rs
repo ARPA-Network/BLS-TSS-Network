@@ -10,4 +10,5 @@ pub mod management;
 pub mod queue;
 pub mod rpc_stub;
 pub mod scheduler;
+pub mod stats;
 pub mod subscriber;

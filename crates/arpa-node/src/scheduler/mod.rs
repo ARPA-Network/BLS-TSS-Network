@@ -5,10 +5,11 @@ use async_trait::async_trait;
 use futures::Future;
 
 pub trait TaskScheduler {
-    fn add_task<T>(&mut self, task_type: TaskType, future: T) -> SchedulerResult<()>
-    where
-        T: Future<Output = ()> + Send + 'static,
-        T::Output: Send + 'static;
+    fn add_task(
+        &mut self,
+        task_type: TaskType,
+        future: impl Future + Send + 'static,
+    ) -> SchedulerResult<()>;
 }
 
 #[async_trait]

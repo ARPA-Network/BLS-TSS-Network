@@ -637,6 +637,7 @@ def deploy_nodes():  # ! Deploy Nodes
     config_files = []  # used when deploying nodes later
     PORT_1 = 50061  # node rpc endpoint starting port
     PORT_2 = 50091  # node management rpc endpoint starting port
+    PORT_3 = 50081  # node statistics http endpoint starting port
     for i, private_key in enumerate(node_private_keys):
         config_file = f"config_{i+1}.yml"
         config_files.append(config_file)
@@ -644,10 +645,14 @@ def deploy_nodes():  # ! Deploy Nodes
         with open(file_path, "r") as f:
             data = yaml.load(f)
 
-        # set node commiter and node management rpc endpoints # ! new
+        # set node commiter, node management and node statistics server endpoints # ! new
         data["node_advertised_committer_rpc_endpoint"] = f"0.0.0.0:{PORT_1 + i}"
         data["node_committer_rpc_endpoint"] = f"0.0.0.0:{PORT_1 + i}"
         data["node_management_rpc_endpoint"] = f"0.0.0.0:{PORT_2 + i}"
+        data["node_statistics_http_endpoint"] = f"0.0.0.0:{PORT_3 + i}"
+
+        # set is_eigenlayer
+        data["is_eigenlayer"] = False
 
         # set node_id, data_path, and log_file_path
         data["data_path"] = f"./db/data{i+1}.sqlite"
@@ -686,9 +691,11 @@ def deploy_nodes():  # ! Deploy Nodes
     for i, config_file in enumerate(config_files, start=1):
         print(f"Starting Node #{i} using: {config_file}!")
         if LOCAL_TEST:
+            cmd = f"cargo run --bin node-client -- -c {NODE_CLIENT_DIR}/{config_file} > /dev/null 2>&1 &"
+            # cmd = f"{NODE_CLIENT_DEBUG_BINARY_PATH} -c {NODE_CLIENT_DIR}/{config_file} > /dev/null 2>&1 &"  # debug binary
+
             # cmd = f"cargo run --release --bin node-client -- -c {NODE_CLIENT_DIR}/{config_file} > /dev/null 2>&1 &"
             # cmd = f"{NODE_CLIENT_RELEASE_BINARY_PATH} -c {NODE_CLIENT_DIR}/{config_file} > /dev/null 2>&1 &"  # release binary
-            cmd = f"{NODE_CLIENT_DEBUG_BINARY_PATH} -c {NODE_CLIENT_DIR}/{config_file} > /dev/null 2>&1 &"  # debug binary
 
         else:
             cmd = (

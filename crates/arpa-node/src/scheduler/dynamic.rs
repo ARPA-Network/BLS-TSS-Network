@@ -22,11 +22,11 @@ impl SimpleDynamicTaskScheduler {
 }
 
 impl TaskScheduler for SimpleDynamicTaskScheduler {
-    fn add_task<T>(&mut self, _: TaskType, future: T) -> SchedulerResult<()>
-    where
-        T: Future<Output = ()> + Send + 'static,
-        T::Output: Send + 'static,
-    {
+    fn add_task(
+        &mut self,
+        _: TaskType,
+        future: impl Future + Send + 'static,
+    ) -> SchedulerResult<()> {
         let (send, recv) = channel::<()>();
 
         let mut mdc = vec![];

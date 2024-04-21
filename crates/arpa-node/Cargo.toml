@@ -50,6 +50,7 @@ uuid = { version = "1.2.2", features = ["v4", "fast-rng", "macro-diagnostics"] }
 tower = "0.4"
 hyper = "0.14"
 reedline-repl-rs = { version = "1.0.6", features = ["async"] }
+actix-web = "4"
 
 [build-dependencies]
 tonic-build = "0.11"
