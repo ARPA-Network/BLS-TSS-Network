@@ -1,4 +1,5 @@
-use crate::context::types::GeneralContext;
+use crate::context::chain::Chain;
+use crate::context::{types::GeneralContext, Context};
 use crate::context::ContextFetcher;
 use crate::scheduler::FixedTaskScheduler;
 use actix_web::{get, web, App, HttpResponse, HttpServer, Responder};
@@ -44,6 +45,41 @@ async fn health<
         HttpResponse::ServiceUnavailable()
     }
 }
+
+pub async fn node_info<
+    PC: Curve + std::fmt::Debug + Clone + Sync + Send + 'static,
+    SS: SignatureScheme
+        + ThresholdScheme<Public = PC::Point, Private = PC::Scalar>
+        + Clone
+        + Send
+        + Sync
+        + 'static,
+>(
+    context: NodeContext<PC, SS>,
+) -> impl Responder
+where
+    <SS as ThresholdScheme>::Error: Sync + Send,
+    <SS as SignatureScheme>::Error: Sync + Send,
+{
+    let group_cache = context
+        .read()
+        .await
+        .get_main_chain()
+        .get_group_cache();
+    let (group_index, node_index) = match (group_cache.read().await.get_index(), group_cache.read().await.get_self_index()) {
+        (Ok(group_idx), Ok(node_idx)) => (Some(group_idx), Some(node_idx)),
+        _ => (None, None),
+    };
+
+    let node_name = match (group_index, node_index) {
+        (Some(group_idx), Some(node_idx)) => {
+            format!("Arpa-Randcast-group{}-node{}", group_idx, node_idx)
+        }
+        _ => "Arpa-Randcast-node".to_string(),
+    };
+    format!("Hello!")
+}
+
 
 pub async fn start_statistics_server<
     PC: Curve + std::fmt::Debug + Clone + Sync + Send + 'static,
