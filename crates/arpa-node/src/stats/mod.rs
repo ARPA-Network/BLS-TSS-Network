@@ -9,8 +9,24 @@ use threshold_bls::{
     sig::{SignatureScheme, ThresholdScheme},
 };
 use tokio::sync::RwLock;
+use serde::{Deserialize, Serialize};
 
 type NodeContext<PC, S> = Arc<RwLock<GeneralContext<PC, S>>>;
+
+#[derive(Serialize, Deserialize)]
+pub struct NodeInfo {
+    pub node_name: String,
+    pub spec_version: String,
+    pub node_version: String,
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct ServiceInfo {
+    pub id: String,
+    pub name: String,
+    pub description: String,
+    pub status: String,
+}
 
 #[get("/hello/{name}")]
 async fn greet(name: web::Path<String>) -> impl Responder {
@@ -68,7 +84,9 @@ where
         .get_group_cache();
     let (group_index, node_index) = match (group_cache.read().await.get_index(), group_cache.read().await.get_self_index()) {
         (Ok(group_idx), Ok(node_idx)) => (Some(group_idx), Some(node_idx)),
-        _ => (None, None),
+        (Err(err), _) | (_, Err(err)) => {
+            return HttpResponse::InternalServerError().json(format!("Not able to retrieve node info: {}", err));
+        }
     };
 
     let node_name = match (group_index, node_index) {
@@ -77,7 +95,14 @@ where
         }
         _ => "Arpa-Randcast-node".to_string(),
     };
-    format!("Hello!")
+
+    let node_info = NodeInfo {
+        node_name,
+        spec_version: "v0.0.1".to_string(),
+        node_version: "v1.0.0".to_string(),
+    };
+
+    return HttpResponse::Ok().json(node_info);
 }
 
 
@@ -101,6 +126,7 @@ where
         App::new()
             .app_data(web::Data::new(context.clone()))
             .route("/health", web::get().to(health::<PC, SS>))
+            .route("/eigen/node", web::get().to(node_info::<PC, SS>))
             .service(greet)
     })
     .bind(endpoint)
