@@ -3,6 +3,7 @@ use crate::context::{types::GeneralContext, Context};
 use crate::context::ContextFetcher;
 use crate::scheduler::FixedTaskScheduler;
 use actix_web::{get, web, App, HttpResponse, HttpServer, Responder};
+use arpa_core::{ListenerType, RpcServerType, TaskType};
 use std::sync::Arc;
 use threshold_bls::{
     group::Curve,
@@ -62,7 +63,7 @@ async fn health<
     }
 }
 
-pub async fn node_info<
+async fn node_info<
     PC: Curve + std::fmt::Debug + Clone + Sync + Send + 'static,
     SS: SignatureScheme
         + ThresholdScheme<Public = PC::Point, Private = PC::Scalar>
@@ -71,13 +72,15 @@ pub async fn node_info<
         + Sync
         + 'static,
 >(
-    context: NodeContext<PC, SS>,
+    context: web::Data<NodeContext<PC, SS>>,
 ) -> impl Responder
 where
     <SS as ThresholdScheme>::Error: Sync + Send,
     <SS as SignatureScheme>::Error: Sync + Send,
 {
+    // Try to retrieve group and node index, and if there is any error, throw it in internal server error. 
     let group_cache = context
+        .into_inner()
         .read()
         .await
         .get_main_chain()
@@ -89,6 +92,7 @@ where
         }
     };
 
+    // Format output accordingly.
     let node_name = match (group_index, node_index) {
         (Some(group_idx), Some(node_idx)) => {
             format!("Arpa-Randcast-group{}-node{}", group_idx, node_idx)
@@ -105,6 +109,229 @@ where
     return HttpResponse::Ok().json(node_info);
 }
 
+
+async fn is_node_info_filled<
+    PC: Curve + std::fmt::Debug + Clone + Sync + Send + 'static,
+    SS: SignatureScheme
+        + ThresholdScheme<Public = PC::Point, Private = PC::Scalar>
+        + Clone
+        + Send
+        + Sync
+        + 'static,
+    >(
+        context: web::Data<NodeContext<PC, SS>>,
+    ) -> bool 
+    where
+    <SS as ThresholdScheme>::Error: Sync + Send,
+    <SS as SignatureScheme>::Error: Sync + Send,
+{
+    let node_cache_handler = context
+    .into_inner()
+    .read()
+    .await
+    .get_main_chain()
+    .get_node_cache();
+    let node_cache = node_cache_handler.read().await;
+
+    match (
+        node_cache.get_id_address(),
+        node_cache.get_node_rpc_endpoint(),
+        node_cache.get_dkg_private_key(),
+        node_cache.get_dkg_public_key(),
+    ) {
+        (Ok(_), Ok(_), Ok(_), Ok(_)) => true,
+        _ => false,
+    }
+}
+
+async fn is_node_connected<
+    PC: Curve + std::fmt::Debug + Clone + Sync + Send + 'static,
+    SS: SignatureScheme
+        + ThresholdScheme<Public = PC::Point, Private = PC::Scalar>
+        + Clone
+        + Send
+        + Sync
+        + 'static,
+>(
+    context: web::Data<NodeContext<PC, SS>>,
+) -> bool {
+
+    let tasks: Vec<TaskType> =
+        context
+        .into_inner()
+        .read()
+        .await
+        .get_fixed_task_handler()
+        .read()
+        .await
+        .get_tasks()
+        .into_iter()
+        .cloned()
+        .collect();
+   
+    let mut has_committer = false;
+    let mut has_management = false;
+
+    for task in tasks {
+        if let TaskType::RpcServer(rpc_server_type) = task {
+            match rpc_server_type {
+                RpcServerType::Committer => has_committer = true,
+                RpcServerType::Management => has_management = true,
+            }
+        }
+    }
+
+    has_committer && has_management
+}
+
+async fn is_node_registered<
+    PC: Curve + std::fmt::Debug + Clone + Sync + Send + 'static,
+    SS: SignatureScheme
+        + ThresholdScheme<Public = PC::Point, Private = PC::Scalar>
+        + Clone
+        + Send
+        + Sync
+        + 'static,
+    >(
+        context: web::Data<NodeContext<PC, SS>>,
+    ) -> bool 
+    where
+    <SS as ThresholdScheme>::Error: Sync + Send,
+    <SS as SignatureScheme>::Error: Sync + Send,
+{
+    let dkg_start_block_height = context
+        .into_inner()
+        .read()
+        .await
+        .get_main_chain()
+        .get_group_cache()
+        .read()
+        .await
+        .get_dkg_start_block_height()
+        .unwrap_or(0);
+    return dkg_start_block_height > 0;
+}
+
+async fn node_health<
+    PC: Curve + std::fmt::Debug + Clone + Sync + Send + 'static,
+    SS: SignatureScheme
+        + ThresholdScheme<Public = PC::Point, Private = PC::Scalar>
+        + Clone
+        + Send
+        + Sync
+        + 'static,
+>(
+    context: web::Data<NodeContext<PC, SS>>,
+) -> impl Responder
+where
+    <SS as ThresholdScheme>::Error: Sync + Send,
+    <SS as SignatureScheme>::Error: Sync + Send,
+{   
+    if !is_node_info_filled(context.clone()).await {
+        return HttpResponse::ServiceUnavailable().json("AVS Node info is not filled completely.");
+    }
+    if !is_node_connected(context.clone()).await {
+        return HttpResponse::ServiceUnavailable().json("AVS Node is not connected since RPC servers not started.");
+    }
+    if !is_node_registered(context.clone()).await {
+        return HttpResponse::PartialContent().json("AVS Node is healthy, but not registered.");
+    }
+    return HttpResponse::Ok().json("Node is fully healthy");
+}
+
+async fn services_info<
+    PC: Curve + std::fmt::Debug + Clone + Sync + Send + 'static,
+    SS: SignatureScheme
+        + ThresholdScheme<Public = PC::Point, Private = PC::Scalar>
+        + Clone
+        + Send
+        + Sync
+        + 'static,
+>(
+    context: web::Data<NodeContext<PC, SS>>,
+) -> impl Responder
+where
+    <SS as ThresholdScheme>::Error: Sync + Send,
+    <SS as SignatureScheme>::Error: Sync + Send,
+{
+    let tasks: Vec<TaskType> =
+        context
+        .into_inner()
+        .read()
+        .await
+        .get_fixed_task_handler()
+        .read()
+        .await
+        .get_tasks()
+        .into_iter()
+        .cloned()
+        .collect();
+
+    let mut services_info = vec![
+        ServiceInfo {
+            id: "block".to_string(),
+            name: "Block".to_string(),
+            description: "Block listener".to_string(),
+            status: "down".to_string(),
+        },
+        ServiceInfo {
+            id: "pre_grouping".to_string(),
+            name: "PreGrouping".to_string(),
+            description: "PreGrouping listener".to_string(),
+            status: "down".to_string(),
+        },
+        ServiceInfo {
+            id: "post_commit_grouping".to_string(),
+            name: "PostCommitGrouping".to_string(),
+            description: "PostCommitGrouping listener".to_string(),
+            status: "down".to_string(),
+        },
+        ServiceInfo {
+            id: "post_grouping".to_string(),
+            name: "PostGrouping".to_string(),
+            description: "PostGrouping listener".to_string(),
+            status: "down".to_string(),
+        },
+        ServiceInfo {
+            id: "new_randomness_task".to_string(),
+            name: "NewRandomnessTask".to_string(),
+            description: "NewRandomnessTask listener".to_string(),
+            status: "down".to_string(),
+        },
+        ServiceInfo {
+            id: "ready_to_handle_randomness_task".to_string(),
+            name: "ReadyToHandleRandomnessTask".to_string(),
+            description: "ReadyToHandleRandomnessTask listener".to_string(),
+            status: "down".to_string(),
+        },
+        ServiceInfo {
+            id: "randomness_signature_aggregation".to_string(),
+            name: "RandomnessSignatureAggregation".to_string(),
+            description: "RandomnessSignatureAggregation listener".to_string(),
+            status: "down".to_string(),
+        },
+    ];
+
+    for task_type in tasks {
+        if let TaskType::Listener(_, listener_type) = task_type {
+            let service_id = match listener_type {
+                ListenerType::Block => "block",
+                ListenerType::PreGrouping => "pre_grouping",
+                ListenerType::PostCommitGrouping => "post_commit_grouping",
+                ListenerType::PostGrouping => "post_grouping",
+                ListenerType::NewRandomnessTask => "new_randomness_task",
+                ListenerType::ReadyToHandleRandomnessTask => "ready_to_handle_randomness_task",
+                ListenerType::RandomnessSignatureAggregation => "randomness_signature_aggregation",
+            };
+
+            if let Some(service) = services_info.iter_mut().find(|s| s.id == service_id) {
+                service.status ="up".to_string();
+            }
+        }
+    }
+
+    HttpResponse::Ok().json(services_info)
+}
 
 pub async fn start_statistics_server<
     PC: Curve + std::fmt::Debug + Clone + Sync + Send + 'static,
@@ -127,6 +354,8 @@ where
             .app_data(web::Data::new(context.clone()))
             .route("/health", web::get().to(health::<PC, SS>))
             .route("/eigen/node", web::get().to(node_info::<PC, SS>))
+            .route("/eigen/node/health", web::get().to(node_health::<PC, SS>))
+            .route("/eigen/node/services", web::get().to(services_info::<PC, SS>))
             .service(greet)
     })
     .bind(endpoint)
@@ -149,7 +378,7 @@ mod tests {
         http::{self},
         test,
     };
-    use arpa_core::{Config, GeneralMainChainIdentity, ListenerType, RandomnessTask, TaskType};
+    use arpa_core::{Config, GeneralMainChainIdentity, RandomnessTask};
     use arpa_dal::{
         cache::{
             InMemoryBLSTasksQueue, InMemoryGroupInfoCache, InMemoryNodeInfoCache,
