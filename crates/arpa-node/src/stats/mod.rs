@@ -239,7 +239,7 @@ where
     return HttpResponse::Ok().json("Node is fully healthy");
 }
 
-async fn services_info<
+async fn services_info_value<
     PC: Curve + std::fmt::Debug + Clone + Sync + Send + 'static,
     SS: SignatureScheme
         + ThresholdScheme<Public = PC::Point, Private = PC::Scalar>
@@ -249,7 +249,7 @@ async fn services_info<
         + 'static,
 >(
     context: web::Data<NodeContext<PC, SS>>,
-) -> impl Responder
+) -> Vec<ServiceInfo>
 where
     <SS as ThresholdScheme>::Error: Sync + Send,
     <SS as SignatureScheme>::Error: Sync + Send,
@@ -330,7 +330,55 @@ where
         }
     }
 
-    HttpResponse::Ok().json(services_info)
+   return services_info;
+}
+
+async fn services_info<
+    PC: Curve + std::fmt::Debug + Clone + Sync + Send + 'static,
+    SS: SignatureScheme
+        + ThresholdScheme<Public = PC::Point, Private = PC::Scalar>
+        + Clone
+        + Send
+        + Sync
+        + 'static,
+>(
+    context: web::Data<NodeContext<PC, SS>>,
+) -> impl Responder
+where
+    <SS as ThresholdScheme>::Error: Sync + Send,
+    <SS as SignatureScheme>::Error: Sync + Send,
+{
+    return HttpResponse::Ok().json(services_info_value(context).await);
+}
+
+async fn service_health<
+    PC: Curve + std::fmt::Debug + Clone + Sync + Send + 'static,
+    SS: SignatureScheme
+        + ThresholdScheme<Public = PC::Point, Private = PC::Scalar>
+        + Clone
+        + Send
+        + Sync
+        + 'static,
+>(
+    context: web::Data<NodeContext<PC, SS>>,
+    service_id: web::Path<String>,
+) -> impl Responder 
+where
+    <SS as ThresholdScheme>::Error: Sync + Send,
+    <SS as SignatureScheme>::Error: Sync + Send,
+{
+    let services_info = services_info_value(context).await;
+    let service_id = service_id.into_inner();
+
+    if let Some(service) = services_info.iter().find(|s| s.id == service_id) {
+        if service.status == "up" {
+            HttpResponse::Ok().finish()
+        } else {
+            HttpResponse::ServiceUnavailable().finish()
+        }
+    } else {
+        HttpResponse::NotFound().finish()
+    }
 }
 
 pub async fn start_statistics_server<
@@ -356,6 +404,7 @@ where
             .route("/eigen/node", web::get().to(node_info::<PC, SS>))
             .route("/eigen/node/health", web::get().to(node_health::<PC, SS>))
             .route("/eigen/node/services", web::get().to(services_info::<PC, SS>))
+            .route("/eigen/node/services/{service_id}/health", web::get().to(service_health::<PC, SS>))
             .service(greet)
     })
     .bind(endpoint)
