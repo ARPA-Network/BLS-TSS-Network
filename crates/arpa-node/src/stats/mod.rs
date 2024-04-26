@@ -509,6 +509,19 @@ mod tests {
             .add_task(TaskType::Listener(0, ListenerType::Block), async {})
             .unwrap();
 
+        context
+            .get_fixed_task_handler()
+            .write()
+            .await
+            .add_task(TaskType::RpcServer(RpcServerType::Committer), async {})
+            .unwrap();
+        context
+            .get_fixed_task_handler()
+            .write()
+            .await
+            .add_task(TaskType::RpcServer(RpcServerType::Management), async {})
+            .unwrap();
+
         Arc::new(RwLock::new(context))
     }
 
@@ -548,5 +561,122 @@ mod tests {
         assert_eq!(resp.status(), http::StatusCode::OK);
         let body = test::read_body(resp).await;
         assert_eq!(body, "Hello world!");
+    }
+
+    #[actix_web::test]
+    async fn test_node_info() {
+        let context = build_context().await;
+        let app = test::init_service(
+            App::new()
+                .app_data(web::Data::new(context))
+                .route("/eigen/node", web::get().to(node_info::<G2Curve, G2Scheme>)),
+        )
+        .await;
+
+        let req = test::TestRequest::get().uri("/eigen/node").to_request();
+        let resp = test::call_service(&app, req).await;
+        assert_eq!(resp.status(), http::StatusCode::OK);
+
+        let body: NodeInfo = test::read_body_json(resp).await;
+        assert_eq!(body.spec_version, "v0.0.1");
+        assert_eq!(body.node_version, "v1.0.0");
+    }
+
+    #[actix_web::test]
+    async fn test_node_health() {
+        let context = build_context().await;
+        let app = test::init_service(
+            App::new()
+                .app_data(web::Data::new(context))
+                .route("/eigen/node/health", web::get().to(node_health::<G2Curve, G2Scheme>)),
+        )
+        .await;
+
+        let req = test::TestRequest::get().uri("/eigen/node/health").to_request();
+        let resp = test::call_service(&app, req).await;
+        assert_eq!(resp.status(), http::StatusCode::OK);
+
+        let body: String = test::read_body_json(resp).await;
+        assert_eq!(body, "Node is fully healthy");
+    }
+
+    #[actix_web::test]
+    async fn test_services_info() {
+        let context = build_context().await;
+        let app = test::init_service(
+            App::new()
+                .app_data(web::Data::new(context))
+                .route("/eigen/services", web::get().to(services_info::<G2Curve, G2Scheme>)),
+        )
+        .await;
+
+        let req = test::TestRequest::get().uri("/eigen/services").to_request();
+        let resp = test::call_service(&app, req).await;
+        assert_eq!(resp.status(), http::StatusCode::OK);
+
+        let body: Vec<ServiceInfo> = test::read_body_json(resp).await;
+        assert_eq!(body.len(), 7);
+        assert!(body.iter().any(|s| s.id == "block" && s.status == "up"));
+    }
+
+    #[actix_web::test]
+    async fn test_service_health() {
+        let context = build_context().await;
+        let app = test::init_service(
+            App::new()
+                .app_data(web::Data::new(context))
+                .route(
+                    "/eigen/node/services/{service_id}/health",
+                    web::get().to(service_health::<G2Curve, G2Scheme>),
+                ),
+        )
+        .await;
+
+        // Test a healthy service
+        let req = test::TestRequest::get()
+            .uri("/eigen/node/services/block/health")
+            .to_request();
+        let resp = test::call_service(&app, req).await;
+        assert_eq!(resp.status(), http::StatusCode::OK);
+
+        // Test an unhealthy service
+        let req = test::TestRequest::get()
+            .uri("/eigen/node/services/pre_grouping/health")
+            .to_request();
+        let resp = test::call_service(&app, req).await;
+        assert_eq!(resp.status(), http::StatusCode::SERVICE_UNAVAILABLE);
+
+        // Test a non-existent service
+        let req = test::TestRequest::get()
+            .uri("/eigen/node/services/unknown/health")
+            .to_request();
+        let resp = test::call_service(&app, req).await;
+        assert_eq!(resp.status(), http::StatusCode::NOT_FOUND);
+    }
+
+    #[actix_web::test]
+    async fn test_is_node_info_filled() {
+        let context = build_context().await;
+        assert!(is_node_info_filled(web::Data::new(context)).await);
+    }
+
+    #[actix_web::test]
+    async fn test_is_node_connected() {
+        let context = build_context().await;
+        assert!(is_node_connected(web::Data::new(context)).await);
+    }
+
+    #[actix_web::test]
+    async fn test_is_node_registered() {
+        let context = build_context().await;
+        assert!(is_node_registered(web::Data::new(context)).await);
+    }
+
+    #[actix_web::test]
+    async fn test_services_info_value() {
+        let context = build_context().await;
+        let services_info = services_info_value(web::Data::new(context)).await;
+        assert_eq!(services_info.len(), 7);
+        assert!(services_info.iter().any(|s| s.id == "block" && s.status == "up"));
     }
 }
