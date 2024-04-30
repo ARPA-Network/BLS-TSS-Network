@@ -106,7 +106,7 @@ where
         node_version: "v1.0.0".to_string(),
     };
 
-    return HttpResponse::Ok().json(node_info);
+    HttpResponse::Ok().json(node_info)
 }
 
 
@@ -133,15 +133,12 @@ async fn is_node_info_filled<
     .get_node_cache();
     let node_cache = node_cache_handler.read().await;
 
-    match (
+    matches!((
         node_cache.get_id_address(),
         node_cache.get_node_rpc_endpoint(),
         node_cache.get_dkg_private_key(),
         node_cache.get_dkg_public_key(),
-    ) {
-        (Ok(_), Ok(_), Ok(_), Ok(_)) => true,
-        _ => false,
-    }
+        ), (Ok(_), Ok(_), Ok(_), Ok(_)))
 }
 
 async fn is_node_connected<
@@ -209,7 +206,7 @@ async fn is_node_registered<
         .await
         .get_dkg_start_block_height()
         .unwrap_or(0);
-    return dkg_start_block_height > 0;
+    dkg_start_block_height > 0
 }
 
 async fn node_health<
@@ -236,7 +233,7 @@ where
     if !is_node_registered(context.clone()).await {
         return HttpResponse::PartialContent().json("AVS Node is healthy, but not registered.");
     }
-    return HttpResponse::Ok().json("Node is fully healthy");
+    HttpResponse::Ok().json("Node is fully healthy")
 }
 
 async fn services_info_value<
@@ -330,7 +327,7 @@ where
         }
     }
 
-   return services_info;
+    services_info
 }
 
 async fn services_info<
@@ -348,7 +345,7 @@ where
     <SS as ThresholdScheme>::Error: Sync + Send,
     <SS as SignatureScheme>::Error: Sync + Send,
 {
-    return HttpResponse::Ok().json(services_info_value(context).await);
+    HttpResponse::Ok().json(services_info_value(context).await)
 }
 
 async fn service_health<
