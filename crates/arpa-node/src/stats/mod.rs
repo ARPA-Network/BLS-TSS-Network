@@ -424,7 +424,7 @@ mod tests {
         http::{self},
         test,
     };
-    use arpa_core::{Config, GeneralMainChainIdentity, RandomnessTask};
+    use arpa_core::{Config, DKGStatus, GeneralMainChainIdentity, Group, RandomnessTask};
     use arpa_dal::{
         cache::{
             InMemoryBLSTasksQueue, InMemoryGroupInfoCache, InMemoryNodeInfoCache,
@@ -437,7 +437,8 @@ mod tests {
         types::Address,
         utils::Anvil,
     };
-    use threshold_bls::{curve::bn254::G2Curve, schemes::bn254::G2Scheme};
+    
+    use threshold_bls::{curve::bn254::G2Curve, schemes::bn254::G2Scheme, sig::Scheme};
 
     async fn build_context() -> NodeContext<G2Curve, G2Scheme> {
         let config = Config::default();
@@ -446,12 +447,34 @@ mod tests {
             .parse()
             .unwrap();
 
+        let id_address = Address::random();
+        let rng = &mut rand::thread_rng();
+
+        let (dkg_private_key, dkg_public_key) = G2Scheme::keypair(rng);
+        let node_rpc_endpoint = "dummy_test_string".to_string();
+    
         let node_cache: Arc<RwLock<Box<dyn NodeInfoHandler<G2Curve>>>> = Arc::new(RwLock::new(
-            Box::new(InMemoryNodeInfoCache::<G2Curve>::new(Address::random())),
+            Box::new(InMemoryNodeInfoCache::<G2Curve>::rebuild(
+                id_address,
+                node_rpc_endpoint,
+                dkg_private_key,
+                dkg_public_key,
+            )),
         ));
 
+        let group = Group::<G2Curve>::new();
+        let dkg_status = DKGStatus::None;
+        let self_index = 0;
+        let dkg_start_block_height = 1;
+
         let group_cache: Arc<RwLock<Box<dyn GroupInfoHandler<G2Curve>>>> = Arc::new(RwLock::new(
-            Box::new(InMemoryGroupInfoCache::<G2Curve>::default()),
+            Box::new(InMemoryGroupInfoCache::<G2Curve>::rebuild(
+                None,
+                group,
+                dkg_status,
+                self_index,
+                dkg_start_block_height,
+            )),
         ));
 
         let randomness_tasks_cache: Arc<RwLock<Box<dyn BLSTasksHandler<RandomnessTask>>>> =
