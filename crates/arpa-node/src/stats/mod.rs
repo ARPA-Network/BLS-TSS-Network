@@ -166,17 +166,17 @@ async fn is_node_connected<
         .cloned()
         .collect();
    
-    let mut has_committer = false;
-    let mut has_management = false;
-
-    for task in tasks {
-        if let TaskType::RpcServer(rpc_server_type) = task {
-            match rpc_server_type {
-                RpcServerType::Committer => has_committer = true,
-                RpcServerType::Management => has_management = true,
+    let (has_committer, has_management) = tasks.iter().fold((false,false), |(has_committer, has_management), task| {
+        match task {
+            TaskType::RpcServer(rpc_server_type) => {
+                (
+                    has_committer || matches!(rpc_server_type, RpcServerType::Committer),
+                    has_management || matches!(rpc_server_type, RpcServerType::Management),
+                )
             }
+            _ => (has_committer, has_management),
         }
-    }
+    });
 
     has_committer && has_management
 }
