@@ -72,7 +72,6 @@ contract ControllerLocalTestScript is Script {
     bool internal _arpaExists = vm.envBool("ARPA_EXISTS");
     address internal _existingArpaAddress = vm.envAddress("EXISTING_L1_ARPA_ADDRESS");
 
-    address internal _stETHStrategyAddress = vm.envAddress("STETH_STRATEGY_ADDRESS");
     address internal _avsDirectory = vm.envAddress("AVS_DIRECTORY_ADDRESS");
     address internal _delegationManager = vm.envAddress("DELEGATION_MANAGER_ADDRESS");
 
@@ -112,11 +111,7 @@ contract ControllerLocalTestScript is Script {
         serviceManager = new ERC1967Proxy(
             address(serviceManagerImpl),
             abi.encodeWithSignature(
-                "initialize(address,address,address,address)",
-                address(nodeRegistry),
-                _stETHStrategyAddress,
-                _avsDirectory,
-                _delegationManager
+                "initialize(address,address,address)", address(nodeRegistry), _avsDirectory, _delegationManager
             )
         );
 

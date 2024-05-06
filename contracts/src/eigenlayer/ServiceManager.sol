@@ -9,14 +9,19 @@ import {IServiceManager} from "../interfaces/IServiceManager.sol";
 
 contract ServiceManager is UUPSUpgradeable, IServiceManager, OwnableUpgradeable {
     // *Constants*
+    /// @notice Constant used as a divisor in calculating weights.
+    uint256 public constant WEIGHTING_DIVISOR = 1e18;
 
-    // *NodeRegistry Config*
+    // *ServiceManager Config*
     address public nodeRegistryAddress;
     IAVSDirectory public avsDirectory;
     IDelegationManager public delegationManager;
-    address[] public strategy;
 
-    // *Node State Variables*
+    // *ServiceManager Variables*
+    address[] public strategy;
+    uint256[] public strategyWeights;
+    mapping(address => bool) public whitelist;
+    bool public whitelistEnabled;
 
     /// @notice when applied to a function, only allows the RegistryCoordinator to call it
     modifier onlyNodeRegistry() {
@@ -26,27 +31,33 @@ contract ServiceManager is UUPSUpgradeable, IServiceManager, OwnableUpgradeable 
         _;
     }
 
+    modifier whitelisted(address operator) {
+        if (whitelistEnabled && !whitelist[operator]) {
+            revert OperatorNotInWhitelist();
+        }
+        _;
+    }
+
     // *Events*
     event OperatorSlashed(address indexed operator, uint256 stakingPenalty);
 
     // *Errors*
     error SenderNotNodeRegistry();
+    error OperatorNotInWhitelist();
+    error StrategyAndWeightsLengthMismatch();
 
     /// @custom:oz-upgrades-unsafe-allow constructor
     constructor() {
         _disableInitializers();
     }
 
-    function initialize(
-        address _nodeRegistryAddress,
-        address _strategyAddress,
-        address _avsDirectory,
-        address _delegationManager
-    ) public initializer {
+    function initialize(address _nodeRegistryAddress, address _avsDirectory, address _delegationManager)
+        public
+        initializer
+    {
         nodeRegistryAddress = _nodeRegistryAddress;
         avsDirectory = IAVSDirectory(_avsDirectory);
         delegationManager = IDelegationManager(_delegationManager);
-        strategy.push(_strategyAddress);
 
         __Ownable_init();
     }
@@ -54,8 +65,50 @@ contract ServiceManager is UUPSUpgradeable, IServiceManager, OwnableUpgradeable 
     // solhint-disable-next-line no-empty-blocks
     function _authorizeUpgrade(address) internal override onlyOwner {}
 
+    /**
+     * @notice Update the AVS Metadata URI
+     */
     function updateAVSMetadataURI(string memory _metadataURI) public virtual onlyOwner {
         avsDirectory.updateAVSMetadataURI(_metadataURI);
+    }
+
+    /**
+     * @notice Add to whitelist
+     */
+    function addToWhitelist(address[] calldata toAddAddresses) external onlyOwner {
+        for (uint256 i = 0; i < toAddAddresses.length; i++) {
+            whitelist[toAddAddresses[i]] = true;
+        }
+    }
+
+    /**
+     * @notice Remove from whitelist
+     */
+    function removeFromWhitelist(address[] calldata toRemoveAddresses) external onlyOwner {
+        for (uint256 i = 0; i < toRemoveAddresses.length; i++) {
+            delete whitelist[toRemoveAddresses[i]];
+        }
+    }
+
+    /**
+     * @notice Set the whitelistEnabled flag
+     */
+    function setWhitelistEnabled(bool _whitelistEnabled) external onlyOwner {
+        whitelistEnabled = _whitelistEnabled;
+    }
+
+    /**
+     * @notice Set the strategy and weights
+     */
+    function setStrategyAndWeights(address[] calldata _strategy, uint256[] calldata _strategyWeights)
+        external
+        onlyOwner
+    {
+        if (_strategy.length != _strategyWeights.length) {
+            revert StrategyAndWeightsLengthMismatch();
+        }
+        strategy = _strategy;
+        strategyWeights = _strategyWeights;
     }
 
     // =============
@@ -64,6 +117,7 @@ contract ServiceManager is UUPSUpgradeable, IServiceManager, OwnableUpgradeable 
     function registerOperator(address operator, ISignatureUtils.SignatureWithSaltAndExpiry memory operatorSignature)
         external
         onlyNodeRegistry
+        whitelisted(operator)
     {
         avsDirectory.registerOperatorToAVS(operator, operatorSignature);
     }
@@ -81,8 +135,11 @@ contract ServiceManager is UUPSUpgradeable, IServiceManager, OwnableUpgradeable 
     // View
     // =============
 
-    function getOperatorShare(address operator) external view returns (uint256) {
-        return delegationManager.operatorShares(operator, strategy[0]);
+    function getOperatorShare(address operator) external view returns (uint256 share) {
+        for (uint256 i = 0; i < strategy.length; i++) {
+            share += IDelegationManager(delegationManager).operatorShares(operator, strategy[i]) * strategyWeights[i]
+                / WEIGHTING_DIVISOR;
+        }
     }
 
     /**

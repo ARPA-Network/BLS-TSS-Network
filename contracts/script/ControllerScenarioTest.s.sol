@@ -67,7 +67,6 @@ contract ControllerScenarioTest is Script {
     address internal _opControllerOracleAddress = vm.envAddress("OP_CONTROLLER_ORACLE_ADDRESS");
     address internal _opL1CrossDomainMessengerAddress = vm.envAddress("OP_L1_CROSS_DOMAIN_MESSENGER_ADDRESS");
 
-    address internal _stETHStrategyAddress = vm.envAddress("STETH_STRATEGY_ADDRESS");
     address internal _avsDirectory = vm.envAddress("AVS_DIRECTORY_ADDRESS");
     address internal _delegationManager = vm.envAddress("DELEGATION_MANAGER_ADDRESS");
 
@@ -103,11 +102,7 @@ contract ControllerScenarioTest is Script {
         serviceManager = new ERC1967Proxy(
             address(serviceManagerImpl),
             abi.encodeWithSignature(
-                "initialize(address,address,address,address)",
-                address(nodeRegistry),
-                _stETHStrategyAddress,
-                _avsDirectory,
-                _delegationManager
+                "initialize(address,address,address)", address(nodeRegistry), _avsDirectory, _delegationManager
             )
         );
 
