@@ -28,7 +28,7 @@ interface INodeRegistry {
         ISignatureUtils.SignatureWithSaltAndExpiry memory operatorSignature
     ) external;
 
-    function nodeActivate() external;
+    function nodeActivate(ISignatureUtils.SignatureWithSaltAndExpiry memory operatorSignature) external;
 
     function nodeQuit() external;
 

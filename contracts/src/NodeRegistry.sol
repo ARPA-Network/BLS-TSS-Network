@@ -123,7 +123,10 @@ contract NodeRegistry is UUPSUpgradeable, INodeRegistry, INodeRegistryOwner, Own
         emit NodeRegistered(msg.sender, dkgPublicKey, groupIndex);
     }
 
-    function nodeActivate() external override(INodeRegistry) {
+    function nodeActivate(ISignatureUtils.SignatureWithSaltAndExpiry memory operatorSignature)
+        external
+        override(INodeRegistry)
+    {
         Node storage node = _nodes[msg.sender];
         if (node.idAddress != msg.sender) {
             revert NodeNotRegistered();
@@ -142,6 +145,7 @@ contract NodeRegistry is UUPSUpgradeable, INodeRegistry, INodeRegistryOwner, Own
             if (share < _config.eigenlayerNodeStakingAmount) {
                 revert OperatorUnderStaking();
             }
+            IServiceManager(_config.serviceManagerContractAddress).registerOperator(msg.sender, operatorSignature);
         } else {
             // lock up to staking amount in Staking contract
             uint256 lockedAmount = INodeStaking(_config.stakingContractAddress).getLockedAmount(msg.sender);
