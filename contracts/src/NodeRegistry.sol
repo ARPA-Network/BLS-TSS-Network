@@ -75,6 +75,10 @@ contract NodeRegistry is UUPSUpgradeable, INodeRegistry, INodeRegistryOwner, Own
         );
     }
 
+    function dismissNode(address nodeIdAddress, uint256 pendingBlock) external override(INodeRegistryOwner) onlyOwner {
+        _nodeQuitHelper(nodeIdAddress, pendingBlock);
+    }
+
     // =============
     // INodeRegistry
     // =============
@@ -156,24 +160,7 @@ contract NodeRegistry is UUPSUpgradeable, INodeRegistry, INodeRegistryOwner, Own
     }
 
     function nodeQuit() external override(INodeRegistry) {
-        Node storage node = _nodes[msg.sender];
-
-        if (node.idAddress != msg.sender) {
-            revert NodeNotRegistered();
-        }
-
-        IController(_config.controllerContractAddress).nodeLeave(msg.sender);
-
-        _freezeNode(msg.sender, _config.pendingBlockAfterQuit);
-
-        if (node.isEigenlayerNode) {
-            IServiceManager(_config.serviceManagerContractAddress).deregisterOperator(msg.sender);
-        } else {
-            // unlock staking amount in Staking contract
-            INodeStaking(_config.stakingContractAddress).unlock(msg.sender, _config.nativeNodeStakingAmount);
-        }
-
-        emit NodeQuit(msg.sender);
+        _nodeQuitHelper(msg.sender, _config.pendingBlockAfterQuit);
     }
 
     function changeDkgPublicKey(bytes calldata dkgPublicKey) external override(INodeRegistry) {
@@ -311,5 +298,26 @@ contract NodeRegistry is UUPSUpgradeable, INodeRegistry, INodeRegistryOwner, Own
         } else {
             _nodes[nodeIdAddress].pendingUntilBlock = currentBlock + pendingBlock;
         }
+    }
+
+    function _nodeQuitHelper(address nodeIdAddress, uint256 pendingBlock) internal {
+        Node storage node = _nodes[nodeIdAddress];
+
+        if (node.idAddress != nodeIdAddress) {
+            revert NodeNotRegistered();
+        }
+
+        IController(_config.controllerContractAddress).nodeLeave(nodeIdAddress);
+
+        _freezeNode(nodeIdAddress, pendingBlock);
+
+        if (node.isEigenlayerNode) {
+            IServiceManager(_config.serviceManagerContractAddress).deregisterOperator(nodeIdAddress);
+        } else {
+            // unlock staking amount in Staking contract
+            INodeStaking(_config.stakingContractAddress).unlock(nodeIdAddress, _config.nativeNodeStakingAmount);
+        }
+
+        emit NodeQuit(nodeIdAddress);
     }
 }

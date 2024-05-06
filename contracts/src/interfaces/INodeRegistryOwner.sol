@@ -21,4 +21,11 @@ interface INodeRegistryOwner {
     ) external;
 
     function initialize(address arpa) external;
+
+    /**
+     * @notice Dismiss a node from the registry forcefully
+     * @param nodeIdAddress The address of the node
+     * @param pendingBlock The number of blocks the node must wait before activating again
+     */
+    function dismissNode(address nodeIdAddress, uint256 pendingBlock) external;
 }
