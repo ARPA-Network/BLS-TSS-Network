@@ -67,5 +67,3 @@ time_limits:
     use_jitter: false
 
 context_logging: false
-
-node_id: 1

@@ -112,7 +112,6 @@ impl Default for ConfigHolder {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LoggerDescriptor {
-    node_id: String,
     context_logging: bool,
     log_file_path: String,
     #[serde(deserialize_with = "deserialize_limit")]
@@ -122,7 +121,6 @@ pub struct LoggerDescriptor {
 impl Default for LoggerDescriptor {
     fn default() -> Self {
         Self {
-            node_id: "running".to_string(),
             context_logging: false,
             log_file_path: "log/running".to_string(),
             rolling_file_size: DEFAULT_ROLLING_LOG_FILE_SIZE,
@@ -131,10 +129,6 @@ impl Default for LoggerDescriptor {
 }
 
 impl LoggerDescriptor {
-    pub fn get_node_id(&self) -> &str {
-        &self.node_id
-    }
-
     pub fn get_context_logging(&self) -> bool {
         self.context_logging
     }

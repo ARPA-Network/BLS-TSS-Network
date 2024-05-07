@@ -1,6 +1,7 @@
 use arpa_contract_client::controller::ControllerClientBuilder;
 use arpa_contract_client::controller::ControllerViews;
 use arpa_contract_client::node_registry::{NodeRegistryClientBuilder, NodeRegistryTransactions};
+use arpa_core::address_to_string;
 use arpa_core::build_wallet_from_config;
 use arpa_core::log::encoder::JsonEncoder;
 use arpa_core::Config;
@@ -164,10 +165,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let config = Config::load(opt.config_path);
 
+    let wallet = build_wallet_from_config(config.get_account())?;
+
+    let id_address = wallet.address();
+
     let logger_descriptor = config.get_logger_descriptor();
 
     init_logger(
-        logger_descriptor.get_node_id(),
+        &address_to_string(id_address),
         logger_descriptor.get_context_logging(),
         logger_descriptor.get_log_file_path(),
         logger_descriptor.get_rolling_file_size(),
@@ -176,10 +181,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     info!("{:?}", config);
 
     let data_path = PathBuf::from(config.get_data_path());
-
-    let wallet = build_wallet_from_config(config.get_account())?;
-
-    let id_address = wallet.address();
 
     let is_new_run = !data_path.exists();
 

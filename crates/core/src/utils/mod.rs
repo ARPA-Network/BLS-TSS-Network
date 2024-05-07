@@ -1,5 +1,8 @@
 use chrono::Local;
-use ethers_core::types::{Address, I256, U256};
+use ethers_core::{
+    types::{Address, I256, U256},
+    utils::{hex, keccak256},
+};
 use log::info;
 
 /// The threshold max change/difference (in %) at which we will ignore the fee history values
@@ -27,7 +30,7 @@ pub fn format_now_date() -> String {
 }
 
 pub fn address_to_string(address: Address) -> String {
-    format!("{:?}", address)
+    to_checksum(&address, None)
 }
 
 pub fn u256_to_vec(x: &U256) -> Vec<u8> {
@@ -48,6 +51,32 @@ pub fn pad_to_bytes32(s: &[u8]) -> Option<[u8; 32]> {
     result[..s_len].clone_from_slice(s);
 
     Some(result)
+}
+
+/// Converts an Ethereum address to the checksum encoding
+/// Ref: <https://github.com/ethereum/EIPs/blob/master/EIPS/eip-55.md>
+pub fn to_checksum(addr: &Address, chain_id: Option<u8>) -> String {
+    let prefixed_addr = match chain_id {
+        Some(chain_id) => format!("{}0x{:x}", chain_id, addr),
+        None => format!("{:x}", addr),
+    };
+    let hash = hex::encode(keccak256(&prefixed_addr));
+    let hash = hash.as_bytes();
+
+    let addr_hex = hex::encode(addr.as_bytes());
+    let addr_hex = addr_hex.as_bytes();
+
+    addr_hex
+        .iter()
+        .zip(hash)
+        .fold("0x".to_owned(), |mut encoded, (addr, hash)| {
+            encoded.push(if *hash >= 56 {
+                addr.to_ascii_uppercase() as char
+            } else {
+                addr.to_ascii_lowercase() as char
+            });
+            encoded
+        })
 }
 
 /// The EIP-1559 fee estimator which is based on the work by [ethers-rs](https://github.com/gakonst/ethers-rs/blob/e0e79df7e9032e882fce4f47bcc25d87bceaec68/ethers-core/src/utils/mod.rs#L500) and [MyCrypto](https://github.com/MyCryptoHQ/MyCrypto/blob/master/src/services/ApiService/Gas/eip1559.ts)

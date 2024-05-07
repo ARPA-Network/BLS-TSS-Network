@@ -656,7 +656,6 @@ def deploy_nodes():  # ! Deploy Nodes
 
         # set node_id, data_path, and log_file_path
         data["data_path"] = f"./db/data{i+1}.sqlite"
-        data["logger"]["node_id"] = i + 1
         data["logger"]["log_file_path"] = f"log/{i+1}/"
         # L1
         data["adapter_address"] = l1_addresses["Adapter"]

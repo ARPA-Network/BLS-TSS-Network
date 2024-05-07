@@ -27,7 +27,6 @@ arpa_address: "0xa4F59C4Caf15641F32f5756E37d93912E7F96203"
 data_path: "./data0.sqlite"
 
 logger:
-  node_id: 0
   context_logging: false
   log_file_path: log/0/
   rolling_file_size: 10 gb

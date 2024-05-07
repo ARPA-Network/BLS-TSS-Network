@@ -281,14 +281,12 @@ Configuration items in [`conf/config.yml`](conf/config.yml) are listed here:
 
     ```
     logger:
-      node_id: running
       context_logging: false
       log_file_path: log/running/
       rolling_file_size: 10 gb
     ```
 
-  - node_id: Set a node id for logging.
-  - context_logging: Set whether to log context of current node info and group info. Since it will increase log size, it is recommended to set it to false in production.
+  - context_logging: Set whether to log context of current node info and group info. Since the log size will get a significant boost with this setting enabled, it is recommended to set it to false in production.
   - log_file_path: Set log file path. The `node-client` will create a `node.log` as well as a `node_err.log` under `log_file_path`, then log to them with info level and error level respectively.
   - rolling_file_size: Log file will be deleted when it reaches this size limit. The following units are supported (case insensitive):
     "b", "kb", "kib", "mb", "mib", "gb", "gib", "tb", "tib". The unit defaults to bytes if not specified.
