@@ -12,6 +12,10 @@ path = "src/node_client.rs"
 name = "node-shell"
 path = "src/node_shell.rs"
 
+[[bin]]
+name = "node-config-checker"
+path = "src/node_config_checker.rs"
+
 [dependencies]
 arpa-log = { path = "../log" }
 arpa-core = { path = "../core" }

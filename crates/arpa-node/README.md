@@ -1,8 +1,10 @@
 - [Overview](#overview)
 - [ARPA Node Client](#arpa-node-client)
   - [Usage](#usage)
-- [ARPA Node CLI](#arpa-node-cli)
+- [ARPA Node Config Checker](#arpa-node-config-checker)
   - [Usage](#usage-1)
+- [ARPA Node CLI](#arpa-node-cli)
+  - [Usage](#usage-2)
   - [REPL Commands](#repl-commands)
     - [SubCommands](#subcommands)
 - [Management grpc server](#management-grpc-server)
@@ -20,6 +22,7 @@ This crate provides a set of tools on the node side of the ARPA BLS Threshold Si
 It consists of:
 
 - ARPA Node Client
+- ARPA Node Config Checker
 - ARPA Node CLI
 - Management grpc server
 
@@ -30,6 +33,10 @@ The ARPA Node Client is a long-running program to run the ARPA node.
 If the data path in the config file doesn't exist, as the first time to run the node, the client will generate a DKG keypair(served as the identity during a grouping process), then register the node address with dkg public key to the ARPA Network on-chain. In early access, make sure the address of the node has been added to eligible operators list in the Staking contract with sufficient stake in advance.
 
 ## Usage
+
+```bash
+cd crates/arpa-node
+```
 
 ```bash
 cargo run --bin node-client
@@ -47,6 +54,19 @@ To specify a config file, use `-- -c <config_file>`:
 cargo run --bin node-client -- -c conf/config.yml
 ```
 
+# ARPA Node Config Checker
+
+The ARPA Node Config Checker is a tool to check the correctness of the node config file. It will print the checksum encoded address of the node identity(wallet) if the config file is correct, otherwise it will print the error message.
+
+## Usage
+
+To specify a config file, use `-- -c <config_file>`:
+
+```bash
+cd crates/arpa-node
+cargo run --bin node-config-checker -- -c conf/config.yml
+```
+
 # ARPA Node CLI
 
 The ARPA Node CLI is a fast and verbose REPL for the operator of a ARPA node. The same node config file as ARPA Node Client will be used. As a supplement to ARPA Node Client, it provides a set of commands to inspect the node status and interact with the on-chain contracts, e.g. register node to the network manually when error occurs in the node client.
@@ -54,6 +74,10 @@ The ARPA Node CLI is a fast and verbose REPL for the operator of a ARPA node. Th
 ## Usage
 
 To print help, use `-- -h`:
+
+```bash
+cd crates/arpa-node
+```
 
 ```bash
 cargo run --bin node-shell -- -h

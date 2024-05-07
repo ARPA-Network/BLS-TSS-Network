@@ -49,7 +49,7 @@ pub struct Opt {
         short = "c",
         long,
         parse(from_os_str),
-        default_value = "conf/config.yml"
+        default_value = "crates/arpa-node/conf/config.yml"
     )]
     config_path: PathBuf,
 

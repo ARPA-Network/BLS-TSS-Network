@@ -594,10 +594,10 @@ impl Default for Config {
 
 impl Config {
     pub fn load(config_path: PathBuf) -> Config {
-        let config_str = &read_to_string(config_path).unwrap_or_else(|e| {
+        let config_str = &read_to_string(&config_path).unwrap_or_else(|e| {
             panic!(
-                "Error loading configuration file: {:?}, please check the configuration!",
-                e
+                "Error loading configuration file: {:?} because {:?}, please check the configuration!",
+                config_path, e
             )
         });
 
