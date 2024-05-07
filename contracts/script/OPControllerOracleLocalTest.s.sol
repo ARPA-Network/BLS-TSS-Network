@@ -14,6 +14,8 @@ contract OPControllerOracleLocalTestScript is Deployer {
     uint256 internal _deployerPrivateKey = vm.envUint("ADMIN_PRIVATE_KEY");
 
     uint256 internal _lastOutput = vm.envUint("LAST_OUTPUT");
+    address internal _arpaAddress = vm.envAddress("EXISTING_OP_ARPA_ADDRESS");
+    address internal _opL2CrossDomainMessengerAddress = vm.envAddress("OP_L2_CROSS_DOMAIN_MESSENGER_ADDRESS");
 
     uint16 internal _minimumRequestConfirmations = uint16(vm.envUint("MINIMUM_REQUEST_CONFIRMATIONS"));
     uint32 internal _maxGasLimit = uint32(vm.envUint("MAX_GAS_LIMIT"));
@@ -41,21 +43,36 @@ contract OPControllerOracleLocalTestScript is Deployer {
     bool internal _arpaExists = vm.envBool("ARPA_EXISTS");
 
     function run() external {
-        ControllerOracle controllerOracle;
-        ERC1967Proxy adapter;
+        ControllerOracle controllerOracleImpl;
+        ERC1967Proxy controllerOracle;
         Adapter adapterImpl;
+        ERC1967Proxy adapter;
+        IERC20 arpa;
 
         _checkDeploymentAddressesFile();
 
         if (!_arpaExists) {
-            IERC20 arpa;
             vm.broadcast(_deployerPrivateKey);
             arpa = new Arpa();
             _addDeploymentAddress(Network.L2, "Arpa", address(arpa));
+        } else {
+            arpa = IERC20(_arpaAddress);
         }
 
         vm.broadcast(_deployerPrivateKey);
-        controllerOracle = new ControllerOracle();
+        controllerOracleImpl = new ControllerOracle();
+        _addDeploymentAddress(Network.L2, "ControllerOracleImpl", address(controllerOracleImpl));
+
+        vm.broadcast(_deployerPrivateKey);
+        controllerOracle = new ERC1967Proxy(
+            address(controllerOracleImpl),
+            abi.encodeWithSignature(
+                "initialize(address,address,uint256)",
+                address(_arpaAddress),
+                address(_opL2CrossDomainMessengerAddress),
+                _lastOutput
+            )
+        );
         _addDeploymentAddress(Network.L2, "ControllerOracle", address(controllerOracle));
 
         vm.broadcast(_deployerPrivateKey);

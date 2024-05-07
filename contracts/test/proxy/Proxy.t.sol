@@ -119,9 +119,8 @@ contract ProxyTest is Test {
         _serviceManager = new ERC1967Proxy(
             address(_serviceManagerImpl),
             abi.encodeWithSignature(
-                "initialize(address,address,address,address)",
+                "initialize(address,address,address)",
                 address(_nodeRegistry),
-                address(0),
                 address(0),
                 address(0)
             )

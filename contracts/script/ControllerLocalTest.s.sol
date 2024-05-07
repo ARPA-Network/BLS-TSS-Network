@@ -61,10 +61,6 @@ contract ControllerLocalTestScript is Deployer {
     uint256 internal _delegationRateDenominator = vm.envUint("DELEGATION_RATE_DENOMINATOR");
     uint256 internal _unstakeFreezingDuration = vm.envUint("UNSTAKE_FREEZING_DURATION");
 
-    uint256 internal _opChainId = vm.envUint("OP_CHAIN_ID");
-    address internal _opControllerOracleAddress = vm.envAddress("OP_CONTROLLER_ORACLE_ADDRESS");
-    address internal _opL1CrossDomainMessengerAddress = vm.envAddress("OP_L1_CROSS_DOMAIN_MESSENGER_ADDRESS");
-
     bool internal _arpaExists = vm.envBool("ARPA_EXISTS");
     address internal _existingArpaAddress = vm.envAddress("EXISTING_L1_ARPA_ADDRESS");
 

@@ -74,11 +74,7 @@ contract ControllerOracleTest is RandcastTestHelper {
         _serviceManager = new ERC1967Proxy(
             address(_serviceManagerImpl),
             abi.encodeWithSignature(
-                "initialize(address,address,address,address)",
-                address(_nodeRegistry),
-                address(0),
-                address(0),
-                address(0)
+                "initialize(address,address,address)", address(_nodeRegistry), address(0), address(0)
             )
         );
 
@@ -189,14 +185,24 @@ contract ControllerOracleTest is RandcastTestHelper {
         MockL2CrossDomainMessenger l2CrossDomainMessenger = new MockL2CrossDomainMessenger(chainMessenger);
         address adapterContractAddress = address(0x90102);
 
-        ControllerOracle controllerOracle = new ControllerOracle();
-        controllerOracle.initialize(
-            address(_arpa), chainMessenger, address(l2CrossDomainMessenger), adapterContractAddress, 42
+        vm.prank(_admin);
+        ControllerOracle controllerOracleImpl = new ControllerOracle();
+
+        vm.prank(_admin);
+        ERC1967Proxy controllerOracle = new ERC1967Proxy(
+            address(controllerOracleImpl),
+            abi.encodeWithSignature(
+                "initialize(address,address,uint256)", address(_arpa), address(l2CrossDomainMessenger), 42
+            )
         );
+        vm.prank(_admin);
+        ControllerOracle(address(controllerOracle)).setChainMessenger(chainMessenger);
+        vm.prank(_admin);
+        ControllerOracle(address(controllerOracle)).setAdapterContractAddress(adapterContractAddress);
 
         vm.prank(_node1);
         vm.expectRevert(ControllerOracle.SenderNotChainMessenger.selector);
-        controllerOracle.updateGroup(_node1, abi.decode(group, (IControllerOracle.Group)));
+        ControllerOracle(address(controllerOracle)).updateGroup(_node1, abi.decode(group, (IControllerOracle.Group)));
     }
 
     function testUpdateGroupByOwner() public {
@@ -226,16 +232,27 @@ contract ControllerOracleTest is RandcastTestHelper {
         address adapterContractAddress = address(0x90102);
 
         vm.prank(_admin);
-        ControllerOracle controllerOracle = new ControllerOracle();
+        ControllerOracle controllerOracleImpl = new ControllerOracle();
+
         vm.prank(_admin);
-        controllerOracle.initialize(address(_arpa), chainMessenger, l2CrossDomainMessenger, adapterContractAddress, 42);
+        ERC1967Proxy controllerOracle = new ERC1967Proxy(
+            address(controllerOracleImpl),
+            abi.encodeWithSignature(
+                "initialize(address,address,uint256)", address(_arpa), address(l2CrossDomainMessenger), 42
+            )
+        );
+        vm.prank(_admin);
+        ControllerOracle(address(controllerOracle)).setChainMessenger(chainMessenger);
+        vm.prank(_admin);
+        ControllerOracle(address(controllerOracle)).setAdapterContractAddress(adapterContractAddress);
+
         vm.expectEmit(true, true, true, true);
         emit GroupUpdated(1, 0, 8, _admin);
 
         vm.prank(_admin);
-        controllerOracle.updateGroup(_admin, abi.decode(group, (IControllerOracle.Group)));
+        ControllerOracle(address(controllerOracle)).updateGroup(_admin, abi.decode(group, (IControllerOracle.Group)));
 
-        printGroupInfo(controllerOracle.getGroup(0));
+        printGroupInfo(ControllerOracle(address(controllerOracle)).getGroup(0));
     }
 
     function testUpdateGroupByL2CrossDomainMessenger() public {
@@ -264,17 +281,28 @@ contract ControllerOracleTest is RandcastTestHelper {
         MockL2CrossDomainMessenger l2CrossDomainMessenger = new MockL2CrossDomainMessenger(chainMessenger);
         address adapterContractAddress = address(0x90102);
 
-        ControllerOracle controllerOracle = new ControllerOracle();
-        controllerOracle.initialize(
-            address(_arpa), chainMessenger, address(l2CrossDomainMessenger), adapterContractAddress, 42
+        vm.prank(_admin);
+        ControllerOracle controllerOracleImpl = new ControllerOracle();
+
+        vm.prank(_admin);
+        ERC1967Proxy controllerOracle = new ERC1967Proxy(
+            address(controllerOracleImpl),
+            abi.encodeWithSignature(
+                "initialize(address,address,uint256)", address(_arpa), address(l2CrossDomainMessenger), 42
+            )
         );
+        vm.prank(_admin);
+        ControllerOracle(address(controllerOracle)).setChainMessenger(chainMessenger);
+        vm.prank(_admin);
+        ControllerOracle(address(controllerOracle)).setAdapterContractAddress(adapterContractAddress);
+
         vm.expectEmit(true, true, true, true);
         emit GroupUpdated(1, 0, 8, _node1);
 
         vm.prank(address(l2CrossDomainMessenger));
-        controllerOracle.updateGroup(_node1, abi.decode(group, (IControllerOracle.Group)));
+        ControllerOracle(address(controllerOracle)).updateGroup(_node1, abi.decode(group, (IControllerOracle.Group)));
 
-        printGroupInfo(controllerOracle.getGroup(0));
+        printGroupInfo(ControllerOracle(address(controllerOracle)).getGroup(0));
     }
 
     function printGroupInfo(IControllerOracle.Group memory g) public {
