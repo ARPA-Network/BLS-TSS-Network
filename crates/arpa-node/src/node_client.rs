@@ -52,16 +52,22 @@ pub struct Opt {
     config_path: PathBuf,
 }
 
-fn init_logger(node_id: &str, context_logging: bool, log_file_path: &str, rolling_file_size: u64) {
+fn init_logger(
+    node_id: &str,
+    l1_chain_id: usize,
+    context_logging: bool,
+    log_file_path: &str,
+    rolling_file_size: u64,
+) {
     let stdout = ConsoleAppender::builder()
         .encoder(Box::new(
-            JsonEncoder::new(node_id.to_string()).context_logging(context_logging),
+            JsonEncoder::new(node_id.to_string(), l1_chain_id).context_logging(context_logging),
         ))
         .build();
 
     let rolling_file = RollingFileAppender::builder()
         .encoder(Box::new(
-            JsonEncoder::new(node_id.to_string()).context_logging(context_logging),
+            JsonEncoder::new(node_id.to_string(), l1_chain_id).context_logging(context_logging),
         ))
         .build(
             format!(
@@ -81,7 +87,7 @@ fn init_logger(node_id: &str, context_logging: bool, log_file_path: &str, rollin
 
     let rolling_err_file = RollingFileAppender::builder()
         .encoder(Box::new(
-            JsonEncoder::new(node_id.to_string()).context_logging(context_logging),
+            JsonEncoder::new(node_id.to_string(), l1_chain_id).context_logging(context_logging),
         ))
         .build(
             format!("{}/node_err.log", log_file_path),
@@ -169,10 +175,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let id_address = wallet.address();
 
+    let l1_chain_id = config.get_main_chain_id();
+
     let logger_descriptor = config.get_logger_descriptor();
 
     init_logger(
         &address_to_string(id_address),
+        l1_chain_id,
         logger_descriptor.get_context_logging(),
         logger_descriptor.get_log_file_path(),
         logger_descriptor.get_rolling_file_size(),

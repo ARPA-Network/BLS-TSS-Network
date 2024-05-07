@@ -49,14 +49,16 @@ lazy_static! {
 #[derive(Clone, Debug, Default)]
 pub struct JsonEncoder {
     node_id: String,
+    l1_chain_id: usize,
     show_context: bool,
 }
 
 impl JsonEncoder {
     /// Returns a new `JsonEncoder` with a default configuration.
-    pub fn new(node_id: String) -> Self {
+    pub fn new(node_id: String, l1_chain_id: usize) -> Self {
         JsonEncoder {
             node_id,
+            l1_chain_id,
             show_context: false,
         }
     }
@@ -97,6 +99,7 @@ impl JsonEncoder {
             thread: thread.name(),
             thread_id: thread_id::get(),
             node_id: &self.node_id,
+            l1_chain_id: self.l1_chain_id,
             mdc: Mdc,
             node_info: &node_info,
             group_info: &group_info,
@@ -130,6 +133,7 @@ struct Message<'a> {
     thread: Option<&'a str>,
     thread_id: usize,
     node_id: &'a str,
+    l1_chain_id: usize,
     mdc: Mdc,
     node_info: &'a str,
     group_info: &'a str,
@@ -182,9 +186,10 @@ mod test {
         let message = "message";
         let thread = "log::encoder::test::default";
         let node_id = "test";
+        let l1_chain_id = 1;
         log_mdc::insert("foo", "bar");
 
-        let encoder = JsonEncoder::new(node_id.to_string());
+        let encoder = JsonEncoder::new(node_id.to_string(), l1_chain_id);
 
         let mut buf = vec![];
         encoder
@@ -205,7 +210,8 @@ mod test {
         let expected = format!(
             "{{\"time\":\"{}\",\"message\":\"{}\",\"module_path\":\"{}\",\
              \"file\":\"{}\",\"line\":{},\"level\":\"{}\",\"target\":\"{}\",\
-             \"thread\":\"{}\",\"thread_id\":{},\"node_id\":\"{}\",\"mdc\":{{\"foo\":\"bar\"}},\
+             \"thread\":\"{}\",\"thread_id\":{},\"node_id\":\"{}\",\"l1_chain_id\":{},\
+             \"mdc\":{{\"foo\":\"bar\"}},\
              \"node_info\":\"\",\"group_info\":\"\"}}",
             time.to_rfc3339(),
             message,
@@ -216,7 +222,8 @@ mod test {
             target,
             thread,
             thread_id::get(),
-            node_id
+            node_id,
+            l1_chain_id
         );
         assert_eq!(expected, String::from_utf8(buf).unwrap().trim());
     }

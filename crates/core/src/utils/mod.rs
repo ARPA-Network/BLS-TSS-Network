@@ -60,7 +60,7 @@ pub fn to_checksum(addr: &Address, chain_id: Option<u8>) -> String {
         Some(chain_id) => format!("{}0x{:x}", chain_id, addr),
         None => format!("{:x}", addr),
     };
-    let hash = hex::encode(keccak256(&prefixed_addr));
+    let hash = hex::encode(keccak256(prefixed_addr));
     let hash = hash.as_bytes();
 
     let addr_hex = hex::encode(addr.as_bytes());
