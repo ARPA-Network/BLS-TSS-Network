@@ -79,7 +79,8 @@ contract ControllerScenarioTest is Script {
         ERC1967Proxy adapter;
         ServiceManager serviceManagerImpl;
         ERC1967Proxy serviceManager;
-        ControllerRelayer controllerRelayer;
+        ControllerRelayer controllerRelayerImpl;
+        ERC1967Proxy controllerRelayer;
         OPChainMessenger opChainMessenger;
         ControllerProxy proxy;
         Staking staking;
@@ -197,7 +198,12 @@ contract ControllerScenarioTest is Script {
         );
 
         vm.broadcast(_deployerPrivateKey);
-        controllerRelayer = new ControllerRelayer(address(proxy));
+        controllerRelayerImpl = new ControllerRelayer();
+
+        vm.broadcast(_deployerPrivateKey);
+        controllerRelayer = new ERC1967Proxy(
+            address(controllerRelayerImpl), abi.encodeWithSignature("initialize(address)", address(proxy))
+        );
 
         vm.broadcast(_deployerPrivateKey);
         opChainMessenger = new OPChainMessenger(
@@ -205,6 +211,6 @@ contract ControllerScenarioTest is Script {
         );
 
         vm.broadcast(_deployerPrivateKey);
-        controllerRelayer.setChainMessenger(_opChainId, address(opChainMessenger));
+        ControllerRelayer(address(controllerRelayer)).setChainMessenger(_opChainId, address(opChainMessenger));
     }
 }

@@ -80,7 +80,8 @@ contract ControllerLocalTestScript is Deployer {
         ERC1967Proxy adapter;
         ServiceManager serviceManagerImpl;
         ERC1967Proxy serviceManager;
-        ControllerRelayer controllerRelayer;
+        ControllerRelayer controllerRelayerImpl;
+        ERC1967Proxy controllerRelayer;
         Staking staking;
         IERC20 arpa;
 
@@ -206,7 +207,13 @@ contract ControllerLocalTestScript is Deployer {
         );
 
         vm.broadcast(_deployerPrivateKey);
-        controllerRelayer = new ControllerRelayer(address(controller));
+        controllerRelayerImpl = new ControllerRelayer();
+        _addDeploymentAddress(Network.L1, "ControllerRelayerImpl", address(controllerRelayerImpl));
+
+        vm.broadcast(_deployerPrivateKey);
+        controllerRelayer = new ERC1967Proxy(
+            address(controllerRelayerImpl), abi.encodeWithSignature("initialize(address)", address(controller))
+        );
         _addDeploymentAddress(Network.L1, "ControllerRelayer", address(controllerRelayer));
     }
 }

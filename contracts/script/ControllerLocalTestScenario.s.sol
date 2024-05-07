@@ -86,7 +86,8 @@ contract ControllerLocalTestScript is Script {
         ERC1967Proxy serviceManager;
         OPChainMessenger opChainMessenger;
         OPChainMessenger baseChainMessenger;
-        ControllerRelayer controllerRelayer;
+        ControllerRelayer controllerRelayerImpl;
+        ERC1967Proxy controllerRelayer;
         Staking staking;
         IERC20 arpa;
 
@@ -200,7 +201,12 @@ contract ControllerLocalTestScript is Script {
         );
 
         vm.broadcast(_deployerPrivateKey);
-        controllerRelayer = new ControllerRelayer(address(controller));
+        controllerRelayerImpl = new ControllerRelayer();
+
+        vm.broadcast(_deployerPrivateKey);
+        controllerRelayer = new ERC1967Proxy(
+            address(controllerRelayerImpl), abi.encodeWithSignature("initialize(address)", address(controller))
+        );
 
         vm.broadcast(_deployerPrivateKey);
         opChainMessenger = new OPChainMessenger(
@@ -208,7 +214,7 @@ contract ControllerLocalTestScript is Script {
         );
 
         vm.broadcast(_deployerPrivateKey);
-        controllerRelayer.setChainMessenger(_opChainId, address(opChainMessenger));
+        ControllerRelayer(address(controllerRelayer)).setChainMessenger(_opChainId, address(opChainMessenger));
 
         vm.broadcast(_deployerPrivateKey);
         baseChainMessenger = new OPChainMessenger(
@@ -216,6 +222,6 @@ contract ControllerLocalTestScript is Script {
         );
 
         vm.broadcast(_deployerPrivateKey);
-        controllerRelayer.setChainMessenger(_baseChainId, address(baseChainMessenger));
+        ControllerRelayer(address(controllerRelayer)).setChainMessenger(_baseChainId, address(baseChainMessenger));
     }
 }
