@@ -954,7 +954,7 @@ def relay_groups(controller_oracle_address):
     #  call relayGroup(chainid, groupindex) for each group index
     print("Relaying groups from L1 to L2...")
     for group_index in group_indices:
-        cmd = f'cast send {EXISTING_L1_CONTROLLER_RELAYER} "relayGroup(uint256,uint256)" {L2_CHAIN_ID} {group_index} --rpc-url {L1_RPC} --private-key {ADMIN_PRIVATE_KEY}'
+        cmd = f'cast send {EXISTING_L1_CONTROLLER_RELAYER} "relayGroup(uint256,uint256)" {L2_CHAIN_ID} {group_index} --rpc-url {L1_RPC} --private-key {ADMIN_PRIVATE_KEY} --gas-limit 3000000'
         cprint(cmd.replace(ADMIN_PRIVATE_KEY, "***"))
         run_command(
             [cmd],
@@ -1033,7 +1033,7 @@ def main():
     # deploy_controller_relayer()
 
     ## Manually call relayGroups(L2controllerOracleAddress)
-    # relay_groups("0x2E2Ed0Cfd3AD2f1d34481277b3204d807Ca2F8c2")
+    # relay_groups("0x901105C43C7f0e421b33c9D1DaA25f54076F6563")
 
     ## Get public/private key info from node mnemonic
     # print_node_key_info()
