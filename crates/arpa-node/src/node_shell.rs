@@ -1,5 +1,7 @@
 use arpa_contract_client::adapter::AdapterViews;
-use arpa_contract_client::contract_stub::adapter::Adapter as AdapterContract;
+use arpa_contract_client::contract_stub::adapter::{
+    Adapter as AdapterContract, SignatureWithSaltAndExpiry,
+};
 use arpa_contract_client::contract_stub::ierc20::IERC20 as ArpaContract;
 use arpa_contract_client::contract_stub::staking::Staking as StakingContract;
 use arpa_contract_client::ethers::adapter::AdapterClient;
@@ -446,7 +448,11 @@ async fn send<PC: Curve>(
                 main_chain_id,
                 "node_activate",
                 controller_contract.client_ref(),
-                controller_contract.node_activate(),
+                controller_contract.node_activate(SignatureWithSaltAndExpiry {
+                    signature: vec![0u8; 65].into(),
+                    salt: [0u8; 32],
+                    expiry: 0u64.into(),
+                }),
                 context
                     .config
                     .get_time_limits()
