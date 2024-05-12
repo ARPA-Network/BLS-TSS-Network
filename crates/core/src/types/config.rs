@@ -417,7 +417,7 @@ pub struct ExponentialBackoffRetryDescriptor {
     pub use_jitter: bool,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct Config {
     node_committer_rpc_endpoint: String,
     node_advertised_committer_rpc_endpoint: String,
@@ -439,6 +439,50 @@ pub struct Config {
     logger: LoggerDescriptor,
     time_limits: TimeLimitDescriptor,
     relayed_chains: Vec<RelayedChain>,
+}
+
+impl std::fmt::Debug for Config {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("Config")
+            .field(
+                "node_committer_rpc_endpoint",
+                &self.node_committer_rpc_endpoint,
+            )
+            .field(
+                "node_advertised_committer_rpc_endpoint",
+                &self.node_advertised_committer_rpc_endpoint,
+            )
+            .field(
+                "node_management_rpc_endpoint",
+                &self.node_management_rpc_endpoint,
+            )
+            .field("node_management_rpc_token", &"ignored")
+            .field(
+                "node_statistics_http_endpoint",
+                &self.node_statistics_http_endpoint,
+            )
+            .field("provider_endpoint", &"ignored")
+            .field("chain_id", &self.chain_id)
+            .field("is_eigenlayer", &self.is_eigenlayer)
+            .field("controller_address", &self.controller_address)
+            .field(
+                "controller_relayer_address",
+                &self.controller_relayer_address,
+            )
+            .field("adapter_address", &self.adapter_address)
+            .field(
+                "adapter_deployed_block_height",
+                &self.adapter_deployed_block_height,
+            )
+            .field("arpa_contract_address", &self.arpa_contract_address)
+            .field("data_path", &self.data_path)
+            .field("account", &"ignored")
+            .field("listeners", &self.listeners)
+            .field("logger", &self.logger)
+            .field("time_limits", &self.time_limits)
+            .field("relayed_chains", &self.relayed_chains)
+            .finish()
+    }
 }
 
 impl From<ConfigHolder> for Config {
@@ -805,7 +849,7 @@ struct RelayedChainHolder {
     pub time_limits: Option<TimeLimitDescriptorHolder>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize)]
 pub struct RelayedChain {
     chain_id: usize,
     description: String,
@@ -816,6 +860,25 @@ pub struct RelayedChain {
     arpa_contract_address: String,
     listeners: Vec<ListenerDescriptor>,
     time_limits: TimeLimitDescriptor,
+}
+
+impl std::fmt::Debug for RelayedChain {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("RelayedChain")
+            .field("chain_id", &self.chain_id)
+            .field("description", &self.description)
+            .field("provider_endpoint", &"ignored")
+            .field("controller_oracle_address", &self.controller_oracle_address)
+            .field("adapter_address", &self.adapter_address)
+            .field(
+                "adapter_deployed_block_height",
+                &self.adapter_deployed_block_height,
+            )
+            .field("arpa_contract_address", &self.arpa_contract_address)
+            .field("listeners", &self.listeners)
+            .field("time_limits", &self.time_limits)
+            .finish()
+    }
 }
 
 impl From<RelayedChainHolder> for RelayedChain {
