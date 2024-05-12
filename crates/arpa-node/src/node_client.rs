@@ -16,10 +16,12 @@ use arpa_node::context::chain::types::GeneralRelayedChain;
 use arpa_node::context::types::GeneralContext;
 use arpa_node::context::{Context, TaskWaiter};
 use arpa_sqlite_db::SqliteDB;
+use ethers::core::k256::ecdsa::SigningKey;
 use ethers::providers::Provider;
 use ethers::providers::Ws;
 use ethers::signers::Signer;
-use log::{info, LevelFilter};
+use ethers::signers::Wallet;
+use log::{error, info, LevelFilter};
 use log4rs::append::console::ConsoleAppender;
 use log4rs::append::rolling_file::policy::compound::roll::delete::DeleteRoller;
 use log4rs::append::rolling_file::policy::compound::trigger::size::SizeTrigger;
@@ -193,6 +195,19 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     );
 
     info!("{:?}", config);
+
+    if let Err(e) = start(config, wallet).await {
+        error!("{:?}", e);
+    };
+
+    Ok(())
+}
+
+async fn start(
+    config: Config,
+    wallet: Wallet<SigningKey>,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let id_address = wallet.address();
 
     let data_path = PathBuf::from(config.get_data_path());
 
