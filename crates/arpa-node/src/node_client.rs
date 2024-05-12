@@ -39,6 +39,8 @@ use threshold_bls::serialize::point_to_hex;
 use threshold_bls::sig::Scheme;
 use tokio::sync::RwLock;
 
+const VERSION: &str = env!("CARGO_PKG_VERSION");
+
 #[derive(StructOpt, Debug)]
 #[structopt(name = "Arpa Node")]
 pub struct Opt {
@@ -61,13 +63,15 @@ fn init_logger(
 ) {
     let stdout = ConsoleAppender::builder()
         .encoder(Box::new(
-            JsonEncoder::new(node_id.to_string(), l1_chain_id).context_logging(context_logging),
+            JsonEncoder::new(node_id.to_string(), l1_chain_id, VERSION.to_string())
+                .context_logging(context_logging),
         ))
         .build();
 
     let rolling_file = RollingFileAppender::builder()
         .encoder(Box::new(
-            JsonEncoder::new(node_id.to_string(), l1_chain_id).context_logging(context_logging),
+            JsonEncoder::new(node_id.to_string(), l1_chain_id, VERSION.to_string())
+                .context_logging(context_logging),
         ))
         .build(
             format!(
@@ -87,7 +91,8 @@ fn init_logger(
 
     let rolling_err_file = RollingFileAppender::builder()
         .encoder(Box::new(
-            JsonEncoder::new(node_id.to_string(), l1_chain_id).context_logging(context_logging),
+            JsonEncoder::new(node_id.to_string(), l1_chain_id, VERSION.to_string())
+                .context_logging(context_logging),
         ))
         .build(
             format!("{}/node_err.log", log_file_path),

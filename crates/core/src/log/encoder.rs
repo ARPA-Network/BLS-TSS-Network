@@ -51,15 +51,17 @@ pub struct JsonEncoder {
     node_id: String,
     l1_chain_id: usize,
     show_context: bool,
+    version: String,
 }
 
 impl JsonEncoder {
     /// Returns a new `JsonEncoder` with a default configuration.
-    pub fn new(node_id: String, l1_chain_id: usize) -> Self {
+    pub fn new(node_id: String, l1_chain_id: usize, version: String) -> Self {
         JsonEncoder {
             node_id,
             l1_chain_id,
             show_context: false,
+            version,
         }
     }
 
@@ -103,6 +105,7 @@ impl JsonEncoder {
             mdc: Mdc,
             node_info: &node_info,
             group_info: &group_info,
+            version: &self.version,
         };
         message.serialize(&mut serde_json::Serializer::new(&mut *w))?;
         w.write_all("\n".as_bytes())?;
@@ -137,6 +140,7 @@ struct Message<'a> {
     mdc: Mdc,
     node_info: &'a str,
     group_info: &'a str,
+    version: &'a str,
 }
 
 fn ser_display<T, S>(v: &T, s: S) -> Result<S::Ok, S::Error>
@@ -187,9 +191,10 @@ mod test {
         let thread = "log::encoder::test::default";
         let node_id = "test";
         let l1_chain_id = 1;
+        let version = "0.1.0";
         log_mdc::insert("foo", "bar");
 
-        let encoder = JsonEncoder::new(node_id.to_string(), l1_chain_id);
+        let encoder = JsonEncoder::new(node_id.to_string(), l1_chain_id, version.to_string());
 
         let mut buf = vec![];
         encoder
@@ -212,7 +217,7 @@ mod test {
              \"file\":\"{}\",\"line\":{},\"level\":\"{}\",\"target\":\"{}\",\
              \"thread\":\"{}\",\"thread_id\":{},\"node_id\":\"{}\",\"l1_chain_id\":{},\
              \"mdc\":{{\"foo\":\"bar\"}},\
-             \"node_info\":\"\",\"group_info\":\"\"}}",
+             \"node_info\":\"\",\"group_info\":\"\",\"version\":\"{}\"}}",
             time.to_rfc3339(),
             message,
             module_path,
@@ -223,7 +228,8 @@ mod test {
             thread,
             thread_id::get(),
             node_id,
-            l1_chain_id
+            l1_chain_id,
+            version
         );
         assert_eq!(expected, String::from_utf8(buf).unwrap().trim());
     }
