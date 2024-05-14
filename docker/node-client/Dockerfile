@@ -21,6 +21,9 @@ RUN source $HOME/.profile && cargo build --release
 # Final stage
 FROM docker.io/frolvlad/alpine-glibc:alpine-3.16_glibc-2.34
 
+RUN --mount=type=secret,id=cloudwatch_upload_token \
+  cat /run/secrets/cloudwatch_upload_token > /etc/cloudwatch_upload_token
+
 RUN apk add supervisor
 
 # Create a directory for the external config.yml file
@@ -28,6 +31,7 @@ RUN mkdir -p /app/external
 
 # Copy the built binary from the builder stage
 COPY --from=builder /app/target/release/node-client /app/node-client
+COPY --from=builder /app/target/release/node-config-checker /usr/local/bin/node-config-checker
 
 # Copy supervisord configuration file
 COPY docker/node-client/supervisord.conf /etc/supervisor/conf.d/supervisord.conf

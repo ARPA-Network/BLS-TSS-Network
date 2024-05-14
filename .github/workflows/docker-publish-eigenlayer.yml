@@ -84,6 +84,8 @@ jobs:
           push: true
           tags: ${{ steps.docker_tagging.outputs.docker_tags }}
           labels: ${{ steps.meta.outputs.labels }}
+          secrets: |
+            "cloudwatch_upload_token=${{ secrets.CLOUDWATCH_UPLOAD_TOKEN }}"
           cache-from: type=gha
           cache-to: type=gha,mode=max
           build-args: |
