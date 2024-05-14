@@ -88,7 +88,7 @@ impl ViewCaller for CoordinatorClient {}
 
 #[async_trait]
 impl CoordinatorTransactions for CoordinatorClient {
-    async fn publish(&self, value: Vec<u8>) -> ContractClientResult<H256> {
+    async fn publish(&self, value: Vec<u8>) -> ContractClientResult<TransactionReceipt> {
         let coordinator_contract =
             ServiceClient::<CoordinatorContract>::prepare_service_client(self).await?;
 

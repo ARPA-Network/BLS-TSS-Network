@@ -85,7 +85,7 @@ impl ViewCaller for ControllerOracleClient {}
 
 #[async_trait]
 impl ControllerOracleTransactions for ControllerOracleClient {
-    async fn node_withdraw(&self, recipient: Address) -> ContractClientResult<H256> {
+    async fn node_withdraw(&self, recipient: Address) -> ContractClientResult<TransactionReceipt> {
         let controller_oracle_contract =
             ServiceClient::<ControllerOracleContract>::prepare_service_client(self).await?;
 

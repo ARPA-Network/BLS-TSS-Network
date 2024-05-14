@@ -103,7 +103,7 @@ impl AdapterTransactions for AdapterClient {
         task: RandomnessTask,
         signature: Vec<u8>,
         partial_signatures: HashMap<Address, PartialSignature>,
-    ) -> ContractClientResult<H256> {
+    ) -> ContractClientResult<TransactionReceipt> {
         let adapter_contract =
             ServiceClient::<AdapterContract>::prepare_service_client(self).await?;
 

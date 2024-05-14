@@ -6,11 +6,15 @@ use crate::{
     queue::{event_queue::EventQueue, EventPublisher},
 };
 use arpa_contract_client::adapter::AdapterLogs;
-use arpa_core::RandomnessTask;
+use arpa_core::{
+    log::{build_request_related_payload, LogType},
+    BLSTaskType, RandomnessTask,
+};
 use arpa_dal::BLSTasksHandler;
 use async_trait::async_trait;
 use ethers::{providers::Middleware, types::Address};
 use log::info;
+use serde_json::json;
 use std::{marker::PhantomData, sync::Arc};
 use threshold_bls::group::Curve;
 use tokio::sync::RwLock;
@@ -22,6 +26,12 @@ pub struct NewRandomnessTaskListener<PC: Curve> {
     randomness_tasks_cache: Arc<RwLock<Box<dyn BLSTasksHandler<RandomnessTask>>>>,
     eq: Arc<RwLock<EventQueue>>,
     pc: PhantomData<PC>,
+}
+
+impl<PC: Curve> std::fmt::Display for NewRandomnessTaskListener<PC> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "NewRandomnessTaskListener")
+    }
 }
 
 impl<PC: Curve> NewRandomnessTaskListener<PC> {
@@ -72,7 +82,18 @@ impl<PC: Curve + Sync + Send> Listener for NewRandomnessTaskListener<PC> {
                         .contains(&randomness_task.request_id)
                         .await;
                     if let Ok(false) = contained_res {
-                        info!("received new randomness task. {:?}", randomness_task);
+                        info!(
+                            "{}",
+                            build_request_related_payload(
+                                LogType::RequestReceived,
+                                "New randomness task received.",
+                                self.chain_id,
+                                &randomness_task.request_id,
+                                BLSTaskType::Randomness,
+                                json!(randomness_task),
+                                None
+                            )
+                        );
 
                         randomness_tasks_cache
                             .write()
@@ -95,10 +116,6 @@ impl<PC: Curve + Sync + Send> Listener for NewRandomnessTaskListener<PC> {
     }
 
     async fn handle_interruption(&self) -> NodeResult<()> {
-        info!(
-            "Handle interruption for NewRandomnessTaskListener, chain_id:{}.",
-            self.chain_id
-        );
         self.chain_identity
             .read()
             .await
@@ -107,5 +124,9 @@ impl<PC: Curve + Sync + Send> Listener for NewRandomnessTaskListener<PC> {
             .await?;
 
         Ok(())
+    }
+
+    async fn chain_id(&self) -> usize {
+        self.chain_id
     }
 }

@@ -7,7 +7,6 @@ use crate::{
 };
 use arpa_contract_client::provider::BlockFetcher;
 use async_trait::async_trait;
-use log::info;
 use std::{marker::PhantomData, sync::Arc};
 use threshold_bls::group::Curve;
 use tokio::sync::RwLock;
@@ -17,6 +16,12 @@ pub struct BlockListener<PC: Curve> {
     chain_identity: Arc<RwLock<ChainIdentityHandlerType<PC>>>,
     eq: Arc<RwLock<EventQueue>>,
     pc: PhantomData<PC>,
+}
+
+impl<PC: Curve> std::fmt::Display for BlockListener<PC> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "BlockListener")
+    }
 }
 
 impl<PC: Curve> BlockListener<PC> {
@@ -71,12 +76,12 @@ impl<PC: Curve + Sync + Send> Listener for BlockListener<PC> {
     }
 
     async fn handle_interruption(&self) -> NodeResult<()> {
-        info!(
-            "Handle interruption for BlockListener, chain_id:{}.",
-            self.chain_id
-        );
         self.chain_identity.write().await.reset_provider().await?;
 
         Ok(())
+    }
+
+    async fn chain_id(&self) -> usize {
+        self.chain_id
     }
 }

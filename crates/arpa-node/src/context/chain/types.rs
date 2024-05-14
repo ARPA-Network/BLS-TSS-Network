@@ -79,11 +79,13 @@ impl<
         time_limits: TimeLimitDescriptor,
         listener_descriptors: Vec<ListenerDescriptor>,
     ) -> Self {
+        let chain_id = chain_identity.get_chain_id();
         GeneralMainChain {
-            id: chain_identity.get_chain_id(),
+            id: chain_id,
             description,
             chain_identity: Arc::new(RwLock::new(Box::new(chain_identity))),
             block_cache: Arc::new(RwLock::new(Box::new(InMemoryBlockInfoCache::new(
+                chain_id,
                 time_limits.block_time,
             )))),
             randomness_tasks_cache,
@@ -561,11 +563,14 @@ impl<
         time_limits: TimeLimitDescriptor,
         listener_descriptors: Vec<ListenerDescriptor>,
     ) -> Self {
+        let chain_id = chain_identity.get_chain_id();
+
         GeneralRelayedChain {
-            id: chain_identity.get_chain_id(),
+            id: chain_id,
             description,
             chain_identity: Arc::new(RwLock::new(Box::new(chain_identity))),
             block_cache: Arc::new(RwLock::new(Box::new(InMemoryBlockInfoCache::new(
+                chain_id,
                 time_limits.block_time,
             )))),
             randomness_tasks_cache,

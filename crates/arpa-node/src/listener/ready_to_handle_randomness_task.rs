@@ -10,7 +10,6 @@ use arpa_core::RandomnessTask;
 use arpa_dal::{BLSTasksHandler, BlockInfoHandler, GroupInfoHandler};
 use async_trait::async_trait;
 use ethers::{providers::Middleware, types::Address};
-use log::info;
 use std::{marker::PhantomData, sync::Arc};
 use threshold_bls::group::Curve;
 use tokio::sync::RwLock;
@@ -25,6 +24,12 @@ pub struct ReadyToHandleRandomnessTaskListener<PC: Curve> {
     eq: Arc<RwLock<EventQueue>>,
     pc: PhantomData<PC>,
     randomness_task_exclusive_window: usize,
+}
+
+impl<PC: Curve> std::fmt::Display for ReadyToHandleRandomnessTaskListener<PC> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "ReadyToHandleRandomnessTaskListener")
+    }
 }
 
 impl<PC: Curve> ReadyToHandleRandomnessTaskListener<PC> {
@@ -114,10 +119,6 @@ impl<PC: Curve + Sync + Send> Listener for ReadyToHandleRandomnessTaskListener<P
     }
 
     async fn handle_interruption(&self) -> NodeResult<()> {
-        info!(
-            "Handle interruption for ReadyToHandleRandomnessTaskListener, chain_id:{}.",
-            self.chain_id
-        );
         self.chain_identity
             .read()
             .await
@@ -126,5 +127,9 @@ impl<PC: Curve + Sync + Send> Listener for ReadyToHandleRandomnessTaskListener<P
             .await?;
 
         Ok(())
+    }
+
+    async fn chain_id(&self) -> usize {
+        self.chain_id
     }
 }

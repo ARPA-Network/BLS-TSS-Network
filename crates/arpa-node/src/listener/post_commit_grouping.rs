@@ -10,7 +10,6 @@ use arpa_core::DKGStatus;
 use arpa_dal::GroupInfoHandler;
 use async_trait::async_trait;
 use ethers::providers::Middleware;
-use log::info;
 use std::{marker::PhantomData, sync::Arc};
 use threshold_bls::group::Curve;
 use tokio::sync::RwLock;
@@ -20,6 +19,12 @@ pub struct PostCommitGroupingListener<PC: Curve> {
     group_cache: Arc<RwLock<Box<dyn GroupInfoHandler<PC>>>>,
     eq: Arc<RwLock<EventQueue>>,
     pc: PhantomData<PC>,
+}
+
+impl<PC: Curve> std::fmt::Display for PostCommitGroupingListener<PC> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "PostCommitGroupingListener")
+    }
 }
 
 impl<PC: Curve> PostCommitGroupingListener<PC> {
@@ -67,7 +72,6 @@ impl<PC: Curve + Sync + Send + 'static> Listener for PostCommitGroupingListener<
     }
 
     async fn handle_interruption(&self) -> NodeResult<()> {
-        info!("Handle interruption for PostCommitGroupingListener");
         self.chain_identity
             .read()
             .await
@@ -76,5 +80,9 @@ impl<PC: Curve + Sync + Send + 'static> Listener for PostCommitGroupingListener<
             .await?;
 
         Ok(())
+    }
+
+    async fn chain_id(&self) -> usize {
+        self.chain_identity.read().await.get_chain_id()
     }
 }

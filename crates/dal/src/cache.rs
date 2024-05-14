@@ -22,13 +22,15 @@ use threshold_bls::sig::Share;
 
 #[derive(Debug, Default)]
 pub struct InMemoryBlockInfoCache {
+    chain_id: usize,
     block_height: usize,
     block_time: usize,
 }
 
 impl InMemoryBlockInfoCache {
-    pub fn new(block_time: usize) -> Self {
+    pub fn new(chain_id: usize, block_time: usize) -> Self {
         InMemoryBlockInfoCache {
+            chain_id,
             block_height: 0,
             block_time,
         }
@@ -38,6 +40,10 @@ impl InMemoryBlockInfoCache {
 impl BlockInfoHandler for InMemoryBlockInfoCache {}
 
 impl BlockInfoFetcher for InMemoryBlockInfoCache {
+    fn get_chain_id(&self) -> usize {
+        self.chain_id
+    }
+
     fn get_block_height(&self) -> usize {
         self.block_height
     }

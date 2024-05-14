@@ -9,7 +9,6 @@ use arpa_contract_client::controller::ControllerLogs;
 use arpa_dal::GroupInfoHandler;
 use async_trait::async_trait;
 use ethers::providers::Middleware;
-use log::info;
 use std::{marker::PhantomData, sync::Arc};
 use threshold_bls::group::Curve;
 use tokio::sync::RwLock;
@@ -19,6 +18,12 @@ pub struct PreGroupingListener<PC: Curve> {
     group_cache: Arc<RwLock<Box<dyn GroupInfoHandler<PC>>>>,
     eq: Arc<RwLock<EventQueue>>,
     pc: PhantomData<PC>,
+}
+
+impl<PC: Curve> std::fmt::Display for PreGroupingListener<PC> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "PreGroupingListener")
+    }
 }
 
 impl<PC: Curve> PreGroupingListener<PC> {
@@ -86,7 +91,6 @@ impl<PC: Curve + Sync + Send> Listener for PreGroupingListener<PC> {
     }
 
     async fn handle_interruption(&self) -> NodeResult<()> {
-        info!("Handle interruption for PreGroupingListener");
         self.chain_identity
             .read()
             .await
@@ -95,5 +99,9 @@ impl<PC: Curve + Sync + Send> Listener for PreGroupingListener<PC> {
             .await?;
 
         Ok(())
+    }
+
+    async fn chain_id(&self) -> usize {
+        self.chain_identity.read().await.get_chain_id()
     }
 }

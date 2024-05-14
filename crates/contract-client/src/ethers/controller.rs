@@ -96,7 +96,7 @@ impl ControllerTransactions for ControllerClient {
         public_key: Vec<u8>,
         partial_public_key: Vec<u8>,
         disqualified_nodes: Vec<Address>,
-    ) -> ContractClientResult<H256> {
+    ) -> ContractClientResult<TransactionReceipt> {
         let controller_contract =
             ServiceClient::<ControllerContract>::prepare_service_client(self).await?;
 
@@ -123,7 +123,7 @@ impl ControllerTransactions for ControllerClient {
         &self,
         group_index: usize,
         group_epoch: usize,
-    ) -> ContractClientResult<H256> {
+    ) -> ContractClientResult<TransactionReceipt> {
         let controller_contract =
             ServiceClient::<ControllerContract>::prepare_service_client(self).await?;
 

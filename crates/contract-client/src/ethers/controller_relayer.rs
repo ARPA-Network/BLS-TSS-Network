@@ -73,7 +73,11 @@ impl TransactionCaller for ControllerRelayerClient {}
 
 #[async_trait]
 impl ControllerRelayerTransactions for ControllerRelayerClient {
-    async fn relay_group(&self, chain_id: usize, group_index: usize) -> ContractClientResult<H256> {
+    async fn relay_group(
+        &self,
+        chain_id: usize,
+        group_index: usize,
+    ) -> ContractClientResult<TransactionReceipt> {
         let controller_relayer_contract =
             ServiceClient::<ControllerRelayerContract>::prepare_service_client(self).await?;
 

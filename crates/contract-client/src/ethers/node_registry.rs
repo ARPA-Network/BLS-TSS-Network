@@ -88,7 +88,7 @@ impl NodeRegistryTransactions for NodeRegistryClient {
         &self,
         id_public_key: Vec<u8>,
         is_eigenlayer: bool,
-    ) -> ContractClientResult<H256> {
+    ) -> ContractClientResult<TransactionReceipt> {
         let node_registry_contract =
             ServiceClient::<NodeRegistryContract>::prepare_service_client(self).await?;
 

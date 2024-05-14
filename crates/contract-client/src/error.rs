@@ -1,5 +1,8 @@
 use arpa_core::{HttpWalletSigner, WsWalletSigner};
-use ethers::prelude::{ContractError, ProviderError, WalletError};
+use ethers::{
+    prelude::{ContractError, ProviderError, WalletError},
+    types::TransactionReceipt,
+};
 use rustc_hex::FromHexError;
 use thiserror::Error;
 
@@ -38,5 +41,5 @@ pub enum ContractClientError {
     #[error("can't fetch transaction receipt")]
     NoTransactionReceipt,
     #[error("Transaction failed with status equal to 0x0")]
-    TransactionFailed,
+    TransactionFailed(TransactionReceipt),
 }

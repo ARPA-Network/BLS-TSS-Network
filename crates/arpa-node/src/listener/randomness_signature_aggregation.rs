@@ -8,7 +8,6 @@ use arpa_dal::cache::RandomnessResultCache;
 use arpa_dal::{BlockInfoHandler, GroupInfoHandler, SignatureResultCacheHandler};
 use async_trait::async_trait;
 use ethers::types::Address;
-use log::info;
 use std::{marker::PhantomData, sync::Arc};
 use threshold_bls::group::Curve;
 use tokio::sync::RwLock;
@@ -22,6 +21,12 @@ pub struct RandomnessSignatureAggregationListener<PC: Curve> {
         Arc<RwLock<Box<dyn SignatureResultCacheHandler<RandomnessResultCache>>>>,
     eq: Arc<RwLock<EventQueue>>,
     pc: PhantomData<PC>,
+}
+
+impl<PC: Curve> std::fmt::Display for RandomnessSignatureAggregationListener<PC> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "RandomnessSignatureAggregationListener")
+    }
 }
 
 impl<PC: Curve> RandomnessSignatureAggregationListener<PC> {
@@ -84,11 +89,10 @@ impl<PC: Curve + Sync + Send> Listener for RandomnessSignatureAggregationListene
     }
 
     async fn handle_interruption(&self) -> NodeResult<()> {
-        info!(
-            "Handle interruption for RandomnessSignatureAggregationListener, chain_id:{}.",
-            self.chain_id
-        );
-
         Ok(())
+    }
+
+    async fn chain_id(&self) -> usize {
+        self.chain_id
     }
 }
