@@ -22,7 +22,7 @@ impl Task for RandomnessTask {
     }
 }
 
-#[derive(Clone, PartialEq)]
+#[derive(Clone, PartialEq, Serialize, Deserialize)]
 pub struct RandomnessTask {
     pub request_id: Vec<u8>,
     pub subscription_id: u64,
@@ -59,7 +59,7 @@ pub struct DKGTask {
     pub coordinator_address: Address,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct GroupRelayTask {
     pub controller_global_epoch: usize,
     pub relayed_group_index: usize,
@@ -67,7 +67,7 @@ pub struct GroupRelayTask {
     pub assignment_block_height: usize,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct GroupRelayConfirmationTask {
     pub index: usize,
     pub group_relay_cache_index: usize,
@@ -154,7 +154,7 @@ pub struct PartialSignature {
     pub signature: Vec<u8>,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Serialize, Deserialize, Debug)]
 pub enum BLSTaskType {
     Randomness,
     GroupRelay,
