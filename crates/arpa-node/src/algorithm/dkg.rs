@@ -225,9 +225,12 @@ fn parse_bundle<D: serde::de::DeserializeOwned>(bundle: &[Vec<u8>]) -> NodeResul
 
 fn write_output<C: Curve>(out: &DKGOutput<C>) -> NodeResult<()> {
     let output = OutputJson {
-        public_key: hex::encode(bincode::serialize(&out.public.public_key())?),
-        public_polynomial: hex::encode(bincode::serialize(&out.public)?),
-        share: hex::encode(bincode::serialize(&out.share)?),
+        public_key: format!(
+            "0x{}",
+            hex::encode(bincode::serialize(&out.public.public_key())?)
+        ),
+        public_polynomial: format!("0x{}", hex::encode(bincode::serialize(&out.public)?)),
+        share: "ignored".to_string(),
     };
 
     info!("{:?}", output);
