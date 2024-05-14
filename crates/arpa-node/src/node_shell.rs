@@ -996,7 +996,7 @@ async fn call<PC: Curve>(
             let logs = logs
                 .iter()
                 .map(|log| RandomnessRequestResult {
-                    request_id: hex::encode(log.request_id),
+                    request_id: format!("0x{}", hex::encode(log.request_id)),
                     group_index: log.group_index,
                     committer: log.committer,
                     participant_members: log.participant_members.clone(),
@@ -1039,7 +1039,7 @@ async fn call<PC: Curve>(
                 .iter()
                 .filter(|log| log.participant_members.contains(&context.wallet.address()))
                 .map(|log| RandomnessRequestResult {
-                    request_id: hex::encode(log.request_id),
+                    request_id: format!("0x{}", hex::encode(log.request_id)),
                     group_index: log.group_index,
                     committer: log.committer,
                     participant_members: log.participant_members.clone(),
@@ -1380,7 +1380,10 @@ async fn call<PC: Curve>(
                 .get_pending_request_commitment(pad_to_bytes32(&hex::decode(r_id)?).unwrap())
                 .await?;
 
-            Ok(Some(hex::encode(pending_request_commitment)))
+            Ok(Some(format!(
+                "0x{}",
+                hex::encode(pending_request_commitment)
+            )))
         }
 
         _ => panic!("Unknown subcommand {:?}", args.subcommand_name()),
@@ -1397,7 +1400,7 @@ fn generate<PC: Curve>(
 
             let pk = SigningKey::random(&mut rng).to_bytes();
 
-            Ok(Some(hex::encode(pk)))
+            Ok(Some(format!("0x{}", hex::encode(pk))))
         }
         Some(("keystore", sub_matches)) => {
             let path = sub_matches.get_one::<PathBuf>("path").unwrap();

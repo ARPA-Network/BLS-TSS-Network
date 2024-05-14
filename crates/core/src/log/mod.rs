@@ -1,13 +1,11 @@
-use std::fmt::Display;
-
-use ethers_core::{
-    types::{Address, H256, U256},
-    utils::hex,
-};
+use crate::ser_bytes_in_hex_string;
+use crate::ser_u256_in_dec_string;
+use crate::BLSTaskType;
+use ethers_core::types::{Address, H256, U256};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
+use std::fmt::Display;
 
-use crate::BLSTaskType;
 pub mod encoder;
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -34,15 +32,6 @@ pub struct Payload<'a> {
     pub transaction_receipt_log: Option<TransactionReceiptLog>,
 }
 
-fn ser_request_id<T, S>(v: &T, s: S) -> Result<S::Ok, S::Error>
-where
-    T: AsRef<[u8]>,
-    S: serde::Serializer,
-{
-    // add "0x" prefix to the hex string
-    s.serialize_str(&format!("0x{}", hex::encode(v.as_ref())))
-}
-
 impl Display for Payload<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         json!(self).fmt(f)
@@ -51,7 +40,7 @@ impl Display for Payload<'_> {
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct TaskLog<'a> {
-    #[serde(serialize_with = "ser_request_id")]
+    #[serde(serialize_with = "ser_bytes_in_hex_string")]
     pub request_id: &'a [u8],
     pub task_type: BLSTaskType,
     pub task_json: Value,
@@ -61,7 +50,9 @@ pub struct TaskLog<'a> {
 #[derive(Serialize, Deserialize, Debug)]
 pub struct TransactionReceiptLog {
     pub transaction_hash: H256,
+    #[serde(serialize_with = "ser_u256_in_dec_string")]
     pub gas_used: U256,
+    #[serde(serialize_with = "ser_u256_in_dec_string")]
     pub effective_gas_price: U256,
 }
 
@@ -98,6 +89,7 @@ pub fn build_request_related_payload<'a>(
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn build_transaction_receipt_log_payload<'a>(
     log_type: LogType,
     message: &'a str,

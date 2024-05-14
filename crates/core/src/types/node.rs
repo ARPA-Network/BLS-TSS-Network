@@ -1,3 +1,5 @@
+use crate::ser_bytes_in_hex_string;
+use crate::ser_u256_in_dec_string;
 use ethers_core::{
     types::{Address, U256},
     utils::hex,
@@ -24,15 +26,19 @@ impl Task for RandomnessTask {
 
 #[derive(Clone, PartialEq, Serialize, Deserialize)]
 pub struct RandomnessTask {
+    #[serde(serialize_with = "ser_bytes_in_hex_string")]
     pub request_id: Vec<u8>,
     pub subscription_id: u64,
     pub group_index: u32,
     pub request_type: RandomnessRequestType,
+    #[serde(serialize_with = "ser_bytes_in_hex_string")]
     pub params: Vec<u8>,
     pub requester: Address,
+    #[serde(serialize_with = "ser_u256_in_dec_string")]
     pub seed: U256,
     pub request_confirmations: u16,
     pub callback_gas_limit: u32,
+    #[serde(serialize_with = "ser_u256_in_dec_string")]
     pub callback_max_gas_price: U256,
     pub assignment_block_height: usize,
 }
@@ -40,7 +46,10 @@ pub struct RandomnessTask {
 impl std::fmt::Debug for RandomnessTask {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("RandomnessTask")
-            .field("request_id", &hex::encode(&self.request_id))
+            .field(
+                "request_id",
+                &format!("0x{}", hex::encode(&self.request_id)),
+            )
             .field("seed", &self.seed)
             .field("group_index", &self.group_index)
             .field("assignment_block_height", &self.assignment_block_height)

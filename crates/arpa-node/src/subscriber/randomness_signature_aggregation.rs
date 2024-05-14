@@ -128,7 +128,7 @@ impl<PC: Curve> FulfillRandomnessHandler for GeneralFulfillRandomnessHandler<PC>
                     .await?;
 
                 info!("mark randomness task as expired. task request id: {}, assignment_block_height:{:?}",
-                    format!("{:?}",hex::encode(randomness_task_request_id)), randomness_task.assignment_block_height);
+                    format!("0x{}", hex::encode(randomness_task_request_id)), randomness_task.assignment_block_height);
 
                 return Ok(());
             }
@@ -151,7 +151,7 @@ impl<PC: Curve> FulfillRandomnessHandler for GeneralFulfillRandomnessHandler<PC>
                     .await?;
 
                 info!("cancel fulfilling randomness as gas price is too high! task request id: {}, current_gas_price:{:?}, max_gas_price: {:?}",
-                    format!("{:?}",hex::encode(randomness_task_request_id)), wei_per_gas, randomness_task.callback_max_gas_price);
+                format!("0x{}", hex::encode(randomness_task_request_id)), wei_per_gas, randomness_task.callback_max_gas_price);
 
                 return Ok(());
             }
@@ -300,7 +300,7 @@ where
                     .await?;
 
                 error!("mark randomness task as faulty for too many failed fulfillment attempts. task request id: {}",
-                    format!("{:?}",hex::encode(&randomness_task.request_id)));
+                format!("0x{}", hex::encode(&randomness_task.request_id)));
 
                 continue;
             }

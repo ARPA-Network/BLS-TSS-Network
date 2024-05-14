@@ -235,7 +235,7 @@ impl AdapterLogs for AdapterClient {
             ) = evt;
 
             info!( "Received randomness task: chain_id: {}, group_index: {}, request_id: {}, sender: {:?}, sub_id: {}, seed: {}, request_confirmations: {}, callback_gas_limit: {}, callback_max_gas_price: {}, block_number: {}",
-                self.chain_id, group_index, hex::encode(request_id), sender, sub_id, seed, request_confirmations, callback_gas_limit, callback_max_gas_price, meta.block_number);
+                self.chain_id, group_index, format!("0x{}", hex::encode(request_id)), sender, sub_id, seed, request_confirmations, callback_gas_limit, callback_max_gas_price, meta.block_number);
 
             let task = RandomnessTask {
                 request_id: request_id.to_vec(),
