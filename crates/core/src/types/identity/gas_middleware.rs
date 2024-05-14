@@ -3,10 +3,11 @@ use ethers_core::{
     types::{transaction::eip2718::TypedTransaction, BlockId, U256},
     utils::parse_units,
 };
-use ethers_providers::{Middleware, MiddlewareError, PendingTransaction};
+use ethers_providers::{Middleware, MiddlewareError};
+use log::info;
 use thiserror::Error;
 
-/// (According to https://github.com/gakonst/ethers-rs/blob/51fe937f6515689b17a3a83b74a05984ad3a7f11/examples/middleware/examples/create_custom_middleware.rs#L23)
+/// (Modified on https://github.com/gakonst/ethers-rs/blob/51fe937f6515689b17a3a83b74a05984ad3a7f11/examples/middleware/examples/create_custom_middleware.rs#L23)
 /// This custom middleware increases the gas value of transactions sent through an ethers-rs
 /// provider by a specified percentage and will be called for each transaction before it is sent.
 /// This can be useful if you want to ensure that transactions have a higher gas value than the
@@ -68,32 +69,29 @@ where
         &self.inner
     }
 
-    /// In this function we bump the transaction gas value by the specified percentage
-    /// This can raise a custom middleware error if a gas amount was not set for
-    /// the transaction.
-    async fn send_transaction<T: Into<TypedTransaction> + Send + Sync>(
+    async fn fill_transaction(
         &self,
-        tx: T,
+        tx: &mut TypedTransaction,
         block: Option<BlockId>,
-    ) -> Result<PendingTransaction<'_, Self::Provider>, Self::Error> {
-        let mut tx: TypedTransaction = tx.into();
+    ) -> Result<(), Self::Error> {
+        // Delegate the call to the inner middleware to get an estimate of the gas
+        self.inner()
+            .fill_transaction(tx, block)
+            .await
+            .map_err(MiddlewareError::from_err)?;
 
         let curr_gas: U256 = match tx.gas() {
             Some(gas) => gas.to_owned(),
             None => Err(GasMiddlewareError::NoGasSetForTransaction)?,
         };
 
-        println!("Original transaction gas: {curr_gas:?} wei");
+        info!("Original transaction gas: {curr_gas:?} wei");
         let units: U256 = U256::exp10(CONTINGENCY_UNITS);
         let raised_gas: U256 = (curr_gas * self.contingency) / units;
         tx.set_gas(raised_gas);
-        println!("Raised transaction gas: {raised_gas:?} wei");
+        info!("Raised transaction gas: {raised_gas:?} wei");
 
-        // Dispatch the call to the inner layer
-        self.inner()
-            .send_transaction(tx, block)
-            .await
-            .map_err(MiddlewareError::from_err)
+        Ok(())
     }
 }
 

@@ -15,7 +15,7 @@ use std::sync::Arc;
 pub struct ControllerRelayerClient {
     chain_id: usize,
     controller_relayer_address: Address,
-    signer: Arc<WsWalletSigner>,
+    client: Arc<WsWalletSigner>,
     contract_transaction_retry_descriptor: ExponentialBackoffRetryDescriptor,
 }
 
@@ -29,7 +29,7 @@ impl ControllerRelayerClient {
         ControllerRelayerClient {
             chain_id,
             controller_relayer_address,
-            signer: identity.get_signer(),
+            client: identity.get_client(),
             contract_transaction_retry_descriptor,
         }
     }
@@ -62,7 +62,7 @@ type ControllerRelayerContract = ControllerRelayer<WsWalletSigner>;
 impl ServiceClient<ControllerRelayerContract> for ControllerRelayerClient {
     async fn prepare_service_client(&self) -> ContractClientResult<ControllerRelayerContract> {
         let controller_relayer_contract =
-            ControllerRelayer::new(self.controller_relayer_address, self.signer.clone());
+            ControllerRelayer::new(self.controller_relayer_address, self.client.clone());
 
         Ok(controller_relayer_contract)
     }

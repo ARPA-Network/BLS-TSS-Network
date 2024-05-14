@@ -20,7 +20,7 @@ use threshold_bls::group::Curve;
 pub struct ControllerOracleClient {
     chain_id: usize,
     controller_oracle_address: Address,
-    signer: Arc<WsWalletSigner>,
+    client: Arc<WsWalletSigner>,
     contract_transaction_retry_descriptor: ExponentialBackoffRetryDescriptor,
     contract_view_retry_descriptor: ExponentialBackoffRetryDescriptor,
 }
@@ -36,7 +36,7 @@ impl ControllerOracleClient {
         ControllerOracleClient {
             chain_id,
             controller_oracle_address,
-            signer: identity.get_signer(),
+            client: identity.get_client(),
             contract_transaction_retry_descriptor,
             contract_view_retry_descriptor,
         }
@@ -71,7 +71,7 @@ type ControllerOracleContract = ControllerOracle<WsWalletSigner>;
 impl ServiceClient<ControllerOracleContract> for ControllerOracleClient {
     async fn prepare_service_client(&self) -> ContractClientResult<ControllerOracleContract> {
         let controller_oracle_contract =
-            ControllerOracle::new(self.controller_oracle_address, self.signer.clone());
+            ControllerOracle::new(self.controller_oracle_address, self.client.clone());
 
         Ok(controller_oracle_contract)
     }

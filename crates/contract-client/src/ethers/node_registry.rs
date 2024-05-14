@@ -19,7 +19,7 @@ use std::sync::Arc;
 pub struct NodeRegistryClient {
     chain_id: usize,
     node_registry_address: Address,
-    signer: Arc<WsWalletSigner>,
+    client: Arc<WsWalletSigner>,
     contract_transaction_retry_descriptor: ExponentialBackoffRetryDescriptor,
     contract_view_retry_descriptor: ExponentialBackoffRetryDescriptor,
 }
@@ -35,7 +35,7 @@ impl NodeRegistryClient {
         NodeRegistryClient {
             chain_id,
             node_registry_address,
-            signer: identity.get_signer(),
+            client: identity.get_client(),
             contract_transaction_retry_descriptor,
             contract_view_retry_descriptor,
         }
@@ -70,7 +70,7 @@ type NodeRegistryContract = NodeRegistry<WsWalletSigner>;
 impl ServiceClient<NodeRegistryContract> for NodeRegistryClient {
     async fn prepare_service_client(&self) -> ContractClientResult<NodeRegistryContract> {
         let node_registry_contract =
-            NodeRegistry::new(self.node_registry_address, self.signer.clone());
+            NodeRegistry::new(self.node_registry_address, self.client.clone());
 
         Ok(node_registry_contract)
     }
@@ -96,15 +96,15 @@ impl NodeRegistryTransactions for NodeRegistryClient {
             let service_manager_address =
                 node_registry_contract.get_node_registry_config().await?.2;
             let service_manager_contract =
-                service_manager::ServiceManager::new(service_manager_address, self.signer.clone());
+                service_manager::ServiceManager::new(service_manager_address, self.client.clone());
             let avs_directory_address = service_manager_contract.avs_directory().await?;
             let avs_directory_contract =
-                iavs_directory::IAVSDirectory::new(avs_directory_address, self.signer.clone());
+                iavs_directory::IAVSDirectory::new(avs_directory_address, self.client.clone());
             // generate random salt
             let salt = rand::thread_rng().gen::<[u8; 32]>();
 
             let expiry = self
-                .signer
+                .client
                 .provider()
                 .get_block(BlockNumber::Latest)
                 .await
@@ -114,14 +114,15 @@ impl NodeRegistryTransactions for NodeRegistryClient {
 
             let digest_hash = avs_directory_contract
                 .calculate_operator_avs_registration_digest_hash(
-                    self.signer.address(),
+                    self.client.inner().address(),
                     service_manager_address,
                     salt,
                     expiry,
                 )
                 .await?;
             let signature = self
-                .signer
+                .client
+                .inner()
                 .signer()
                 .sign_hash(digest_hash.into())?
                 .to_vec()

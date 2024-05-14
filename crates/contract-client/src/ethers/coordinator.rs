@@ -24,7 +24,7 @@ use threshold_bls::group::Curve;
 pub struct CoordinatorClient {
     chain_id: usize,
     coordinator_address: Address,
-    signer: Arc<WsWalletSigner>,
+    client: Arc<WsWalletSigner>,
     contract_transaction_retry_descriptor: ExponentialBackoffRetryDescriptor,
     contract_view_retry_descriptor: ExponentialBackoffRetryDescriptor,
 }
@@ -40,7 +40,7 @@ impl CoordinatorClient {
         CoordinatorClient {
             chain_id,
             coordinator_address,
-            signer: identity.get_signer(),
+            client: identity.get_client(),
             contract_transaction_retry_descriptor,
             contract_view_retry_descriptor,
         }
@@ -74,7 +74,7 @@ type CoordinatorContract = Coordinator<WsWalletSigner>;
 #[async_trait]
 impl ServiceClient<CoordinatorContract> for CoordinatorClient {
     async fn prepare_service_client(&self) -> ContractClientResult<CoordinatorContract> {
-        let coordinator_contract = Coordinator::new(self.coordinator_address, self.signer.clone());
+        let coordinator_contract = Coordinator::new(self.coordinator_address, self.client.clone());
 
         Ok(coordinator_contract)
     }
@@ -230,11 +230,10 @@ pub mod coordinator_tests {
     use crate::contract_stub::coordinator::Coordinator;
     use crate::coordinator::CoordinatorTransactions;
     use crate::error::ContractClientError;
+    use arpa_core::build_client;
     use arpa_core::eip1559_gas_price_estimator;
     use arpa_core::Config;
-    use arpa_core::GasMiddleware;
     use arpa_core::GeneralMainChainIdentity;
-    use arpa_core::GAS_RAISE_PERCENTAGE;
     use ethers::abi::Tokenize;
     use ethers::prelude::ContractError::Revert;
     use ethers::prelude::*;
@@ -275,15 +274,7 @@ pub mod coordinator_tests {
         );
 
         // 4. instantiate the client with the wallet
-        let nonce_manager = NonceManagerMiddleware::new(
-            provider.wrap_into(|s| GasMiddleware::new(s, GAS_RAISE_PERCENTAGE).unwrap()),
-            wallet.address(),
-        );
-
-        let client = Arc::new(SignerMiddleware::new(
-            nonce_manager,
-            wallet.with_chain_id(anvil.chain_id()),
-        ));
+        let client = build_client(wallet, anvil.chain_id() as usize, provider);
 
         // 5. deploy contract
         let mut call = Coordinator::deploy(client.clone(), (3u8, 30u8)).unwrap();

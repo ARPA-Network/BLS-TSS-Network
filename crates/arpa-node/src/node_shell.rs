@@ -219,7 +219,7 @@ async fn send<PC: Curve>(
 
             let arpa_contract = ArpaContract::new(
                 context.config.find_arpa_address(main_chain_id)?,
-                context.chain_identity(main_chain_id)?.get_signer(),
+                context.chain_identity(main_chain_id)?.get_client(),
             );
 
             let trx_hash = ArpaClient::call_contract_transaction(
@@ -247,7 +247,7 @@ async fn send<PC: Curve>(
 
             let staking_contract = StakingContract::new(
                 context.staking_contract_address().await?,
-                context.chain_identity(main_chain_id)?.get_signer(),
+                context.chain_identity(main_chain_id)?.get_client(),
             );
 
             let is_operator = StakingClient::call_contract_view(
@@ -268,7 +268,7 @@ async fn send<PC: Curve>(
 
             let arpa_contract = ArpaContract::new(
                 context.config.find_arpa_address(main_chain_id)?,
-                context.chain_identity(main_chain_id)?.get_signer(),
+                context.chain_identity(main_chain_id)?.get_client(),
             );
 
             let balance = ArpaClient::call_contract_view(
@@ -333,7 +333,7 @@ async fn send<PC: Curve>(
 
             let staking_contract = StakingContract::new(
                 context.staking_contract_address().await?,
-                context.chain_identity(main_chain_id)?.get_signer(),
+                context.chain_identity(main_chain_id)?.get_client(),
             );
 
             let staked_amount = StakingClient::call_contract_view(
@@ -375,7 +375,7 @@ async fn send<PC: Curve>(
             let main_chain_id = context.config.get_main_chain_id();
             let staking_contract = StakingContract::new(
                 context.staking_contract_address().await?,
-                context.chain_identity(main_chain_id)?.get_signer(),
+                context.chain_identity(main_chain_id)?.get_client(),
             );
 
             let trx_hash = StakingClient::call_contract_transaction(
@@ -1058,7 +1058,7 @@ async fn call<PC: Curve>(
             let main_chain_id = context.config.get_main_chain_id();
             let staking_contract = StakingContract::new(
                 context.staking_contract_address().await?,
-                context.chain_identity(main_chain_id)?.get_signer(),
+                context.chain_identity(main_chain_id)?.get_client(),
             );
 
             let delegation_reward = StakingClient::call_contract_view(
@@ -1078,7 +1078,7 @@ async fn call<PC: Curve>(
             let main_chain_id = context.config.get_main_chain_id();
             let staking_contract = StakingContract::new(
                 context.staking_contract_address().await?,
-                context.chain_identity(main_chain_id)?.get_signer(),
+                context.chain_identity(main_chain_id)?.get_client(),
             );
 
             let delegates_count = StakingClient::call_contract_view(
@@ -1097,7 +1097,7 @@ async fn call<PC: Curve>(
             let main_chain_id = context.config.get_main_chain_id();
             let staking_contract = StakingContract::new(
                 context.staking_contract_address().await?,
-                context.chain_identity(main_chain_id)?.get_signer(),
+                context.chain_identity(main_chain_id)?.get_client(),
             );
 
             let amount = StakingClient::call_contract_view(
@@ -1116,7 +1116,7 @@ async fn call<PC: Curve>(
             let main_chain_id = context.config.get_main_chain_id();
             let staking_contract = StakingContract::new(
                 context.staking_contract_address().await?,
-                context.chain_identity(main_chain_id)?.get_signer(),
+                context.chain_identity(main_chain_id)?.get_client(),
             );
 
             let (amounts, timestamps) = StakingClient::call_contract_view(
@@ -1152,7 +1152,7 @@ async fn call<PC: Curve>(
             let chain_id = sub_matches.get_one::<usize>("chain-id").unwrap();
             let arpa_contract = ArpaContract::new(
                 context.config.find_arpa_address(*chain_id)?,
-                context.chain_identity(*chain_id)?.get_signer(),
+                context.chain_identity(*chain_id)?.get_client(),
             );
 
             let balance = ArpaClient::call_contract_view(
