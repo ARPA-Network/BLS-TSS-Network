@@ -113,57 +113,19 @@ fn init_logger(
                 .filter(Box::new(ThresholdFilter::new(LevelFilter::Error)))
                 .build("err_file", Box::new(rolling_err_file)),
         )
-        .logger(
-            log4rs::config::Logger::builder()
-                .appender("stdout")
-                .appender("file")
-                .build("node_client", LevelFilter::Info),
-        )
-        .logger(
-            log4rs::config::Logger::builder()
-                .appender("stdout")
-                .appender("file")
-                .build("arpa_node", LevelFilter::Info),
-        )
-        .logger(
-            log4rs::config::Logger::builder()
-                .appender("stdout")
-                .appender("file")
-                .build("arpa_core", LevelFilter::Info),
-        )
-        .logger(
-            log4rs::config::Logger::builder()
-                .appender("stdout")
-                .appender("file")
-                .build("arpa_contract_client", LevelFilter::Info),
-        )
-        .logger(
-            log4rs::config::Logger::builder()
-                .appender("stdout")
-                .appender("file")
-                .build("arpa_sqlite_db", LevelFilter::Info),
-        )
-        .logger(
-            log4rs::config::Logger::builder()
-                .appender("stdout")
-                .appender("file")
-                .build("arpa_dal", LevelFilter::Info),
-        )
-        .logger(
-            log4rs::config::Logger::builder()
-                .appender("stdout")
-                .appender("file")
-                .build("dkg_core", LevelFilter::Info),
-        )
-        .logger(
-            log4rs::config::Logger::builder()
-                .appender("stdout")
-                .appender("file")
-                .build("threshold_bls", LevelFilter::Info),
-        )
+        .logger(log4rs::config::Logger::builder().build("node_client", LevelFilter::Info))
+        .logger(log4rs::config::Logger::builder().build("arpa_node", LevelFilter::Info))
+        .logger(log4rs::config::Logger::builder().build("arpa_core", LevelFilter::Info))
+        .logger(log4rs::config::Logger::builder().build("arpa_contract_client", LevelFilter::Info))
+        .logger(log4rs::config::Logger::builder().build("arpa_sqlite_db", LevelFilter::Info))
+        .logger(log4rs::config::Logger::builder().build("arpa_dal", LevelFilter::Info))
+        .logger(log4rs::config::Logger::builder().build("dkg_core", LevelFilter::Info))
+        .logger(log4rs::config::Logger::builder().build("threshold_bls", LevelFilter::Info))
         .build(
             Root::builder()
                 .appender("err_file")
+                .appender("stdout")
+                .appender("file")
                 .build(LevelFilter::Error),
         )
         .unwrap();
