@@ -6,9 +6,15 @@ use crate::{
     queue::{event_queue::EventQueue, EventPublisher},
 };
 use arpa_contract_client::controller::ControllerLogs;
+use arpa_core::{
+    log::{build_task_related_payload, LogType},
+    TaskType,
+};
 use arpa_dal::GroupInfoHandler;
 use async_trait::async_trait;
 use ethers::providers::Middleware;
+use log::info;
+use serde_json::json;
 use std::{marker::PhantomData, sync::Arc};
 use threshold_bls::group::Curve;
 use tokio::sync::RwLock;
@@ -60,6 +66,8 @@ impl<PC: Curve + Sync + Send> Listener for PreGroupingListener<PC> {
                 let eq = self.eq.clone();
 
                 async move {
+                    let chain_id = self.chain_id().await;
+
                     if let Some((node_index, _)) = dkg_task
                         .members
                         .iter()
@@ -71,11 +79,25 @@ impl<PC: Curve + Sync + Send> Listener for PreGroupingListener<PC> {
                         let cache_epoch = group_cache.read().await.get_epoch().unwrap_or(0);
 
                         if cache_index != dkg_task.group_index || cache_epoch != dkg_task.epoch {
+                            info!(
+                                "{}",
+                                build_task_related_payload(
+                                    LogType::TaskReceived,
+                                    "DKG grouping task received.",
+                                    chain_id,
+                                    &[],
+                                    TaskType::DKG,
+                                    json!(dkg_task),
+                                    None
+                                )
+                            );
+
                             let self_index = node_index;
 
                             eq.read()
                                 .await
                                 .publish(NewDKGTask {
+                                    chain_id,
                                     dkg_task,
                                     self_index,
                                 })

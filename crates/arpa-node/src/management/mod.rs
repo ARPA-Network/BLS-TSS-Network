@@ -10,8 +10,8 @@ use super::{
 use anyhow::Result;
 use arpa_contract_client::{adapter::AdapterTransactions, controller::ControllerTransactions};
 use arpa_core::{
-    BLSTaskType, DKGStatus, ExponentialBackoffRetryDescriptor, Group, ListenerDescriptor,
-    ListenerType, PartialSignature, SchedulerError, SchedulerResult, TaskType,
+    BLSTaskType, ComponentTaskType, DKGStatus, ExponentialBackoffRetryDescriptor, Group,
+    ListenerDescriptor, ListenerType, PartialSignature, SchedulerError, SchedulerResult,
     DEFAULT_COMMIT_PARTIAL_SIGNATURE_RETRY_BASE, DEFAULT_COMMIT_PARTIAL_SIGNATURE_RETRY_FACTOR,
     DEFAULT_COMMIT_PARTIAL_SIGNATURE_RETRY_MAX_ATTEMPTS,
     DEFAULT_COMMIT_PARTIAL_SIGNATURE_RETRY_USE_JITTER,
@@ -58,7 +58,7 @@ pub trait NodeService {
 }
 
 pub trait ComponentService {
-    async fn list_fixed_tasks(&self) -> SchedulerResult<Vec<TaskType>>;
+    async fn list_fixed_tasks(&self) -> SchedulerResult<Vec<ComponentTaskType>>;
 
     async fn start_listener(&self, chain_id: usize, task_type: ListenerType)
         -> SchedulerResult<()>;
@@ -182,7 +182,7 @@ where
     <S as ThresholdScheme>::Error: Sync + Send,
     <S as SignatureScheme>::Error: Sync + Send,
 {
-    async fn list_fixed_tasks(&self) -> SchedulerResult<Vec<TaskType>> {
+    async fn list_fixed_tasks(&self) -> SchedulerResult<Vec<ComponentTaskType>> {
         Ok(self
             .get_fixed_task_handler()
             .read()
@@ -236,7 +236,7 @@ where
         self.get_fixed_task_handler()
             .write()
             .await
-            .abort(&TaskType::Listener(chain_id, task_type))
+            .abort(&ComponentTaskType::Listener(chain_id, task_type))
             .await
     }
 }

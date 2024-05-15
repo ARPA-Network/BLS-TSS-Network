@@ -12,8 +12,8 @@ use arpa_contract_client::{
     error::ContractClientError,
 };
 use arpa_core::{
-    log::{build_request_related_payload, build_transaction_receipt_log_payload, LogType},
-    BLSTaskType, PartialSignature, RandomnessTask, SubscriberType, TaskType,
+    log::{build_task_related_payload, build_task_related_transaction_receipt_payload, LogType},
+    BLSTaskType, ComponentTaskType, PartialSignature, RandomnessTask, SubscriberType, TaskType,
     DEFAULT_MAX_RANDOMNESS_FULFILLMENT_ATTEMPTS,
 };
 use arpa_dal::{cache::RandomnessResultCache, BLSResultCacheState};
@@ -177,12 +177,12 @@ impl<PC: Curve> FulfillRandomnessHandler for GeneralFulfillRandomnessHandler<PC>
 
                     info!(
                         "{}",
-                        build_transaction_receipt_log_payload(
+                        build_task_related_transaction_receipt_payload(
                             LogType::FulfillmentFinished,
                             "Randomness fulfilled successfully.",
                             chain_id,
                             &randomness_task_request_id,
-                            BLSTaskType::Randomness,
+                            TaskType::BLS(BLSTaskType::Randomness),
                             randomness_task_json,
                             receipt.transaction_hash,
                             receipt.gas_used.unwrap_or(U256::zero()),
@@ -204,12 +204,12 @@ impl<PC: Curve> FulfillRandomnessHandler for GeneralFulfillRandomnessHandler<PC>
                         ContractClientError::TransactionFailed(receipt) => {
                             error!(
                                 "{}",
-                                build_transaction_receipt_log_payload(
+                                build_task_related_transaction_receipt_payload(
                                     LogType::FulfillmentFailed,
                                     "Randomness fulfillment reverted.",
                                     chain_id,
                                     &randomness_task_request_id,
-                                    BLSTaskType::Randomness,
+                                    TaskType::BLS(BLSTaskType::Randomness),
                                     randomness_task_json,
                                     receipt.transaction_hash,
                                     receipt.gas_used.unwrap_or(U256::zero()),
@@ -220,16 +220,14 @@ impl<PC: Curve> FulfillRandomnessHandler for GeneralFulfillRandomnessHandler<PC>
                         _ => {
                             error!(
                                 "{}",
-                                build_transaction_receipt_log_payload(
+                                build_task_related_payload(
                                     LogType::FulfillmentFailed,
                                     &format!("Randomness fulfillment failed with error: {:?}", e),
                                     chain_id,
                                     &randomness_task_request_id,
-                                    BLSTaskType::Randomness,
+                                    TaskType::BLS(BLSTaskType::Randomness),
                                     randomness_task_json,
-                                    Default::default(),
-                                    U256::zero(),
-                                    U256::zero(),
+                                    None,
                                 )
                             );
                         }
@@ -310,81 +308,86 @@ where
                 .cloned()
                 .collect::<Vec<Vec<u8>>>();
 
-            if let Ok(signature) = SimpleBLSCore::<PC, S>::aggregate(threshold, &partials) {
-                info!(
-                    "{}",
-                    build_request_related_payload(
-                        LogType::AggregatedSignatureFinished,
-                        "Randomness signature aggregated successfully.",
-                        self.chain_id,
-                        &randomness_task.request_id,
-                        BLSTaskType::Randomness,
-                        json!(randomness_task),
-                        None
-                    )
-                );
+            match SimpleBLSCore::<PC, S>::aggregate(threshold, &partials) {
+                Ok(signature) => {
+                    info!(
+                        "{}",
+                        build_task_related_payload(
+                            LogType::AggregatedSignatureFinished,
+                            "Randomness signature aggregated successfully.",
+                            self.chain_id,
+                            &randomness_task.request_id,
+                            TaskType::BLS(BLSTaskType::Randomness),
+                            json!(randomness_task),
+                            None
+                        )
+                    );
 
-                let partial_signatures = partial_signatures
-                    .iter()
-                    .map(|(addr, partial)| {
-                        let eval: Eval<Vec<u8>> = bincode::deserialize(partial)?;
-                        let partial = PartialSignature {
-                            index: eval.index as usize,
-                            signature: eval.value,
-                        };
-                        Ok((*addr, partial))
-                    })
-                    .collect::<Result<_, NodeError>>()?;
+                    let partial_signatures = partial_signatures
+                        .iter()
+                        .map(|(addr, partial)| {
+                            let eval: Eval<Vec<u8>> = bincode::deserialize(partial)?;
+                            let partial = PartialSignature {
+                                index: eval.index as usize,
+                                signature: eval.value,
+                            };
+                            Ok((*addr, partial))
+                        })
+                        .collect::<Result<_, NodeError>>()?;
 
-                let id_address = self.id_address;
+                    let id_address = self.id_address;
 
-                let block_cache = self.block_cache.clone();
+                    let block_cache = self.block_cache.clone();
 
-                let chain_identity = self.chain_identity.clone();
+                    let chain_identity = self.chain_identity.clone();
 
-                let randomness_signature_cache = self.randomness_signature_cache.clone();
+                    let randomness_signature_cache = self.randomness_signature_cache.clone();
 
-                self.ts.write().await.add_task(
-                    TaskType::Subscriber(
-                        self.chain_identity.read().await.get_chain_id(),
-                        SubscriberType::RandomnessSignatureAggregation,
-                    ),
-                    async move {
-                        let handler = GeneralFulfillRandomnessHandler {
-                            id_address,
-                            chain_identity,
-                            block_cache,
-                            randomness_signature_cache,
-                            pc: PhantomData,
-                        };
+                    self.ts.write().await.add_task(
+                        ComponentTaskType::Subscriber(
+                            self.chain_identity.read().await.get_chain_id(),
+                            SubscriberType::RandomnessSignatureAggregation,
+                        ),
+                        async move {
+                            let handler = GeneralFulfillRandomnessHandler {
+                                id_address,
+                                chain_identity,
+                                block_cache,
+                                randomness_signature_cache,
+                                pc: PhantomData,
+                            };
 
-                        if let Err(e) = handler
-                            .handle(
-                                group_index,
-                                randomness_task,
-                                signature.clone(),
-                                partial_signatures,
-                            )
-                            .await
-                        {
-                            error!("{:?}", e);
-                        }
-                    },
-                )?;
-            } else {
-                error!(
-                    "{}",
-                    build_request_related_payload(
-                        LogType::AggregatedSignatureFailed,
-                        "Randomness signature aggregation failed.",
-                        self.chain_id,
-                        &randomness_task.request_id,
-                        BLSTaskType::Randomness,
-                        json!(randomness_task),
-                        None
-                    )
-                );
-                continue;
+                            if let Err(e) = handler
+                                .handle(
+                                    group_index,
+                                    randomness_task,
+                                    signature.clone(),
+                                    partial_signatures,
+                                )
+                                .await
+                            {
+                                error!("{:?}", e);
+                            }
+                        },
+                    )?;
+                }
+                Err(e) => {
+                    error!(
+                        "{}",
+                        build_task_related_payload(
+                            LogType::AggregatedSignatureFailed,
+                            &format!(
+                                "Randomness signature aggregation failed with error: {:?}",
+                                e
+                            ),
+                            self.chain_id,
+                            &randomness_task.request_id,
+                            TaskType::BLS(BLSTaskType::Randomness),
+                            json!(randomness_task),
+                            None
+                        )
+                    );
+                }
             }
         }
 

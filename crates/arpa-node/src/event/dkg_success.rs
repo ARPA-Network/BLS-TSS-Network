@@ -6,12 +6,13 @@ use super::{types::Topic, Event};
 
 #[derive(Clone, Debug)]
 pub struct DKGSuccess<C: Curve> {
+    pub chain_id: usize,
     pub group: Group<C>,
 }
 
 impl<C: Curve> DKGSuccess<C> {
-    pub fn new(group: Group<C>) -> Self {
-        DKGSuccess { group }
+    pub fn new(chain_id: usize, group: Group<C>) -> Self {
+        DKGSuccess { chain_id, group }
     }
 }
 

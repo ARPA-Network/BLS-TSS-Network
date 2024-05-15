@@ -1,7 +1,7 @@
 # Extending DKG Scenario Tests
 
 Prior to this test suite, we started with an empty network and 5 newly registered nodes to test various commitDkg() scenarios. This test suite extends the test cases to cover more scenarios.
-Specifically, we set up various inital states of the network and then call nodeQuit() and nodeRegister() to trigger various grouping and rebalancing behaviors. We then assert the expected network state after each commitDkg() call, as well as making sure that group.epoch is incrementing correctly during the various steps. 
+Specifically, we set up various inital states of the network and then call nodeQuit() and nodeRegister() to trigger various grouping and rebalancing behaviors. We then assert the expected network state after each commitDkg() call, as well as making sure that group.epoch is incrementing correctly during the various steps.
 
 Note: groupMaxCapacity is set to 6 instead of 10 to simplify setup.
 
@@ -34,7 +34,7 @@ Final network status should be (3,6,4), all functional, group_0 and group_1 shou
 group_0: 3 members
 group_1: 3 members
 A new node calls nodeRegister
-Controller should create a new group_2, add the new node into group_2, then try to rebalance. 
+Controller should create a new group_2, add the new node into group_2, then try to rebalance.
 Final network status should be (3,3,1) with group_2 not yet functional.
 
 `ideal number of groups` (How do i get these network into state (3,3,3,3,3)
@@ -97,7 +97,7 @@ cargo test serialize_group -- --nocapture
 use ethers_core::{types::U256, utils::hex}; // ! new
 
     fn serialize_group_test<E: Element>(size: usize) {
-        let empty = bincode::deserialize::<E>(&vec![]);
+        let empty = bincode::deserialize::<E>(&[]);
         assert!(empty.is_err());
 
         let rng = &mut rand::thread_rng();

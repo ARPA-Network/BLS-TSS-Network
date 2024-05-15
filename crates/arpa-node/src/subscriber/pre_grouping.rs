@@ -4,7 +4,10 @@ use crate::{
     event::{new_dkg_task::NewDKGTask, run_dkg::RunDKG, types::Topic},
     queue::{event_queue::EventQueue, EventPublisher, EventSubscriber},
 };
-use arpa_core::DKGStatus;
+use arpa_core::{
+    log::{build_group_related_payload, LogType},
+    DKGStatus,
+};
 use arpa_dal::GroupInfoHandler;
 use async_trait::async_trait;
 use log::{debug, info};
@@ -45,6 +48,7 @@ impl<C: Curve + std::fmt::Debug + Sync + Send + 'static> Subscriber for PreGroup
         debug!("{:?}", topic);
 
         let NewDKGTask {
+            chain_id,
             dkg_task,
             self_index,
         } = payload
@@ -79,8 +83,13 @@ impl<C: Curve + std::fmt::Debug + Sync + Send + 'static> Subscriber for PreGroup
                 self.publish(RunDKG { dkg_task }).await;
 
                 info!(
-                    "received new dkg_task: index:{} epoch:{}, start handling...",
-                    task_group_index, task_epoch
+                    "{}",
+                    build_group_related_payload(
+                        LogType::DKGGroupingStarted,
+                        "start handling new DKG task.",
+                        chain_id,
+                        self.group_cache.read().await.get_group()?
+                    )
                 );
             }
         }

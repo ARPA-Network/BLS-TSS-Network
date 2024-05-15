@@ -7,8 +7,8 @@ use crate::{
 };
 use arpa_contract_client::adapter::AdapterLogs;
 use arpa_core::{
-    log::{build_request_related_payload, LogType},
-    BLSTaskType, RandomnessTask,
+    log::{build_task_related_payload, LogType},
+    BLSTaskType, RandomnessTask, TaskType,
 };
 use arpa_dal::BLSTasksHandler;
 use async_trait::async_trait;
@@ -84,12 +84,12 @@ impl<PC: Curve + Sync + Send> Listener for NewRandomnessTaskListener<PC> {
                     if let Ok(false) = contained_res {
                         info!(
                             "{}",
-                            build_request_related_payload(
-                                LogType::RequestReceived,
+                            build_task_related_payload(
+                                LogType::TaskReceived,
                                 "New randomness task received.",
                                 self.chain_id,
                                 &randomness_task.request_id,
-                                BLSTaskType::Randomness,
+                                TaskType::BLS(BLSTaskType::Randomness),
                                 json!(randomness_task),
                                 None
                             )

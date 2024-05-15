@@ -96,6 +96,7 @@ pub struct Group<C: Curve> {
     pub public_key: Option<C::Point>,
     pub members: BTreeMap<Address, Member<C>>,
     pub committers: Vec<Address>,
+    #[serde(skip)]
     pub c: PhantomData<C>,
 }
 
@@ -161,6 +162,12 @@ impl<C: Curve> std::fmt::Debug for Member<C> {
 pub struct PartialSignature {
     pub index: usize,
     pub signature: Vec<u8>,
+}
+
+#[derive(Clone, Serialize, Deserialize, Debug)]
+pub enum TaskType {
+    DKG,
+    BLS(BLSTaskType),
 }
 
 #[derive(Clone, Serialize, Deserialize, Debug)]

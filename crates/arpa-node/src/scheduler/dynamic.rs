@@ -5,7 +5,7 @@ use tokio::{
     task::JoinHandle,
 };
 
-use super::{DynamicTaskScheduler, TaskScheduler, TaskType};
+use super::{ComponentTaskType, DynamicTaskScheduler, TaskScheduler};
 
 #[derive(Debug, Default)]
 pub struct SimpleDynamicTaskScheduler {
@@ -24,7 +24,7 @@ impl SimpleDynamicTaskScheduler {
 impl TaskScheduler for SimpleDynamicTaskScheduler {
     fn add_task(
         &mut self,
-        _: TaskType,
+        _: ComponentTaskType,
         future: impl Future + Send + 'static,
     ) -> SchedulerResult<()> {
         let (send, recv) = channel::<()>();

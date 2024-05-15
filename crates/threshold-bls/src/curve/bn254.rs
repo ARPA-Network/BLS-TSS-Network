@@ -437,7 +437,7 @@ mod tests {
     }
 
     fn serialize_group_test<E: Element>(size: usize) {
-        let empty = bincode::deserialize::<E>(&vec![]);
+        let empty = bincode::deserialize::<E>(&[]);
         assert!(empty.is_err());
 
         let rng = &mut rand::thread_rng();

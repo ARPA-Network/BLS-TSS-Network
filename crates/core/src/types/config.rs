@@ -995,28 +995,34 @@ impl RelayedChain {
 }
 
 #[derive(Debug, Eq, Clone, Copy, Hash, PartialEq)]
-pub enum TaskType {
+pub enum ComponentTaskType {
     Listener(usize, ListenerType),
     Subscriber(usize, SubscriberType),
     RpcServer(RpcServerType),
     HttpServer(HttpServerType),
 }
 
-impl std::fmt::Display for TaskType {
+impl std::fmt::Display for ComponentTaskType {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         match self {
-            TaskType::Listener(id, l) => f
-                .debug_struct("TaskType")
+            ComponentTaskType::Listener(id, l) => f
+                .debug_struct("ComponentTaskType")
                 .field("chain_id", id)
                 .field("listener", l)
                 .finish(),
-            TaskType::Subscriber(id, s) => f
-                .debug_struct("TaskType")
+            ComponentTaskType::Subscriber(id, s) => f
+                .debug_struct("ComponentTaskType")
                 .field("chain_id", id)
                 .field("subscriber", s)
                 .finish(),
-            TaskType::RpcServer(r) => f.debug_struct("TaskType").field("rpc server", r).finish(),
-            TaskType::HttpServer(h) => f.debug_struct("TaskType").field("http server", h).finish(),
+            ComponentTaskType::RpcServer(r) => f
+                .debug_struct("ComponentTaskType")
+                .field("rpc server", r)
+                .finish(),
+            ComponentTaskType::HttpServer(h) => f
+                .debug_struct("ComponentTaskType")
+                .field("http server", h)
+                .finish(),
         }
     }
 }

@@ -19,8 +19,9 @@ use crate::{
     },
 };
 use arpa_core::{
-    ChainIdentity, GeneralMainChainIdentity, GeneralRelayedChainIdentity, ListenerDescriptor,
-    ListenerType, RandomnessTask, SchedulerError, SchedulerResult, TaskType, TimeLimitDescriptor,
+    ChainIdentity, ComponentTaskType, GeneralMainChainIdentity, GeneralRelayedChainIdentity,
+    ListenerDescriptor, ListenerType, RandomnessTask, SchedulerError, SchedulerResult,
+    TimeLimitDescriptor,
 };
 use arpa_dal::cache::{InMemoryBlockInfoCache, RandomnessResultCache};
 use arpa_dal::{
@@ -171,7 +172,7 @@ where
                 let p_block = BlockListener::new(self.id(), self.get_chain_identity(), eq);
 
                 fs.write().await.add_task(
-                    TaskType::Listener(self.id, ListenerType::Block),
+                    ComponentTaskType::Listener(self.id, ListenerType::Block),
                     async move {
                         if let Err(e) = p_block
                             .start(
@@ -191,7 +192,7 @@ where
                     PreGroupingListener::new(self.get_chain_identity(), self.get_group_cache(), eq);
 
                 fs.write().await.add_task(
-                    TaskType::Listener(self.id, ListenerType::PreGrouping),
+                    ComponentTaskType::Listener(self.id, ListenerType::PreGrouping),
                     async move {
                         if let Err(e) = p_pre_grouping
                             .start(
@@ -214,7 +215,7 @@ where
                 );
 
                 fs.write().await.add_task(
-                    TaskType::Listener(self.id, ListenerType::PostCommitGrouping),
+                    ComponentTaskType::Listener(self.id, ListenerType::PostCommitGrouping),
                     async move {
                         if let Err(e) = p_post_commit_grouping
                             .start(
@@ -238,7 +239,7 @@ where
                 );
 
                 fs.write().await.add_task(
-                    TaskType::Listener(self.id, ListenerType::PostGrouping),
+                    ComponentTaskType::Listener(self.id, ListenerType::PostGrouping),
                     async move {
                         if let Err(e) = p_post_grouping
                             .start(
@@ -265,7 +266,7 @@ where
                 );
 
                 fs.write().await.add_task(
-                    TaskType::Listener(self.id, ListenerType::NewRandomnessTask),
+                    ComponentTaskType::Listener(self.id, ListenerType::NewRandomnessTask),
                     async move {
                         if let Err(e) = p_new_randomness_task
                             .start(
@@ -295,7 +296,7 @@ where
                 );
 
                 fs.write().await.add_task(
-                    TaskType::Listener(self.id, ListenerType::ReadyToHandleRandomnessTask),
+                    ComponentTaskType::Listener(self.id, ListenerType::ReadyToHandleRandomnessTask),
                     async move {
                         if let Err(e) = p_ready_to_handle_randomness_task
                             .start(
@@ -324,7 +325,10 @@ where
                     );
 
                 fs.write().await.add_task(
-                    TaskType::Listener(self.id, ListenerType::RandomnessSignatureAggregation),
+                    ComponentTaskType::Listener(
+                        self.id,
+                        ListenerType::RandomnessSignatureAggregation,
+                    ),
                     async move {
                         if let Err(e) = p_randomness_signature_aggregation
                             .start(
@@ -655,7 +659,7 @@ where
                 let p_block = BlockListener::new(self.id(), self.get_chain_identity(), eq);
 
                 fs.write().await.add_task(
-                    TaskType::Listener(self.id, ListenerType::Block),
+                    ComponentTaskType::Listener(self.id, ListenerType::Block),
                     async move {
                         if let Err(e) = p_block
                             .start(
@@ -682,7 +686,7 @@ where
                 );
 
                 fs.write().await.add_task(
-                    TaskType::Listener(self.id, ListenerType::NewRandomnessTask),
+                    ComponentTaskType::Listener(self.id, ListenerType::NewRandomnessTask),
                     async move {
                         if let Err(e) = p_new_randomness_task
                             .start(
@@ -712,7 +716,7 @@ where
                 );
 
                 fs.write().await.add_task(
-                    TaskType::Listener(self.id, ListenerType::ReadyToHandleRandomnessTask),
+                    ComponentTaskType::Listener(self.id, ListenerType::ReadyToHandleRandomnessTask),
                     async move {
                         if let Err(e) = p_ready_to_handle_randomness_task
                             .start(
@@ -741,7 +745,10 @@ where
                     );
 
                 fs.write().await.add_task(
-                    TaskType::Listener(self.id, ListenerType::RandomnessSignatureAggregation),
+                    ComponentTaskType::Listener(
+                        self.id,
+                        ListenerType::RandomnessSignatureAggregation,
+                    ),
                     async move {
                         if let Err(e) = p_randomness_signature_aggregation
                             .start(

@@ -1,9 +1,13 @@
 use arpa_contract_client::controller::ControllerClientBuilder;
 use arpa_contract_client::controller::ControllerViews;
+use arpa_contract_client::error::ContractClientError;
 use arpa_contract_client::node_registry::{NodeRegistryClientBuilder, NodeRegistryTransactions};
 use arpa_core::address_to_string;
 use arpa_core::build_wallet_from_config;
+use arpa_core::log::build_general_payload;
+use arpa_core::log::build_transaction_receipt_payload;
 use arpa_core::log::encoder::JsonEncoder;
+use arpa_core::log::LogType;
 use arpa_core::Config;
 use arpa_core::GeneralMainChainIdentity;
 use arpa_core::GeneralRelayedChainIdentity;
@@ -21,6 +25,7 @@ use ethers::providers::Provider;
 use ethers::providers::Ws;
 use ethers::signers::Signer;
 use ethers::signers::Wallet;
+use ethers::types::U256;
 use log::{error, info, LevelFilter};
 use log4rs::append::console::ConsoleAppender;
 use log4rs::append::rolling_file::policy::compound::roll::delete::DeleteRoller;
@@ -170,6 +175,8 @@ async fn start(
     wallet: Wallet<SigningKey>,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let id_address = wallet.address();
+
+    let l1_chain_id = config.get_main_chain_id();
 
     let data_path = PathBuf::from(config.get_data_path());
 
@@ -364,9 +371,49 @@ async fn start(
             node_registry_address,
         );
 
-        node_registry_client
+        match node_registry_client
             .node_register(dkg_public_key_to_register.unwrap(), is_eigenlayer)
-            .await?;
+            .await
+        {
+            Ok(receipt) => {
+                info!(
+                    "{}",
+                    build_transaction_receipt_payload(
+                        LogType::NodeRegistered,
+                        "Node registered",
+                        l1_chain_id,
+                        receipt.transaction_hash,
+                        receipt.gas_used.unwrap_or(U256::zero()),
+                        receipt.effective_gas_price.unwrap_or(U256::zero()),
+                    )
+                );
+            }
+            Err(e) => match e {
+                ContractClientError::TransactionFailed(receipt) => {
+                    error!(
+                        "{}",
+                        build_transaction_receipt_payload(
+                            LogType::NodeRegisterFailed,
+                            "Node register failed",
+                            l1_chain_id,
+                            receipt.transaction_hash,
+                            receipt.gas_used.unwrap_or(U256::zero()),
+                            receipt.effective_gas_price.unwrap_or(U256::zero()),
+                        )
+                    );
+                }
+                _ => {
+                    error!(
+                        "{}",
+                        build_general_payload(
+                            LogType::NodeRegisterFailed,
+                            &format!("Node register failed with error: {:?}", e),
+                            Some(l1_chain_id)
+                        )
+                    );
+                }
+            },
+        }
     }
 
     handle.wait_task().await;

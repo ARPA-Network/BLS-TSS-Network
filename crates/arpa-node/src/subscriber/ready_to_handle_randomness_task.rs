@@ -9,9 +9,9 @@ use crate::{
     scheduler::{dynamic::SimpleDynamicTaskScheduler, TaskScheduler},
 };
 use arpa_core::{
-    log::{build_request_related_payload, LogType},
-    u256_to_vec, BLSTaskType, ExponentialBackoffRetryDescriptor, RandomnessTask, SubscriberType,
-    TaskType,
+    log::{build_task_related_payload, LogType},
+    u256_to_vec, BLSTaskType, ComponentTaskType, ExponentialBackoffRetryDescriptor, RandomnessTask,
+    SubscriberType, TaskType,
 };
 use arpa_dal::cache::RandomnessResultCache;
 use arpa_dal::{BLSTasksHandler, GroupInfoHandler, SignatureResultCacheHandler};
@@ -146,39 +146,41 @@ where
             ]
             .concat();
 
-            if let Ok(partial_signature) = SimpleBLSCore::<PC, S>::partial_sign(
+            match SimpleBLSCore::<PC, S>::partial_sign(
                 self.group_cache.read().await.get_secret_share()?,
                 &actual_seed,
             ) {
-                info!(
-                    "{}",
-                    build_request_related_payload(
-                        LogType::PartialSignatureFinished,
-                        "Partial signature generated.",
-                        self.chain_id,
-                        &task.request_id,
-                        BLSTaskType::Randomness,
-                        json!(task),
-                        None
-                    )
-                );
+                Ok(partial_signature) => {
+                    info!(
+                        "{}",
+                        build_task_related_payload(
+                            LogType::PartialSignatureFinished,
+                            "Partial signature generated.",
+                            self.chain_id,
+                            &task.request_id,
+                            TaskType::BLS(BLSTaskType::Randomness),
+                            json!(task),
+                            None
+                        )
+                    );
 
-                self.send_partial_signature(task, actual_seed, partial_signature)
-                    .await?;
-            } else {
-                error!(
-                    "{}",
-                    build_request_related_payload(
-                        LogType::PartialSignatureFailed,
-                        "Partial signature generation failed.",
-                        self.chain_id,
-                        &task.request_id,
-                        BLSTaskType::Randomness,
-                        json!(task),
-                        None
-                    )
-                );
-                continue;
+                    self.send_partial_signature(task, actual_seed, partial_signature)
+                        .await?;
+                }
+                Err(e) => {
+                    error!(
+                        "{}",
+                        build_task_related_payload(
+                            LogType::PartialSignatureFailed,
+                            &format!("Partial signature generation failed with error: {:?}", e),
+                            self.chain_id,
+                            &task.request_id,
+                            TaskType::BLS(BLSTaskType::Randomness),
+                            json!(task),
+                            None
+                        )
+                    );
+                }
             }
         }
 
@@ -243,7 +245,7 @@ where
             let task_json = json!(task);
 
             self.ts.write().await.add_task(
-                TaskType::Subscriber(chain_id, SubscriberType::SendingPartialSignature),
+                ComponentTaskType::Subscriber(chain_id, SubscriberType::SendingPartialSignature),
                 async move {
                     let committer_id = committer.get_committer_id_address();
 
@@ -260,12 +262,12 @@ where
                         Ok(true) => {
                             info!(
                                 "{}",
-                                build_request_related_payload(
+                                build_task_related_payload(
                                     LogType::PartialSignatureSent,
                                     "Partial signature sent and accepted.",
                                     chain_id,
                                     &request_id,
-                                    BLSTaskType::Randomness,
+                                    TaskType::BLS(BLSTaskType::Randomness),
                                     task_json,
                                     Some(committer_id)
                                 )
@@ -274,12 +276,12 @@ where
                         Ok(false) => {
                             info!(
                                 "{}",
-                                build_request_related_payload(
+                                build_task_related_payload(
                                     LogType::PartialSignatureSendingRejected,
                                     "Partial signature sent and rejected.",
                                     chain_id,
                                     &request_id,
-                                    BLSTaskType::Randomness,
+                                    TaskType::BLS(BLSTaskType::Randomness),
                                     task_json,
                                     Some(committer_id)
                                 )
@@ -288,7 +290,7 @@ where
                         Err(e) => {
                             error!(
                                 "{}",
-                                build_request_related_payload(
+                                build_task_related_payload(
                                     LogType::PartialSignatureSendingFailed,
                                     &format!(
                                         "Partial signature sending failed with error: {:?}",
@@ -296,7 +298,7 @@ where
                                     ),
                                     chain_id,
                                     &request_id,
-                                    BLSTaskType::Randomness,
+                                    TaskType::BLS(BLSTaskType::Randomness),
                                     task_json,
                                     Some(committer_id)
                                 )
@@ -350,7 +352,7 @@ where
             self.commit_partial_signature_retry_descriptor;
 
         self.ts.write().await.add_task(
-            TaskType::Subscriber(chain_id, SubscriberType::ReadyToHandleRandomnessTask),
+            ComponentTaskType::Subscriber(chain_id, SubscriberType::ReadyToHandleRandomnessTask),
             async move {
                 let handler = GeneralRandomnessHandler {
                     chain_id,
