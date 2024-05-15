@@ -12,7 +12,7 @@ path = "src/user_shell.rs"
 arpa-contract-client = { path = "../contract-client" }
 arpa-core = { path = "../core" }
 
-tokio = { version = "1.20.1", features = ["full"] }
+tokio = { version = "1.37.0", features = ["full"] }
 serde = "1.0.106"
 serde_yaml = "0.8"
 ethers.workspace = true
