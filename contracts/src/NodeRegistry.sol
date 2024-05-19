@@ -230,6 +230,7 @@ contract NodeRegistry is UUPSUpgradeable, INodeRegistry, INodeRegistryOwner, Own
             IServiceManager(_config.serviceManagerContractAddress).slashDelegationStaking(
                 nodeIdAddress, stakingRewardPenalty
             );
+            IServiceManager(_config.serviceManagerContractAddress).deregisterOperator(nodeIdAddress);
         } else {
             // slash staking reward in Staking contract
             INodeStaking(_config.stakingContractAddress).slashDelegationReward(nodeIdAddress, stakingRewardPenalty);
