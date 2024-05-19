@@ -112,24 +112,26 @@ impl<PC: Curve + Sync + Send + 'static> DKGPostProcessHandler for GeneralDKGPost
                     );
                 }
 
-                for relayed_chain_id in self.supported_relayed_chains.iter() {
-                    if let Ok(receipt) = controller_relayer_client
-                        .relay_group(*relayed_chain_id, group_index)
-                        .await
-                    {
-                        info!(
-                            "{}",
-                            build_group_related_transaction_receipt_payload(
-                                LogType::DKGPostProcessGroupRelayFinished,
-                                "DKG post process group relay finished.",
-                                chain_id,
-                                self.group_cache.read().await.get_group()?,
-                                Some(*relayed_chain_id),
-                                receipt.transaction_hash,
-                                receipt.gas_used.unwrap_or(U256::zero()),
-                                receipt.effective_gas_price.unwrap_or(U256::zero())
-                            )
-                        );
+                if self.group_cache.read().await.get_group()?.state {
+                    for relayed_chain_id in self.supported_relayed_chains.iter() {
+                        if let Ok(receipt) = controller_relayer_client
+                            .relay_group(*relayed_chain_id, group_index)
+                            .await
+                        {
+                            info!(
+                                "{}",
+                                build_group_related_transaction_receipt_payload(
+                                    LogType::DKGPostProcessGroupRelayFinished,
+                                    "DKG post process group relay finished.",
+                                    chain_id,
+                                    self.group_cache.read().await.get_group()?,
+                                    Some(*relayed_chain_id),
+                                    receipt.transaction_hash,
+                                    receipt.gas_used.unwrap_or(U256::zero()),
+                                    receipt.effective_gas_price.unwrap_or(U256::zero())
+                                )
+                            );
+                        }
                     }
                 }
             };
