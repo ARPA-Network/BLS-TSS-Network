@@ -21,19 +21,3 @@ echo "Printing updated CloudWatch configuration file at: /opt/aws/amazon-cloudwa
 
 # run cat /opt/aws/amazon-cloudwatch-agent/bin/default_linux_config.json
 cat /opt/aws/amazon-cloudwatch-agent/bin/default_linux_config.json 
-
-# exit 1
-
-
-# #####################################
-# # Update Log file path in CW Config #
-# #####################################
-
-# # Extract the logger.log_file_path from the app config file
-# log_file_path=$(awk '/log_file_path:/ {print $2}' /app/config.yml)
-# echo "Extracted log_file_path from app config: $log_file_path"
-
-# # Replace the file_path in the CloudWatch configuration file
-# sed -i "s#\"file_path\": \".*\"#\"file_path\": \"/app/$log_file_path/node.log\"#" /opt/aws/amazon-cloudwatch-agent/bin/default_linux_config.json
-
-# echo "Updated file_path in CloudWatch configuration file."

@@ -57,13 +57,13 @@ COPY --from=build_cw_agent /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-
 COPY --from=build_cw_agent /opt/aws/amazon-cloudwatch-agent /opt/aws/amazon-cloudwatch-agent
 ENV RUN_IN_CONTAINER="True"
 
-# Grab cloudwatch push token from secret mount 
-RUN --mount=type=secret,id=cloudwatch_upload_token \
-  cat /run/secrets/cloudwatch_upload_token > /root/.aws/credentials
-
 # Copy the AWS config file to the container
 COPY docker/node-client/config /root/.aws/config
 RUN chmod 600 /root/.aws/config
+
+# Grab cloudwatch push token from secret mount 
+RUN --mount=type=secret,id=cloudwatch_upload_token \
+  cat /run/secrets/cloudwatch_upload_token > /root/.aws/credentials
 
 # Copy the cloudwatch agent configuration file to the container
 COPY docker/node-client/cloudwatch-agent-config.json /opt/aws/amazon-cloudwatch-agent/bin/default_linux_config.json
