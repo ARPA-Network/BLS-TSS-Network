@@ -28,4 +28,4 @@ log = "0.4"
 threshold-bls = { path = "../threshold-bls", default-features = false, features = [
     "bn254",
 ] }
-tokio = { version = "0.2.21", features = ["rt-core", "macros"] }
+tokio = { version = "1.37.0", features = ["full"] }

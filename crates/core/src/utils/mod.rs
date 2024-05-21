@@ -55,6 +55,22 @@ pub fn pad_to_bytes32(s: &[u8]) -> Option<[u8; 32]> {
     Some(result)
 }
 
+pub fn ser_bytes_in_hex_string<T, S>(v: &T, s: S) -> Result<S::Ok, S::Error>
+where
+    T: AsRef<[u8]>,
+    S: serde::Serializer,
+{
+    // add "0x" prefix to the hex string
+    s.serialize_str(&format!("0x{}", hex::encode(v.as_ref())))
+}
+
+pub fn ser_u256_in_dec_string<S>(v: &U256, s: S) -> Result<S::Ok, S::Error>
+where
+    S: serde::Serializer,
+{
+    s.serialize_str(&format!("{}", v))
+}
+
 /// Converts an Ethereum address to the checksum encoding
 /// Ref: <https://github.com/ethereum/EIPs/blob/master/EIPS/eip-55.md>
 pub fn to_checksum(addr: &Address, chain_id: Option<u8>) -> String {

@@ -1,13 +1,13 @@
 pub mod dynamic;
 pub mod fixed;
-use arpa_core::{SchedulerResult, TaskType};
+use arpa_core::{ComponentTaskType, SchedulerResult};
 use async_trait::async_trait;
 use futures::Future;
 
 pub trait TaskScheduler {
     fn add_task(
         &mut self,
-        task_type: TaskType,
+        task_type: ComponentTaskType,
         future: impl Future + Send + 'static,
     ) -> SchedulerResult<()>;
 }
@@ -16,9 +16,9 @@ pub trait TaskScheduler {
 pub trait FixedTaskScheduler: TaskScheduler {
     async fn join(mut self);
 
-    async fn abort(&mut self, task_type: &TaskType) -> SchedulerResult<()>;
+    async fn abort(&mut self, task_type: &ComponentTaskType) -> SchedulerResult<()>;
 
-    fn get_tasks(&self) -> Vec<&TaskType>;
+    fn get_tasks(&self) -> Vec<&ComponentTaskType>;
 }
 
 pub trait DynamicTaskScheduler: TaskScheduler {

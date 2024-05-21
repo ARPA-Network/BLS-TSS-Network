@@ -1237,7 +1237,7 @@ async fn randcast(args: ArgMatches, context: &mut Context) -> anyhow::Result<Opt
             let mut results = logs
                 .iter()
                 .map(|log| RandomnessRequest {
-                    request_id: hex::encode(log.request_id),
+                    request_id: format!("0x{}", hex::encode(log.request_id)),
                     sub_id: log.sub_id,
                     group_index: log.group_index,
                     seed: log.seed,
@@ -1271,7 +1271,7 @@ async fn randcast(args: ArgMatches, context: &mut Context) -> anyhow::Result<Opt
                 let fulfillments = fulfillment_filter.query().await?;
                 fulfillments.iter().for_each(|fulfillment| {
                     result.fulfillment_result = Some(RandomnessRequestResult {
-                        request_id: hex::encode(fulfillment.request_id),
+                        request_id: format!("0x{}", hex::encode(fulfillment.request_id)),
                         group_index: fulfillment.group_index,
                         committer: fulfillment.committer,
                         participant_members: fulfillment.participant_members.clone(),
@@ -1404,7 +1404,10 @@ async fn randcast(args: ArgMatches, context: &mut Context) -> anyhow::Result<Opt
                 .get_pending_request_commitment(pad_to_bytes32(&hex::decode(r_id)?).unwrap())
                 .await?;
 
-            Ok(Some(hex::encode(pending_request_commitment)))
+            Ok(Some(format!(
+                "0x{}",
+                hex::encode(pending_request_commitment)
+            )))
         }
 
         _ => panic!("Unknown subcommand {:?}", args.subcommand_name()),

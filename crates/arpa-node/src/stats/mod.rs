@@ -87,7 +87,9 @@ mod tests {
         http::{self},
         test,
     };
-    use arpa_core::{Config, GeneralMainChainIdentity, ListenerType, RandomnessTask, TaskType};
+    use arpa_core::{
+        ComponentTaskType, Config, GeneralMainChainIdentity, ListenerType, RandomnessTask,
+    };
     use arpa_dal::{
         cache::{
             InMemoryBLSTasksQueue, InMemoryGroupInfoCache, InMemoryNodeInfoCache,
@@ -166,7 +168,8 @@ mod tests {
             .get_fixed_task_handler()
             .write()
             .await
-            .add_task(TaskType::Listener(0, ListenerType::Block), async {})
+            .add_task(ComponentTaskType::Listener(0, ListenerType::Block), async {
+            })
             .unwrap();
 
         Arc::new(RwLock::new(context))

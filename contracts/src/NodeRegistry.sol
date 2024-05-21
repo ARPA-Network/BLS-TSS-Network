@@ -235,7 +235,6 @@ contract NodeRegistry is UUPSUpgradeable, INodeRegistry, INodeRegistryOwner, Own
             INodeStaking(_config.stakingContractAddress).slashDelegationReward(nodeIdAddress, stakingRewardPenalty);
         }
 
-        // remove node from group if handleGroup is true and deactivate it
         _freezeNode(nodeIdAddress, pendingBlock);
 
         emit NodeSlashed(nodeIdAddress, stakingRewardPenalty, pendingBlock);

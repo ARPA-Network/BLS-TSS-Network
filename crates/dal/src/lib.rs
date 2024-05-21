@@ -35,6 +35,8 @@ pub trait SignatureResultCacheHandler<T: ResultCache>:
 }
 
 pub trait BlockInfoFetcher {
+    fn get_chain_id(&self) -> usize;
+
     fn get_block_height(&self) -> usize;
 
     fn get_block_time(&self) -> usize;

@@ -97,12 +97,12 @@ impl ContractSerialize for bn254::G2 {
 
 pub fn scalar_to_hex<S: Scalar>(s: &S) -> String {
     let bytes = bincode::serialize(s).unwrap();
-    hex::encode(bytes)
+    format!("0x{}", hex::encode(bytes))
 }
 
 pub fn point_to_hex<P: Point>(p: &P) -> String {
     let bytes = bincode::serialize(p).unwrap();
-    hex::encode(bytes)
+    format!("0x{}", hex::encode(bytes))
 }
 
 #[cfg(test)]

@@ -4,7 +4,10 @@ use crate::{
     event::{dkg_success::DKGSuccess, types::Topic},
     queue::{event_queue::EventQueue, EventSubscriber},
 };
-use arpa_core::DKGStatus;
+use arpa_core::{
+    log::{build_group_related_payload, LogType},
+    DKGStatus,
+};
 use arpa_dal::GroupInfoHandler;
 use async_trait::async_trait;
 use log::{debug, info};
@@ -39,7 +42,7 @@ impl<PC: Curve + std::fmt::Debug + Sync + Send + 'static> Subscriber
     async fn notify(&self, topic: Topic, payload: &(dyn DebuggableEvent)) -> NodeResult<()> {
         debug!("{:?}", topic);
 
-        let DKGSuccess { group } = payload
+        let DKGSuccess { chain_id, group } = payload
             .as_any()
             .downcast_ref::<DKGSuccess<PC>>()
             .unwrap()
@@ -64,8 +67,13 @@ impl<PC: Curve + std::fmt::Debug + Sync + Send + 'static> Subscriber
                 .await?;
 
             info!(
-                "Group index:{} epoch:{} is available, committers saved.",
-                group.index, group.epoch
+                "{}",
+                build_group_related_payload(
+                    LogType::DKGGroupingAvailable,
+                    "Group is available, committers saved.",
+                    chain_id,
+                    self.group_cache.read().await.get_group()?
+                )
             );
         }
 

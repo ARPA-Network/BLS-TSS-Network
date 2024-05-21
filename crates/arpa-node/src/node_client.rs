@@ -1,9 +1,13 @@
 use arpa_contract_client::controller::ControllerClientBuilder;
 use arpa_contract_client::controller::ControllerViews;
+use arpa_contract_client::error::ContractClientError;
 use arpa_contract_client::node_registry::{NodeRegistryClientBuilder, NodeRegistryTransactions};
 use arpa_core::address_to_string;
 use arpa_core::build_wallet_from_config;
+use arpa_core::log::build_general_payload;
+use arpa_core::log::build_transaction_receipt_payload;
 use arpa_core::log::encoder::JsonEncoder;
+use arpa_core::log::LogType;
 use arpa_core::Config;
 use arpa_core::GeneralMainChainIdentity;
 use arpa_core::GeneralRelayedChainIdentity;
@@ -16,10 +20,13 @@ use arpa_node::context::chain::types::GeneralRelayedChain;
 use arpa_node::context::types::GeneralContext;
 use arpa_node::context::{Context, TaskWaiter};
 use arpa_sqlite_db::SqliteDB;
+use ethers::core::k256::ecdsa::SigningKey;
 use ethers::providers::Provider;
 use ethers::providers::Ws;
 use ethers::signers::Signer;
-use log::{info, LevelFilter};
+use ethers::signers::Wallet;
+use ethers::types::U256;
+use log::{error, info, LevelFilter};
 use log4rs::append::console::ConsoleAppender;
 use log4rs::append::rolling_file::policy::compound::roll::delete::DeleteRoller;
 use log4rs::append::rolling_file::policy::compound::trigger::size::SizeTrigger;
@@ -38,6 +45,8 @@ use threshold_bls::schemes::bn254::G2Scheme;
 use threshold_bls::serialize::point_to_hex;
 use threshold_bls::sig::Scheme;
 use tokio::sync::RwLock;
+
+const VERSION: &str = env!("CARGO_PKG_VERSION");
 
 #[derive(StructOpt, Debug)]
 #[structopt(name = "Arpa Node")]
@@ -61,13 +70,15 @@ fn init_logger(
 ) {
     let stdout = ConsoleAppender::builder()
         .encoder(Box::new(
-            JsonEncoder::new(node_id.to_string(), l1_chain_id).context_logging(context_logging),
+            JsonEncoder::new(node_id.to_string(), l1_chain_id, VERSION.to_string())
+                .context_logging(context_logging),
         ))
         .build();
 
     let rolling_file = RollingFileAppender::builder()
         .encoder(Box::new(
-            JsonEncoder::new(node_id.to_string(), l1_chain_id).context_logging(context_logging),
+            JsonEncoder::new(node_id.to_string(), l1_chain_id, VERSION.to_string())
+                .context_logging(context_logging),
         ))
         .build(
             format!(
@@ -87,7 +98,8 @@ fn init_logger(
 
     let rolling_err_file = RollingFileAppender::builder()
         .encoder(Box::new(
-            JsonEncoder::new(node_id.to_string(), l1_chain_id).context_logging(context_logging),
+            JsonEncoder::new(node_id.to_string(), l1_chain_id, VERSION.to_string())
+                .context_logging(context_logging),
         ))
         .build(
             format!("{}/node_err.log", log_file_path),
@@ -106,57 +118,19 @@ fn init_logger(
                 .filter(Box::new(ThresholdFilter::new(LevelFilter::Error)))
                 .build("err_file", Box::new(rolling_err_file)),
         )
-        .logger(
-            log4rs::config::Logger::builder()
-                .appender("stdout")
-                .appender("file")
-                .build("node_client", LevelFilter::Info),
-        )
-        .logger(
-            log4rs::config::Logger::builder()
-                .appender("stdout")
-                .appender("file")
-                .build("arpa_node", LevelFilter::Info),
-        )
-        .logger(
-            log4rs::config::Logger::builder()
-                .appender("stdout")
-                .appender("file")
-                .build("arpa_core", LevelFilter::Info),
-        )
-        .logger(
-            log4rs::config::Logger::builder()
-                .appender("stdout")
-                .appender("file")
-                .build("arpa_contract_client", LevelFilter::Info),
-        )
-        .logger(
-            log4rs::config::Logger::builder()
-                .appender("stdout")
-                .appender("file")
-                .build("arpa_sqlite_db", LevelFilter::Info),
-        )
-        .logger(
-            log4rs::config::Logger::builder()
-                .appender("stdout")
-                .appender("file")
-                .build("arpa_dal", LevelFilter::Info),
-        )
-        .logger(
-            log4rs::config::Logger::builder()
-                .appender("stdout")
-                .appender("file")
-                .build("dkg_core", LevelFilter::Info),
-        )
-        .logger(
-            log4rs::config::Logger::builder()
-                .appender("stdout")
-                .appender("file")
-                .build("threshold_bls", LevelFilter::Info),
-        )
+        .logger(log4rs::config::Logger::builder().build("node_client", LevelFilter::Info))
+        .logger(log4rs::config::Logger::builder().build("arpa_node", LevelFilter::Info))
+        .logger(log4rs::config::Logger::builder().build("arpa_core", LevelFilter::Info))
+        .logger(log4rs::config::Logger::builder().build("arpa_contract_client", LevelFilter::Info))
+        .logger(log4rs::config::Logger::builder().build("arpa_sqlite_db", LevelFilter::Info))
+        .logger(log4rs::config::Logger::builder().build("arpa_dal", LevelFilter::Info))
+        .logger(log4rs::config::Logger::builder().build("dkg_core", LevelFilter::Info))
+        .logger(log4rs::config::Logger::builder().build("threshold_bls", LevelFilter::Info))
         .build(
             Root::builder()
                 .appender("err_file")
+                .appender("stdout")
+                .appender("file")
                 .build(LevelFilter::Error),
         )
         .unwrap();
@@ -188,6 +162,21 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     );
 
     info!("{:?}", config);
+
+    if let Err(e) = start(config, wallet).await {
+        error!("{:?}", e);
+    };
+
+    Ok(())
+}
+
+async fn start(
+    config: Config,
+    wallet: Wallet<SigningKey>,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let id_address = wallet.address();
+
+    let l1_chain_id = config.get_main_chain_id();
 
     let data_path = PathBuf::from(config.get_data_path());
 
@@ -382,9 +371,49 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             node_registry_address,
         );
 
-        node_registry_client
+        match node_registry_client
             .node_register(dkg_public_key_to_register.unwrap(), is_eigenlayer)
-            .await?;
+            .await
+        {
+            Ok(receipt) => {
+                info!(
+                    "{}",
+                    build_transaction_receipt_payload(
+                        LogType::NodeRegistered,
+                        "Node registered",
+                        l1_chain_id,
+                        receipt.transaction_hash,
+                        receipt.gas_used.unwrap_or(U256::zero()),
+                        receipt.effective_gas_price.unwrap_or(U256::zero()),
+                    )
+                );
+            }
+            Err(e) => match e {
+                ContractClientError::TransactionFailed(receipt) => {
+                    error!(
+                        "{}",
+                        build_transaction_receipt_payload(
+                            LogType::NodeRegisterFailed,
+                            "Node register failed",
+                            l1_chain_id,
+                            receipt.transaction_hash,
+                            receipt.gas_used.unwrap_or(U256::zero()),
+                            receipt.effective_gas_price.unwrap_or(U256::zero()),
+                        )
+                    );
+                }
+                _ => {
+                    error!(
+                        "{}",
+                        build_general_payload(
+                            LogType::NodeRegisterFailed,
+                            &format!("Node register failed with error: {:?}", e),
+                            Some(l1_chain_id)
+                        )
+                    );
+                }
+            },
+        }
     }
 
     handle.wait_task().await;

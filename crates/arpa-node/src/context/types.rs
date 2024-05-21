@@ -16,8 +16,9 @@ use crate::{
     stats,
 };
 use arpa_core::{
-    Config, GeneralMainChainIdentity, GeneralRelayedChainIdentity, HttpServerType, RandomnessTask,
-    RpcServerType, SchedulerResult, TaskType, DEFAULT_DYNAMIC_TASK_CLEANER_INTERVAL_MILLIS,
+    ComponentTaskType, Config, GeneralMainChainIdentity, GeneralRelayedChainIdentity,
+    HttpServerType, RandomnessTask, RpcServerType, SchedulerResult,
+    DEFAULT_DYNAMIC_TASK_CLEANER_INTERVAL_MILLIS,
 };
 use arpa_dal::cache::RandomnessResultCache;
 use async_trait::async_trait;
@@ -249,7 +250,7 @@ where
         context: Arc<RwLock<GeneralContext<PC, S>>>,
     ) -> SchedulerResult<()> {
         self.add_task(
-            TaskType::RpcServer(RpcServerType::Committer),
+            ComponentTaskType::RpcServer(RpcServerType::Committer),
             committer_server::start_committer_server(rpc_endpoint, context),
         )
     }
@@ -274,7 +275,7 @@ where
         context: Arc<RwLock<GeneralContext<PC, S>>>,
     ) -> SchedulerResult<()> {
         self.add_task(
-            TaskType::RpcServer(RpcServerType::Management),
+            ComponentTaskType::RpcServer(RpcServerType::Management),
             management_server::start_management_server(rpc_endpoint, context),
         )
     }
@@ -299,7 +300,7 @@ where
         context: Arc<RwLock<GeneralContext<PC, S>>>,
     ) -> SchedulerResult<()> {
         self.add_task(
-            TaskType::HttpServer(HttpServerType::Statistics),
+            ComponentTaskType::HttpServer(HttpServerType::Statistics),
             stats::start_statistics_server(rpc_endpoint, context),
         )
     }

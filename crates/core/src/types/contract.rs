@@ -18,7 +18,10 @@ impl std::fmt::Debug for Node {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("Node")
             .field("id_address", &address_to_string(self.id_address))
-            .field("id_public_key", &hex::encode(&self.id_public_key))
+            .field(
+                "id_public_key",
+                &format!("0x{}", hex::encode(&self.id_public_key)),
+            )
             .field("state", &self.state)
             .field("pending_until_block", &self.pending_until_block)
             .finish()

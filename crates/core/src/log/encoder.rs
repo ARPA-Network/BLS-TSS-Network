@@ -51,15 +51,17 @@ pub struct JsonEncoder {
     node_id: String,
     l1_chain_id: usize,
     show_context: bool,
+    version: String,
 }
 
 impl JsonEncoder {
     /// Returns a new `JsonEncoder` with a default configuration.
-    pub fn new(node_id: String, l1_chain_id: usize) -> Self {
+    pub fn new(node_id: String, l1_chain_id: usize, version: String) -> Self {
         JsonEncoder {
             node_id,
             l1_chain_id,
             show_context: false,
+            version,
         }
     }
 
@@ -103,6 +105,7 @@ impl JsonEncoder {
             mdc: Mdc,
             node_info: &node_info,
             group_info: &group_info,
+            version: &self.version,
         };
         message.serialize(&mut serde_json::Serializer::new(&mut *w))?;
         w.write_all("\n".as_bytes())?;
@@ -137,6 +140,7 @@ struct Message<'a> {
     mdc: Mdc,
     node_info: &'a str,
     group_info: &'a str,
+    version: &'a str,
 }
 
 fn ser_display<T, S>(v: &T, s: S) -> Result<S::Ok, S::Error>
@@ -144,7 +148,11 @@ where
     T: fmt::Display,
     S: ser::Serializer,
 {
-    s.collect_str(v)
+    if let Ok(val) = serde_json::from_str::<serde_json::Value>(&format!("{}", v)) {
+        val.serialize(s)
+    } else {
+        s.collect_str(v)
+    }
 }
 
 struct Mdc;
@@ -171,6 +179,7 @@ impl ser::Serialize for Mdc {
 #[cfg(test)]
 mod test {
     use super::*;
+    use crate::log::{build_general_payload, LogType};
     use log4rs::encode::writer::simple::SimpleWriter;
 
     #[test]
@@ -187,9 +196,10 @@ mod test {
         let thread = "log::encoder::test::default";
         let node_id = "test";
         let l1_chain_id = 1;
+        let version = "0.1.0";
         log_mdc::insert("foo", "bar");
 
-        let encoder = JsonEncoder::new(node_id.to_string(), l1_chain_id);
+        let encoder = JsonEncoder::new(node_id.to_string(), l1_chain_id, version.to_string());
 
         let mut buf = vec![];
         encoder
@@ -212,7 +222,7 @@ mod test {
              \"file\":\"{}\",\"line\":{},\"level\":\"{}\",\"target\":\"{}\",\
              \"thread\":\"{}\",\"thread_id\":{},\"node_id\":\"{}\",\"l1_chain_id\":{},\
              \"mdc\":{{\"foo\":\"bar\"}},\
-             \"node_info\":\"\",\"group_info\":\"\"}}",
+             \"node_info\":\"\",\"group_info\":\"\",\"version\":\"{}\"}}",
             time.to_rfc3339(),
             message,
             module_path,
@@ -223,7 +233,69 @@ mod test {
             thread,
             thread_id::get(),
             node_id,
-            l1_chain_id
+            l1_chain_id,
+            version
+        );
+        assert_eq!(expected, String::from_utf8(buf).unwrap().trim());
+    }
+
+    #[test]
+    fn test_error_log_with_json_payload() {
+        let time = DateTime::parse_from_rfc3339("2016-03-20T14:22:20.644420340-08:00")
+            .unwrap()
+            .with_timezone(&Local);
+        let level = Level::Error;
+        let target = "target";
+        let module_path = "module_path";
+        let file = "file";
+        let line = 100;
+        let message = build_general_payload(
+            LogType::ListenerInterrupted,
+            "Listener interrupted",
+            Some(1),
+        );
+        let thread = "log::encoder::test::test_error_log_with_json_payload";
+        let node_id = "test";
+        let l1_chain_id = 1;
+        let version = "0.1.0";
+        log_mdc::insert("foo", "bar");
+
+        let encoder = JsonEncoder::new(node_id.to_string(), l1_chain_id, version.to_string());
+
+        let mut buf = vec![];
+        encoder
+            .encode_inner(
+                &mut SimpleWriter(&mut buf),
+                time,
+                &Record::builder()
+                    .level(level)
+                    .target(target)
+                    .module_path(Some(module_path))
+                    .file(Some(file))
+                    .line(Some(line))
+                    .args(format_args!("{}", message))
+                    .build(),
+            )
+            .unwrap();
+
+        let expected = format!(
+            "{{\"time\":\"{}\",\"message\":{},\"module_path\":\"{}\",\
+             \"file\":\"{}\",\"line\":{},\"level\":\"{}\",\"target\":\"{}\",\
+             \"thread\":\"{}\",\"thread_id\":{},\"node_id\":\"{}\",\"l1_chain_id\":{},\
+             \"mdc\":{{\"foo\":\"bar\"}},\
+             \"node_info\":\"\",\"group_info\":\"\",\"version\":\"{}\"}}",
+            time.to_rfc3339(),
+            message,
+            module_path,
+            file,
+            line,
+            level,
+            target,
+            thread,
+            thread_id::get(),
+            node_id,
+            l1_chain_id,
+            version
         );
         assert_eq!(expected, String::from_utf8(buf).unwrap().trim());
     }

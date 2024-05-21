@@ -23,7 +23,7 @@ pub struct AdapterClient {
     chain_id: usize,
     main_id_address: Address,
     adapter_address: Address,
-    signer: Arc<WsWalletSigner>,
+    client: Arc<WsWalletSigner>,
     contract_transaction_retry_descriptor: ExponentialBackoffRetryDescriptor,
     contract_view_retry_descriptor: ExponentialBackoffRetryDescriptor,
 }
@@ -33,7 +33,7 @@ impl AdapterClient {
         chain_id: usize,
         main_id_address: Address,
         adapter_address: Address,
-        signer: Arc<WsWalletSigner>,
+        client: Arc<WsWalletSigner>,
         contract_transaction_retry_descriptor: ExponentialBackoffRetryDescriptor,
         contract_view_retry_descriptor: ExponentialBackoffRetryDescriptor,
     ) -> Self {
@@ -41,7 +41,7 @@ impl AdapterClient {
             chain_id,
             main_id_address,
             adapter_address,
-            signer,
+            client,
             contract_transaction_retry_descriptor,
             contract_view_retry_descriptor,
         }
@@ -56,7 +56,7 @@ impl AdapterClientBuilder for GeneralMainChainIdentity {
             self.get_chain_id(),
             main_id_address,
             self.get_adapter_address(),
-            self.get_signer(),
+            self.get_client(),
             self.get_contract_transaction_retry_descriptor(),
             self.get_contract_view_retry_descriptor(),
         )
@@ -71,7 +71,7 @@ impl AdapterClientBuilder for GeneralRelayedChainIdentity {
             self.get_chain_id(),
             main_id_address,
             self.get_adapter_address(),
-            self.get_signer(),
+            self.get_client(),
             self.get_contract_transaction_retry_descriptor(),
             self.get_contract_view_retry_descriptor(),
         )
@@ -83,7 +83,7 @@ type AdapterContract = Adapter<WsWalletSigner>;
 #[async_trait]
 impl ServiceClient<AdapterContract> for AdapterClient {
     async fn prepare_service_client(&self) -> ContractClientResult<AdapterContract> {
-        let adapter_contract = Adapter::new(self.adapter_address, self.signer.clone());
+        let adapter_contract = Adapter::new(self.adapter_address, self.client.clone());
 
         Ok(adapter_contract)
     }
@@ -103,7 +103,7 @@ impl AdapterTransactions for AdapterClient {
         task: RandomnessTask,
         signature: Vec<u8>,
         partial_signatures: HashMap<Address, PartialSignature>,
-    ) -> ContractClientResult<H256> {
+    ) -> ContractClientResult<TransactionReceipt> {
         let adapter_contract =
             ServiceClient::<AdapterContract>::prepare_service_client(self).await?;
 
@@ -208,7 +208,7 @@ impl AdapterLogs for AdapterClient {
         &self,
         mut cb: C,
     ) -> ContractClientResult<()> {
-        let contract = Adapter::new(self.adapter_address, self.signer.clone());
+        let contract = Adapter::new(self.adapter_address, self.client.clone());
 
         let events = contract
             .event::<RandomnessRequestFilter>()
@@ -235,7 +235,7 @@ impl AdapterLogs for AdapterClient {
             ) = evt;
 
             info!( "Received randomness task: chain_id: {}, group_index: {}, request_id: {}, sender: {:?}, sub_id: {}, seed: {}, request_confirmations: {}, callback_gas_limit: {}, callback_max_gas_price: {}, block_number: {}",
-                self.chain_id, group_index, hex::encode(request_id), sender, sub_id, seed, request_confirmations, callback_gas_limit, callback_max_gas_price, meta.block_number);
+                self.chain_id, group_index, format!("0x{}", hex::encode(request_id)), sender, sub_id, seed, request_confirmations, callback_gas_limit, callback_max_gas_price, meta.block_number);
 
             let task = RandomnessTask {
                 request_id: request_id.to_vec(),

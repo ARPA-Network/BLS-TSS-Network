@@ -10,7 +10,6 @@ use arpa_core::DKGStatus;
 use arpa_dal::GroupInfoHandler;
 use async_trait::async_trait;
 use ethers::providers::Middleware;
-use log::info;
 use std::{marker::PhantomData, sync::Arc};
 use threshold_bls::group::Curve;
 use tokio::sync::RwLock;
@@ -20,6 +19,12 @@ pub struct PostCommitGroupingListener<PC: Curve> {
     group_cache: Arc<RwLock<Box<dyn GroupInfoHandler<PC>>>>,
     eq: Arc<RwLock<EventQueue>>,
     pc: PhantomData<PC>,
+}
+
+impl<PC: Curve> std::fmt::Display for PostCommitGroupingListener<PC> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "PostCommitGroupingListener")
+    }
 }
 
 impl<PC: Curve> PostCommitGroupingListener<PC> {
@@ -52,13 +57,15 @@ impl<PC: Curve + Sync + Send + 'static> Listener for PostCommitGroupingListener<
         let dkg_status = self.group_cache.read().await.get_dkg_status();
 
         if let Ok(DKGStatus::CommitSuccess) = dkg_status {
+            let chain_id = self.chain_id().await;
+
             let group_index = self.group_cache.read().await.get_index()?;
 
             let client = self.chain_identity.read().await.build_controller_client();
 
             if let Ok(group) = client.get_group(group_index).await {
                 if group.state {
-                    self.publish(DKGSuccess { group }).await;
+                    self.publish(DKGSuccess { chain_id, group }).await;
                 }
             }
         }
@@ -67,7 +74,6 @@ impl<PC: Curve + Sync + Send + 'static> Listener for PostCommitGroupingListener<
     }
 
     async fn handle_interruption(&self) -> NodeResult<()> {
-        info!("Handle interruption for PostCommitGroupingListener");
         self.chain_identity
             .read()
             .await
@@ -76,5 +82,9 @@ impl<PC: Curve + Sync + Send + 'static> Listener for PostCommitGroupingListener<
             .await?;
 
         Ok(())
+    }
+
+    async fn chain_id(&self) -> usize {
+        self.chain_identity.read().await.get_chain_id()
     }
 }

@@ -25,7 +25,7 @@ use threshold_bls::group::Curve;
 pub struct ControllerClient {
     chain_id: usize,
     controller_address: Address,
-    signer: Arc<WsWalletSigner>,
+    client: Arc<WsWalletSigner>,
     contract_transaction_retry_descriptor: ExponentialBackoffRetryDescriptor,
     contract_view_retry_descriptor: ExponentialBackoffRetryDescriptor,
 }
@@ -41,7 +41,7 @@ impl ControllerClient {
         ControllerClient {
             chain_id,
             controller_address,
-            signer: identity.get_signer(),
+            client: identity.get_client(),
             contract_transaction_retry_descriptor,
             contract_view_retry_descriptor,
         }
@@ -75,7 +75,7 @@ type ControllerContract = Controller<WsWalletSigner>;
 #[async_trait]
 impl ServiceClient<ControllerContract> for ControllerClient {
     async fn prepare_service_client(&self) -> ContractClientResult<ControllerContract> {
-        let controller_contract = Controller::new(self.controller_address, self.signer.clone());
+        let controller_contract = Controller::new(self.controller_address, self.client.clone());
 
         Ok(controller_contract)
     }
@@ -96,7 +96,7 @@ impl ControllerTransactions for ControllerClient {
         public_key: Vec<u8>,
         partial_public_key: Vec<u8>,
         disqualified_nodes: Vec<Address>,
-    ) -> ContractClientResult<H256> {
+    ) -> ContractClientResult<TransactionReceipt> {
         let controller_contract =
             ServiceClient::<ControllerContract>::prepare_service_client(self).await?;
 
@@ -123,7 +123,7 @@ impl ControllerTransactions for ControllerClient {
         &self,
         group_index: usize,
         group_epoch: usize,
-    ) -> ContractClientResult<H256> {
+    ) -> ContractClientResult<TransactionReceipt> {
         let controller_contract =
             ServiceClient::<ControllerContract>::prepare_service_client(self).await?;
 
@@ -195,7 +195,7 @@ impl ControllerLogs for ControllerClient {
         &self,
         mut cb: C,
     ) -> ContractClientResult<()> {
-        let contract = Controller::new(self.controller_address, self.signer.clone());
+        let contract = Controller::new(self.controller_address, self.client.clone());
 
         let events = contract
             .event::<DkgTaskFilter>()

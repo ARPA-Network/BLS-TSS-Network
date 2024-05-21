@@ -11,7 +11,7 @@ threshold-bls = { path = "../threshold-bls", default-features = false, features 
 ] }
 arpa-core = { path = "../core" }
 
-tokio = { version = "1.20.1", features = ["full"] }
+tokio = { version = "1.37.0", features = ["full"] }
 thiserror = "1.0.15"
 anyhow = "1.0.31"
 serde = "1.0.106"
