@@ -20,7 +20,6 @@ import {BLS} from "../src/libraries/BLS.sol";
 
 contract NodeRegistryTest is RandcastTestHelper {
     address[] tempAddresses;
-    //event NodeRegistered(address indexed nodeAddress, bytes dkgPublicKey, uint256 groupIndex);
     event NodeQuit(address indexed nodeAddress);
     event DkgPublicKeyChanged(address indexed nodeAddress, bytes dkgPublicKey);
     event NodeRewarded(address indexed nodeAddress, uint256 ethAmount, uint256 arpaAmount);
@@ -64,11 +63,13 @@ contract NodeRegistryTest is RandcastTestHelper {
         ServiceManager(address(_serviceManager)).addToWhitelist(tempAddresses);
         assertTrue(ServiceManager(address(_serviceManager)).whitelist(_node3));
 
-        // If is EigenLayer node, and share amount sufficient
-        tempAddresses[0] = _node2;
-        vm.prank(_admin);
-        ServiceManager(address(_serviceManager)).addToWhitelist(tempAddresses);
-        assertTrue(ServiceManager(address(_serviceManager)).whitelist(_node2));
+        vm.prank(_admin); 
+        uint256[] memory tempWeights = new uint256[](1);
+        tempWeights[0] = 100;
+        ServiceManager(address(_serviceManager)).setStrategyAndWeights(tempAddresses, tempWeights);
+
+        vm.prank(_node3);
+        INodeRegistry(address(_nodeRegistry)).nodeRegister(_dkgPubkey1, true, _emptyOperatorSignature);
     }
 
     function testNodeActivate() public {
@@ -123,7 +124,6 @@ contract NodeRegistryTest is RandcastTestHelper {
         INodeRegistry(address(_nodeRegistry)).nodeQuit();
     }
 
-    // TO-DO Ask when to call this?
     function testChangeDkgPublicKey() public {
         // Register a node
         vm.prank(_node1);
@@ -137,6 +137,12 @@ contract NodeRegistryTest is RandcastTestHelper {
         // When already activated (node.state), error and reverts
         vm.prank(_node1);
         vm.expectRevert(NodeRegistry.NodeAlreadyActive.selector);
+        INodeRegistry(address(_nodeRegistry)).changeDkgPublicKey(_dkgPubkey2);
+
+        // When already activated (node.state), quit first then we can change DkgKey
+        vm.prank(_node1);
+        INodeRegistry(address(_nodeRegistry)).nodeQuit();
+        vm.prank(_node1);
         INodeRegistry(address(_nodeRegistry)).changeDkgPublicKey(_dkgPubkey2);
     }
 
@@ -200,7 +206,7 @@ contract NodeRegistryTest is RandcastTestHelper {
         uint256 stakingRewardPenalty = 100;
         uint256 pendingBlock = 10;
         
-        // If is not EigenLayer node, call slashDelegationReward of NodeStaking (TO-DO: how does expectCall work?)
+        // If is not EigenLayer node, call slashDelegationReward of NodeStaking
         vm.prank(address(_controller));
         vm.expectCall(
             address(_staking),

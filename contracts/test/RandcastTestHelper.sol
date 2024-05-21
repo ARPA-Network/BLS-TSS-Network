@@ -82,7 +82,7 @@ abstract contract RandcastTestHelper is Test {
     /// @notice The minimum stake amount that an operator can stake
     uint256 internal _operatorStakeAmount = 500_00 * 1e18;
     /// @notice The minimum stake amount that an eigenlayer operator must stake
-    uint256 internal _eigenlayerOperatorStakeAmount = 500_00 * 1e18;
+    uint256 internal _eigenlayerOperatorStakeAmount = 500_00;
     /// @notice The minimum number of node operators required to initialize the
     /// _staking pool.
     uint256 internal _minInitialOperatorCount = 1;

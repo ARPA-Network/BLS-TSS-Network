@@ -88,54 +88,46 @@ contract ServiceManagerTest is RandcastTestHelper {
         assertEq(restakeableStrategies.length, 2);
         assertEq(restakeableStrategies[0], _node1);
         assertEq(restakeableStrategies[1], _node2);
-
-        // Skip the final validation for now (TO-DO: Update RandcastTestHelper with real delegation manager logic later) 
-        
+ 
         // After above, should expect getOperatorShares to return value accordingly
-        // uint256 operatorShare = testInstance.getOperatorShare(_node1);
-        // assertEq(operatorShare, 50);
-        // operatorShare = testInstance.getOperatorShare(_node2);
-        // assertEq(operatorShare, 100);
+        uint256 operatorShare = testInstance.getOperatorShare(_node1);
+        assertEq(operatorShare, 15000000);
 
-        // After above, should expect getOperatorRestakedStrategies to return
-        // Empty list if delegation manager doesn't have operator shares
-        // address[] memory restakedStrategies = testInstance.getOperatorRestakedStrategies(_node3);
-        // assertEq(restakedStrategies.length, 0);
-
-        // // Real list if delegation manager has operator shares
-        // restakedStrategies = testInstance.getOperatorRestakedStrategies(_node1);
-        // assertEq(restakedStrategies.length, 2);
-        // assertEq(restakedStrategies[0], _node1);
-        // assertEq(restakedStrategies[1], _node2);
+        // Real list if delegation manager has operator shares
+        address[] memory restakedStrategies = testInstance.getOperatorRestakedStrategies(_node1);
+        assertEq(restakedStrategies.length, 2);
+        assertEq(restakedStrategies[0], _node1);
+        assertEq(restakedStrategies[1], _node2);
         
         vm.stopPrank();
     }
 
-    //TO-DO, update RandcastTestHelper for AVS and re-test
-    // function testOperatorRegistrationAndDeregistration() public {
-    //     // Check value of whitelistEnabled and whitelisted, 
-    //     // If enabled but not whitelisted, revert and error
-    //     vm.prank(address(_nodeRegistry));
-    //     tempAddresses = new address[](1);
-    //     tempAddresses[0] = _node1;
-    //     assertTrue(testInstance.whitelistEnabled());
+    function testOperatorRegistrationAndDeregistration() public {
+        // Check value of whitelistEnabled and whitelisted, 
+        // If enabled but not whitelisted, revert and error
+        vm.prank(address(_admin));
+        testInstance.setWhitelistEnabled(true);
+        tempAddresses = new address[](1);
+        tempAddresses[0] = _node1;
 
-    //     vm.prank(address(_nodeRegistry));
-    //     vm.expectRevert(abi.encodeWithSelector(ServiceManager.OperatorNotInWhitelist.selector));
-    //     IServiceManager(address(_serviceManager)).registerOperator(_node1, _emptyOperatorSignature);
+        vm.prank(address(_nodeRegistry));
+        assertTrue(testInstance.whitelistEnabled());
 
-    //     vm.prank(address(_nodeRegistry));
-    //     testInstance.addToWhitelist(tempAddresses);
-    //     assertTrue(testInstance.whitelist(_node1));
+        vm.prank(address(_nodeRegistry));
+        vm.expectRevert(abi.encodeWithSelector(ServiceManager.OperatorNotInWhitelist.selector));
+        testInstance.registerOperator(_node1, _emptyOperatorSignature);
 
-    //     // Check onlyNodeRegistry, if not, revert and error
-    //     vm.prank(_node1);
-    //     testInstance.registerOperator(_node1, _emptyOperatorSignature);
+        vm.prank(address(_admin));
+        testInstance.addToWhitelist(tempAddresses);
+        assertTrue(testInstance.whitelist(_node1));
+        
+        vm.prank(address(_nodeRegistry));
+        testInstance.registerOperator(_node1, _emptyOperatorSignature);
 
-    //     vm.prank(_node2);
-    //     vm.expectRevert(abi.encodeWithSelector(ServiceManager.SenderNotNodeRegistry.selector));
-    //     testInstance.registerOperator(_node2, _emptyOperatorSignature);
-    // }
+        vm.prank(_node2);
+        vm.expectRevert(abi.encodeWithSelector(ServiceManager.SenderNotNodeRegistry.selector));
+        testInstance.registerOperator(_node2, _emptyOperatorSignature);        
+    }
 
     function testOperatorSlashing() public {
         // Verify that the slashDelegationStaking function can be called by the `NodeRegistry` contract
