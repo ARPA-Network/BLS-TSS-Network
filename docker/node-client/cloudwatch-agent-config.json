@@ -11,7 +11,7 @@
                     {
                             "file_path": "/app/log/node.log",
                             "log_group_class": "STANDARD",
-                            "log_group_name": "eigenlayer-logs",
+                            "log_group_name": "arpa-network-logs",
                             "log_stream_name": "STREAMNAME",
                             "retention_in_days": -1
                     }
