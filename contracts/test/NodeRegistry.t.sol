@@ -69,7 +69,13 @@ contract NodeRegistryTest is RandcastTestHelper {
         ServiceManager(address(_serviceManager)).setStrategyAndWeights(tempAddresses, tempWeights);
 
         vm.prank(_node3);
+        vm.expectCall(address(_serviceManager), abi.encodeWithSelector(IServiceManager.registerOperator.selector, _node3, _emptyOperatorSignature));
         INodeRegistry(address(_nodeRegistry)).nodeRegister(_dkgPubkey1, true, _emptyOperatorSignature);
+
+        // If not Eigenlayer node, call lock of NodeStaking
+        vm.prank(_node4);
+        vm.expectCall(address(_staking), abi.encodeWithSelector(INodeStaking.lock.selector, _node4, 500_00 * 1e18));
+        INodeRegistry(address(_nodeRegistry)).nodeRegister(_dkgPubkey4, false, _emptyOperatorSignature);
     }
 
     function testNodeActivate() public {
@@ -99,7 +105,7 @@ contract NodeRegistryTest is RandcastTestHelper {
         // If is EigenLayer node, and share amount insufficient, error and revert
         vm.prank(_node2);
         vm.expectRevert(abi.encodeWithSelector(NodeRegistry.OperatorUnderStaking.selector));
-        INodeRegistry(address(_nodeRegistry)).nodeRegister(_dkgPubkey2, true, _emptyOperatorSignature);
+        INodeRegistry(address(_nodeRegistry)).nodeRegister(_dkgPubkey2, true, _emptyOperatorSignature); 
     }
 
     function testDismissNodeAndNodeQuit() public {
