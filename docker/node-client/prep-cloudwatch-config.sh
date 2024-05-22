@@ -14,7 +14,7 @@ sed -i "s/\"log_stream_name\": \".*\"/\"log_stream_name\": $address/" /opt/aws/a
 echo "Updated log_stream_name in CloudWatch configuration file."
 
 #####################################
-# Pint updated CW Config to console #
+# Print updated CW Config to console #
 #####################################
 
 echo "Printing updated CloudWatch configuration file at: /opt/aws/amazon-cloudwatch-agent/bin/default_linux_config.json"

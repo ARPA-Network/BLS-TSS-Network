@@ -47,6 +47,8 @@ RUN apk add supervisor curl vim bash
 # Copy the built binary from the randcast builder stage
 COPY --from=build_randcast /app/target/release/node-client /app/node-client
 COPY --from=build_randcast /app/target/release/node-config-checker /usr/local/bin/node-config-checker
+RUN chmod +x /app/node-client
+RUN chmod +x /usr/local/bin/node-config-checker
 
 ##################
 # CW Agent Stuff #
