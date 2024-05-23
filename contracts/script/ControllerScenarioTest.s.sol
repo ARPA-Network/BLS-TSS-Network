@@ -7,13 +7,15 @@ import {ControllerProxy} from "../src/ControllerProxy.sol";
 import {ControllerRelayer} from "../src/ControllerRelayer.sol";
 import {OPChainMessenger} from "../src/OPChainMessenger.sol";
 import {IControllerOwner} from "../src/interfaces/IControllerOwner.sol";
+import {NodeRegistry} from "../src/NodeRegistry.sol";
+import {INodeRegistryOwner} from "../src/interfaces/INodeRegistryOwner.sol";
 import {Adapter} from "../src/Adapter.sol";
 import {IAdapterOwner} from "../src/interfaces/IAdapterOwner.sol";
 import {Arpa} from "./ArpaLocalTest.sol";
 import {IERC20} from "openzeppelin-contracts/contracts/token/ERC20/IERC20.sol";
-import {ERC20} from "openzeppelin-contracts/contracts/token/ERC20/ERC20.sol";
 import {ERC1967Proxy} from "openzeppelin-contracts/contracts/proxy/ERC1967/ERC1967Proxy.sol";
 import {Staking} from "Staking-v0.1/Staking.sol";
+import {ServiceManager} from "../src/eigenlayer/ServiceManager.sol";
 
 // solhint-disable-next-line max-states-count
 contract ControllerScenarioTest is Script {
@@ -55,6 +57,7 @@ contract ControllerScenarioTest is Script {
     uint256 internal _initialMaxCommunityStakeAmount = vm.envUint("INITIAL_MAX_COMMUNITY_STAKE_AMOUNT");
     uint256 internal _minCommunityStakeAmount = vm.envUint("MIN_COMMUNITY_STAKE_AMOUNT");
     uint256 internal _operatorStakeAmount = vm.envUint("OPERATOR_STAKE_AMOUNT");
+    uint256 internal _eigenlayerOperatorStakeAmount = vm.envUint("EIGENLAYER_OPERATOR_STAKE_AMOUNT");
     uint256 internal _minInitialOperatorCount = vm.envUint("MIN_INITIAL_OPERATOR_COUNT");
     uint256 internal _minRewardDuration = vm.envUint("MIN_REWARD_DURATION");
     uint256 internal _delegationRateDenominator = vm.envUint("DELEGATION_RATE_DENOMINATOR");
@@ -64,18 +67,45 @@ contract ControllerScenarioTest is Script {
     address internal _opControllerOracleAddress = vm.envAddress("OP_CONTROLLER_ORACLE_ADDRESS");
     address internal _opL1CrossDomainMessengerAddress = vm.envAddress("OP_L1_CROSS_DOMAIN_MESSENGER_ADDRESS");
 
+    address internal _avsDirectory = vm.envAddress("AVS_DIRECTORY_ADDRESS");
+    address internal _delegationManager = vm.envAddress("DELEGATION_MANAGER_ADDRESS");
+
     function run() external {
-        Controller controller;
-        ControllerRelayer controllerRelayer;
+        NodeRegistry nodeRegistryImpl;
+        ERC1967Proxy nodeRegistry;
+        Controller controllerImpl;
+        ERC1967Proxy controller;
+        Adapter adapterImpl;
+        ERC1967Proxy adapter;
+        ServiceManager serviceManagerImpl;
+        ERC1967Proxy serviceManager;
+        ControllerRelayer controllerRelayerImpl;
+        ERC1967Proxy controllerRelayer;
         OPChainMessenger opChainMessenger;
         ControllerProxy proxy;
-        ERC1967Proxy adapter;
-        Adapter adapterImpl;
         Staking staking;
         IERC20 arpa;
 
         vm.broadcast(_deployerPrivateKey);
         arpa = new Arpa();
+
+        vm.broadcast(_deployerPrivateKey);
+        nodeRegistryImpl = new NodeRegistry();
+
+        vm.broadcast(_deployerPrivateKey);
+        nodeRegistry =
+            new ERC1967Proxy(address(nodeRegistryImpl), abi.encodeWithSignature("initialize(address)", address(arpa)));
+
+        vm.broadcast(_deployerPrivateKey);
+        serviceManagerImpl = new ServiceManager();
+
+        vm.broadcast(_deployerPrivateKey);
+        serviceManager = new ERC1967Proxy(
+            address(serviceManagerImpl),
+            abi.encodeWithSignature(
+                "initialize(address,address,address)", address(nodeRegistry), _avsDirectory, _delegationManager
+            )
+        );
 
         Staking.PoolConstructorParams memory params = Staking.PoolConstructorParams(
             IERC20(address(arpa)),
@@ -88,17 +118,35 @@ contract ControllerScenarioTest is Script {
             _delegationRateDenominator,
             _unstakeFreezingDuration
         );
+
         vm.broadcast(_deployerPrivateKey);
         staking = new Staking(params);
 
         vm.broadcast(_deployerPrivateKey);
-        controller = new Controller();
+        staking.setController(address(nodeRegistry));
+
+        vm.broadcast(_deployerPrivateKey);
+        controllerImpl = new Controller();
+
+        vm.broadcast(_deployerPrivateKey);
+        controller =
+            new ERC1967Proxy(address(controllerImpl), abi.encodeWithSignature("initialize(uint256)", _lastOutput));
+
+        vm.broadcast(_deployerPrivateKey);
+        INodeRegistryOwner(address(nodeRegistry)).setNodeRegistryConfig(
+            address(controller),
+            address(staking),
+            address(serviceManager),
+            _operatorStakeAmount,
+            _eigenlayerOperatorStakeAmount,
+            _pendingBlockAfterQuit
+        );
 
         vm.broadcast(_deployerPrivateKey);
         proxy = new ControllerProxy(address(controller));
 
         vm.broadcast(_deployerPrivateKey);
-        IControllerOwner(address(proxy)).initialize(address(arpa), _lastOutput);
+        IControllerOwner(address(proxy)).initialize(_lastOutput);
 
         vm.broadcast(_deployerPrivateKey);
         adapterImpl = new Adapter();
@@ -108,15 +156,13 @@ contract ControllerScenarioTest is Script {
 
         vm.broadcast(_deployerPrivateKey);
         IControllerOwner(address(proxy)).setControllerConfig(
-            address(staking),
+            address(nodeRegistry),
             address(adapter),
-            _operatorStakeAmount,
             _disqualifiedNodePenaltyAmount,
             _defaultNumberOfCommitters,
             _defaultDkgPhaseDuration,
             _groupMaxCapacity,
             _idealNumberOfGroups,
-            _pendingBlockAfterQuit,
             _dkgPostProcessReward
         );
 
@@ -152,10 +198,12 @@ contract ControllerScenarioTest is Script {
         );
 
         vm.broadcast(_deployerPrivateKey);
-        staking.setController(address(proxy));
+        controllerRelayerImpl = new ControllerRelayer();
 
         vm.broadcast(_deployerPrivateKey);
-        controllerRelayer = new ControllerRelayer(address(proxy));
+        controllerRelayer = new ERC1967Proxy(
+            address(controllerRelayerImpl), abi.encodeWithSignature("initialize(address)", address(proxy))
+        );
 
         vm.broadcast(_deployerPrivateKey);
         opChainMessenger = new OPChainMessenger(
@@ -163,6 +211,6 @@ contract ControllerScenarioTest is Script {
         );
 
         vm.broadcast(_deployerPrivateKey);
-        controllerRelayer.setChainMessenger(_opChainId, address(opChainMessenger));
+        ControllerRelayer(address(controllerRelayer)).setChainMessenger(_opChainId, address(opChainMessenger));
     }
 }

@@ -62,25 +62,20 @@ library GroupLib {
         }
     }
 
-    function nodeLeave(GroupData storage groupData, address idAddress, uint256 lastOutput)
+    function nodeLeave(GroupData storage groupData, uint256 groupIndex, uint256 memberIndex, uint256 lastOutput)
         public
         returns (uint256[] memory groupIndicesToEmitEvent)
     {
         groupIndicesToEmitEvent = new uint256[](0);
 
-        (int256 groupIndex, int256 memberIndex) = getBelongingGroupByMemberAddress(groupData, idAddress);
-
-        if (groupIndex != -1) {
-            (bool needRebalance, bool needEmitGroupEvent) =
-                removeFromGroup(groupData, uint256(memberIndex), uint256(groupIndex));
-            if (needEmitGroupEvent) {
-                groupIndicesToEmitEvent = new uint256[](1);
-                groupIndicesToEmitEvent[0] = uint256(groupIndex);
-                return groupIndicesToEmitEvent;
-            }
-            if (needRebalance) {
-                return arrangeMembersInGroup(groupData, uint256(groupIndex), lastOutput);
-            }
+        (bool needRebalance, bool needEmitGroupEvent) = removeFromGroup(groupData, memberIndex, groupIndex);
+        if (needEmitGroupEvent) {
+            groupIndicesToEmitEvent = new uint256[](1);
+            groupIndicesToEmitEvent[0] = groupIndex;
+            return groupIndicesToEmitEvent;
+        }
+        if (needRebalance) {
+            return arrangeMembersInGroup(groupData, uint256(groupIndex), lastOutput);
         }
     }
 
@@ -118,9 +113,7 @@ library GroupLib {
 
                 // Create indexMemberMap: Iterate through group.members and create mapping: memberIndex -> nodeIdAddress
                 // Create qualifiedIndices: Iterate through group, add all member indexes found in majorityMembers.
-                uint256[] memory qualifiedIndices = new uint256[](
-                        majorityMembers.length
-                    );
+                uint256[] memory qualifiedIndices = new uint256[](majorityMembers.length);
 
                 for (uint256 j = 0; j < majorityMembers.length; j++) {
                     for (uint256 i = 0; i < g.members.length; i++) {
@@ -293,16 +286,11 @@ library GroupLib {
         // Get group and set isStrictlyMajorityConsensusReached to false
         g.isStrictlyMajorityConsensusReached = false;
 
-        // collect idAddress of members in group
-        address[] memory membersLeftInGroup = new address[](g.members.length);
-        for (uint256 i = 0; i < g.members.length; i++) {
-            membersLeftInGroup[i] = g.members[i].nodeIdAddress;
-        }
         uint256[] memory involvedGroups = new uint256[](groupData.groupCount); // max number of groups involved is groupCount
         uint256 currentIndex;
 
         // for each membersLeftInGroup, call findOrCreateTargetGroup and then add that member to the new group.
-        for (uint256 i = 0; i < membersLeftInGroup.length; i++) {
+        for (uint256 i = g.members.length - 1; i >= 0; i--) {
             // find a suitable group for the member
             (uint256 targetGroupIndex,) = findOrCreateTargetGroup(groupData);
 
@@ -311,13 +299,12 @@ library GroupLib {
                 break;
             }
 
-            // add member to target group
-            addToGroup(groupData, membersLeftInGroup[i], targetGroupIndex);
-
-            if (groupData.groups[i].size >= DEFAULT_MINIMUM_THRESHOLD) {
+            // remove and add member to target group
+            if (addToGroup(groupData, g.members[i].nodeIdAddress, targetGroupIndex)) {
                 involvedGroups[currentIndex] = targetGroupIndex;
                 currentIndex++;
             }
+            removeFromGroup(groupData, i, groupIndex);
         }
 
         return Utils.trimTrailingElements(involvedGroups, currentIndex);
@@ -328,7 +315,7 @@ library GroupLib {
         returns (bool rebalanceSuccess, uint256 groupIndexToRebalance)
     {
         // get all group indices excluding the current groupIndex
-        uint256[] memory groupIndices = new uint256[](groupData.groupCount -1);
+        uint256[] memory groupIndices = new uint256[](groupData.groupCount - 1);
         uint256 index = 0;
         for (uint256 i = 0; i < groupData.groupCount; i++) {
             if (i != groupIndex) {
@@ -441,7 +428,7 @@ library GroupLib {
         // max of 51% of group size and DEFAULT_MINIMUM_THRESHOLD
         g.threshold = minimum > DEFAULT_MINIMUM_THRESHOLD ? minimum : DEFAULT_MINIMUM_THRESHOLD;
 
-        if (g.size >= 3) {
+        if (g.size >= DEFAULT_MINIMUM_THRESHOLD) {
             return true;
         }
     }
@@ -466,7 +453,7 @@ library GroupLib {
         uint256 minimum = Utils.minimumThreshold(g.size);
         g.threshold = minimum > DEFAULT_MINIMUM_THRESHOLD ? minimum : DEFAULT_MINIMUM_THRESHOLD;
 
-        if (g.size < 3) {
+        if (g.size < DEFAULT_MINIMUM_THRESHOLD) {
             return (true, false);
         }
 

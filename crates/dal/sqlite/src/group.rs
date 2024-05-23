@@ -13,6 +13,7 @@ use async_trait::async_trait;
 use entity::group_info;
 use entity::prelude::GroupInfo;
 use ethers_core::types::Address;
+use log::info;
 use sea_orm::{ActiveModelTrait, DbConn, DbErr, EntityTrait, QueryOrder, Set};
 use std::collections::BTreeMap;
 use std::{marker::PhantomData, sync::Arc};
@@ -265,7 +266,7 @@ impl<C: Curve + Sync + Send> GroupInfoUpdater<C> for GroupInfoDBClient<C> {
         Ok(())
     }
 
-    async fn save_output(
+    async fn save_successful_output(
         &mut self,
         index: usize,
         epoch: usize,
@@ -351,6 +352,56 @@ impl<C: Curve + Sync + Send> GroupInfoUpdater<C> for GroupInfoDBClient<C> {
         Ok((public_key, partial_public_key, disqualified_nodes))
     }
 
+    async fn save_failed_output(
+        &mut self,
+        index: usize,
+        epoch: usize,
+        disqualified_node_indices: Vec<u32>,
+    ) -> DataAccessResult<Vec<Address>> {
+        let group_info_cache = self.get_group_info_cache()?;
+
+        let mut group = group_info_cache.get_group()?.clone();
+
+        if group.index != index {
+            return Err(GroupError::GroupIndexObsolete(group.index).into());
+        }
+
+        if group.epoch != epoch {
+            return Err(GroupError::GroupEpochObsolete(group.epoch).into());
+        }
+
+        if group.state {
+            return Err(GroupError::GroupAlreadyReady.into());
+        }
+
+        // remove disqualified nodes from members
+        let members = group.members.clone();
+
+        let disqualified_nodes = members
+            .iter()
+            .filter(|(_, member)| disqualified_node_indices.contains(&(member.index as u32)))
+            .map(|(id_address, _)| *id_address)
+            .collect::<Vec<_>>();
+
+        group.remove_disqualified_nodes(&disqualified_nodes);
+
+        GroupMutation::update_members(
+            self.get_connection(),
+            self.group_info_cache_model.to_owned().unwrap(),
+            group.members.len() as i32,
+            serde_json::to_string(&group.members).unwrap(),
+        )
+        .await
+        .map_err(|e| {
+            let e: DBError = e.into();
+            e
+        })?;
+
+        self.refresh_current_group_info().await?;
+
+        Ok(disqualified_nodes)
+    }
+
     async fn update_dkg_status(
         &mut self,
         index: usize,
@@ -385,6 +436,11 @@ impl<C: Curve + Sync + Send> GroupInfoUpdater<C> for GroupInfoDBClient<C> {
             let e: DBError = e.into();
             e
         })?;
+
+        info!(
+            "dkg_status transfered from {:?} to {:?}",
+            current_dkg_status, dkg_status
+        );
 
         self.refresh_current_group_info().await?;
 
@@ -500,6 +556,22 @@ impl GroupMutation {
         group_info.size = Set(size);
         group_info.public_key = Set(Some(public_key));
         group_info.share = Set(Some(share));
+        group_info.members = Set(members);
+
+        group_info.update_at = Set(format_now_date());
+
+        group_info.update(db).await
+    }
+
+    pub async fn update_members(
+        db: &DbConn,
+        model: group_info::Model,
+        size: i32,
+        members: String,
+    ) -> Result<group_info::Model, DbErr> {
+        let mut group_info: group_info::ActiveModel = model.into();
+
+        group_info.size = Set(size);
         group_info.members = Set(members);
 
         group_info.update_at = Set(format_now_date());

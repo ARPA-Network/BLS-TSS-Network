@@ -1,10 +1,16 @@
-node_committer_rpc_endpoint: "[::1]:50060"
+node_advertised_committer_rpc_endpoint: "0.0.0.0:50061"
 
-node_management_rpc_endpoint: "[::1]:50090"
+node_committer_rpc_endpoint: "0.0.0.0:50061"
+
+node_management_rpc_endpoint: "0.0.0.0:50091"
 
 node_management_rpc_token: "change_me"
 
+node_statistics_http_endpoint: "0.0.0.0:50081"
+
 provider_endpoint: "ws://127.0.0.1:8546"
+
+is_eigenlayer: false
 
 chain_id: 900
 
@@ -21,7 +27,6 @@ arpa_address: "0xa4F59C4Caf15641F32f5756E37d93912E7F96203"
 data_path: "./data0.sqlite"
 
 logger:
-  node_id: 0
   context_logging: false
   log_file_path: log/0/
   rolling_file_size: 10 gb

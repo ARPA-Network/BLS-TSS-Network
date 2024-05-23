@@ -1,0 +1,7 @@
+[default]
+region = us-east-1
+output = json
+
+[profile AmazonCloudWatchAgent]
+region = us-east-1
+output = json

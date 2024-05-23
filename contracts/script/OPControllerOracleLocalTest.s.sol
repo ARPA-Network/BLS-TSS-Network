@@ -1,20 +1,21 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.18;
 
-import {Script} from "forge-std/Script.sol";
+import {Deployer} from "./Deployer.s.sol";
 import {ControllerOracle} from "../src/ControllerOracle.sol";
 import {Adapter} from "../src/Adapter.sol";
 import {IAdapterOwner} from "../src/interfaces/IAdapterOwner.sol";
 import {Arpa} from "./ArpaLocalTest.sol";
 import {IERC20} from "openzeppelin-contracts/contracts/token/ERC20/IERC20.sol";
-import {ERC20} from "openzeppelin-contracts/contracts/token/ERC20/ERC20.sol";
 import {ERC1967Proxy} from "openzeppelin-contracts/contracts/proxy/ERC1967/ERC1967Proxy.sol";
 
 // solhint-disable-next-line max-states-count
-contract OPControllerOracleLocalTestScript is Script {
+contract OPControllerOracleLocalTestScript is Deployer {
     uint256 internal _deployerPrivateKey = vm.envUint("ADMIN_PRIVATE_KEY");
 
     uint256 internal _lastOutput = vm.envUint("LAST_OUTPUT");
+    address internal _arpaAddress = vm.envAddress("EXISTING_OP_ARPA_ADDRESS");
+    address internal _opL2CrossDomainMessengerAddress = vm.envAddress("OP_L2_CROSS_DOMAIN_MESSENGER_ADDRESS");
 
     uint16 internal _minimumRequestConfirmations = uint16(vm.envUint("MINIMUM_REQUEST_CONFIRMATIONS"));
     uint32 internal _maxGasLimit = uint32(vm.envUint("MAX_GAS_LIMIT"));
@@ -39,28 +40,50 @@ contract OPControllerOracleLocalTestScript is Script {
     uint256 internal _flatFeePromotionStartTimestamp = vm.envUint("FLAT_FEE_PROMOTION_START_TIMESTAMP");
     uint256 internal _flatFeePromotionEndTimestamp = vm.envUint("FLAT_FEE_PROMOTION_END_TIMESTAMP");
 
-    bool internal _arpa_exists = vm.envBool("ARPA_EXISTS");
+    bool internal _arpaExists = vm.envBool("ARPA_EXISTS");
 
     function run() external {
-        ControllerOracle controllerOracle;
-        ERC1967Proxy adapter;
+        ControllerOracle controllerOracleImpl;
+        ERC1967Proxy controllerOracle;
         Adapter adapterImpl;
+        ERC1967Proxy adapter;
+        IERC20 arpa;
 
-        if (!_arpa_exists) {
-            IERC20 arpa;
+        _checkDeploymentAddressesFile();
+
+        if (!_arpaExists) {
             vm.broadcast(_deployerPrivateKey);
             arpa = new Arpa();
+            _addDeploymentAddress(Network.L2, "Arpa", address(arpa));
+        } else {
+            arpa = IERC20(_arpaAddress);
         }
 
         vm.broadcast(_deployerPrivateKey);
-        controllerOracle = new ControllerOracle();
+        controllerOracleImpl = new ControllerOracle();
+        _addDeploymentAddress(Network.L2, "ControllerOracleImpl", address(controllerOracleImpl));
+
+        vm.broadcast(_deployerPrivateKey);
+        controllerOracle = new ERC1967Proxy(
+            address(controllerOracleImpl),
+            abi.encodeWithSignature(
+                "initialize(address,address,uint256)",
+                address(_arpaAddress),
+                address(_opL2CrossDomainMessengerAddress),
+                _lastOutput
+            )
+        );
+        _addDeploymentAddress(Network.L2, "ControllerOracle", address(controllerOracle));
 
         vm.broadcast(_deployerPrivateKey);
         adapterImpl = new Adapter();
+        _addDeploymentAddress(Network.L2, "AdapterImpl", address(adapterImpl));
 
         vm.broadcast(_deployerPrivateKey);
-        adapter =
-        new ERC1967Proxy(address(adapterImpl),abi.encodeWithSignature("initialize(address)", address(controllerOracle)));
+        adapter = new ERC1967Proxy(
+            address(adapterImpl), abi.encodeWithSignature("initialize(address)", address(controllerOracle))
+        );
+        _addDeploymentAddress(Network.L2, "Adapter", address(adapter));
 
         vm.broadcast(_deployerPrivateKey);
         IAdapterOwner(address(adapter)).setAdapterConfig(

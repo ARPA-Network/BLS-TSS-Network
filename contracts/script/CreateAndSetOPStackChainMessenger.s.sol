@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.18;
 
-import {Script} from "forge-std/Script.sol";
+import {Deployer} from "./Deployer.s.sol";
 import {Controller} from "../src/Controller.sol";
 import {ControllerRelayer} from "../src/ControllerRelayer.sol";
 import {OPStackChainMessenger} from "../src/OPStackChainMessenger.sol";
@@ -15,7 +15,7 @@ import {ERC1967Proxy} from "openzeppelin-contracts/contracts/proxy/ERC1967/ERC19
 import {Staking} from "Staking-v0.1/Staking.sol";
 
 // solhint-disable-next-line max-states-count
-contract CreateAndSetOPStackChainMessengerScript is Script {
+contract CreateAndSetOPStackChainMessengerScript is Deployer {
     uint256 internal _deployerPrivateKey = vm.envUint("ADMIN_PRIVATE_KEY");
 
     address internal _opControllerOracleAddress = vm.envAddress("OP_CONTROLLER_ORACLE_ADDRESS");

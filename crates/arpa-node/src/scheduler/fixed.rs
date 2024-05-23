@@ -1,4 +1,4 @@
-use super::{FixedTaskScheduler, TaskScheduler, TaskType};
+use super::{ComponentTaskType, FixedTaskScheduler, TaskScheduler};
 use arpa_core::{SchedulerError, SchedulerResult};
 use async_trait::async_trait;
 use futures::Future;
@@ -7,7 +7,7 @@ use tokio::task::JoinHandle;
 
 #[derive(Debug, Default)]
 pub struct SimpleFixedTaskScheduler {
-    fixed_tasks: HashMap<TaskType, JoinHandle<()>>,
+    fixed_tasks: HashMap<ComponentTaskType, JoinHandle<()>>,
 }
 
 impl SimpleFixedTaskScheduler {
@@ -19,11 +19,11 @@ impl SimpleFixedTaskScheduler {
 }
 
 impl TaskScheduler for SimpleFixedTaskScheduler {
-    fn add_task<T>(&mut self, task_type: TaskType, future: T) -> SchedulerResult<()>
-    where
-        T: Future<Output = ()> + Send + 'static,
-        T::Output: Send + 'static,
-    {
+    fn add_task(
+        &mut self,
+        task_type: ComponentTaskType,
+        future: impl Future + Send + 'static,
+    ) -> SchedulerResult<()> {
         if self.fixed_tasks.contains_key(&task_type) {
             return Err(SchedulerError::TaskAlreadyExisted);
         }
@@ -48,7 +48,7 @@ impl FixedTaskScheduler for SimpleFixedTaskScheduler {
         }
     }
 
-    async fn abort(&mut self, task_type: &TaskType) -> SchedulerResult<()> {
+    async fn abort(&mut self, task_type: &ComponentTaskType) -> SchedulerResult<()> {
         if !self.fixed_tasks.contains_key(task_type) {
             return Err(SchedulerError::TaskNotFound);
         }
@@ -57,8 +57,8 @@ impl FixedTaskScheduler for SimpleFixedTaskScheduler {
         Ok(())
     }
 
-    fn get_tasks(&self) -> Vec<&TaskType> {
-        self.fixed_tasks.keys().collect::<Vec<&TaskType>>()
+    fn get_tasks(&self) -> Vec<&ComponentTaskType> {
+        self.fixed_tasks.keys().collect::<Vec<&ComponentTaskType>>()
     }
 }
 

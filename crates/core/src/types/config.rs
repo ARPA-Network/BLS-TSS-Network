@@ -4,7 +4,6 @@ use ethers_core::{k256::ecdsa::SigningKey, types::Address};
 use ethers_signers::{coins_bip39::English, LocalWallet, MnemonicBuilder, Wallet};
 use serde::de;
 use serde::{Deserialize, Serialize};
-use std::convert::TryFrom;
 use std::env;
 use std::fmt::{self};
 use std::time::Duration;
@@ -12,8 +11,12 @@ use std::{fs::read_to_string, path::PathBuf};
 
 pub const PLACEHOLDER_ADDRESS: Address = Address::zero();
 
+pub const GAS_RAISE_PERCENTAGE: u32 = 20;
+
 pub const DEFAULT_LISTENER_INTERVAL_MILLIS: u64 = 10000;
 pub const DEFAULT_LISTENER_USE_JITTER: bool = true;
+
+pub const DEFAULT_NODE_ACTIVATION_INTERVAL_MILLIS: u64 = 30000;
 
 pub const DEFAULT_DKG_TIMEOUT_DURATION: usize = 10 * 4;
 pub const DEFAULT_RANDOMNESS_TASK_EXCLUSIVE_WINDOW: usize = 10;
@@ -65,8 +68,10 @@ struct ConfigHolder {
     pub node_advertised_committer_rpc_endpoint: Option<String>,
     pub node_management_rpc_endpoint: String,
     pub node_management_rpc_token: String,
+    pub node_statistics_http_endpoint: String,
     pub provider_endpoint: String,
     pub chain_id: usize,
+    pub is_eigenlayer: Option<bool>,
     pub controller_address: String,
     pub controller_relayer_address: String,
     pub adapter_address: String,
@@ -76,7 +81,7 @@ struct ConfigHolder {
     pub data_path: Option<String>,
     pub account: Account,
     pub listeners: Option<Vec<ListenerDescriptorHolder>>,
-    pub logger: Option<LoggerDescriptor>,
+    pub logger: Option<LoggerDescriptorHolder>,
     pub time_limits: Option<TimeLimitDescriptorHolder>,
     pub relayed_chains: Vec<RelayedChainHolder>,
 }
@@ -86,10 +91,12 @@ impl Default for ConfigHolder {
         Self {
             node_committer_rpc_endpoint: "[::1]:50060".to_string(),
             node_advertised_committer_rpc_endpoint: Some("[::1]:50060".to_string()),
-            node_management_rpc_endpoint: "[::1]:50099".to_string(),
+            node_management_rpc_endpoint: "[::1]:50090".to_string(),
             node_management_rpc_token: "for_test".to_string(),
+            node_statistics_http_endpoint: "http://localhost:50080".to_string(),
             provider_endpoint: "localhost:8545".to_string(),
             chain_id: 0,
+            is_eigenlayer: Some(false),
             controller_address: PLACEHOLDER_ADDRESS.to_string(),
             controller_relayer_address: PLACEHOLDER_ADDRESS.to_string(),
             adapter_address: PLACEHOLDER_ADDRESS.to_string(),
@@ -104,10 +111,16 @@ impl Default for ConfigHolder {
         }
     }
 }
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct LoggerDescriptorHolder {
+    context_logging: bool,
+    log_file_path: Option<String>,
+    #[serde(deserialize_with = "deserialize_limit")]
+    rolling_file_size: u64,
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LoggerDescriptor {
-    node_id: String,
     context_logging: bool,
     log_file_path: String,
     #[serde(deserialize_with = "deserialize_limit")]
@@ -117,17 +130,28 @@ pub struct LoggerDescriptor {
 impl Default for LoggerDescriptor {
     fn default() -> Self {
         Self {
-            node_id: "running".to_string(),
             context_logging: false,
-            log_file_path: "log/running".to_string(),
+            log_file_path: "log/".to_string(),
             rolling_file_size: DEFAULT_ROLLING_LOG_FILE_SIZE,
         }
     }
 }
 
 impl LoggerDescriptor {
-    pub fn get_node_id(&self) -> &str {
-        &self.node_id
+    pub fn from(logger_descriptor_holder: LoggerDescriptorHolder) -> Self {
+        let context_logging = logger_descriptor_holder.context_logging;
+        let log_file_path = if logger_descriptor_holder.log_file_path.is_none() {
+            "log/".to_string()
+        } else {
+            logger_descriptor_holder.log_file_path.unwrap()
+        };
+        let rolling_file_size = logger_descriptor_holder.rolling_file_size;
+
+        Self {
+            context_logging,
+            log_file_path,
+            rolling_file_size,
+        }
     }
 
     pub fn get_context_logging(&self) -> bool {
@@ -418,14 +442,16 @@ pub struct ExponentialBackoffRetryDescriptor {
     pub use_jitter: bool,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct Config {
     node_committer_rpc_endpoint: String,
     node_advertised_committer_rpc_endpoint: String,
     node_management_rpc_endpoint: String,
     node_management_rpc_token: String,
+    node_statistics_http_endpoint: String,
     provider_endpoint: String,
     chain_id: usize,
+    is_eigenlayer: bool,
     controller_address: String,
     controller_relayer_address: String,
     adapter_address: String,
@@ -438,6 +464,50 @@ pub struct Config {
     logger: LoggerDescriptor,
     time_limits: TimeLimitDescriptor,
     relayed_chains: Vec<RelayedChain>,
+}
+
+impl std::fmt::Debug for Config {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("Config")
+            .field(
+                "node_committer_rpc_endpoint",
+                &self.node_committer_rpc_endpoint,
+            )
+            .field(
+                "node_advertised_committer_rpc_endpoint",
+                &self.node_advertised_committer_rpc_endpoint,
+            )
+            .field(
+                "node_management_rpc_endpoint",
+                &self.node_management_rpc_endpoint,
+            )
+            .field("node_management_rpc_token", &"ignored")
+            .field(
+                "node_statistics_http_endpoint",
+                &self.node_statistics_http_endpoint,
+            )
+            .field("provider_endpoint", &"ignored")
+            .field("chain_id", &self.chain_id)
+            .field("is_eigenlayer", &self.is_eigenlayer)
+            .field("controller_address", &self.controller_address)
+            .field(
+                "controller_relayer_address",
+                &self.controller_relayer_address,
+            )
+            .field("adapter_address", &self.adapter_address)
+            .field(
+                "adapter_deployed_block_height",
+                &self.adapter_deployed_block_height,
+            )
+            .field("arpa_contract_address", &self.arpa_contract_address)
+            .field("data_path", &self.data_path)
+            .field("account", &"ignored")
+            .field("listeners", &self.listeners)
+            .field("logger", &self.logger)
+            .field("time_limits", &self.time_limits)
+            .field("relayed_chains", &self.relayed_chains)
+            .finish()
+    }
 }
 
 impl From<ConfigHolder> for Config {
@@ -460,8 +530,14 @@ impl From<ConfigHolder> for Config {
         } else {
             config_holder.node_management_rpc_token.clone()
         };
+        let node_statistics_http_endpoint = config_holder.node_statistics_http_endpoint.clone();
         let provider_endpoint = config_holder.provider_endpoint.clone();
         let chain_id = config_holder.chain_id;
+        let is_eigenlayer = if config_holder.is_eigenlayer.is_none() {
+            false
+        } else {
+            config_holder.is_eigenlayer.unwrap()
+        };
         let controller_address = config_holder.controller_address.clone();
         let controller_relayer_address = config_holder.controller_relayer_address.clone();
         let adapter_address = config_holder.adapter_address.clone();
@@ -477,7 +553,7 @@ impl From<ConfigHolder> for Config {
             config_holder.arpa_contract_address.unwrap()
         };
         let data_path = if config_holder.data_path.is_none() {
-            String::from("data.sqlite")
+            String::from("./db/data.sqlite")
         } else {
             config_holder.data_path.unwrap()
         };
@@ -485,7 +561,7 @@ impl From<ConfigHolder> for Config {
         let logger = if config_holder.logger.is_none() {
             LoggerDescriptor::default()
         } else {
-            config_holder.logger.unwrap()
+            LoggerDescriptor::from(config_holder.logger.unwrap())
         };
         let time_limits = if config_holder.time_limits.is_none() {
             TimeLimitDescriptor::default()
@@ -554,8 +630,10 @@ impl From<ConfigHolder> for Config {
             node_advertised_committer_rpc_endpoint,
             node_management_rpc_endpoint,
             node_management_rpc_token,
+            node_statistics_http_endpoint,
             provider_endpoint,
             chain_id,
+            is_eigenlayer,
             controller_address,
             controller_relayer_address,
             adapter_address,
@@ -579,10 +657,10 @@ impl Default for Config {
 
 impl Config {
     pub fn load(config_path: PathBuf) -> Config {
-        let config_str = &read_to_string(config_path).unwrap_or_else(|e| {
+        let config_str = &read_to_string(&config_path).unwrap_or_else(|e| {
             panic!(
-                "Error loading configuration file: {:?}, please check the configuration!",
-                e
+                "Error loading configuration file: {:?} because {:?}, please check the configuration!",
+                config_path, e
             )
         });
 
@@ -590,6 +668,10 @@ impl Config {
             serde_yaml::from_str(config_str).expect("Error loading configuration file");
 
         config.into()
+    }
+
+    pub fn is_eigenlayer(&self) -> bool {
+        self.is_eigenlayer
     }
 
     pub fn get_main_chain_id(&self) -> usize {
@@ -614,6 +696,10 @@ impl Config {
 
     pub fn get_node_management_rpc_token(&self) -> &str {
         &self.node_management_rpc_token
+    }
+
+    pub fn get_node_statistics_http_endpoint(&self) -> &str {
+        &self.node_statistics_http_endpoint
     }
 
     pub fn get_provider_endpoint(&self) -> &str {
@@ -788,7 +874,7 @@ struct RelayedChainHolder {
     pub time_limits: Option<TimeLimitDescriptorHolder>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize)]
 pub struct RelayedChain {
     chain_id: usize,
     description: String,
@@ -799,6 +885,25 @@ pub struct RelayedChain {
     arpa_contract_address: String,
     listeners: Vec<ListenerDescriptor>,
     time_limits: TimeLimitDescriptor,
+}
+
+impl std::fmt::Debug for RelayedChain {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("RelayedChain")
+            .field("chain_id", &self.chain_id)
+            .field("description", &self.description)
+            .field("provider_endpoint", &"ignored")
+            .field("controller_oracle_address", &self.controller_oracle_address)
+            .field("adapter_address", &self.adapter_address)
+            .field(
+                "adapter_deployed_block_height",
+                &self.adapter_deployed_block_height,
+            )
+            .field("arpa_contract_address", &self.arpa_contract_address)
+            .field("listeners", &self.listeners)
+            .field("time_limits", &self.time_limits)
+            .finish()
+    }
 }
 
 impl From<RelayedChainHolder> for RelayedChain {
@@ -915,26 +1020,34 @@ impl RelayedChain {
 }
 
 #[derive(Debug, Eq, Clone, Copy, Hash, PartialEq)]
-pub enum TaskType {
+pub enum ComponentTaskType {
     Listener(usize, ListenerType),
     Subscriber(usize, SubscriberType),
     RpcServer(RpcServerType),
+    HttpServer(HttpServerType),
 }
 
-impl std::fmt::Display for TaskType {
+impl std::fmt::Display for ComponentTaskType {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         match self {
-            TaskType::Listener(id, l) => f
-                .debug_struct("TaskType")
+            ComponentTaskType::Listener(id, l) => f
+                .debug_struct("ComponentTaskType")
                 .field("chain_id", id)
                 .field("listener", l)
                 .finish(),
-            TaskType::Subscriber(id, s) => f
-                .debug_struct("TaskType")
+            ComponentTaskType::Subscriber(id, s) => f
+                .debug_struct("ComponentTaskType")
                 .field("chain_id", id)
                 .field("subscriber", s)
                 .finish(),
-            TaskType::RpcServer(r) => f.debug_struct("TaskType").field("rpc server", r).finish(),
+            ComponentTaskType::RpcServer(r) => f
+                .debug_struct("ComponentTaskType")
+                .field("rpc server", r)
+                .finish(),
+            ComponentTaskType::HttpServer(h) => f
+                .debug_struct("ComponentTaskType")
+                .field("http server", h)
+                .finish(),
         }
     }
 }
@@ -948,6 +1061,7 @@ pub enum ListenerType {
     NewRandomnessTask,
     ReadyToHandleRandomnessTask,
     RandomnessSignatureAggregation,
+    ScheduleNodeActivation,
 }
 
 impl TryFrom<i32> for ListenerType {
@@ -962,6 +1076,7 @@ impl TryFrom<i32> for ListenerType {
             4 => Ok(ListenerType::NewRandomnessTask),
             5 => Ok(ListenerType::ReadyToHandleRandomnessTask),
             6 => Ok(ListenerType::RandomnessSignatureAggregation),
+            7 => Ok(ListenerType::ScheduleNodeActivation),
             _ => Err(SchedulerError::TaskNotFound),
         }
     }
@@ -979,6 +1094,7 @@ impl std::fmt::Display for ListenerType {
             }
             ListenerType::PostCommitGrouping => write!(f, "PostCommitGrouping"),
             ListenerType::NewRandomnessTask => write!(f, "NewRandomnessTask"),
+            ListenerType::ScheduleNodeActivation => write!(f, "ScheduleNodeActivation"),
         }
     }
 }
@@ -1023,6 +1139,19 @@ impl std::fmt::Display for RpcServerType {
         match self {
             RpcServerType::Committer => write!(f, "Committer"),
             RpcServerType::Management => write!(f, "Management"),
+        }
+    }
+}
+
+#[derive(Debug, Eq, Clone, Copy, Hash, PartialEq)]
+pub enum HttpServerType {
+    Statistics,
+}
+
+impl std::fmt::Display for HttpServerType {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        match self {
+            HttpServerType::Statistics => write!(f, "Statistics"),
         }
     }
 }

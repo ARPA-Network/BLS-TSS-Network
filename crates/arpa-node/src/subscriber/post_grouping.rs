@@ -10,10 +10,14 @@ use arpa_contract_client::{
     controller::{ControllerTransactions, ControllerViews},
     controller_relayer::ControllerRelayerTransactions,
 };
-use arpa_core::{DKGStatus, SubscriberType, TaskType, PLACEHOLDER_ADDRESS};
+use arpa_core::{
+    log::{build_group_related_transaction_receipt_payload, LogType},
+    ComponentTaskType, DKGStatus, SubscriberType, PLACEHOLDER_ADDRESS,
+};
 use arpa_dal::GroupInfoHandler;
 use arpa_log::*;
 use async_trait::async_trait;
+use ethers::types::U256;
 use log::{debug, error, info};
 use std::{marker::PhantomData, sync::Arc};
 use threshold_bls::group::Curve;
@@ -76,6 +80,8 @@ impl<PC: Curve + Sync + Send + 'static> DKGPostProcessHandler for GeneralDKGPost
                 group_index, group_epoch
             );
 
+            let chain_id = self.chain_identity.read().await.get_chain_id();
+
             let controller_client = self.chain_identity.read().await.build_controller_client();
 
             let controller_relayer_client = self
@@ -87,14 +93,46 @@ impl<PC: Curve + Sync + Send + 'static> DKGPostProcessHandler for GeneralDKGPost
             if PLACEHOLDER_ADDRESS
                 != ControllerViews::<PC>::get_coordinator(&controller_client, group_index).await?
             {
-                controller_client
+                if let Ok(receipt) = controller_client
                     .post_process_dkg(group_index, group_epoch)
-                    .await?;
+                    .await
+                {
+                    info!(
+                        "{}",
+                        build_group_related_transaction_receipt_payload(
+                            LogType::DKGPostProcessFinished,
+                            "DKG post process finished.",
+                            chain_id,
+                            self.group_cache.read().await.get_group()?,
+                            None,
+                            receipt.transaction_hash,
+                            receipt.gas_used.unwrap_or(U256::zero()),
+                            receipt.effective_gas_price.unwrap_or(U256::zero())
+                        )
+                    );
+                }
 
-                for relayed_chain_id in self.supported_relayed_chains.iter() {
-                    controller_relayer_client
-                        .relay_group(*relayed_chain_id, group_index)
-                        .await?;
+                if self.group_cache.read().await.get_group()?.state {
+                    for relayed_chain_id in self.supported_relayed_chains.iter() {
+                        if let Ok(receipt) = controller_relayer_client
+                            .relay_group(*relayed_chain_id, group_index)
+                            .await
+                        {
+                            info!(
+                                "{}",
+                                build_group_related_transaction_receipt_payload(
+                                    LogType::DKGPostProcessGroupRelayFinished,
+                                    "DKG post process group relay finished.",
+                                    chain_id,
+                                    self.group_cache.read().await.get_group()?,
+                                    Some(*relayed_chain_id),
+                                    receipt.transaction_hash,
+                                    receipt.gas_used.unwrap_or(U256::zero()),
+                                    receipt.effective_gas_price.unwrap_or(U256::zero())
+                                )
+                            );
+                        }
+                    }
                 }
             };
         }
@@ -120,7 +158,7 @@ impl<PC: Curve + std::fmt::Debug + Sync + Send + 'static> Subscriber
         let supported_relayed_chains = self.supported_relayed_chains.clone();
         let group_cache = self.group_cache.clone();
 
-        self.ts.write().await.add_task(TaskType::Subscriber(self.chain_identity.read().await.get_chain_id(), SubscriberType::PostGrouping),async move {
+        self.ts.write().await.add_task(ComponentTaskType::Subscriber(self.chain_identity.read().await.get_chain_id(), SubscriberType::PostGrouping),async move {
                 let handler = GeneralDKGPostProcessHandler {
                     chain_identity,
                     supported_relayed_chains,

@@ -20,6 +20,12 @@ pub struct PostGroupingListener<PC: Curve> {
     dkg_timeout_duration: usize,
 }
 
+impl<PC: Curve> std::fmt::Display for PostGroupingListener<PC> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "PostGroupingListener")
+    }
+}
+
 impl<PC: Curve> PostGroupingListener<PC> {
     pub fn new(
         block_cache: Arc<RwLock<Box<dyn BlockInfoHandler>>>,
@@ -83,8 +89,10 @@ impl<PC: Curve + Sync + Send> Listener for PostGroupingListener<PC> {
     }
 
     async fn handle_interruption(&self) -> NodeResult<()> {
-        info!("Handle interruption for PostGroupingListener");
-
         Ok(())
+    }
+
+    async fn chain_id(&self) -> usize {
+        self.block_cache.read().await.get_chain_id()
     }
 }

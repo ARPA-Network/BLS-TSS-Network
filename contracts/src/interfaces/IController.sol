@@ -30,13 +30,6 @@ interface IController {
         CommitResult commitResult;
     }
 
-    struct Node {
-        address idAddress;
-        bytes dkgPublicKey;
-        bool state;
-        uint256 pendingUntilBlock;
-    }
-
     struct CommitDkgParams {
         uint256 groupIndex;
         uint256 groupEpoch;
@@ -46,19 +39,16 @@ interface IController {
     }
 
     // node transaction
-    function nodeRegister(bytes calldata dkgPublicKey) external;
+    function nodeJoin(address nodeIdAddress) external returns (uint256 groupIndex);
 
-    function nodeActivate() external;
-
-    function nodeQuit() external;
-
-    function changeDkgPublicKey(bytes calldata dkgPublicKey) external;
+    function nodeLeave(address nodeIdAddress) external;
 
     function commitDkg(CommitDkgParams memory params) external;
 
     function postProcessDkg(uint256 groupIndex, uint256 groupEpoch) external;
 
-    function nodeWithdraw(address recipient) external;
+    // nodeRegistry transaction
+    function nodeWithdrawETH(address recipient, uint256 ethAmount) external;
 
     // adapter transaction
     function addReward(address[] memory nodes, uint256 ethAmount, uint256 arpaAmount) external;
@@ -70,15 +60,13 @@ interface IController {
         external
         view
         returns (
-            address stakingContractAddress,
+            address nodeRegistryContractAddress,
             address adapterContractAddress,
-            uint256 nodeStakingAmount,
             uint256 disqualifiedNodePenaltyAmount,
             uint256 defaultNumberOfCommitters,
             uint256 defaultDkgPhaseDuration,
             uint256 groupMaxCapacity,
             uint256 idealNumberOfGroups,
-            uint256 pendingBlockAfterQuit,
             uint256 dkgPostProcessReward
         );
 
@@ -94,16 +82,12 @@ interface IController {
 
     function getGroupThreshold(uint256 groupIndex) external view returns (uint256, uint256);
 
-    function getNode(address nodeAddress) external view returns (Node memory);
-
     function getMember(uint256 groupIndex, uint256 memberIndex) external view returns (Member memory);
 
     /// @notice Get the group index and member index of a given node.
     function getBelongingGroup(address nodeAddress) external view returns (int256, int256);
 
     function getCoordinator(uint256 groupIndex) external view returns (address);
-
-    function getNodeWithdrawableTokens(address nodeAddress) external view returns (uint256, uint256);
 
     function getLastOutput() external view returns (uint256);
 

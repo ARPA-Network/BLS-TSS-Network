@@ -3,22 +3,24 @@ pragma solidity ^0.8.18;
 
 pragma experimental ABIEncoderV2;
 
-import {RandcastTestHelper, ERC20, ControllerForTest, IController, Controller} from "./RandcastTestHelper.sol";
+import {
+    RandcastTestHelper,
+    ERC20,
+    ControllerForTest,
+    IController,
+    IControllerOwner,
+    INodeRegistry,
+    NodeRegistry,
+    ServiceManager,
+    ERC1967Proxy,
+    INodeRegistryOwner
+} from "./RandcastTestHelper.sol";
+import {Controller} from "../src/Controller.sol";
 import {ICoordinator} from "../src/interfaces/ICoordinator.sol";
+import {IControllerForTest} from "./IControllerForTest.sol";
 import {BLS} from "../src/libraries/BLS.sol";
 
 contract DKGScenarioTest is RandcastTestHelper {
-    uint256 internal _disqualifiedNodePenaltyAmount = 1000;
-    uint256 internal _defaultNumberOfCommitters = 3;
-    uint256 internal _defaultDkgPhaseDuration = 10;
-    uint256 internal _groupMaxCapacity = 10;
-    uint256 internal _idealNumberOfGroups = 5;
-    uint256 internal _pendingBlockAfterQuit = 100;
-    uint256 internal _dkgPostProcessReward = 100;
-    uint64 internal _lastOutput = 0x2222222222222222;
-
-    address internal _owner = _admin;
-
     function setUp() public {
         // deal nodes
         vm.deal(_node1, 1 * 10 ** 18);
@@ -28,9 +30,9 @@ contract DKGScenarioTest is RandcastTestHelper {
         vm.deal(_node5, 1 * 10 ** 18);
 
         // deal _owner and create _controller
-        vm.deal(_owner, 1 * 10 ** 18);
+        vm.deal(_admin, 1 * 10 ** 18);
 
-        vm.prank(_owner);
+        vm.prank(_admin);
         _arpa = new ERC20("arpa token", "ARPA");
 
         address[] memory operators = new address[](5);
@@ -41,35 +43,70 @@ contract DKGScenarioTest is RandcastTestHelper {
         operators[4] = _node5;
         _prepareStakingContract(_stakingDeployer, address(_arpa), operators);
 
-        _controller = new ControllerForTest(address(_arpa), _lastOutput);
+        vm.prank(_admin);
+        _controllerImpl = new ControllerForTest();
 
-        _controller.setControllerConfig(
+        vm.prank(_admin);
+        _controller =
+            new ERC1967Proxy(address(_controllerImpl), abi.encodeWithSignature("initialize(uint256)", _lastOutput));
+
+        vm.prank(_admin);
+        _nodeRegistryImpl = new NodeRegistry();
+
+        vm.prank(_admin);
+        _nodeRegistry =
+            new ERC1967Proxy(address(_nodeRegistryImpl), abi.encodeWithSignature("initialize(address)", address(_arpa)));
+
+        vm.prank(_admin);
+        _serviceManagerImpl = new ServiceManager();
+
+        vm.prank(_admin);
+        _serviceManager = new ERC1967Proxy(
+            address(_serviceManagerImpl),
+            abi.encodeWithSignature(
+                "initialize(address,address,address)",
+                address(_nodeRegistry),
+                address(0),
+                address(0)
+            )
+        );
+
+        vm.prank(_admin);
+        INodeRegistryOwner(address(_nodeRegistry)).setNodeRegistryConfig(
+            address(_controller),
             address(_staking),
-            address(0),
+            address(_serviceManager),
             _operatorStakeAmount,
+            _eigenlayerOperatorStakeAmount,
+            _pendingBlockAfterQuit
+        );
+
+        vm.prank(_admin);
+        IControllerOwner(address(_controller)).setControllerConfig(
+            address(_nodeRegistry),
+            address(0),
             _disqualifiedNodePenaltyAmount,
             _defaultNumberOfCommitters,
             _defaultDkgPhaseDuration,
             _groupMaxCapacity,
             _idealNumberOfGroups,
-            _pendingBlockAfterQuit,
             _dkgPostProcessReward
         );
 
         vm.prank(_stakingDeployer);
-        _staking.setController(address(_controller));
+        _staking.setController(address(_nodeRegistry));
 
         // Register Nodes
         vm.prank(_node1);
-        _controller.nodeRegister(_dkgPubkey1);
+        INodeRegistry(address(_nodeRegistry)).nodeRegister(_dkgPubkey1, false, _emptyOperatorSignature);
         vm.prank(_node2);
-        _controller.nodeRegister(_dkgPubkey2);
+        INodeRegistry(address(_nodeRegistry)).nodeRegister(_dkgPubkey2, false, _emptyOperatorSignature);
         vm.prank(_node3);
-        _controller.nodeRegister(_dkgPubkey3);
+        INodeRegistry(address(_nodeRegistry)).nodeRegister(_dkgPubkey3, false, _emptyOperatorSignature);
         vm.prank(_node4);
-        _controller.nodeRegister(_dkgPubkey4);
+        INodeRegistry(address(_nodeRegistry)).nodeRegister(_dkgPubkey4, false, _emptyOperatorSignature);
         vm.prank(_node5);
-        _controller.nodeRegister(_dkgPubkey5);
+        INodeRegistry(address(_nodeRegistry)).nodeRegister(_dkgPubkey5, false, _emptyOperatorSignature);
     }
 
     struct Params {
@@ -89,7 +126,7 @@ contract DKGScenarioTest is RandcastTestHelper {
             if (params[i].shouldRevert) {
                 vm.expectRevert(params[i].revertMessage);
             }
-            _controller.commitDkg(
+            IControllerForTest(address(_controller)).commitDkg(
                 IController.CommitDkgParams(
                     params[i].groupIndex,
                     params[i].groupEpoch,
@@ -102,7 +139,7 @@ contract DKGScenarioTest is RandcastTestHelper {
     }
 
     function setPhase(uint256 groupIndex, uint256 phase) public {
-        address coordinatorAddress = _controller.getCoordinator(groupIndex);
+        address coordinatorAddress = IControllerForTest(address(_controller)).getCoordinator(groupIndex);
         ICoordinator coordinator = ICoordinator(coordinatorAddress);
         uint256 startBlock = coordinator.startBlock();
         vm.roll(startBlock + 1 + phase * _defaultDkgPhaseDuration);
@@ -160,8 +197,8 @@ contract DKGScenarioTest is RandcastTestHelper {
         // printGroupInfo(0);
 
         assertEq(checkIsStrictlyMajorityConsensusReached(0), true);
-        assertEq(_controller.getGroup(0).members.length, 5);
-        assertEq(_controller.getGroup(0).size, 5);
+        assertEq(IControllerForTest(address(_controller)).getGroup(0).members.length, 5);
+        assertEq(IControllerForTest(address(_controller)).getGroup(0).size, 5);
     }
 
     // * 1 Disqualified Node
@@ -183,8 +220,8 @@ contract DKGScenarioTest is RandcastTestHelper {
 
         // assert group state is correct
         assertEq(checkIsStrictlyMajorityConsensusReached(0), true);
-        assertEq(_controller.getGroup(0).members.length, 4);
-        assertEq(_controller.getGroup(0).size, 4);
+        assertEq(IControllerForTest(address(_controller)).getGroup(0).members.length, 4);
+        assertEq(IControllerForTest(address(_controller)).getGroup(0).size, 4);
 
         // assert _node1 was slashed
         assertEq(nodeInGroup(_node1, 0), false);
@@ -209,8 +246,8 @@ contract DKGScenarioTest is RandcastTestHelper {
 
         // assert group state is correct
         assertEq(checkIsStrictlyMajorityConsensusReached(0), true);
-        assertEq(_controller.getGroup(0).members.length, 4);
-        assertEq(_controller.getGroup(0).size, 4);
+        assertEq(IControllerForTest(address(_controller)).getGroup(0).members.length, 4);
+        assertEq(IControllerForTest(address(_controller)).getGroup(0).size, 4);
 
         // assert _node1 was slashed
         assertEq(nodeInGroup(_node1, 0), false);
@@ -233,8 +270,8 @@ contract DKGScenarioTest is RandcastTestHelper {
 
         // assert group state is correct
         assertEq(checkIsStrictlyMajorityConsensusReached(0), true);
-        assertEq(_controller.getGroup(0).members.length, 5);
-        assertEq(_controller.getGroup(0).size, 5);
+        assertEq(IControllerForTest(address(_controller)).getGroup(0).members.length, 5);
+        assertEq(IControllerForTest(address(_controller)).getGroup(0).size, 5);
     }
 
     function test1Dq1Reporter() public {
@@ -253,8 +290,8 @@ contract DKGScenarioTest is RandcastTestHelper {
 
         // assert group state is correct
         assertEq(checkIsStrictlyMajorityConsensusReached(0), true);
-        assertEq(_controller.getGroup(0).members.length, 5);
-        assertEq(_controller.getGroup(0).size, 5);
+        assertEq(IControllerForTest(address(_controller)).getGroup(0).members.length, 5);
+        assertEq(IControllerForTest(address(_controller)).getGroup(0).size, 5);
     }
 
     // * 2 Disqualified Nodes
@@ -279,8 +316,8 @@ contract DKGScenarioTest is RandcastTestHelper {
 
         // assert group state is correct
         assertEq(checkIsStrictlyMajorityConsensusReached(0), true);
-        assertEq(_controller.getGroup(0).members.length, 3);
-        assertEq(_controller.getGroup(0).size, 3);
+        assertEq(IControllerForTest(address(_controller)).getGroup(0).members.length, 3);
+        assertEq(IControllerForTest(address(_controller)).getGroup(0).size, 3);
 
         // assert _node1 was slashed
         assertEq(nodeInGroup(_node1, 0), false);
@@ -310,8 +347,8 @@ contract DKGScenarioTest is RandcastTestHelper {
 
         // assert group state is correct
         assertEq(checkIsStrictlyMajorityConsensusReached(0), true);
-        assertEq(_controller.getGroup(0).members.length, 3);
-        assertEq(_controller.getGroup(0).size, 3);
+        assertEq(IControllerForTest(address(_controller)).getGroup(0).members.length, 3);
+        assertEq(IControllerForTest(address(_controller)).getGroup(0).size, 3);
 
         // assert _node1 and _node2 were slashed
         assertEq(nodeInGroup(_node1, 0), false);
@@ -337,8 +374,8 @@ contract DKGScenarioTest is RandcastTestHelper {
 
         // assert group state is correct
         assertEq(checkIsStrictlyMajorityConsensusReached(0), true);
-        assertEq(_controller.getGroup(0).members.length, 5);
-        assertEq(_controller.getGroup(0).size, 5);
+        assertEq(IControllerForTest(address(_controller)).getGroup(0).members.length, 5);
+        assertEq(IControllerForTest(address(_controller)).getGroup(0).size, 5);
     }
 
     // * 3 Disqualified Nodes (???)
@@ -363,14 +400,14 @@ contract DKGScenarioTest is RandcastTestHelper {
 
         // assert group state is correct
         assertEq(checkIsStrictlyMajorityConsensusReached(0), false);
-        assertEq(_controller.getGroup(0).members.length, 5);
-        assertEq(_controller.getGroup(0).size, 5);
+        assertEq(IControllerForTest(address(_controller)).getGroup(0).members.length, 5);
+        assertEq(IControllerForTest(address(_controller)).getGroup(0).size, 5);
 
         // assert _node1, _node2, and _node3 were slashed
         assertEq(nodeInGroup(_node1, 0), true);
-        // assertEq(nodeStakingAmount, _staking.getDelegationReward(_node1));
+        // assertEq(nativeNodeStakingAmount, _staking.getDelegationReward(_node1));
         // assertEq(nodeInGroup(_node1, 0), false);
-        // // assertEq(nodeStakingAmount - _disqualifiedNodePenaltyAmount, _staking.getDelegationReward(_node1));
+        // // assertEq(nativeNodeStakingAmount - _disqualifiedNodePenaltyAmount, _staking.getDelegationReward(_node1));
     }
 
     // * PPDKG with 3 Disqualified Nodes
@@ -387,13 +424,13 @@ contract DKGScenarioTest is RandcastTestHelper {
 
         // call postProcessDkg as _node1
         vm.prank(_node1);
-        _controller.postProcessDkg(0, 3);
+        IControllerForTest(address(_controller)).postProcessDkg(0, 3);
         // printGroupInfo(0);
 
         // assert group state is correct
         assertEq(checkIsStrictlyMajorityConsensusReached(0), false);
-        assertEq(_controller.getGroup(0).members.length, 2);
-        assertEq(_controller.getGroup(0).size, 2);
+        assertEq(IControllerForTest(address(_controller)).getGroup(0).members.length, 2);
+        assertEq(IControllerForTest(address(_controller)).getGroup(0).size, 2);
 
         // assert _node1, _node2, and _node3 were slashed
         assertEq(nodeInGroup(_node1, 0), false);
@@ -431,8 +468,8 @@ contract DKGScenarioTest is RandcastTestHelper {
 
         // assert group state is correct
         assertEq(checkIsStrictlyMajorityConsensusReached(0), false);
-        assertEq(_controller.getGroup(0).members.length, 5);
-        assertEq(_controller.getGroup(0).size, 5);
+        assertEq(IControllerForTest(address(_controller)).getGroup(0).members.length, 5);
+        assertEq(IControllerForTest(address(_controller)).getGroup(0).size, 5);
     }
 
     // * PPDKG Node Mixed Reporting
@@ -451,13 +488,13 @@ contract DKGScenarioTest is RandcastTestHelper {
 
         // call postProcessDkg as _node1
         vm.prank(_node1);
-        _controller.postProcessDkg(0, 3);
+        IControllerForTest(address(_controller)).postProcessDkg(0, 3);
         printGroupInfo(0);
 
         // assert group state is correct
         assertEq(checkIsStrictlyMajorityConsensusReached(0), false);
-        assertEq(_controller.getGroup(0).members.length, 0);
-        assertEq(_controller.getGroup(0).size, 0);
+        assertEq(IControllerForTest(address(_controller)).getGroup(0).members.length, 0);
+        assertEq(IControllerForTest(address(_controller)).getGroup(0).size, 0);
 
         // assert nodes are slashed
         assertEq(nodeInGroup(_node1, 0), false);

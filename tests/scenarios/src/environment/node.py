@@ -8,7 +8,8 @@ import subprocess
 import sys
 import re
 import grpc
-sys.path.insert(1, 'tests/scenarios/src/environment/proto')
+
+sys.path.insert(1, "tests/scenarios/src/environment/proto")
 from google.protobuf.empty_pb2 import Empty
 import management_pb2_grpc
 import management_pb2
@@ -55,7 +56,7 @@ def call_request(endpoint, request_name, **args):
     request = get_request(request_name, **args)
     function = getattr(stub, request_name)
     metadata = []
-    metadata.append(('authorization', 'for_test'))
+    metadata.append(("authorization", "for_test"))
     response = function(request, metadata=metadata)
     return response
 
@@ -74,8 +75,11 @@ def parse_chain_result_to_account_list():
     """
     Parse the result of the chain command to a list of Account objects.
     """
-    with open('tests/scenarios/src/environment/node_config/accounts.txt', 'r',
-              encoding='utf-8') as file:
+    with open(
+        "tests/scenarios/src/environment/node_config/accounts.txt",
+        "r",
+        encoding="utf-8",
+    ) as file:
         # creating two arrays of accounts and private keys
         accounts = []
         private_keys = []
@@ -83,14 +87,14 @@ def parse_chain_result_to_account_list():
         for line in file:
             is_private_key = False
             # locating private keys
-            matches = re.finditer('(0x)?[A-Fa-f0-9]{64}', line)
+            matches = re.finditer("(0x)?[A-Fa-f0-9]{64}", line)
             for match in matches:
                 private_keys.append(match.group())
                 is_private_key = True
             if is_private_key:
                 continue
             # locating accounts
-            matches = re.finditer('(0x)?[A-Fa-f0-9]{40}', line)
+            matches = re.finditer("(0x)?[A-Fa-f0-9]{40}", line)
             for match in matches:
                 accounts.append(match.group())
         # Create a list of Account objects using the namedtuple syntax
@@ -98,7 +102,9 @@ def parse_chain_result_to_account_list():
         return account_list
 
 
-def create_relay_list(op_endpoint=None, op_chain_id=None, base_endpoint=None, base_chain_id=None):
+def create_relay_list(
+    op_endpoint=None, op_chain_id=None, base_endpoint=None, base_chain_id=None
+):
     """
     Create the relay list.
     """
@@ -152,18 +158,20 @@ def create_relay_list(op_endpoint=None, op_chain_id=None, base_endpoint=None, ba
     relay_chain_config = []
 
     if op_endpoint is not None and op_chain_id is not None:
-        relay_chain_config.append(
-            generate_relay_string("OP", op_chain_id, op_endpoint))
+        relay_chain_config.append(generate_relay_string("OP", op_chain_id, op_endpoint))
 
     if base_endpoint is not None and base_chain_id is not None:
-        relay_chain_config.append(generate_relay_string(
-            "base", base_chain_id, base_endpoint))
+        relay_chain_config.append(
+            generate_relay_string("base", base_chain_id, base_endpoint)
+        )
 
-    joined_list = '\n  '.join(relay_chain_config)
+    joined_list = "\n  ".join(relay_chain_config)
     return joined_list
 
 
-def create_node_config(controller_address, adapter_address, relayer_address, chain_id, relay_config):
+def create_node_config(
+    controller_address, adapter_address, relayer_address, chain_id, relay_config
+):
     """
     Create the node config files.
     """
@@ -171,14 +179,14 @@ def create_node_config(controller_address, adapter_address, relayer_address, cha
     account_list = parse_chain_result_to_account_list()
     provider_endpoint = "ws://127.0.0.1:8545"
     relay_chain_config = relay_config
-    if chain_id == '900':
+    if chain_id == "900":
         provider_endpoint = "ws://127.0.0.1:8546"
     # Loop through accounts
     i = 0
     for account in account_list:
-        key = account.key.replace('0x', '')
+        key = account.key.replace("0x", "")
         # Create filename
-        file_name = f'config{i + 1}.yml'
+        file_name = f"config{i + 1}.yml"
         # Create contents
         content = f"""node_committer_rpc_endpoint: \"[::1]:501{61 + i}\"
 
@@ -249,7 +257,6 @@ time_limits:
     max_attempts: 5
     use_jitter: false
 logger:
-  node_id: {i + 1}
   context_logging: true
   log_file_path: log/{i + 1}/
   rolling_file_size: 10 gb
@@ -259,8 +266,11 @@ relayed_chains:
 
 """
         # Write out to file
-        with open('tests/scenarios/src/environment/node_config/'+file_name, 'w',
-                  encoding='utf-8') as file:
+        with open(
+            "tests/scenarios/src/environment/node_config/" + file_name,
+            "w",
+            encoding="utf-8",
+        ) as file:
             file.write(content)
         i += 1
 
@@ -272,17 +282,19 @@ def start_node(node_idx):
     """
     root_path = os.path.dirname(os.path.abspath(__file__))
     root_path = root_path.split("/tests/")[0]
-    cmd = ("cd crates/arpa-node;"
-           "cargo run --bin node-client -- -c "
-           "{}/tests/scenarios/src/environment/node_config/config{}.yml"
-           ).format(root_path, node_idx)
+    cmd = (
+        "cd crates/arpa-node;"
+        "cargo run --bin node-client -- -c "
+        "{}/tests/scenarios/src/environment/node_config/config{}.yml"
+    ).format(root_path, node_idx)
     log_path = f"crates/arpa-node/log/running/node{node_idx}.log"
     # Check if file exists, if not create an empty file
     if not os.path.exists(log_path):
-        open(log_path, 'w', encoding='UTF-8').close()
-    with open(log_path, 'w', encoding='utf-8') as log_file:
-        proc = subprocess.Popen(cmd, shell=True, stdout=log_file,
-                                stderr=subprocess.STDOUT, cwd=root_path)
+        open(log_path, "w", encoding="UTF-8").close()
+    with open(log_path, "w", encoding="utf-8") as log_file:
+        proc = subprocess.Popen(
+            cmd, shell=True, stdout=log_file, stderr=subprocess.STDOUT, cwd=root_path
+        )
     return proc
 
 
@@ -301,10 +313,10 @@ def kill_process_by_port(port):
     port: port number.
     """
     if platform.system() == "Windows":
-        command = f'FOR /F "tokens=5 delims= " %P IN (\'netstat -a -n -o ^| findstr :{port}\') DO TaskKill.exe /F /PID %P'
+        command = f"FOR /F \"tokens=5 delims= \" %P IN ('netstat -a -n -o ^| findstr :{port}') DO TaskKill.exe /F /PID %P"
         os.system(command)
     else:
-        command = f'lsof -ti :{port} | xargs -r kill -9'
+        command = f"lsof -ti :{port} | xargs -r kill -9"
         subprocess.call(command, shell=True)
 
 
@@ -325,7 +337,7 @@ def get_node_port_from_index(node_idx):
     node_idx: index of the node.
     """
     port = 50201 + int(node_idx) - 1
-    return 'localhost:' + str(port)
+    return "localhost:" + str(port)
 
 
 def add_process_to_list(proc, node_list):
@@ -353,11 +365,11 @@ def print_node_process():
     Get the process of a node.
     """
     # Find all processes using ports 50061-50110
-    cmd = 'lsof -i :50061-50220'
+    cmd = "lsof -i :50061-50220"
     proc = subprocess.Popen(cmd.split(), stdout=subprocess.PIPE)
     out, _ = proc.communicate()
     for line in out.splitlines()[1:]:
         fields = line.strip().split()
         if fields:
-            if fields[0] == b'node-clie':
+            if fields[0] == b"node-clie":
                 print(fields)

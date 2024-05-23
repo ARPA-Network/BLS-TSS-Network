@@ -2,7 +2,7 @@ use arpa_contract_client::error::ContractClientError;
 use arpa_core::SchedulerError;
 use arpa_dal::error::DataAccessError;
 use arpa_sqlite_db::DBError;
-use dkg_core::{primitives::DKGError, NodeError as DKGNodeError};
+use dkg_core::{primitives::DKGError, DKGNodeError};
 use ethers::providers::ProviderError;
 use rustc_hex::FromHexError;
 use thiserror::Error;

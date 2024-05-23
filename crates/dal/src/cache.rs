@@ -1,5 +1,8 @@
 use crate::error::{DataAccessResult, GroupError, NodeInfoError};
-use crate::{BLSResultCacheState, BlockInfoHandler, ContextInfoUpdater};
+use crate::{
+    BLSResultCacheState, BLSTasksHandler, BlockInfoHandler, ContextInfoUpdater, GroupInfoHandler,
+    NodeInfoHandler, SignatureResultCacheHandler,
+};
 
 use super::{
     BLSTasksFetcher, BLSTasksUpdater, BlockInfoFetcher, BlockInfoUpdater, GroupInfoFetcher,
@@ -19,13 +22,15 @@ use threshold_bls::sig::Share;
 
 #[derive(Debug, Default)]
 pub struct InMemoryBlockInfoCache {
+    chain_id: usize,
     block_height: usize,
     block_time: usize,
 }
 
 impl InMemoryBlockInfoCache {
-    pub fn new(block_time: usize) -> Self {
+    pub fn new(chain_id: usize, block_time: usize) -> Self {
         InMemoryBlockInfoCache {
+            chain_id,
             block_height: 0,
             block_time,
         }
@@ -35,6 +40,10 @@ impl InMemoryBlockInfoCache {
 impl BlockInfoHandler for InMemoryBlockInfoCache {}
 
 impl BlockInfoFetcher for InMemoryBlockInfoCache {
+    fn get_chain_id(&self) -> usize {
+        self.chain_id
+    }
+
     fn get_block_height(&self) -> usize {
         self.block_height
     }
@@ -292,7 +301,7 @@ impl<C: Curve> GroupInfoUpdater<C> for InMemoryGroupInfoCache<C> {
         Ok(())
     }
 
-    async fn save_output(
+    async fn save_successful_output(
         &mut self,
         index: usize,
         epoch: usize,
@@ -366,6 +375,44 @@ impl<C: Curve> GroupInfoUpdater<C> for InMemoryGroupInfoCache<C> {
         self.refresh_context_entry();
 
         Ok((public_key, partial_public_key, disqualified_nodes))
+    }
+
+    async fn save_failed_output(
+        &mut self,
+        index: usize,
+        epoch: usize,
+        disqualified_node_indices: Vec<u32>,
+    ) -> DataAccessResult<Vec<Address>> {
+        self.only_has_group_task()?;
+
+        if self.group.index != index {
+            return Err(GroupError::GroupIndexObsolete(self.group.index).into());
+        }
+
+        if self.group.epoch != epoch {
+            return Err(GroupError::GroupEpochObsolete(self.group.epoch).into());
+        }
+
+        if self.group.state {
+            return Err(GroupError::GroupAlreadyReady.into());
+        }
+
+        // remove disqualified nodes from members
+        let disqualified_nodes = self
+            .group
+            .members
+            .iter()
+            .filter(|(_, member)| disqualified_node_indices.contains(&(member.index as u32)))
+            .map(|(id_address, _)| *id_address)
+            .collect::<Vec<_>>();
+
+        self.group.remove_disqualified_nodes(&disqualified_nodes);
+
+        self.group.size = self.group.members.len();
+
+        self.refresh_context_entry();
+
+        Ok(disqualified_nodes)
     }
 
     async fn save_committers(
@@ -751,4 +798,12 @@ impl SignatureResultCacheUpdater<RandomnessResultCache>
 
         Ok(())
     }
+}
+
+impl<PC: Curve + 'static> NodeInfoHandler<PC> for InMemoryNodeInfoCache<PC> {}
+impl<PC: Curve + 'static> GroupInfoHandler<PC> for InMemoryGroupInfoCache<PC> {}
+impl BLSTasksHandler<RandomnessTask> for InMemoryBLSTasksQueue<RandomnessTask> {}
+impl SignatureResultCacheHandler<RandomnessResultCache>
+    for InMemorySignatureResultCache<RandomnessResultCache>
+{
 }

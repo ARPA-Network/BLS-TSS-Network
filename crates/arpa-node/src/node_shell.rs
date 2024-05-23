@@ -1,11 +1,14 @@
 use arpa_contract_client::adapter::AdapterViews;
-use arpa_contract_client::contract_stub::adapter::Adapter as AdapterContract;
+use arpa_contract_client::contract_stub::adapter::{
+    Adapter as AdapterContract, SignatureWithSaltAndExpiry,
+};
 use arpa_contract_client::contract_stub::ierc20::IERC20 as ArpaContract;
 use arpa_contract_client::contract_stub::staking::Staking as StakingContract;
-use arpa_contract_client::controller::{ControllerTransactions, ControllerViews};
 use arpa_contract_client::ethers::adapter::AdapterClient;
 use arpa_contract_client::ethers::controller::ControllerClient;
 use arpa_contract_client::ethers::controller_oracle::ControllerOracleClient;
+use arpa_contract_client::ethers::node_registry::NodeRegistryClient;
+use arpa_contract_client::node_registry::{NodeRegistryTransactions, NodeRegistryViews};
 use arpa_contract_client::{ServiceClient, TransactionCaller, ViewCaller};
 use arpa_core::{
     address_to_string, build_wallet_from_config, pad_to_bytes32, Config, ConfigError,
@@ -46,7 +49,7 @@ pub struct Opt {
         short = "c",
         long,
         parse(from_os_str),
-        default_value = "conf/config.yml"
+        default_value = "crates/arpa-node/conf/config.yml"
     )]
     config_path: PathBuf,
 
@@ -66,6 +69,7 @@ struct Context<PC: Curve> {
     chain_identities: BTreeMap<usize, ChainIdentityHandlerType<PC>>,
     db: SqliteDB,
     staking_contract_address: Option<Address>,
+    node_registry_address: Option<Address>,
     show_address: bool,
     history_file_path: PathBuf,
 }
@@ -79,8 +83,8 @@ impl<PC: Curve> Context<PC> {
     }
 
     pub async fn staking_contract_address(&mut self) -> anyhow::Result<Address> {
-        let main_chain_id = self.config.get_main_chain_id();
         if self.staking_contract_address.is_none() {
+            let main_chain_id = self.config.get_main_chain_id();
             let client = self
                 .chain_identities
                 .get(&main_chain_id)
@@ -103,6 +107,34 @@ impl<PC: Curve> Context<PC> {
             return Ok(staking_contract_address);
         }
         Ok(self.staking_contract_address.unwrap())
+    }
+
+    pub async fn node_registry_address(&mut self) -> anyhow::Result<Address> {
+        if self.node_registry_address.is_none() {
+            let main_chain_id = self.config.get_main_chain_id();
+            let client = self
+                .chain_identities
+                .get(&main_chain_id)
+                .unwrap()
+                .build_controller_client();
+
+            let controller_contract = client.prepare_service_client().await?;
+
+            let node_registry_address = ControllerClient::call_contract_view(
+                main_chain_id,
+                "controller_config",
+                controller_contract.get_controller_config(),
+                self.config.get_time_limits().contract_view_retry_descriptor,
+            )
+            .await?
+            .1;
+
+            self.node_registry_address = Some(node_registry_address);
+
+            return Ok(node_registry_address);
+        }
+
+        Ok(self.node_registry_address.unwrap())
     }
 }
 
@@ -187,7 +219,7 @@ async fn send<PC: Curve>(
 
             let arpa_contract = ArpaContract::new(
                 context.config.find_arpa_address(main_chain_id)?,
-                context.chain_identity(main_chain_id)?.get_signer(),
+                context.chain_identity(main_chain_id)?.get_client(),
             );
 
             let trx_hash = ArpaClient::call_contract_transaction(
@@ -215,7 +247,7 @@ async fn send<PC: Curve>(
 
             let staking_contract = StakingContract::new(
                 context.staking_contract_address().await?,
-                context.chain_identity(main_chain_id)?.get_signer(),
+                context.chain_identity(main_chain_id)?.get_client(),
             );
 
             let is_operator = StakingClient::call_contract_view(
@@ -236,7 +268,7 @@ async fn send<PC: Curve>(
 
             let arpa_contract = ArpaContract::new(
                 context.config.find_arpa_address(main_chain_id)?,
-                context.chain_identity(main_chain_id)?.get_signer(),
+                context.chain_identity(main_chain_id)?.get_client(),
             );
 
             let balance = ArpaClient::call_contract_view(
@@ -301,7 +333,7 @@ async fn send<PC: Curve>(
 
             let staking_contract = StakingContract::new(
                 context.staking_contract_address().await?,
-                context.chain_identity(main_chain_id)?.get_signer(),
+                context.chain_identity(main_chain_id)?.get_client(),
             );
 
             let staked_amount = StakingClient::call_contract_view(
@@ -343,7 +375,7 @@ async fn send<PC: Curve>(
             let main_chain_id = context.config.get_main_chain_id();
             let staking_contract = StakingContract::new(
                 context.staking_contract_address().await?,
-                context.chain_identity(main_chain_id)?.get_signer(),
+                context.chain_identity(main_chain_id)?.get_client(),
             );
 
             let trx_hash = StakingClient::call_contract_transaction(
@@ -365,13 +397,14 @@ async fn send<PC: Curve>(
             )))
         }
         Some(("register", _sub_matches)) => {
+            // TODO support register from eigenlayer
             let main_chain_id = context.config.get_main_chain_id();
+            let node_registry_address = context.node_registry_address().await?;
             let client = context
                 .chain_identity(main_chain_id)?
-                .build_controller_client();
+                .build_node_registry_client(node_registry_address);
 
-            let node =
-                ControllerViews::<G2Curve>::get_node(&client, context.wallet.address()).await?;
+            let node = NodeRegistryViews::get_node(&client, context.wallet.address()).await?;
 
             if node.id_address != Address::zero() {
                 return Ok(Some("Node already registered".to_string()));
@@ -384,7 +417,7 @@ async fn send<PC: Curve>(
             let dkg_public_key = node_cache.get_dkg_public_key()?;
 
             let trx_hash = client
-                .node_register(bincode::serialize(&dkg_public_key)?)
+                .node_register(bincode::serialize(&dkg_public_key)?, false)
                 .await?;
 
             Ok(Some(format!(
@@ -394,12 +427,12 @@ async fn send<PC: Curve>(
         }
         Some(("activate", _sub_matches)) => {
             let main_chain_id = context.config.get_main_chain_id();
+            let node_registry_address = context.node_registry_address().await?;
             let client = context
                 .chain_identity(main_chain_id)?
-                .build_controller_client();
+                .build_node_registry_client(node_registry_address);
 
-            let node =
-                ControllerViews::<G2Curve>::get_node(&client, context.wallet.address()).await?;
+            let node = NodeRegistryViews::get_node(&client, context.wallet.address()).await?;
 
             if node.id_address == Address::zero() {
                 return Ok(Some("Node has not registered".to_string()));
@@ -415,7 +448,11 @@ async fn send<PC: Curve>(
                 main_chain_id,
                 "node_activate",
                 controller_contract.client_ref(),
-                controller_contract.node_activate(),
+                controller_contract.node_activate(SignatureWithSaltAndExpiry {
+                    signature: vec![0u8; 65].into(),
+                    salt: [0u8; 32],
+                    expiry: 0u64.into(),
+                }),
                 context
                     .config
                     .get_time_limits()
@@ -431,12 +468,12 @@ async fn send<PC: Curve>(
         }
         Some(("quit", _sub_matches)) => {
             let main_chain_id = context.config.get_main_chain_id();
+            let node_registry_address = context.node_registry_address().await?;
             let client = context
                 .chain_identity(main_chain_id)?
-                .build_controller_client();
+                .build_node_registry_client(node_registry_address);
 
-            let node =
-                ControllerViews::<G2Curve>::get_node(&client, context.wallet.address()).await?;
+            let node = NodeRegistryViews::get_node(&client, context.wallet.address()).await?;
 
             if node.id_address == Address::zero() {
                 return Ok(Some("Node has not registered".to_string()));
@@ -464,12 +501,12 @@ async fn send<PC: Curve>(
         }
         Some(("change-dkg-public-key", _sub_matches)) => {
             let main_chain_id = context.config.get_main_chain_id();
+            let node_registry_address = context.node_registry_address().await?;
             let client = context
                 .chain_identity(main_chain_id)?
-                .build_controller_client();
+                .build_node_registry_client(node_registry_address);
 
-            let node =
-                ControllerViews::<G2Curve>::get_node(&client, context.wallet.address()).await?;
+            let node = NodeRegistryViews::get_node(&client, context.wallet.address()).await?;
 
             if node.id_address == Address::zero() {
                 return Ok(Some("Node has not registered".to_string()));
@@ -514,12 +551,13 @@ async fn send<PC: Curve>(
             if recipient == Address::zero() {
                 return Ok(Some("Invalid recipient address".to_string()));
             }
-
             if *chain_id == context.config.get_main_chain_id() {
-                let client = context.chain_identity(*chain_id)?.build_controller_client();
+                let node_registry_address = context.node_registry_address().await?;
+                let client = context
+                    .chain_identity(*chain_id)?
+                    .build_node_registry_client(node_registry_address);
 
-                let node =
-                    ControllerViews::<G2Curve>::get_node(&client, context.wallet.address()).await?;
+                let node = NodeRegistryViews::get_node(&client, context.wallet.address()).await?;
 
                 if node.id_address == Address::zero() {
                     return Ok(Some("Node has not registered".to_string()));
@@ -584,12 +622,12 @@ async fn call<PC: Curve>(
             let main_chain_id = context.config.get_main_chain_id();
             let id_address = sub_matches.get_one::<String>("id-address").unwrap();
             let id_address = id_address.parse::<Address>()?;
-
+            let node_registry_address = context.node_registry_address().await?;
             let client = context
                 .chain_identity(main_chain_id)?
-                .build_controller_client();
+                .build_node_registry_client(node_registry_address);
 
-            let node = ControllerViews::<G2Curve>::get_node(&client, id_address).await?;
+            let node = NodeRegistryViews::get_node(&client, id_address).await?;
 
             Ok(Some(format!("{:#?}", node)))
         }
@@ -848,15 +886,18 @@ async fn call<PC: Curve>(
             let node_address = node_address.parse::<Address>()?;
 
             if *chain_id == context.config.get_main_chain_id() {
-                let client = context.chain_identity(*chain_id)?.build_controller_client();
+                let node_registry_address = context.node_registry_address().await?;
+                let client = context
+                    .chain_identity(*chain_id)?
+                    .build_node_registry_client(node_registry_address);
 
-                let controller_contract = client.prepare_service_client().await?;
+                let node_registry_contract = client.prepare_service_client().await?;
 
                 let (node_withdrawable_eth, node_withdrawable_arpa) =
-                    ControllerClient::call_contract_view(
+                    NodeRegistryClient::call_contract_view(
                         *chain_id,
                         "node_withdrawable_tokens",
-                        controller_contract.get_node_withdrawable_tokens(node_address),
+                        node_registry_contract.get_node_withdrawable_tokens(node_address),
                         context.config.contract_view_retry_descriptor(*chain_id)?,
                     )
                     .await?;
@@ -897,15 +938,13 @@ async fn call<PC: Curve>(
             let controller_contract = client.prepare_service_client().await?;
 
             let (
-                staking_contract_address,
+                node_registry_contract_address,
                 adapter_contract_address,
-                node_staking_amount,
                 disqualified_node_penalty_amount,
                 default_number_of_committers,
                 default_dkg_phase_duration,
                 group_max_capacity,
                 ideal_number_of_groups,
-                pending_block_after_quit,
                 dkg_post_process_reward,
             ) = ControllerClient::call_contract_view(
                 main_chain_id,
@@ -917,18 +956,16 @@ async fn call<PC: Curve>(
             )
             .await?;
 
-            Ok(Some(format!("staking_contract_address: {:#?}, adapter_contract_address: {:#?}, node_staking_amount: {:#?}, \
+            Ok(Some(format!("node_registry_contract_address: {:#?}, adapter_contract_address: {:#?}, \
             disqualified_node_penalty_amount: {:#?}, default_number_of_committers: {:#?}, default_dkg_phase_duration: {:#?}, \
-            group_max_capacity: {:#?}, ideal_number_of_groups: {:#?}, pending_block_after_quit: {:#?}, dkg_post_process_reward: {:#?}",  
-            staking_contract_address,
+            group_max_capacity: {:#?}, ideal_number_of_groups: {:#?}, dkg_post_process_reward: {:#?}",  
+            node_registry_contract_address,
             adapter_contract_address,
-            node_staking_amount,
             disqualified_node_penalty_amount,
             default_number_of_committers,
             default_dkg_phase_duration,
             group_max_capacity,
             ideal_number_of_groups,
-            pending_block_after_quit,
             dkg_post_process_reward,)))
         }
         Some(("fulfillments-as-committer", sub_matches)) => {
@@ -959,7 +996,7 @@ async fn call<PC: Curve>(
             let logs = logs
                 .iter()
                 .map(|log| RandomnessRequestResult {
-                    request_id: hex::encode(log.request_id),
+                    request_id: format!("0x{}", hex::encode(log.request_id)),
                     group_index: log.group_index,
                     committer: log.committer,
                     participant_members: log.participant_members.clone(),
@@ -1002,7 +1039,7 @@ async fn call<PC: Curve>(
                 .iter()
                 .filter(|log| log.participant_members.contains(&context.wallet.address()))
                 .map(|log| RandomnessRequestResult {
-                    request_id: hex::encode(log.request_id),
+                    request_id: format!("0x{}", hex::encode(log.request_id)),
                     group_index: log.group_index,
                     committer: log.committer,
                     participant_members: log.participant_members.clone(),
@@ -1021,7 +1058,7 @@ async fn call<PC: Curve>(
             let main_chain_id = context.config.get_main_chain_id();
             let staking_contract = StakingContract::new(
                 context.staking_contract_address().await?,
-                context.chain_identity(main_chain_id)?.get_signer(),
+                context.chain_identity(main_chain_id)?.get_client(),
             );
 
             let delegation_reward = StakingClient::call_contract_view(
@@ -1041,7 +1078,7 @@ async fn call<PC: Curve>(
             let main_chain_id = context.config.get_main_chain_id();
             let staking_contract = StakingContract::new(
                 context.staking_contract_address().await?,
-                context.chain_identity(main_chain_id)?.get_signer(),
+                context.chain_identity(main_chain_id)?.get_client(),
             );
 
             let delegates_count = StakingClient::call_contract_view(
@@ -1060,7 +1097,7 @@ async fn call<PC: Curve>(
             let main_chain_id = context.config.get_main_chain_id();
             let staking_contract = StakingContract::new(
                 context.staking_contract_address().await?,
-                context.chain_identity(main_chain_id)?.get_signer(),
+                context.chain_identity(main_chain_id)?.get_client(),
             );
 
             let amount = StakingClient::call_contract_view(
@@ -1079,7 +1116,7 @@ async fn call<PC: Curve>(
             let main_chain_id = context.config.get_main_chain_id();
             let staking_contract = StakingContract::new(
                 context.staking_contract_address().await?,
-                context.chain_identity(main_chain_id)?.get_signer(),
+                context.chain_identity(main_chain_id)?.get_client(),
             );
 
             let (amounts, timestamps) = StakingClient::call_contract_view(
@@ -1115,7 +1152,7 @@ async fn call<PC: Curve>(
             let chain_id = sub_matches.get_one::<usize>("chain-id").unwrap();
             let arpa_contract = ArpaContract::new(
                 context.config.find_arpa_address(*chain_id)?,
-                context.chain_identity(*chain_id)?.get_signer(),
+                context.chain_identity(*chain_id)?.get_client(),
             );
 
             let balance = ArpaClient::call_contract_view(
@@ -1343,7 +1380,10 @@ async fn call<PC: Curve>(
                 .get_pending_request_commitment(pad_to_bytes32(&hex::decode(r_id)?).unwrap())
                 .await?;
 
-            Ok(Some(hex::encode(pending_request_commitment)))
+            Ok(Some(format!(
+                "0x{}",
+                hex::encode(pending_request_commitment)
+            )))
         }
 
         _ => panic!("Unknown subcommand {:?}", args.subcommand_name()),
@@ -1360,7 +1400,7 @@ fn generate<PC: Curve>(
 
             let pk = SigningKey::random(&mut rng).to_bytes();
 
-            Ok(Some(hex::encode(pk)))
+            Ok(Some(format!("0x{}", hex::encode(pk))))
         }
         Some(("keystore", sub_matches)) => {
             let path = sub_matches.get_one::<PathBuf>("path").unwrap();
@@ -1579,6 +1619,7 @@ async fn main() -> anyhow::Result<()> {
         chain_identities,
         db,
         staking_contract_address: None,
+        node_registry_address: None,
         show_address: false,
         history_file_path: opt.history_file_path.clone(),
     };

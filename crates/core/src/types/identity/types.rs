@@ -1,25 +1,46 @@
 use crate::{
     eip1559_gas_price_estimator, supports_eip1559, ChainProviderManager,
-    ExponentialBackoffRetryDescriptor, RelayedChainIdentity,
-    DEFAULT_WEBSOCKET_PROVIDER_RECONNECT_TIMES,
+    ExponentialBackoffRetryDescriptor, GasMiddleware, RelayedChainIdentity,
+    DEFAULT_WEBSOCKET_PROVIDER_RECONNECT_TIMES, GAS_RAISE_PERCENTAGE,
 };
 
 use super::{ChainIdentity, MainChainIdentity};
 use async_trait::async_trait;
 use ethers_core::types::{Address, BlockNumber, U256};
-use ethers_middleware::{NonceManagerMiddleware, SignerMiddleware};
+use ethers_middleware::{MiddlewareBuilder, NonceManagerMiddleware, SignerMiddleware};
 use ethers_providers::{Http, Middleware, Provider, ProviderError, Ws};
 use ethers_signers::{LocalWallet, Signer};
 use std::sync::Arc;
 
-pub type WsWalletSigner = SignerMiddleware<NonceManagerMiddleware<Arc<Provider<Ws>>>, LocalWallet>;
+pub type WsWalletSigner =
+    NonceManagerMiddleware<SignerMiddleware<GasMiddleware<Arc<Provider<Ws>>>, LocalWallet>>;
 pub type HttpWalletSigner =
     SignerMiddleware<NonceManagerMiddleware<Arc<Provider<Http>>>, LocalWallet>;
+
+pub fn build_client(
+    wallet: LocalWallet,
+    chain_id: usize,
+    provider: Arc<Provider<Ws>>,
+) -> Arc<WsWalletSigner> {
+    let address = wallet.address();
+
+    let wallet = wallet.with_chain_id(chain_id as u32);
+
+    let provider_with_gas_raiser =
+        GasMiddleware::new(provider, GAS_RAISE_PERCENTAGE).expect("Failed to create GasMiddleware");
+
+    let client = SignerMiddleware::new(provider_with_gas_raiser, wallet);
+
+    let client_with_nonce_manager = client.nonce_manager(address);
+
+    Arc::new(client_with_nonce_manager)
+}
 
 #[derive(Debug, Clone)]
 pub struct GeneralMainChainIdentity {
     chain_id: usize,
-    signer: Arc<WsWalletSigner>,
+    address: Address,
+    client: Arc<WsWalletSigner>,
     provider_endpoint: String,
     controller_address: Address,
     controller_relayer_address: Address,
@@ -41,16 +62,14 @@ impl GeneralMainChainIdentity {
         contract_transaction_retry_descriptor: ExponentialBackoffRetryDescriptor,
         contract_view_retry_descriptor: ExponentialBackoffRetryDescriptor,
     ) -> Self {
-        let wallet = wallet.with_chain_id(chain_id as u32);
+        let address = wallet.address();
 
-        let nonce_manager = NonceManagerMiddleware::new(provider, wallet.address());
-
-        // instantiate the client with the wallet
-        let signer = Arc::new(SignerMiddleware::new(nonce_manager, wallet));
+        let client = build_client(wallet, chain_id, provider);
 
         GeneralMainChainIdentity {
             chain_id,
-            signer,
+            address,
+            client,
             provider_endpoint,
             controller_address,
             controller_relayer_address,
@@ -68,15 +87,15 @@ impl ChainIdentity for GeneralMainChainIdentity {
     }
 
     fn get_id_address(&self) -> Address {
-        self.signer.address()
+        self.address
     }
 
     fn get_adapter_address(&self) -> Address {
         self.adapter_address
     }
 
-    fn get_signer(&self) -> Arc<WsWalletSigner> {
-        self.signer.clone()
+    fn get_client(&self) -> Arc<WsWalletSigner> {
+        self.client.clone()
     }
 
     fn get_contract_transaction_retry_descriptor(&self) -> ExponentialBackoffRetryDescriptor {
@@ -89,10 +108,10 @@ impl ChainIdentity for GeneralMainChainIdentity {
 
     async fn get_current_gas_price(&self) -> Result<U256, ProviderError> {
         if !supports_eip1559(self.chain_id) {
-            return self.signer.provider().get_gas_price().await;
+            return self.client.provider().get_gas_price().await;
         }
         let (max_fee, _) = self
-            .signer
+            .client
             .provider()
             .estimate_eip1559_fees(Some(eip1559_gas_price_estimator))
             .await?;
@@ -104,7 +123,7 @@ impl ChainIdentity for GeneralMainChainIdentity {
         &self,
         block_number: BlockNumber,
     ) -> Result<Option<U256>, ProviderError> {
-        self.signer
+        self.client
             .provider()
             .get_block(block_number)
             .await
@@ -126,7 +145,7 @@ impl MainChainIdentity for GeneralMainChainIdentity {
 #[async_trait]
 impl ChainProviderManager for GeneralMainChainIdentity {
     fn get_provider(&self) -> &Provider<Ws> {
-        self.signer.provider()
+        self.client.provider()
     }
 
     fn get_provider_endpoint(&self) -> &str {
@@ -143,14 +162,11 @@ impl ChainProviderManager for GeneralMainChainIdentity {
             .interval(self.get_provider().get_interval()),
         );
 
-        let nonce_manager = NonceManagerMiddleware::new(provider, self.get_id_address());
-
-        let signer = Arc::new(SignerMiddleware::new(
-            nonce_manager,
-            self.signer.signer().clone(),
-        ));
-
-        self.signer = signer;
+        self.client = build_client(
+            self.client.inner().signer().clone(),
+            self.chain_id,
+            provider,
+        );
 
         Ok(())
     }
@@ -159,7 +175,8 @@ impl ChainProviderManager for GeneralMainChainIdentity {
 #[derive(Debug, Clone)]
 pub struct GeneralRelayedChainIdentity {
     chain_id: usize,
-    signer: Arc<WsWalletSigner>,
+    address: Address,
+    client: Arc<WsWalletSigner>,
     provider_endpoint: String,
     controller_oracle_address: Address,
     adapter_address: Address,
@@ -179,16 +196,14 @@ impl GeneralRelayedChainIdentity {
         contract_transaction_retry_descriptor: ExponentialBackoffRetryDescriptor,
         contract_view_retry_descriptor: ExponentialBackoffRetryDescriptor,
     ) -> Self {
-        let wallet = wallet.with_chain_id(chain_id as u32);
+        let address = wallet.address();
 
-        let nonce_manager = NonceManagerMiddleware::new(provider, wallet.address());
-
-        // instantiate the client with the wallet
-        let signer = Arc::new(SignerMiddleware::new(nonce_manager, wallet));
+        let client = build_client(wallet, chain_id, provider);
 
         GeneralRelayedChainIdentity {
             chain_id,
-            signer,
+            address,
+            client,
             provider_endpoint,
             controller_oracle_address,
             adapter_address,
@@ -205,15 +220,15 @@ impl ChainIdentity for GeneralRelayedChainIdentity {
     }
 
     fn get_id_address(&self) -> Address {
-        self.signer.address()
+        self.address
     }
 
     fn get_adapter_address(&self) -> Address {
         self.adapter_address
     }
 
-    fn get_signer(&self) -> Arc<WsWalletSigner> {
-        self.signer.clone()
+    fn get_client(&self) -> Arc<WsWalletSigner> {
+        self.client.clone()
     }
 
     fn get_contract_transaction_retry_descriptor(&self) -> ExponentialBackoffRetryDescriptor {
@@ -226,10 +241,10 @@ impl ChainIdentity for GeneralRelayedChainIdentity {
 
     async fn get_current_gas_price(&self) -> Result<U256, ProviderError> {
         if !supports_eip1559(self.chain_id) {
-            return self.signer.provider().get_gas_price().await;
+            return self.client.provider().get_gas_price().await;
         }
         let (max_fee, _) = self
-            .signer
+            .client
             .provider()
             .estimate_eip1559_fees(Some(eip1559_gas_price_estimator))
             .await?;
@@ -241,7 +256,7 @@ impl ChainIdentity for GeneralRelayedChainIdentity {
         &self,
         block_number: BlockNumber,
     ) -> Result<Option<U256>, ProviderError> {
-        self.signer
+        self.client
             .provider()
             .get_block(block_number)
             .await
@@ -258,7 +273,7 @@ impl RelayedChainIdentity for GeneralRelayedChainIdentity {
 #[async_trait]
 impl ChainProviderManager for GeneralRelayedChainIdentity {
     fn get_provider(&self) -> &Provider<Ws> {
-        self.signer.provider()
+        self.client.provider()
     }
 
     fn get_provider_endpoint(&self) -> &str {
@@ -275,14 +290,11 @@ impl ChainProviderManager for GeneralRelayedChainIdentity {
             .interval(self.get_provider().get_interval()),
         );
 
-        let nonce_manager = NonceManagerMiddleware::new(provider, self.get_id_address());
-
-        let signer = Arc::new(SignerMiddleware::new(
-            nonce_manager,
-            self.signer.signer().clone(),
-        ));
-
-        self.signer = signer;
+        self.client = build_client(
+            self.client.inner().signer().clone(),
+            self.chain_id,
+            provider,
+        );
 
         Ok(())
     }

@@ -13,8 +13,8 @@ use arpa_dal::ResultCache;
 use arpa_dal::SignatureResultCacheFetcher;
 use arpa_dal::SignatureResultCacheUpdater;
 use async_trait::async_trait;
-use entity::prelude::LootRandomnessResult;
 use entity::loot_randomness_result;
+use entity::prelude::LootRandomnessResult;
 use ethers_core::types::Address;
 use migration::Expr;
 use migration::Query;
@@ -107,15 +107,13 @@ impl SignatureResultCacheFetcher<RandomnessResultCache>
     for LootSignatureResultDBClient<RandomnessResultCache>
 {
     async fn contains(&self, task_request_id: &[u8]) -> DataAccessResult<bool> {
-        let model = LootRandomnessResultQuery::select_by_request_id(
-            self.get_connection(),
-            task_request_id,
-        )
-        .await
-        .map_err(|e| {
-            let e: DBError = e.into();
-            e
-        })?;
+        let model =
+            LootRandomnessResultQuery::select_by_request_id(self.get_connection(), task_request_id)
+                .await
+                .map_err(|e| {
+                    let e: DBError = e.into();
+                    e
+                })?;
 
         Ok(model.is_some())
     }

@@ -14,13 +14,13 @@ threshold-bls = { path = "../../threshold-bls", default-features = false, featur
 ] }
 dkg-core = { path = "../../dkg-core" }
 
-sea-orm = { version = "^0.11.0", features = [
+sea-orm = { version = "0.12", features = [
       "sqlx-sqlite",
       "runtime-tokio-rustls",
       "macros",
       "debug-print",
 ] }
-libsqlite3-sys = { version = "0.24.2", default-features = false, features = [
+libsqlite3-sys = { version = "^0.26.0", default-features = false, features = [
       "pkg-config",
       "vcpkg",
       "bundled-sqlcipher-vendored-openssl",
@@ -28,7 +28,7 @@ libsqlite3-sys = { version = "0.24.2", default-features = false, features = [
 ] }
 chrono = "0.4"
 log = "0.4"
-tokio = { version = "1.20.1", features = ["full"] }
+tokio = { version = "1.37.0", features = ["full"] }
 ethers-core.workspace = true
 thiserror = "1.0.15"
 anyhow = "1.0.31"

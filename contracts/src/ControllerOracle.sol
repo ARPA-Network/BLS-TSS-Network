@@ -3,14 +3,14 @@ pragma solidity ^0.8.18;
 
 import {IERC20, SafeERC20} from "openzeppelin-contracts/contracts/token/ERC20/utils/SafeERC20.sol";
 import {OwnableUpgradeable} from "openzeppelin-contracts-upgradeable/contracts/access/OwnableUpgradeable.sol";
-import {Initializable} from "openzeppelin-contracts-upgradeable/contracts/proxy/utils/Initializable.sol";
+import {UUPSUpgradeable} from "openzeppelin-contracts-upgradeable/contracts/proxy/utils/UUPSUpgradeable.sol";
 import {IControllerOracle} from "./interfaces/IControllerOracle.sol";
 import {IOPCrossDomainMessenger} from "./interfaces/IOPCrossDomainMessenger.sol";
 import {IAdapter} from "./interfaces/IAdapter.sol";
 // solhint-disable-next-line no-global-import
 import "./utils/Utils.sol" as Utils;
 
-contract ControllerOracle is Initializable, IControllerOracle, OwnableUpgradeable {
+contract ControllerOracle is UUPSUpgradeable, IControllerOracle, OwnableUpgradeable {
     using SafeERC20 for IERC20;
 
     struct GroupData {
@@ -53,17 +53,17 @@ contract ControllerOracle is Initializable, IControllerOracle, OwnableUpgradeabl
     error SenderNotChainMessenger();
     error InvalidZeroAddress();
 
-    function initialize(
-        address arpa,
-        address chainMessenger,
-        address l2CrossDomainMessenger,
-        address adapterContractAddress,
-        uint256 lastOutput
-    ) public initializer {
+    /// @custom:oz-upgrades-unsafe-allow constructor
+    constructor() {
+        _disableInitializers();
+    }
+
+    // solhint-disable-next-line no-empty-blocks
+    function _authorizeUpgrade(address) internal override onlyOwner {}
+
+    function initialize(address arpa, address l2CrossDomainMessenger, uint256 lastOutput) public initializer {
         _arpa = IERC20(arpa);
-        _chainMessenger = chainMessenger;
         _l2CrossDomainMessenger = IOPCrossDomainMessenger(l2CrossDomainMessenger);
-        _adapterContractAddress = adapterContractAddress;
         _lastOutput = lastOutput;
 
         __Ownable_init();

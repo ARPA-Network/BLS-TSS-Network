@@ -1,0 +1,22 @@
+{
+    "agent": {
+            "run_as_user": "root",
+            "region": "us-east-1",
+            "mode": "onPremise"
+    },
+    "logs": {
+        "logs_collected": {
+            "files": {
+                "collect_list": [
+                    {
+                            "file_path": "/app/log/node.log",
+                            "log_group_class": "STANDARD",
+                            "log_group_name": "arpa-network-logs",
+                            "log_stream_name": "STREAMNAME",
+                            "retention_in_days": -1
+                    }
+                ]
+            }
+        }
+    }
+}

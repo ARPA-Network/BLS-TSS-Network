@@ -2,7 +2,8 @@ use super::{
     chain::{types::GeneralMainChain, Chain, RelayedChain},
     BLSTasksHandler, BlockInfoHandler, ChainIdentityHandler, ChainIdentityHandlerType,
     CommitterServerStarter, Context, ContextFetcher, GroupInfoHandler, ManagementServerStarter,
-    NodeInfoHandler, RelayedChainType, SignatureResultCacheHandler, TaskWaiter,
+    NodeInfoHandler, RelayedChainType, SignatureResultCacheHandler, StatisticsServerStarter,
+    TaskWaiter,
 };
 use crate::{
     committer::server as committer_server,
@@ -12,14 +13,15 @@ use crate::{
     scheduler::{
         dynamic::SimpleDynamicTaskScheduler, fixed::SimpleFixedTaskScheduler, TaskScheduler,
     },
+    stats,
 };
 use arpa_core::{
-    Config, GeneralMainChainIdentity, GeneralRelayedChainIdentity, RandomnessTask, RpcServerType,
-    SchedulerResult, TaskType, DEFAULT_DYNAMIC_TASK_CLEANER_INTERVAL_MILLIS,
+    ComponentTaskType, Config, GeneralMainChainIdentity, GeneralRelayedChainIdentity,
+    HttpServerType, RandomnessTask, RpcServerType, SchedulerResult,
+    DEFAULT_DYNAMIC_TASK_CLEANER_INTERVAL_MILLIS,
 };
 use arpa_dal::cache::RandomnessResultCache;
 use async_trait::async_trait;
-use log::error;
 use std::{collections::HashMap, fmt::Debug, sync::Arc};
 use threshold_bls::{
     group::Curve,
@@ -150,6 +152,9 @@ where
         let node_management_rpc_endpoint =
             self.config.get_node_management_rpc_endpoint().to_string();
 
+        let node_statistics_http_endpoint =
+            self.config.get_node_statistics_http_endpoint().to_string();
+
         let context = Arc::new(RwLock::new(self));
 
         f_ts.write()
@@ -159,6 +164,10 @@ where
         f_ts.write()
             .await
             .start_management_server(node_management_rpc_endpoint, context.clone())?;
+
+        f_ts.write()
+            .await
+            .start_statistics_server(node_statistics_http_endpoint, context.clone())?;
 
         let ts = context.read().await.get_dynamic_task_handler();
 
@@ -240,11 +249,10 @@ where
         rpc_endpoint: String,
         context: Arc<RwLock<GeneralContext<PC, S>>>,
     ) -> SchedulerResult<()> {
-        self.add_task(TaskType::RpcServer(RpcServerType::Committer), async move {
-            if let Err(e) = committer_server::start_committer_server(rpc_endpoint, context).await {
-                error!("{:?}", e);
-            };
-        })
+        self.add_task(
+            ComponentTaskType::RpcServer(RpcServerType::Committer),
+            committer_server::start_committer_server(rpc_endpoint, context),
+        )
     }
 }
 
@@ -266,12 +274,35 @@ where
         rpc_endpoint: String,
         context: Arc<RwLock<GeneralContext<PC, S>>>,
     ) -> SchedulerResult<()> {
-        self.add_task(TaskType::RpcServer(RpcServerType::Management), async move {
-            if let Err(e) = management_server::start_management_server(rpc_endpoint, context).await
-            {
-                error!("{:?}", e);
-            };
-        })
+        self.add_task(
+            ComponentTaskType::RpcServer(RpcServerType::Management),
+            management_server::start_management_server(rpc_endpoint, context),
+        )
+    }
+}
+
+impl<
+        PC: Curve + std::fmt::Debug + Clone + Sync + Send + 'static,
+        S: SignatureScheme
+            + ThresholdScheme<Public = PC::Point, Private = PC::Scalar>
+            + Clone
+            + Send
+            + Sync
+            + 'static,
+    > StatisticsServerStarter<GeneralContext<PC, S>, PC, S> for SimpleFixedTaskScheduler
+where
+    <S as ThresholdScheme>::Error: Sync + Send,
+    <S as SignatureScheme>::Error: Sync + Send,
+{
+    fn start_statistics_server(
+        &mut self,
+        rpc_endpoint: String,
+        context: Arc<RwLock<GeneralContext<PC, S>>>,
+    ) -> SchedulerResult<()> {
+        self.add_task(
+            ComponentTaskType::HttpServer(HttpServerType::Statistics),
+            stats::start_statistics_server(rpc_endpoint, context),
+        )
     }
 }
 

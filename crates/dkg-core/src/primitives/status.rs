@@ -1,4 +1,4 @@
-use bitvec::{prelude::*, vec::BitVec};
+use bitvec::prelude::*;
 use serde::{Deserialize, Serialize};
 use std::fmt;
 use threshold_bls::poly::Idx;

@@ -22,7 +22,7 @@ impl EventQueue {
 
 impl EventSubscriber for EventQueue {
     fn subscribe(&mut self, topic: Topic, subscriber: Box<dyn DebuggableSubscriber>) {
-        self.subscribers.entry(topic).or_insert_with(Vec::new);
+        self.subscribers.entry(topic).or_default();
 
         self.subscribers.get_mut(&topic).unwrap().push(subscriber);
     }
@@ -72,8 +72,9 @@ pub mod tests {
 
         let chain_id = 1;
 
-        let block_cache: Arc<RwLock<Box<dyn BlockInfoHandler>>> =
-            Arc::new(RwLock::new(Box::new(InMemoryBlockInfoCache::new(12))));
+        let block_cache: Arc<RwLock<Box<dyn BlockInfoHandler>>> = Arc::new(RwLock::new(Box::new(
+            InMemoryBlockInfoCache::new(chain_id, 12),
+        )));
 
         assert_eq!(0, block_cache.clone().read().await.get_block_height());
 

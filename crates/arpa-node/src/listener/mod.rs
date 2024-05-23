@@ -5,9 +5,16 @@ pub mod post_grouping;
 pub mod pre_grouping;
 pub mod randomness_signature_aggregation;
 pub mod ready_to_handle_randomness_task;
+pub mod schedule_node_activation;
+
+use std::fmt::Display;
 
 use crate::error::NodeResult;
-use arpa_core::{jitter, FixedIntervalRetryDescriptor};
+use arpa_core::{
+    jitter,
+    log::{build_general_payload, LogType},
+    FixedIntervalRetryDescriptor,
+};
 use async_trait::async_trait;
 use log::error;
 use tokio::time::sleep;
@@ -20,14 +27,24 @@ pub trait Listener {
         interval_millis: u64,
         use_jitter: bool,
         reset_descriptor: FixedIntervalRetryDescriptor,
-    ) -> NodeResult<()> {
+    ) -> NodeResult<()>
+    where
+        Self: Display,
+    {
         let mut next_polling_strategy =
             FixedInterval::from_millis(interval_millis)
                 .map(|e| if use_jitter { jitter(e) } else { e });
 
         loop {
             if let Err(err) = self.listen().await {
-                error!("Listener is interrupted. Retry... Error: {:?}.", err);
+                error!(
+                    "{}",
+                    build_general_payload(
+                        LogType::ListenerInterrupted,
+                        &format!("{} is interrupted. Retry... Error: {:?}.", self, err),
+                        Some(self.chain_id().await)
+                    )
+                );
 
                 let reset_strategy = FixedInterval::from_millis(reset_descriptor.interval_millis)
                     .map(|e| {
@@ -48,11 +65,17 @@ pub trait Listener {
         }
     }
 
+    async fn initialize(&mut self) -> NodeResult<()> {
+        Ok(())
+    }
+
     async fn listen(&self) -> NodeResult<()>;
 
     async fn handle_interruption(&self) -> NodeResult<()> {
         Ok(())
     }
+
+    async fn chain_id(&self) -> usize;
 }
 
 #[cfg(test)]

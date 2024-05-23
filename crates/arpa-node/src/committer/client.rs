@@ -3,7 +3,6 @@ use crate::error::{NodeError, NodeResult};
 use crate::rpc_stub::committer::committer_service_client::CommitterServiceClient;
 use crate::rpc_stub::committer::CommitPartialSignatureRequest;
 use arpa_core::{address_to_string, jitter, BLSTaskType, ExponentialBackoffRetryDescriptor};
-use async_trait::async_trait;
 use ethers::types::Address;
 use log::error;
 use tokio_retry::{strategy::ExponentialBackoff, RetryIf};
@@ -61,7 +60,6 @@ impl CommitterClient for GeneralCommitterClient {
     }
 }
 
-#[async_trait]
 impl ServiceClient<CommitterServiceClient<tonic::transport::Channel>> for GeneralCommitterClient {
     async fn prepare_service_client(
         &self,
@@ -72,7 +70,6 @@ impl ServiceClient<CommitterServiceClient<tonic::transport::Channel>> for Genera
     }
 }
 
-#[async_trait]
 impl CommitterService for GeneralCommitterClient {
     async fn commit_partial_signature(
         self,
@@ -99,7 +96,6 @@ impl CommitterService for GeneralCommitterClient {
         RetryIf::spawn(
             retry_strategy,
             || async {
-                let chain_id = chain_id;
                 let request_id = request_id.clone();
                 let message = message.clone();
                 let partial_signature = partial_signature.clone();

@@ -1,6 +1,6 @@
 use std::time::Duration;
 
-use migration::{sea_orm::ConnectOptions, Migrator, MigratorTrait};
+use migration::{sea_orm::ConnectOptions, Migrator};
 use sea_orm_migration::prelude::*;
 
 #[async_std::main]

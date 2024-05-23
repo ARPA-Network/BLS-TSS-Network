@@ -420,7 +420,7 @@ impl CurveType for BN254Curve {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use serde::{de::DeserializeOwned, Serialize};
+    use serde::de::DeserializeOwned;
     use static_assertions::assert_impl_all;
 
     assert_impl_all!(G1: Serialize, DeserializeOwned, Clone);
@@ -437,7 +437,7 @@ mod tests {
     }
 
     fn serialize_group_test<E: Element>(size: usize) {
-        let empty = bincode::deserialize::<E>(&vec![]);
+        let empty = bincode::deserialize::<E>(&[]);
         assert!(empty.is_err());
 
         let rng = &mut rand::thread_rng();

@@ -64,6 +64,9 @@ HIDE_OUTPUT = not VERBOSE_OUTPUT  # if verbose_output = false, hide_output = tru
 EXISTING_OP_ARPA_ADDRESS = get_key(ENV_PATH, "EXISTING_OP_ARPA_ADDRESS")
 EXISTING_L1_ARPA_ADDRESS = get_key(ENV_PATH, "EXISTING_L1_ARPA_ADDRESS")
 EXISTING_L1_STAKING_ADDRESS = get_key(ENV_PATH, "EXISTING_L1_STAKING_ADDRESS")
+EXISTING_L1_SERVICE_MANAGER_ADDRESS = get_key(
+    ENV_PATH, "EXISTING_L1_SERVICE_MANAGER_ADDRESS"
+)
 EXISTING_L1_CONTROLLER_ADDRESS = get_key(ENV_PATH, "EXISTING_L1_CONTROLLER_ADDRESS")
 EXISTING_L1_ADAPTER_ADDRESS = get_key(ENV_PATH, "EXISTING_L1_ADAPTER_ADDRESS")
 EXISTING_L1_CONTROLLER_RELAYER = get_key(ENV_PATH, "EXISTING_L1_CONTROLLER_RELAYER")
@@ -71,6 +74,8 @@ OP_L1_CROSS_DOMAIN_MESSENGER_ADDRESS = get_key(
     ENV_PATH, "OP_L1_CROSS_DOMAIN_MESSENGER_ADDRESS"
 )
 
+# Staking Environment Variables
+NODE_PRIVATE_KEY_COUNT = get_key(ENV_PATH, "NODE_PRIVATE_KEY_COUNT")
 
 print(f"L1_CHAIN_ID: {L1_CHAIN_ID}")
 print(f"L1_RPC: {L1_RPC}")
@@ -93,6 +98,9 @@ L1_CONTRACTS_DEPLOYMENT_BROADCAST_PATH = os.path.join(
     L1_CHAIN_ID,
     "run-latest.json",
 )
+CONTRACTS_DEPLOYMENT_ADDRESSES_PATH = os.path.join(
+    CONTRACTS_DIR, get_key(ENV_PATH, "DEPLOYMENT_ADDRESSES_PATH")
+)
 
 
 # ! New - Generalize by making a general "OPStackChainMessenger contract" and "CreateAndSetChainMessengerScript" script
@@ -104,33 +112,16 @@ CREATE_AND_SET_OP_STACK_CHAIN_MESSENGER_BROADCAST_PATH = os.path.join(
     "run-latest.json",
 )
 
-# ! Old
-# CREATE_AND_SET_OP_CHAIN_MESSENGER_BROADCAST_PATH = os.path.join(
-#     CONTRACTS_DIR,
-#     "broadcast",
-#     "CreateAndSetOPChainMessenger.s.sol",
-#     L1_CHAIN_ID,
-#     "run-latest.json",
-# )
-
-# CREATE_AND_SET_BASE_CHAIN_MESSENGER_BROADCAST_PATH = os.path.join(
-#     CONTRACTS_DIR,
-#     "broadcast",
-#     "CreateAndSetBaseChainMessenger.s.sol",
-#     L1_CHAIN_ID,
-#     "run-latest.json",
-# )
-
-# CREATE_AND_SET_REDSTONE_CHAIN_MESSENGER_BROADCAST_PATH = os.path.join(
-#     CONTRACTS_DIR,
-#     "broadcast",
-#     "CreateAndSetRedstoneChainMessenger.s.sol",
-#     L1_CHAIN_ID,
-#     "run-latest.json",
-# )
 
 NODE_CLIENT_RELEASE_BINARY_PATH = os.path.join(ROOT_DIR, "target/release/node-client")
 NODE_CLIENT_DEBUG_BINARY_PATH = os.path.join(ROOT_DIR, "target/debug/node-client")
+
+L1_TRANSACTION_PRIORITY_GAS_PRICE = get_key(
+    ENV_PATH, "L1_TRANSACTION_PRIORITY_GAS_PRICE"
+)
+L2_TRANSACTION_PRIORITY_GAS_PRICE = get_key(
+    ENV_PATH, "L2_TRANSACTION_PRIORITY_GAS_PRICE"
+)
 
 
 def cprint(text: str, color: str = "green"):
@@ -143,9 +134,9 @@ def cprint(text: str, color: str = "green"):
     termcolor.cprint(text, color)
 
 
-def get_addresses_from_json(path: str) -> dict:
+def get_addresses_from_broadcast_json(path: str) -> dict:
     """
-    Given a path to a json file, return a dictionary of contract names to addresses
+    Given a path to the broadcast json file, return a dictionary of contract names to addresses
     """
 
     # Initialize an empty dictionary
@@ -164,10 +155,19 @@ def get_addresses_from_json(path: str) -> dict:
             contract_address = transaction.get("contractAddress")
 
             # If both contractName and contractAddress exists, add to dictionary
-            if contract_name and contract_address:
+            if contract_name and contract_address and contract_name != "ERC1967Proxy":
                 contracts_dict[contract_name] = contract_address
 
     return contracts_dict
+
+
+def get_addresses_from_json(path: str) -> dict:
+    """
+    Given a path to a json file, return a dictionary of contract names to addresses
+    """
+    with open(path, "r") as f:
+        addresses = json.load(f)
+    return addresses
 
 
 def get_l1_addresses():
@@ -175,44 +175,40 @@ def get_l1_addresses():
     if L2_ONLY:
         l1_controller_addresses["Arpa"] = EXISTING_L1_ARPA_ADDRESS
         l1_controller_addresses["Staking"] = EXISTING_L1_STAKING_ADDRESS
+        l1_controller_addresses["ServiceManager"] = EXISTING_L1_SERVICE_MANAGER_ADDRESS
         l1_controller_addresses["Controller"] = EXISTING_L1_CONTROLLER_ADDRESS
-        l1_controller_addresses["ERC1967Proxy"] = EXISTING_L1_ADAPTER_ADDRESS
+        l1_controller_addresses["Adapter"] = EXISTING_L1_ADAPTER_ADDRESS
         l1_controller_addresses["ControllerRelayer"] = EXISTING_L1_CONTROLLER_RELAYER
 
         l1_addresses = {**l1_controller_addresses}
 
-        # ! New
-        l1_chain_op_stack_messenger_addresses = get_addresses_from_json(
+        l1_chain_op_stack_messenger_addresses = get_addresses_from_broadcast_json(
             CREATE_AND_SET_OP_STACK_CHAIN_MESSENGER_BROADCAST_PATH
         )
         l1_addresses.update(l1_chain_op_stack_messenger_addresses)
-
-        # ! Old - Generalize by making a general "OPStackChainMessenger contract" and "CreateAndSetChainMessengerScript" script
-        # if os.path.exists(CREATE_AND_SET_OP_CHAIN_MESSENGER_BROADCAST_PATH):
-        #     l1_chain_op_messenger_addresses = get_addresses_from_json(
-        #         CREATE_AND_SET_OP_CHAIN_MESSENGER_BROADCAST_PATH
-        #     )
-        #     l1_addresses.update(l1_chain_op_messenger_addresses)
-        # if os.path.exists(CREATE_AND_SET_BASE_CHAIN_MESSENGER_BROADCAST_PATH):
-        #     l1_chain_base_messenger_addresses = get_addresses_from_json(
-        #         CREATE_AND_SET_BASE_CHAIN_MESSENGER_BROADCAST_PATH
-        #     )
-        #     l1_addresses.update(l1_chain_base_messenger_addresses)
-        # if os.path.exists(CREATE_AND_SET_REDSTONE_CHAIN_MESSENGER_BROADCAST_PATH):
-        #     l1_chain_redstone_messenger_addresses = get_addresses_from_json(
-        #         CREATE_AND_SET_REDSTONE_CHAIN_MESSENGER_BROADCAST_PATH
-        #     )
-        #     l1_addresses.update(l1_chain_redstone_messenger_addresses)
-
     else:
-        l1_addresses = get_addresses_from_json(L1_CONTRACTS_DEPLOYMENT_BROADCAST_PATH)
+        l1_addresses = get_addresses_from_broadcast_json(
+            L1_CONTRACTS_DEPLOYMENT_BROADCAST_PATH
+        )
+        l1_addresses.update(
+            get_addresses_from_json(CONTRACTS_DEPLOYMENT_ADDRESSES_PATH)["L1"]
+        )
+        l1_chain_op_stack_messenger_addresses = get_addresses_from_broadcast_json(
+            CREATE_AND_SET_OP_STACK_CHAIN_MESSENGER_BROADCAST_PATH
+        )
+        l1_addresses.update(l1_chain_op_stack_messenger_addresses)
         if ARPA_EXISTS:
             l1_addresses["Arpa"] = EXISTING_L1_ARPA_ADDRESS
     return l1_addresses
 
 
 def get_l2_addresses():
-    l2_addresses = get_addresses_from_json(OP_CONTRACTS_DEPLOYMENT_BROADCAST_PATH)
+    l2_addresses = get_addresses_from_broadcast_json(
+        OP_CONTRACTS_DEPLOYMENT_BROADCAST_PATH
+    )
+    l2_addresses.update(
+        get_addresses_from_json(CONTRACTS_DEPLOYMENT_ADDRESSES_PATH)["L2"]
+    )
     if ARPA_EXISTS:
         l2_addresses["Arpa"] = EXISTING_OP_ARPA_ADDRESS
     return l2_addresses
@@ -336,10 +332,9 @@ def deploy_contracts():
     # 1. Copy .env.example to .env, and load .env file for editing
     # run_command(["cp", ENV_EXAMPLE_PATH, ENV_PATH])
 
-    # 2. Deploy L2 OPControllerOracleLocalTest contracts (ControllerOracle, Adapter, Arpa)
-    # # forge script script/OPControllerOracleLocalTest.s.sol:OPControllerOracleLocalTestScript --fork-url http://localhost:9545 --broadcast
+    # 2. Deploy L2 OPControllerOracleLocalTest contracts
     print("Running Solidity Script: OPControllerOracleLocalTest on L2...")
-    cmd = f"forge script script/OPControllerOracleLocalTest.s.sol:OPControllerOracleLocalTestScript --fork-url {L2_RPC} --broadcast"
+    cmd = f"forge script script/OPControllerOracleLocalTest.s.sol:OPControllerOracleLocalTestScript --fork-url {L2_RPC} --broadcast --priority-gas-price {L2_TRANSACTION_PRIORITY_GAS_PRICE}"
     if LOOTCHAIN_DEPLOYMENT:
         cmd = cmd + " --slow --legacy"
 
@@ -348,20 +343,18 @@ def deploy_contracts():
         [cmd], env={}, cwd=CONTRACTS_DIR, capture_output=HIDE_OUTPUT, shell=True
     )
     # get L2 contract addresses from broadcast and update .env file
-    l2_addresses = get_addresses_from_json(OP_CONTRACTS_DEPLOYMENT_BROADCAST_PATH)
+    l2_addresses = get_addresses_from_json(CONTRACTS_DEPLOYMENT_ADDRESSES_PATH)["L2"]
     if ARPA_EXISTS:
         l2_addresses["Arpa"] = EXISTING_OP_ARPA_ADDRESS
 
-    set_key(ENV_PATH, "OP_ADAPTER_ADDRESS", l2_addresses["ERC1967Proxy"])
+    set_key(ENV_PATH, "OP_ADAPTER_ADDRESS", l2_addresses["Adapter"])
     set_key(ENV_PATH, "OP_ARPA_ADDRESS", l2_addresses["Arpa"])
     set_key(ENV_PATH, "OP_CONTROLLER_ORACLE_ADDRESS", l2_addresses["ControllerOracle"])
 
     if not L2_ONLY:  # l2_only = false
         # 3. Deploy L1 ControllerLocalTest contracts
-        #     (Controller, Controller Relayer, OPChainMessenger, Adapter, Arpa, Staking)
-        # forge script script/ControllerLocalTest.s.sol:ControllerLocalTestScript --fork-url http://localhost:8545 --broadcast
         print("Running Solidity Script: ControllerLocalTest on L1...")
-        cmd = f"forge script script/ControllerLocalTest.s.sol:ControllerLocalTestScript --fork-url {L1_RPC} --broadcast"
+        cmd = f"forge script script/ControllerLocalTest.s.sol:ControllerLocalTestScript --fork-url {L1_RPC} --broadcast --priority-gas-price {L1_TRANSACTION_PRIORITY_GAS_PRICE}"
         cprint(cmd)
         run_command(
             [cmd],
@@ -371,28 +364,35 @@ def deploy_contracts():
             shell=True,
         )
         # get L1 contract addresses from broadcast and update .env file
-        l1_addresses = get_addresses_from_json(L1_CONTRACTS_DEPLOYMENT_BROADCAST_PATH)
+        l1_addresses = get_addresses_from_json(CONTRACTS_DEPLOYMENT_ADDRESSES_PATH)[
+            "L1"
+        ]
         if ARPA_EXISTS:
             l1_addresses["Arpa"] = EXISTING_L1_ARPA_ADDRESS
 
         set_key(ENV_PATH, "ARPA_ADDRESS", l1_addresses["Arpa"])
-        set_key(ENV_PATH, "STAKING_ADDRESS", l1_addresses["Staking"])
         set_key(ENV_PATH, "CONTROLLER_ADDRESS", l1_addresses["Controller"])
-        set_key(ENV_PATH, "ADAPTER_ADDRESS", l1_addresses["ERC1967Proxy"])
+        set_key(ENV_PATH, "ADAPTER_ADDRESS", l1_addresses["Adapter"])
+        set_key(ENV_PATH, "NODE_REGISTRY_ADDRESS", l1_addresses["NodeRegistry"])
+        set_key(ENV_PATH, "SERVICE_MANAGER_ADDRESS", l1_addresses["ServiceManager"])
+        set_key(ENV_PATH, "STAKING_ADDRESS", l1_addresses["Staking"])
+
         l1_controller_relayer = l1_addresses["ControllerRelayer"]
 
     else:  # l2_only == True
         l1_controller_addresses = {}
         l1_controller_addresses["Arpa"] = EXISTING_L1_ARPA_ADDRESS
         l1_controller_addresses["Staking"] = EXISTING_L1_STAKING_ADDRESS
+        l1_controller_addresses["ServiceManager"] = EXISTING_L1_SERVICE_MANAGER_ADDRESS
         l1_controller_addresses["Controller"] = EXISTING_L1_CONTROLLER_ADDRESS
-        l1_controller_addresses["ERC1967Proxy"] = EXISTING_L1_ADAPTER_ADDRESS
+        l1_controller_addresses["Adapter"] = EXISTING_L1_ADAPTER_ADDRESS
 
         l1_addresses = {**l1_controller_addresses}
         set_key(ENV_PATH, "ARPA_ADDRESS", l1_addresses["Arpa"])
-        set_key(ENV_PATH, "STAKING_ADDRESS", l1_addresses["Staking"])
         set_key(ENV_PATH, "CONTROLLER_ADDRESS", l1_addresses["Controller"])
-        set_key(ENV_PATH, "ADAPTER_ADDRESS", l1_addresses["ERC1967Proxy"])
+        set_key(ENV_PATH, "ADAPTER_ADDRESS", l1_addresses["Adapter"])
+        set_key(ENV_PATH, "SERVICE_MANAGER_ADDRESS", l1_addresses["ServiceManager"])
+        set_key(ENV_PATH, "STAKING_ADDRESS", l1_addresses["Staking"])
         l1_controller_relayer = EXISTING_L1_CONTROLLER_RELAYER
 
     # Deploy CreateAndSetChainMessenger script
@@ -400,22 +400,8 @@ def deploy_contracts():
 
     # ! New
     print("Running Solidity Script: CreateAndSetOPStackChainMessenger on L1...")
-    cmd = f"forge script script/CreateAndSetOPStackChainMessenger.s.sol:CreateAndSetOPStackChainMessengerScript --fork-url {L1_RPC} --broadcast"
+    cmd = f"forge script script/CreateAndSetOPStackChainMessenger.s.sol:CreateAndSetOPStackChainMessengerScript --fork-url {L1_RPC} --broadcast --priority-gas-price {L1_TRANSACTION_PRIORITY_GAS_PRICE}"
     cprint(cmd)
-
-    # ! Old
-    # if REDSTONE_DEPLOYMENT:
-    #     print("Running Solidity Script: CreateAndSetRedstoneChainMessenger on L1...")
-    #     cmd = f"forge script script/CreateAndSetRedstoneChainMessenger.s.sol:CreateAndSetRedstoneChainMessengerScript --fork-url {L1_RPC} --broadcast"
-    #     cprint(cmd)
-    # elif BASE_DEPLOYMENT:
-    #     print("Running Solidity Script: CreateAndSetBaseChainMessenger on L1...")
-    #     cmd = f"forge script script/CreateAndSetBaseChainMessenger.s.sol:CreateAndSetBaseChainMessengerScript --fork-url {L1_RPC} --broadcast"
-    #     cprint(cmd)
-    # else:
-    #     print("Running Solidity Script: CreateAndSetOPChainMessenger on L1...")
-    #     cmd = f"forge script script/CreateAndSetOPChainMessenger.s.sol:CreateAndSetOPChainMessengerScript --fork-url {L1_RPC} --broadcast"
-    #     cprint(cmd)
 
     run_command(
         [cmd],
@@ -430,71 +416,30 @@ def deploy_contracts():
     )
 
     # ! New
-    l1_chain_op_stack_messenger_addresses = get_addresses_from_json(
+    l1_chain_op_stack_messenger_addresses = get_addresses_from_broadcast_json(
         CREATE_AND_SET_OP_STACK_CHAIN_MESSENGER_BROADCAST_PATH
     )
-
     l1_addresses.update(l1_chain_op_stack_messenger_addresses)
 
     set_key(
         ENV_PATH, "L1_CHAIN_MESSENGER_ADDRESS", l1_addresses["OPStackChainMessenger"]
     )
 
-    # ! Old
-    # if REDSTONE_DEPLOYMENT:
-    #     l1_chain_redstone_messenger_addresses = get_addresses_from_json(
-    #         CREATE_AND_SET_REDSTONE_CHAIN_MESSENGER_BROADCAST_PATH
-    #     )
-    #     l1_addresses.update(l1_chain_redstone_messenger_addresses)
-    #     set_key(
-    #         ENV_PATH,
-    #         "L1_CHAIN_MESSENGER_ADDRESS",
-    #         l1_addresses["RedstoneChainMessenger"],
-    #     )
-    # elif BASE_DEPLOYMENT:
-    #     l1_chain_base_messenger_addresses = get_addresses_from_json(
-    #         CREATE_AND_SET_BASE_CHAIN_MESSENGER_BROADCAST_PATH
-    #     )
-    #     l1_addresses.update(l1_chain_base_messenger_addresses)
-    #     set_key(
-    #         ENV_PATH, "L1_CHAIN_MESSENGER_ADDRESS", l1_addresses["BaseChainMessenger"]
-    #     )
-    # else:
-    #     l1_chain_op_messenger_addresses = get_addresses_from_json(
-    #         CREATE_AND_SET_OP_CHAIN_MESSENGER_BROADCAST_PATH
-    #     )
-    #     l1_addresses.update(l1_chain_op_messenger_addresses)
-    #     set_key(
-    #         ENV_PATH, "L1_CHAIN_MESSENGER_ADDRESS", l1_addresses["OPChainMessenger"]
-    #     )
-
     # 4. deploy remaining contracts (Controller Oracle Init, StakeNodeLocalTest)
-    # forge script script/OPControllerOracleInitializationLocalTest.s.sol:OPControllerOracleInitializationLocalTestScript --fork-url http://localhost:9545 --broadcast
     print(
         "Running Solidity Script: OPControllerOracleInitializationLocalTestScript on L2..."
     )
-    cmd = f"forge script script/OPControllerOracleInitializationLocalTest.s.sol:OPControllerOracleInitializationLocalTestScript --fork-url {L2_RPC} --broadcast"
+    cmd = f"forge script script/OPControllerOracleInitializationLocalTest.s.sol:OPControllerOracleInitializationLocalTestScript --fork-url {L2_RPC} --broadcast --priority-gas-price {L2_TRANSACTION_PRIORITY_GAS_PRICE}"
     if LOOTCHAIN_DEPLOYMENT:
         cmd = cmd + " --slow --legacy"
     cprint(cmd)
     run_command(
         [cmd],
         env={
-            "OP_ADAPTER_ADDRESS": l2_addresses["ERC1967Proxy"],
+            "OP_ADAPTER_ADDRESS": l2_addresses["Adapter"],
             "OP_ARPA_ADDRESS": l2_addresses["Arpa"],
             "OP_CONTROLLER_ORACLE_ADDRESS": l2_addresses["ControllerOracle"],
-            # ! New
             "L1_CHAIN_MESSENGER_ADDRESS": l1_addresses["OPStackChainMessenger"],
-            # ! Old
-            # "L1_CHAIN_MESSENGER_ADDRESS": (
-            #     l1_addresses["BaseChainMessenger"]
-            #     if BASE_DEPLOYMENT
-            #     else (
-            #         l1_addresses["RedstoneChainMessenger"]
-            #         if REDSTONE_DEPLOYMENT
-            #         else l1_addresses["OPChainMessenger"]
-            #     )
-            # ),
         },
         cwd=CONTRACTS_DIR,
         capture_output=HIDE_OUTPUT,
@@ -502,36 +447,37 @@ def deploy_contracts():
     )
 
     if not L2_ONLY:  # l2_only == False
-        # forge script script/InitStakingLocalTest.s.sol:InitStakingLocalTestScript --fork-url http://localhost:8545 --broadcast -g 15
-        print("Running Solidity Script: InitStakingLocalTestScript on L1...")
-        cmd = f"forge script script/InitStakingLocalTest.s.sol:InitStakingLocalTestScript --fork-url {L1_RPC} --broadcast -g 150"
-        cprint(cmd)
-        run_command(
-            [cmd],
-            env={
-                "ARPA_ADDRESS": l1_addresses["Arpa"],
-                "STAKING_ADDRESS": l1_addresses["Staking"],
-            },
-            cwd=CONTRACTS_DIR,
-            capture_output=HIDE_OUTPUT,
-            shell=True,
-        )
-
-        # forge script script/StakeNodeLocalTest.s.sol:StakeNodeLocalTestScript --fork-url http://localhost:8545 --broadcast
-        print("Running Solidity Script: StakeNodeLocalTestScript on L1...")
-        cmd = f"forge script script/StakeNodeLocalTest.s.sol:StakeNodeLocalTestScript --fork-url {L1_RPC} --broadcast -g 150"
-        cprint(cmd)
-        run_command(
-            [cmd],
-            env={
-                "ARPA_ADDRESS": l1_addresses["Arpa"],
-                "STAKING_ADDRESS": l1_addresses["Staking"],
-                "ADAPTER_ADDRESS": l1_addresses["ERC1967Proxy"],
-            },
-            cwd=CONTRACTS_DIR,
-            capture_output=HIDE_OUTPUT,
-            shell=True,
-        )
+        if NODE_PRIVATE_KEY_COUNT != "0":
+            print("Running Solidity Script: InitStakingLocalTestScript on L1...")
+            cmd = f"forge script script/InitStakingLocalTest.s.sol:InitStakingLocalTestScript --fork-url {L1_RPC} --broadcast -g 150 --priority-gas-price {L1_TRANSACTION_PRIORITY_GAS_PRICE}"
+            cprint(cmd)
+            run_command(
+                [cmd],
+                env={
+                    "ARPA_ADDRESS": l1_addresses["Arpa"],
+                    "STAKING_ADDRESS": l1_addresses["Staking"],
+                },
+                cwd=CONTRACTS_DIR,
+                capture_output=HIDE_OUTPUT,
+                shell=True,
+            )
+            for i in range(1, int(NODE_PRIVATE_KEY_COUNT) + 1):
+                print("Running Solidity Script: StakeNodeLocalTestScript on L1...")
+                cmd = f"forge script script/StakeNodeLocalTest.s.sol:StakeNodeLocalTestScript --fork-url {L1_RPC} --broadcast -g 150 --priority-gas-price {L1_TRANSACTION_PRIORITY_GAS_PRICE}"
+                cprint(cmd)
+                run_command(
+                    [cmd],
+                    env={
+                        "ARPA_ADDRESS": l1_addresses["Arpa"],
+                        "STAKING_ADDRESS": l1_addresses["Staking"],
+                        "ADAPTER_ADDRESS": l1_addresses["Adapter"],
+                        "NODE_PRIVATE_KEY_OFFSET": str(i),
+                    },
+                    cwd=CONTRACTS_DIR,
+                    capture_output=HIDE_OUTPUT,
+                    shell=True,
+                )
+                time.sleep(3)  # avoid replacement transaction underpriced
 
     else:  # l2_only == True
         # determine number of available groups and relay groups
@@ -540,7 +486,7 @@ def deploy_contracts():
         )
         relay_groups(l2_addresses["ControllerOracle"])
 
-    # Print addresses to addresses.json
+    # Print addresses to addresses.json in the current directory
     print_addresses()
 
 
@@ -601,6 +547,7 @@ def deploy_nodes():  # ! Deploy Nodes
     config_files = []  # used when deploying nodes later
     PORT_1 = 50061  # node rpc endpoint starting port
     PORT_2 = 50091  # node management rpc endpoint starting port
+    PORT_3 = 50081  # node statistics http endpoint starting port
     for i, private_key in enumerate(node_private_keys):
         config_file = f"config_{i+1}.yml"
         config_files.append(config_file)
@@ -608,24 +555,27 @@ def deploy_nodes():  # ! Deploy Nodes
         with open(file_path, "r") as f:
             data = yaml.load(f)
 
-        # set node commiter and node management rpc endpoints # ! new
-        data["node_advertised_committer_rpc_endpoint"] = f"172.17.0.1:{PORT_1 + i}"
+        # set node commiter, node management and node statistics server endpoints # ! new
+        data["node_advertised_committer_rpc_endpoint"] = f"0.0.0.0:{PORT_1 + i}"
         data["node_committer_rpc_endpoint"] = f"0.0.0.0:{PORT_1 + i}"
         data["node_management_rpc_endpoint"] = f"0.0.0.0:{PORT_2 + i}"
+        data["node_statistics_http_endpoint"] = f"0.0.0.0:{PORT_3 + i}"
+
+        # set is_eigenlayer
+        data["is_eigenlayer"] = False
 
         # set node_id, data_path, and log_file_path
         data["data_path"] = f"./db/data{i+1}.sqlite"
-        data["logger"]["node_id"] = i + 1
         data["logger"]["log_file_path"] = f"log/{i+1}/"
         # L1
-        data["adapter_address"] = l1_addresses["ERC1967Proxy"]
+        data["adapter_address"] = l1_addresses["Adapter"]
         data["controller_address"] = l1_addresses["Controller"]
         data["controller_relayer_address"] = l1_addresses["ControllerRelayer"]
         # L2
         data["relayed_chains"][0]["controller_oracle_address"] = l2_addresses[
             "ControllerOracle"
         ]
-        data["relayed_chains"][0]["adapter_address"] = l2_addresses["ERC1967Proxy"]
+        data["relayed_chains"][0]["adapter_address"] = l2_addresses["Adapter"]
 
         # update rpc endpoints
         data["provider_endpoint"] = L1_WS_RPC
@@ -650,9 +600,11 @@ def deploy_nodes():  # ! Deploy Nodes
     for i, config_file in enumerate(config_files, start=1):
         print(f"Starting Node #{i} using: {config_file}!")
         if LOCAL_TEST:
+            cmd = f"cargo run --bin node-client -- -c {NODE_CLIENT_DIR}/{config_file} > /dev/null 2>&1 &"
+            # cmd = f"{NODE_CLIENT_DEBUG_BINARY_PATH} -c {NODE_CLIENT_DIR}/{config_file} > /dev/null 2>&1 &"  # debug binary
+
             # cmd = f"cargo run --release --bin node-client -- -c {NODE_CLIENT_DIR}/{config_file} > /dev/null 2>&1 &"
             # cmd = f"{NODE_CLIENT_RELEASE_BINARY_PATH} -c {NODE_CLIENT_DIR}/{config_file} > /dev/null 2>&1 &"  # release binary
-            cmd = f"{NODE_CLIENT_DEBUG_BINARY_PATH} -c {NODE_CLIENT_DIR}/{config_file} > /dev/null 2>&1 &"  # debug binary
 
         else:
             cmd = (
@@ -774,27 +726,27 @@ def test_request_randomness():
     ############################################
 
     # 1. Get L1 previous randomness
-    l1_prev_randomness = get_last_randomness(l1_addresses["ERC1967Proxy"], L1_RPC)
+    l1_prev_randomness = get_last_randomness(l1_addresses["Adapter"], L1_RPC)
 
     # 2. Deploy L1 user contract and request randomness
     print("\nDeploying L1 user contract and requesting randomness...")
-    cmd = f"forge script script/GetRandomNumberLocalTest.s.sol:GetRandomNumberLocalTestScript --fork-url {L1_RPC} --broadcast"
+    cmd = f"forge script script/GetRandomNumberLocalTest.s.sol:GetRandomNumberLocalTestScript --fork-url {L1_RPC} --broadcast --priority-gas-price {L1_TRANSACTION_PRIORITY_GAS_PRICE}"
     cprint(cmd)
     run_command(
         [cmd],
         env={
-            "ADAPTER_ADDRESS": l1_addresses["ERC1967Proxy"],
+            "ADAPTER_ADDRESS": l1_addresses["Adapter"],
         },
         cwd=CONTRACTS_DIR,
         capture_output=HIDE_OUTPUT,
         shell=True,
     )
-    l1_cur_randomness = get_last_randomness(l1_addresses["ERC1967Proxy"], L1_RPC)
+    l1_cur_randomness = get_last_randomness(l1_addresses["Adapter"], L1_RPC)
 
     # 3. Check if randomness is updated
 
     print("Waiting for randomness to be updated...")
-    cmd = f'cast call {l1_addresses["ERC1967Proxy"]} "getLastRandomness()(uint256)" --rpc-url {L1_RPC}'
+    cmd = f'cast call {l1_addresses["Adapter"]} "getLastRandomness()(uint256)" --rpc-url {L1_RPC}'
     cprint(cmd)
     l1_cur_randomness = wait_command(
         [cmd],
@@ -813,31 +765,31 @@ def test_request_randomness():
 
     # 1. Get last randomness
     # get l2 previous randomness
-    l2_prev_randomness = get_last_randomness(l2_addresses["ERC1967Proxy"], L2_RPC)
+    l2_prev_randomness = get_last_randomness(l2_addresses["Adapter"], L2_RPC)
 
     # 2. Deploy l2 user contract and request randomness
     print("Deploying l2 user contract and requesting randomness...")
 
     # forge script script/OPGetRandomNumberLocalTest.s.sol:OPGetRandomNumberLocalTestScript --fork-url http://localhost:9545 --broadcast
-    cmd = f"forge script script/OPGetRandomNumberLocalTest.s.sol:OPGetRandomNumberLocalTestScript --fork-url {L2_RPC} --broadcast"
+    cmd = f"forge script script/OPGetRandomNumberLocalTest.s.sol:OPGetRandomNumberLocalTestScript --fork-url {L2_RPC} --broadcast --priority-gas-price {L2_TRANSACTION_PRIORITY_GAS_PRICE}"
     if LOOTCHAIN_DEPLOYMENT:
         cmd = cmd + " --slow --legacy"
     cprint(cmd)
     run_command(
         [cmd],
         env={
-            "OP_ADAPTER_ADDRESS": l2_addresses["ERC1967Proxy"],
+            "OP_ADAPTER_ADDRESS": l2_addresses["Adapter"],
         },
         cwd=CONTRACTS_DIR,
         capture_output=HIDE_OUTPUT,
         shell=True,
     )
-    l2_cur_randomness = get_last_randomness(l2_addresses["ERC1967Proxy"], L2_RPC)
+    l2_cur_randomness = get_last_randomness(l2_addresses["Adapter"], L2_RPC)
 
     # 3. Check if randomness is updated
 
     print("Waiting for randomness to be updated...")
-    cmd = f'cast call {l2_addresses["ERC1967Proxy"]} "getLastRandomness()(uint256)" --rpc-url {L2_RPC}'
+    cmd = f'cast call {l2_addresses["Adapter"]} "getLastRandomness()(uint256)" --rpc-url {L2_RPC}'
     if LOOTCHAIN_DEPLOYMENT:
         cmd = cmd + " --slow --legacy"
     cprint(cmd)
@@ -912,7 +864,7 @@ def relay_groups(controller_oracle_address):
     #  call relayGroup(chainid, groupindex) for each group index
     print("Relaying groups from L1 to L2...")
     for group_index in group_indices:
-        cmd = f'cast send {EXISTING_L1_CONTROLLER_RELAYER} "relayGroup(uint256,uint256)" {L2_CHAIN_ID} {group_index} --rpc-url {L1_RPC} --private-key {ADMIN_PRIVATE_KEY}'
+        cmd = f'cast send {EXISTING_L1_CONTROLLER_RELAYER} "relayGroup(uint256,uint256)" {L2_CHAIN_ID} {group_index} --rpc-url {L1_RPC} --private-key {ADMIN_PRIVATE_KEY} --gas-limit 3000000'
         cprint(cmd.replace(ADMIN_PRIVATE_KEY, "***"))
         run_command(
             [cmd],
@@ -962,7 +914,7 @@ def update_group(controller_address, controller_oracle_address, group_index):
     print(f"Admin wallet address: {admin_wallet_address}")
 
     # construct the forge script
-    cmd = f"forge script script/updateGroup.s.sol:GetGroupFromL1AndUpdateL2Script --broadcast"
+    cmd = f"forge script script/updateGroup.s.sol:GetGroupFromL1AndUpdateL2Script --broadcast --priority-gas-price {L1_TRANSACTION_PRIORITY_GAS_PRICE}"
 
     cprint(cmd)
 
@@ -991,7 +943,7 @@ def main():
     # deploy_controller_relayer()
 
     ## Manually call relayGroups(L2controllerOracleAddress)
-    # relay_groups("0x2E2Ed0Cfd3AD2f1d34481277b3204d807Ca2F8c2")
+    # relay_groups("0x901105C43C7f0e421b33c9D1DaA25f54076F6563")
 
     ## Get public/private key info from node mnemonic
     # print_node_key_info()

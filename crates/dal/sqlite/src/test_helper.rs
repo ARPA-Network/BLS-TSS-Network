@@ -62,14 +62,12 @@ impl<C: Curve> BoardPublisher<C> for InMemoryBoard<C> {
 }
 
 #[allow(unused)]
-pub async fn run_dkg<C, S>(
+pub async fn run_dkg<C>(
     board: &mut InMemoryBoard<C>,
     phase0s: Vec<joint_feldman::DKG<C>>,
 ) -> Vec<DKGOutput<C>>
 where
     C: Curve,
-    // We need to bind the Curve's Point and Scalars to the Scheme
-    S: Scheme<Public = <C as Curve>::Point, Private = <C as Curve>::Scalar>,
 {
     // Phase 1: Publishes shares
     let mut phase1s = Vec::new();

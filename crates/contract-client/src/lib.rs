@@ -1,9 +1,9 @@
 use crate::error::ContractClientError;
 use ::ethers::abi::Detokenize;
+use ::ethers::prelude::builders::ContractCall;
 use ::ethers::prelude::ContractError;
 use ::ethers::providers::{Middleware, ProviderError};
-use ::ethers::types::{BlockNumber, U64};
-use ::ethers::{prelude::builders::ContractCall, types::H256};
+use ::ethers::types::{BlockNumber, TransactionReceipt, U64};
 use arpa_core::{
     eip1559_gas_price_estimator, fallback_eip1559_gas_price_estimator, jitter, supports_eip1559,
     ExponentialBackoffRetryDescriptor,
@@ -35,7 +35,7 @@ pub trait TransactionCaller {
         mut call: ContractCall<M, D>,
         contract_transaction_retry_descriptor: ExponentialBackoffRetryDescriptor,
         retry_on_transaction_fail: bool,
-    ) -> ContractClientResult<H256>
+    ) -> ContractClientResult<TransactionReceipt>
     where
         ContractClientError: From<ContractError<M>>,
     {
@@ -93,7 +93,7 @@ pub trait TransactionCaller {
             tx.max_priority_fee_per_gas = Some(max_priority_fee);
         }
 
-        let transaction_hash = RetryIf::spawn(
+        let transaction_receipt = RetryIf::spawn(
             retry_strategy,
             || async {
                 let pending_tx = call.send().await.map_err(|e| {
@@ -121,7 +121,7 @@ pub trait TransactionCaller {
                         "Transaction failed({}) with chain_id({}), receipt: {:?}",
                         info, chain_id, receipt
                     );
-                    return Err(ContractClientError::TransactionFailed);
+                    return Err(ContractClientError::TransactionFailed(receipt));
                 } else {
                     info!(
                         "Transaction successful({}) with chain_id({}), receipt: {:?}",
@@ -129,15 +129,15 @@ pub trait TransactionCaller {
                     );
                 }
 
-                Ok(receipt.transaction_hash)
+                Ok(receipt)
             },
             |e: &ContractClientError| {
-                retry_on_transaction_fail || !matches!(e, ContractClientError::TransactionFailed)
+                retry_on_transaction_fail || !matches!(e, ContractClientError::TransactionFailed(_))
             },
         )
         .await?;
 
-        Ok(transaction_hash)
+        Ok(transaction_receipt)
     }
 }
 
@@ -219,19 +219,53 @@ pub trait ViewCaller {
     }
 }
 
-pub mod controller {
+pub mod node_registry {
     use crate::error::ContractClientResult;
-    use arpa_core::{DKGTask, Group, Node};
+    use arpa_core::Node;
     use async_trait::async_trait;
     use ethers::core::types::Address;
-    use ethers::types::H256;
+    use ethers::types::TransactionReceipt;
+
+    #[async_trait]
+    pub trait NodeRegistryTransactions {
+        async fn node_register(
+            &self,
+            id_public_key: Vec<u8>,
+            is_eigenlayer: bool,
+        ) -> ContractClientResult<TransactionReceipt>;
+
+        async fn node_activate(
+            &self,
+            is_eigenlayer: bool,
+        ) -> ContractClientResult<TransactionReceipt>;
+    }
+
+    #[async_trait]
+    pub trait NodeRegistryViews {
+        async fn get_node(&self, id_address: Address) -> ContractClientResult<Node>;
+    }
+
+    pub trait NodeRegistryClientBuilder {
+        type NodeRegistryService: NodeRegistryTransactions + NodeRegistryViews + Send + Sync;
+
+        fn build_node_registry_client(
+            &self,
+            node_registry_address: Address,
+        ) -> Self::NodeRegistryService;
+    }
+}
+
+pub mod controller {
+    use crate::error::ContractClientResult;
+    use arpa_core::{DKGTask, Group};
+    use async_trait::async_trait;
+    use ethers::core::types::Address;
+    use ethers::types::TransactionReceipt;
     use std::future::Future;
     use threshold_bls::group::Curve;
 
     #[async_trait]
     pub trait ControllerTransactions {
-        async fn node_register(&self, id_public_key: Vec<u8>) -> ContractClientResult<H256>;
-
         async fn commit_dkg(
             &self,
             group_index: usize,
@@ -239,22 +273,22 @@ pub mod controller {
             public_key: Vec<u8>,
             partial_public_key: Vec<u8>,
             disqualified_nodes: Vec<Address>,
-        ) -> ContractClientResult<H256>;
+        ) -> ContractClientResult<TransactionReceipt>;
 
         async fn post_process_dkg(
             &self,
             group_index: usize,
             group_epoch: usize,
-        ) -> ContractClientResult<H256>;
+        ) -> ContractClientResult<TransactionReceipt>;
     }
 
     #[async_trait]
     pub trait ControllerViews<C: Curve> {
-        async fn get_node(&self, id_address: Address) -> ContractClientResult<Node>;
-
         async fn get_group(&self, group_index: usize) -> ContractClientResult<Group<C>>;
 
         async fn get_coordinator(&self, group_index: usize) -> ContractClientResult<Address>;
+
+        async fn get_node_registry_address(&self) -> ContractClientResult<Address>;
     }
 
     #[async_trait]
@@ -283,12 +317,15 @@ pub mod controller_oracle {
     use crate::error::ContractClientResult;
     use arpa_core::Group;
     use async_trait::async_trait;
-    use ethers::types::{Address, H256};
+    use ethers::types::{Address, TransactionReceipt};
     use threshold_bls::group::Curve;
 
     #[async_trait]
     pub trait ControllerOracleTransactions {
-        async fn node_withdraw(&self, recipient: Address) -> ContractClientResult<H256>;
+        async fn node_withdraw(
+            &self,
+            recipient: Address,
+        ) -> ContractClientResult<TransactionReceipt>;
     }
 
     #[async_trait]
@@ -306,7 +343,7 @@ pub mod controller_oracle {
 pub mod controller_relayer {
     use crate::error::ContractClientResult;
     use async_trait::async_trait;
-    use ethers::types::H256;
+    use ethers::types::TransactionReceipt;
 
     #[async_trait]
     pub trait ControllerRelayerTransactions {
@@ -314,7 +351,7 @@ pub mod controller_relayer {
             &self,
             chain_id: usize,
             group_index: usize,
-        ) -> ContractClientResult<H256>;
+        ) -> ContractClientResult<TransactionReceipt>;
     }
 
     pub trait ControllerRelayerClientBuilder {
@@ -327,8 +364,7 @@ pub mod controller_relayer {
 pub mod coordinator {
     use async_trait::async_trait;
     use dkg_core::BoardPublisher;
-    use ethers::core::types::Address;
-    use ethers::types::H256;
+    use ethers::{core::types::Address, types::TransactionReceipt};
     use thiserror::Error;
     use threshold_bls::group::Curve;
 
@@ -347,7 +383,7 @@ pub mod coordinator {
         /// Participant publishes their data and depending on the phase the data gets inserted
         /// in the shares, responses or justifications mapping. Reverts if the participant
         /// has already published their data for a phase or if the DKG has ended.
-        async fn publish(&self, value: Vec<u8>) -> ContractClientResult<H256>;
+        async fn publish(&self, value: Vec<u8>) -> ContractClientResult<TransactionReceipt>;
     }
 
     #[async_trait]
@@ -389,7 +425,7 @@ pub mod adapter {
     use arpa_core::{PartialSignature, RandomnessTask};
     use async_trait::async_trait;
     use ethers::core::types::Address;
-    use ethers::types::{H256, U256};
+    use ethers::types::{TransactionReceipt, U256};
     use std::{collections::HashMap, future::Future};
 
     use crate::error::ContractClientResult;
@@ -402,7 +438,7 @@ pub mod adapter {
             task: RandomnessTask,
             signature: Vec<u8>,
             partial_signatures: HashMap<Address, PartialSignature>,
-        ) -> ContractClientResult<H256>;
+        ) -> ContractClientResult<TransactionReceipt>;
     }
 
     #[async_trait]

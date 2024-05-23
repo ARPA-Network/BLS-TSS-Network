@@ -5,6 +5,7 @@ pub mod post_success_grouping;
 pub mod pre_grouping;
 pub mod randomness_signature_aggregation;
 pub mod ready_to_handle_randomness_task;
+pub mod schedule_node_activation;
 
 use crate::{
     error::NodeResult,

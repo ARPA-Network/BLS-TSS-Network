@@ -17,7 +17,6 @@ adapter_address: "0x4c5859f0F772848b2D91F1D83E2Fe57935348029"
 data_path: "./data8.sqlite"
 
 logger:
-  node_id: 8
   context_logging: false
   log_file_path: log/8/
   rolling_file_size: 10 gb
