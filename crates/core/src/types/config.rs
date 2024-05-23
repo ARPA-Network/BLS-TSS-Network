@@ -122,7 +122,7 @@ impl Default for LoggerDescriptor {
     fn default() -> Self {
         Self {
             context_logging: false,
-            log_file_path: "log/running".to_string(),
+            log_file_path: "log/".to_string(),
             rolling_file_size: DEFAULT_ROLLING_LOG_FILE_SIZE,
         }
     }
@@ -528,7 +528,7 @@ impl From<ConfigHolder> for Config {
             config_holder.arpa_contract_address.unwrap()
         };
         let data_path = if config_holder.data_path.is_none() {
-            String::from("data.sqlite")
+            String::from("./db/data.sqlite")
         } else {
             config_holder.data_path.unwrap()
         };
