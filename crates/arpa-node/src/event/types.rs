@@ -17,4 +17,5 @@ pub enum Topic {
     ReadyToFulfillRandomnessTask(usize),
     ReadyToFulfillGroupRelayTask,
     ReadyToFulfillGroupRelayConfirmationTask(usize),
+    NodeActivation,
 }

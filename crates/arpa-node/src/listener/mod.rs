@@ -5,6 +5,7 @@ pub mod post_grouping;
 pub mod pre_grouping;
 pub mod randomness_signature_aggregation;
 pub mod ready_to_handle_randomness_task;
+pub mod schedule_node_activation;
 
 use std::fmt::Display;
 
@@ -62,6 +63,10 @@ pub trait Listener {
             }
             sleep(next_polling_strategy.next().unwrap()).await;
         }
+    }
+
+    async fn initialize(&mut self) -> NodeResult<()> {
+        Ok(())
     }
 
     async fn listen(&self) -> NodeResult<()>;

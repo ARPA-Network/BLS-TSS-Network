@@ -33,6 +33,9 @@ pub enum SchedulerError {
 
     #[error("the listener {1} is not supported in relayed chain {0}")]
     UnsupportedListenerType(usize, String),
+
+    #[error("the listener failed to initialize. Error: {0}")]
+    ListenerInitializationError(String),
 }
 
 #[derive(Debug, Error)]

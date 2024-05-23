@@ -150,8 +150,15 @@ impl<PC: Curve> FulfillRandomnessHandler for GeneralFulfillRandomnessHandler<PC>
                     )
                     .await?;
 
+                // TODO add a special retry mechanism for gas price too high
+                self.randomness_signature_cache
+                    .write()
+                    .await
+                    .incr_committed_times(&randomness_task_request_id)
+                    .await?;
+
                 info!("cancel fulfilling randomness as gas price is too high! task request id: {}, current_gas_price:{:?}, max_gas_price: {:?}",
-                format!("0x{}", hex::encode(randomness_task_request_id)), wei_per_gas, randomness_task.callback_max_gas_price);
+                format!("0x{}", hex::encode(&randomness_task_request_id)), wei_per_gas, randomness_task.callback_max_gas_price);
 
                 return Ok(());
             }

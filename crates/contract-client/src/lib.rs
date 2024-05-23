@@ -233,6 +233,11 @@ pub mod node_registry {
             id_public_key: Vec<u8>,
             is_eigenlayer: bool,
         ) -> ContractClientResult<TransactionReceipt>;
+
+        async fn node_activate(
+            &self,
+            is_eigenlayer: bool,
+        ) -> ContractClientResult<TransactionReceipt>;
     }
 
     #[async_trait]

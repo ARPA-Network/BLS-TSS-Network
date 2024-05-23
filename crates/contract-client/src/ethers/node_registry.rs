@@ -40,6 +40,51 @@ impl NodeRegistryClient {
             contract_view_retry_descriptor,
         }
     }
+
+    async fn build_signature_with_salt_and_expiry(
+        &self,
+        node_registry_contract: &NodeRegistryContract,
+    ) -> ContractClientResult<SignatureWithSaltAndExpiry> {
+        let service_manager_address = node_registry_contract.get_node_registry_config().await?.2;
+        let service_manager_contract =
+            service_manager::ServiceManager::new(service_manager_address, self.client.clone());
+        let avs_directory_address = service_manager_contract.avs_directory().await?;
+        let avs_directory_contract =
+            iavs_directory::IAVSDirectory::new(avs_directory_address, self.client.clone());
+        // generate random salt
+        let salt = rand::thread_rng().gen::<[u8; 32]>();
+
+        let expiry = self
+            .client
+            .provider()
+            .get_block(BlockNumber::Latest)
+            .await
+            .map(|o| o.map(|b| b.timestamp))?
+            .unwrap()
+            + 1000;
+
+        let digest_hash = avs_directory_contract
+            .calculate_operator_avs_registration_digest_hash(
+                self.client.inner().address(),
+                service_manager_address,
+                salt,
+                expiry,
+            )
+            .await?;
+        let signature = self
+            .client
+            .inner()
+            .signer()
+            .sign_hash(digest_hash.into())?
+            .to_vec()
+            .into();
+
+        Ok(SignatureWithSaltAndExpiry {
+            signature,
+            salt,
+            expiry,
+        })
+    }
 }
 
 impl NodeRegistryClientBuilder for GeneralMainChainIdentity {
@@ -93,46 +138,8 @@ impl NodeRegistryTransactions for NodeRegistryClient {
             ServiceClient::<NodeRegistryContract>::prepare_service_client(self).await?;
 
         let signature = if is_eigenlayer {
-            let service_manager_address =
-                node_registry_contract.get_node_registry_config().await?.2;
-            let service_manager_contract =
-                service_manager::ServiceManager::new(service_manager_address, self.client.clone());
-            let avs_directory_address = service_manager_contract.avs_directory().await?;
-            let avs_directory_contract =
-                iavs_directory::IAVSDirectory::new(avs_directory_address, self.client.clone());
-            // generate random salt
-            let salt = rand::thread_rng().gen::<[u8; 32]>();
-
-            let expiry = self
-                .client
-                .provider()
-                .get_block(BlockNumber::Latest)
-                .await
-                .map(|o| o.map(|b| b.timestamp))?
-                .unwrap()
-                + 1000;
-
-            let digest_hash = avs_directory_contract
-                .calculate_operator_avs_registration_digest_hash(
-                    self.client.inner().address(),
-                    service_manager_address,
-                    salt,
-                    expiry,
-                )
-                .await?;
-            let signature = self
-                .client
-                .inner()
-                .signer()
-                .sign_hash(digest_hash.into())?
-                .to_vec()
-                .into();
-
-            SignatureWithSaltAndExpiry {
-                signature,
-                salt,
-                expiry,
-            }
+            self.build_signature_with_salt_and_expiry(&node_registry_contract)
+                .await?
         } else {
             SignatureWithSaltAndExpiry {
                 signature: vec![0u8; 65].into(),
@@ -147,6 +154,34 @@ impl NodeRegistryTransactions for NodeRegistryClient {
         NodeRegistryClient::call_contract_transaction(
             self.chain_id,
             "node_register",
+            node_registry_contract.client_ref(),
+            call,
+            self.contract_transaction_retry_descriptor,
+            true,
+        )
+        .await
+    }
+
+    async fn node_activate(&self, is_eigenlayer: bool) -> ContractClientResult<TransactionReceipt> {
+        let node_registry_contract =
+            ServiceClient::<NodeRegistryContract>::prepare_service_client(self).await?;
+
+        let signature = if is_eigenlayer {
+            self.build_signature_with_salt_and_expiry(&node_registry_contract)
+                .await?
+        } else {
+            SignatureWithSaltAndExpiry {
+                signature: vec![0u8; 65].into(),
+                salt: [0u8; 32],
+                expiry: 0u64.into(),
+            }
+        };
+
+        let call = node_registry_contract.node_activate(signature);
+
+        NodeRegistryClient::call_contract_transaction(
+            self.chain_id,
+            "node_activate",
             node_registry_contract.client_ref(),
             call,
             self.contract_transaction_retry_descriptor,

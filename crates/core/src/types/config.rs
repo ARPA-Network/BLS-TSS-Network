@@ -16,6 +16,8 @@ pub const GAS_RAISE_PERCENTAGE: u32 = 20;
 pub const DEFAULT_LISTENER_INTERVAL_MILLIS: u64 = 10000;
 pub const DEFAULT_LISTENER_USE_JITTER: bool = true;
 
+pub const DEFAULT_NODE_ACTIVATION_INTERVAL_MILLIS: u64 = 30000;
+
 pub const DEFAULT_DKG_TIMEOUT_DURATION: usize = 10 * 4;
 pub const DEFAULT_RANDOMNESS_TASK_EXCLUSIVE_WINDOW: usize = 10;
 pub const DEFAULT_DKG_WAIT_FOR_PHASE_INTERVAL_MILLIS: u64 = 10000;
@@ -1036,6 +1038,7 @@ pub enum ListenerType {
     NewRandomnessTask,
     ReadyToHandleRandomnessTask,
     RandomnessSignatureAggregation,
+    ScheduleNodeActivation,
 }
 
 impl TryFrom<i32> for ListenerType {
@@ -1050,6 +1053,7 @@ impl TryFrom<i32> for ListenerType {
             4 => Ok(ListenerType::NewRandomnessTask),
             5 => Ok(ListenerType::ReadyToHandleRandomnessTask),
             6 => Ok(ListenerType::RandomnessSignatureAggregation),
+            7 => Ok(ListenerType::ScheduleNodeActivation),
             _ => Err(SchedulerError::TaskNotFound),
         }
     }
@@ -1067,6 +1071,7 @@ impl std::fmt::Display for ListenerType {
             }
             ListenerType::PostCommitGrouping => write!(f, "PostCommitGrouping"),
             ListenerType::NewRandomnessTask => write!(f, "NewRandomnessTask"),
+            ListenerType::ScheduleNodeActivation => write!(f, "ScheduleNodeActivation"),
         }
     }
 }

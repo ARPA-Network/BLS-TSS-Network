@@ -15,6 +15,8 @@ pub mod encoder;
 pub enum LogType {
     NodeRegistered,
     NodeRegisterFailed,
+    NodeActivated,
+    NodeActivationFailed,
     TaskReceived,
     DKGGroupingStarted,
     DKGGroupingFinished,
