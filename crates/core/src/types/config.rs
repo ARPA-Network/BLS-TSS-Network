@@ -81,7 +81,7 @@ struct ConfigHolder {
     pub data_path: Option<String>,
     pub account: Account,
     pub listeners: Option<Vec<ListenerDescriptorHolder>>,
-    pub logger: Option<LoggerDescriptor>,
+    pub logger: Option<LoggerDescriptorHolder>,
     pub time_limits: Option<TimeLimitDescriptorHolder>,
     pub relayed_chains: Vec<RelayedChainHolder>,
 }
@@ -111,6 +111,13 @@ impl Default for ConfigHolder {
         }
     }
 }
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct LoggerDescriptorHolder {
+    context_logging: bool,
+    log_file_path: Option<String>,
+    #[serde(deserialize_with = "deserialize_limit")]
+    rolling_file_size: u64,
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LoggerDescriptor {
@@ -131,6 +138,22 @@ impl Default for LoggerDescriptor {
 }
 
 impl LoggerDescriptor {
+    pub fn from(logger_descriptor_holder: LoggerDescriptorHolder) -> Self {
+        let context_logging = logger_descriptor_holder.context_logging;
+        let log_file_path = if logger_descriptor_holder.log_file_path.is_none() {
+            "log/".to_string()
+        } else {
+            logger_descriptor_holder.log_file_path.unwrap()
+        };
+        let rolling_file_size = logger_descriptor_holder.rolling_file_size;
+
+        Self {
+            context_logging,
+            log_file_path,
+            rolling_file_size,
+        }
+    }
+
     pub fn get_context_logging(&self) -> bool {
         self.context_logging
     }
@@ -538,7 +561,7 @@ impl From<ConfigHolder> for Config {
         let logger = if config_holder.logger.is_none() {
             LoggerDescriptor::default()
         } else {
-            config_holder.logger.unwrap()
+            LoggerDescriptor::from(config_holder.logger.unwrap())
         };
         let time_limits = if config_holder.time_limits.is_none() {
             TimeLimitDescriptor::default()
