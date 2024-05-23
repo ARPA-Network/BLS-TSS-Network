@@ -182,12 +182,15 @@ where
                 }
             }
             Err(err) => match err {
-                DKGNodeError::NotEnoughValidShares(_, _, disqualified_node_indices) => {
-                    Ok(DKGOutput::<C>::fail(disqualified_node_indices))
-                }
-                DKGNodeError::NotEnoughJustifications(_, _, disqualified_node_indices) => {
-                    Ok(DKGOutput::<C>::fail(disqualified_node_indices))
-                }
+                DKGNodeError::DKGError(e) => match e {
+                    DKGError::NotEnoughValidShares(_, _, disqualified_node_indices) => {
+                        Ok(DKGOutput::<C>::fail(disqualified_node_indices))
+                    }
+                    DKGError::NotEnoughJustifications(_, _, disqualified_node_indices) => {
+                        Ok(DKGOutput::<C>::fail(disqualified_node_indices))
+                    }
+                    _ => Err(e.into()),
+                },
                 _ => Err(err.into()),
             },
         }

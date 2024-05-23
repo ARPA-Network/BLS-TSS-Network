@@ -23,12 +23,6 @@ pub enum DKGNodeError {
     /// There was an internal error in the DKG
     #[error("DKG Error: {0}")]
     DKGError(#[from] DKGError),
-
-    #[error("only has {0}/{1} valid shares, disqualified: {2:?}")]
-    NotEnoughValidShares(usize, usize, Vec<u32>),
-
-    #[error("only has {0}/{1} required justifications, disqualified: {2:?}")]
-    NotEnoughJustifications(usize, usize, Vec<u32>),
 }
 
 /// Phase2 can either be successful or require going to Phase 3.
@@ -115,12 +109,7 @@ where
 
                 Ok(next)
             }
-            Err(e) => match e {
-                DKGError::NotEnoughValidShares(got, required, disqualified_node_indices) => Err(
-                    DKGNodeError::NotEnoughValidShares(got, required, disqualified_node_indices),
-                ),
-                _ => Err(DKGNodeError::DKGError(e)),
-            },
+            Err(e) => Err(DKGNodeError::DKGError(e)),
         }
     }
 }
