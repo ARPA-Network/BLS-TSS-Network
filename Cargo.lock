@@ -575,7 +575,7 @@ dependencies = [
 
 [[package]]
 name = "arpa-node"
-version = "0.0.3"
+version = "0.1.0"
 dependencies = [
  "actix-web",
  "anyhow",
