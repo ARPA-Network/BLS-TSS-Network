@@ -1,5 +1,7 @@
-# Build stage
-FROM alpine:3.18 as builder
+##########################################################
+# Randcast Builder
+##########################################################
+FROM alpine:3.18 as build_randcast
 
 # Define working directory
 WORKDIR /app
@@ -16,23 +18,65 @@ ENV CARGO_NET_GIT_FETCH_WITH_CLI=true
 # Copy the source code and build Randcast
 COPY . .
 RUN source $HOME/.profile && cargo build --release
+ 
+##########################################################
+# CW Agent Builder
+##########################################################
+FROM debian:latest as build_cw_agent
+
+# Define working directory
+WORKDIR /app
+
+# install dependencies
+RUN apt-get update && apt-get install -y dpkg wget vim
+RUN wget https://amazoncloudwatch-agent.s3.amazonaws.com/debian/amd64/latest/amazon-cloudwatch-agent.deb
+RUN dpkg -i amazon-cloudwatch-agent.deb
+
 
 ##########################################################
 # Final stage
+##########################################################
 FROM docker.io/frolvlad/alpine-glibc:alpine-3.16_glibc-2.34
 
+# install dependencies
+RUN apk add supervisor curl vim bash 
+
+##################
+# Randcast Stuff #
+##################
+# Copy the built binary from the randcast builder stage
+COPY --from=build_randcast /app/target/release/node-client /app/node-client
+COPY --from=build_randcast /app/target/release/node-config-checker /usr/local/bin/node-config-checker
+RUN chmod +x /app/node-client
+RUN chmod +x /usr/local/bin/node-config-checker
+
+##################
+# CW Agent Stuff #
+##################
+# Copy cloudwatch agent files from the builder stage
+COPY --from=build_cw_agent /tmp /tmp
+COPY --from=build_cw_agent /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt
+COPY --from=build_cw_agent /opt/aws/amazon-cloudwatch-agent /opt/aws/amazon-cloudwatch-agent
+ENV RUN_IN_CONTAINER="True"
+
+# Copy the AWS config file to the container
+COPY docker/node-client/config /root/.aws/config
+RUN chmod 600 /root/.aws/config
+
+# Grab cloudwatch push token from secret mount 
 RUN --mount=type=secret,id=cloudwatch_upload_token \
-  cat /run/secrets/cloudwatch_upload_token > /etc/cloudwatch_upload_token
+  cat /run/secrets/cloudwatch_upload_token > /root/.aws/credentials
 
-RUN apk add supervisor
+# Copy the cloudwatch agent configuration file to the container
+COPY docker/node-client/cloudwatch-agent-config.json /opt/aws/amazon-cloudwatch-agent/bin/default_linux_config.json
 
-# Create a directory for the external config.yml file
-RUN mkdir -p /app/external
+# copy prep-cloudwatch-config.sh script to the container
+COPY docker/node-client/prep-cloudwatch-config.sh /app/prep-cloudwatch-config.sh
+RUN chmod +x /app/prep-cloudwatch-config.sh
 
-# Copy the built binary from the builder stage
-COPY --from=builder /app/target/release/node-client /app/node-client
-COPY --from=builder /app/target/release/node-config-checker /usr/local/bin/node-config-checker
-
+###############
+#  Entrypoint # 
+###############
 # Copy supervisord configuration file
 COPY docker/node-client/supervisord.conf /etc/supervisor/conf.d/supervisord.conf
 
