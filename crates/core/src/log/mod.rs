@@ -18,6 +18,7 @@ pub enum LogType {
     TaskReceived,
     DKGGroupingStarted,
     DKGGroupingFinished,
+    DKGGroupingAborted,
     DKGGroupingFailed,
     DKGGroupingCommitted,
     DKGGroupingCommitFailed,

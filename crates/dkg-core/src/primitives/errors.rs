@@ -22,11 +22,11 @@ pub enum DKGError {
     /// NotEnoughValidShares is raised when the DKG has not successfully
     /// processed enough shares because they were invalid. In that case, the DKG
     /// can not continue, the protocol MUST be aborted.
-    #[error("only has {0}/{1} valid shares")]
-    NotEnoughValidShares(usize, usize),
+    #[error("only has {0}/{1} valid shares, disqualified: {2:?}")]
+    NotEnoughValidShares(usize, usize, Vec<Idx>),
 
-    #[error("only has {0}/{1} required justifications")]
-    NotEnoughJustifications(usize, usize),
+    #[error("only has {0}/{1} required justifications, disqualified: {2:?}")]
+    NotEnoughJustifications(usize, usize, Vec<Idx>),
 
     /// Rejected is raised when the participant is rejected from the final
     /// output

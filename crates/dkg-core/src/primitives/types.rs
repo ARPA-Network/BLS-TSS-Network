@@ -1,7 +1,7 @@
 use crate::primitives::{group::Group, status::Status};
-
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use std::fmt::Debug;
+use threshold_bls::group::Element;
 use threshold_bls::{
     ecies::EciesCipher,
     group::Curve,
@@ -20,6 +20,26 @@ pub struct DKGOutput<C: Curve> {
     pub public: PublicPoly<C>,
     /// The private share which corresponds to the participant's index
     pub share: Share<C::Scalar>,
+    /// The list of nodes that were disqualified during the protocol when failing
+    pub disqualified_node_indices: Vec<Idx>,
+}
+
+impl<C: Curve> DKGOutput<C> {
+    /// Returns the public key of the DKG
+    pub fn fail(disqualified_node_indices: Vec<Idx>) -> Self {
+        Self {
+            qual: Group {
+                nodes: vec![],
+                threshold: 0,
+            },
+            public: PublicPoly::<C>::zero(),
+            share: Share {
+                index: 0,
+                private: C::Scalar::zero(),
+            },
+            disqualified_node_indices,
+        }
+    }
 }
 
 /// BundledShares holds all encrypted shares a dealer creates during the first

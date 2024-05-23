@@ -29,6 +29,21 @@ contract BLSTest is Test {
         emit log_uint(onCurve2 ? 1 : 0);
     }
 
+    function testG2_One() public {
+        bytes memory bone = abi.encodePacked(
+            hex"1800deef121f1e76426a00665e5c4479674322d4f75edadd46debd5cd992f6ed198e9393920d483a7260bfb731fb5d25f1aa493335a9e71297e485b7aef312c212c85ea5db8c6deb4aab71808dcb408fe3d1e7690c43d37b4ce6cc0166fa7daa090689d0585ff075ec9e99ad690c3395bc4b313370b38ef355acdadcd122975b"
+        );
+
+        uint256[4] memory one = BLS.fromBytesPublicKey(bone);
+
+        uint256[4] memory point1 = [one[0], one[1], one[2], one[3]];
+        uint256[4] memory point2 = [one[0], one[1], BLS.N - one[2], BLS.N - one[3]];
+        bool onCurve1 = BLS.isOnCurveG2(point1);
+        emit log_uint(onCurve1 ? 1 : 0);
+        bool onCurve2 = BLS.isOnCurveG2(point2);
+        emit log_uint(onCurve2 ? 1 : 0);
+    }
+
     function testDecompress() public {
         uint256 cx1 = 131449440775817426560367863668973187564446271105289002152564551034334957958;
         uint256 y1 = 5142471158538969335790353460140971440396771055705923842924855903685812733855;

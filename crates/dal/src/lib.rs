@@ -75,12 +75,19 @@ pub trait NodeInfoFetcher<C: Curve>: std::fmt::Debug {
 pub trait GroupInfoUpdater<C: Curve> {
     async fn save_task_info(&mut self, self_index: usize, task: DKGTask) -> DataAccessResult<()>;
 
-    async fn save_output(
+    async fn save_successful_output(
         &mut self,
         index: usize,
         epoch: usize,
         output: DKGOutput<C>,
     ) -> DataAccessResult<(C::Point, C::Point, Vec<Address>)>;
+
+    async fn save_failed_output(
+        &mut self,
+        index: usize,
+        epoch: usize,
+        disqualified_node_indices: Vec<u32>,
+    ) -> DataAccessResult<Vec<Address>>;
 
     async fn update_dkg_status(
         &mut self,

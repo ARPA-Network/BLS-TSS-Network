@@ -23,9 +23,9 @@ use arpa_core::OP_DEVNET_CHAIN_ID;
 use arpa_core::OP_GOERLI_TESTNET_CHAIN_ID;
 use arpa_core::OP_MAINNET_CHAIN_ID;
 use arpa_core::OP_SEPOLIA_TESTNET_CHAIN_ID;
+use arpa_core::REDSTONE_GARNET_TESTNET_CHAIN_ID;
 use arpa_core::REDSTONE_HOLESKY_TESTNET_CHAIN_ID;
 use arpa_core::REDSTONE_MAINNET_CHAIN_ID;
-use arpa_core::REDSTONE_GARNET_TESTNET_CHAIN_ID;
 use arpa_core::TAIKO_KATLA_TEST_CHAIN_ID;
 use arpa_dal::cache::RandomnessResultCache;
 use arpa_dal::error::DataAccessError;
@@ -113,12 +113,12 @@ impl SqliteDB {
             | BASE_GOERLI_TESTNET_CHAIN_ID
             | BASE_SEPOLIA_TESTNET_CHAIN_ID => {
                 Ok(Box::new(self.get_base_bls_tasks_client::<RandomnessTask>()))
-            }, 
+            }
             REDSTONE_HOLESKY_TESTNET_CHAIN_ID
             | REDSTONE_MAINNET_CHAIN_ID
-            | REDSTONE_GARNET_TESTNET_CHAIN_ID  => {
-                Ok(Box::new(self.get_redstone_bls_tasks_client::<RandomnessTask>()))
-            },
+            | REDSTONE_GARNET_TESTNET_CHAIN_ID => Ok(Box::new(
+                self.get_redstone_bls_tasks_client::<RandomnessTask>(),
+            )),
             LOOT_MAINNET_CHAIN_ID | LOOT_TESTNET_CHAIN_ID => {
                 Ok(Box::new(self.get_loot_bls_tasks_client::<RandomnessTask>()))
             }
@@ -561,7 +561,7 @@ pub mod sqlite_tests {
 
         let output = outputs.remove(0);
 
-        if let Err(e) = db.save_output(1, 1, output.clone()).await {
+        if let Err(e) = db.save_successful_output(1, 1, output.clone()).await {
             println!("{:?}", e);
         }
 

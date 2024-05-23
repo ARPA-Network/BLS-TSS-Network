@@ -4,7 +4,7 @@ use async_trait::async_trait;
 use core::fmt::Debug;
 use dkg_core::{
     primitives::{joint_feldman::*, *},
-    BoardPublisher, DKGPhase, Phase2Result,
+    BoardPublisher, DKGNodeError, DKGPhase, Phase2Result,
 };
 use log::info;
 use rand::RngCore;
@@ -126,59 +126,70 @@ where
         info!("Parsed {} shares. Running Phase 1.", shares.len());
 
         // Run Phase 1
-        let phase2 = phase1.run(&mut self.coordinator_client, &shares).await?;
-
-        // Wait for Phase 2
-        wait_for_phase(
-            &self.coordinator_client,
-            2,
-            self.dkg_wait_for_phase_interval_millis,
-        )
-        .await?;
-
-        // Get the responses
-        let responses = self.coordinator_client.get_responses().await?;
-        info!("Got {} responses...", responses.len());
-        let responses = parse_bundle(&responses)?;
-        info!("Parsed {} responses. Running Phase 2.", responses.len());
-
-        // Run Phase 2
-        let result = match phase2.run(&mut self.coordinator_client, &responses).await? {
-            Phase2Result::Output(out) => Ok(out),
-            // Run Phase 3 if Phase 2 errored
-            Phase2Result::GoToPhase3(phase3) => {
-                info!("There were complaints. Running Phase 3.");
-                // Wait for Phase 3
+        match phase1.run(&mut self.coordinator_client, &shares).await {
+            Ok(phase2) => {
+                // Wait for Phase 2
                 wait_for_phase(
                     &self.coordinator_client,
-                    3,
+                    2,
                     self.dkg_wait_for_phase_interval_millis,
                 )
                 .await?;
 
-                let justifications = self.coordinator_client.get_justifications().await?;
-                let justifications = parse_bundle(&justifications)?;
+                // Get the responses
+                let responses = self.coordinator_client.get_responses().await?;
+                info!("Got {} responses...", responses.len());
+                let responses = parse_bundle(&responses)?;
+                info!("Parsed {} responses. Running Phase 2.", responses.len());
 
-                // Run Phase 3
-                phase3
-                    .run(&mut self.coordinator_client, &justifications)
-                    .await
+                // Run Phase 2
+                let result = match phase2.run(&mut self.coordinator_client, &responses).await? {
+                    Phase2Result::Output(out) => Ok(out),
+                    // Run Phase 3 if Phase 2 errored
+                    Phase2Result::GoToPhase3(phase3) => {
+                        info!("There were complaints. Running Phase 3.");
+                        // Wait for Phase 3
+                        wait_for_phase(
+                            &self.coordinator_client,
+                            3,
+                            self.dkg_wait_for_phase_interval_millis,
+                        )
+                        .await?;
+
+                        let justifications = self.coordinator_client.get_justifications().await?;
+                        let justifications = parse_bundle(&justifications)?;
+
+                        // Run Phase 3
+                        phase3
+                            .run(&mut self.coordinator_client, &justifications)
+                            .await
+                    }
+                };
+
+                match result {
+                    Ok(output) => {
+                        info!("Success. Your share and threshold pubkey are ready.");
+
+                        write_output(&output)?;
+
+                        // info!("{:#?}", output.qual.nodes);
+
+                        // info!("public key: {}", output.public.public_key());
+
+                        Ok(output)
+                    }
+                    Err(err) => Err(err.into()),
+                }
             }
-        };
-
-        match result {
-            Ok(output) => {
-                info!("Success. Your share and threshold pubkey are ready.");
-
-                write_output(&output)?;
-
-                // info!("{:#?}", output.qual.nodes);
-
-                // info!("public key: {}", output.public.public_key());
-
-                Ok(output)
-            }
-            Err(err) => Err(err.into()),
+            Err(err) => match err {
+                DKGNodeError::NotEnoughValidShares(_, _, disqualified_node_indices) => {
+                    Ok(DKGOutput::<C>::fail(disqualified_node_indices))
+                }
+                DKGNodeError::NotEnoughJustifications(_, _, disqualified_node_indices) => {
+                    Ok(DKGOutput::<C>::fail(disqualified_node_indices))
+                }
+                _ => Err(err.into()),
+            },
         }
     }
 }

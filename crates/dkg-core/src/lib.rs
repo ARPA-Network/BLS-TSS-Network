@@ -13,7 +13,7 @@ pub use board::BoardPublisher;
 
 /// Higher level objects for running a JF-DKG
 pub mod node;
-pub use node::{DKGPhase, NodeError, Phase2Result};
+pub use node::{DKGNodeError, DKGPhase, Phase2Result};
 use threshold_bls::group::Element;
 use threshold_bls::sig::Scheme;
 

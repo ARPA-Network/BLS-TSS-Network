@@ -12,16 +12,14 @@ use crate::primitives::{
     types::*,
     DKGError, DKGResult,
 };
-
+use rand_core::RngCore;
+use serde::{de::DeserializeOwned, Deserialize, Serialize};
+use std::{cell::RefCell, fmt::Debug};
 use threshold_bls::{
     group::{Curve, Element},
     poly::{Eval, Idx, Poly, PrivatePoly, PublicPoly},
     sig::Share,
 };
-
-use rand_core::RngCore;
-use serde::{de::DeserializeOwned, Deserialize, Serialize};
-use std::{cell::RefCell, fmt::Debug};
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(bound = "C::Scalar: DeserializeOwned")]
@@ -257,6 +255,7 @@ impl<C: Curve> Phase1<C> for RDKGWaitingShare<C> {
             return Err(DKGError::NotEnoughValidShares(
                 shares.len(),
                 info.prev_group.threshold,
+                vec![],
             ));
         }
 
@@ -492,6 +491,7 @@ fn compute_resharing_output<C: Curve>(
             index: info.new_index.unwrap(),
             private: recovered_share,
         },
+        disqualified_node_indices: vec![],
     })
 }
 
@@ -584,6 +584,7 @@ mod tests {
                     },
                     public: public_poly.clone(),
                     qual: prev_group.clone(),
+                    disqualified_node_indices: vec![],
                 };
                 RDKG::new_from_share(p, out, new_group.clone()).unwrap()
             })

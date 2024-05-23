@@ -16,13 +16,19 @@ use super::{
 
 #[derive(Debug, Error)]
 /// Error thrown while running the DKG or while publishing to the board
-pub enum NodeError {
+pub enum DKGNodeError {
     /// Node could not publish to the board
     #[error("Could not publish to board")]
     PublisherError,
     /// There was an internal error in the DKG
     #[error("DKG Error: {0}")]
     DKGError(#[from] DKGError),
+
+    #[error("only has {0}/{1} valid shares, disqualified: {2:?}")]
+    NotEnoughValidShares(usize, usize, Vec<u32>),
+
+    #[error("only has {0}/{1} required justifications, disqualified: {2:?}")]
+    NotEnoughJustifications(usize, usize, Vec<u32>),
 }
 
 /// Phase2 can either be successful or require going to Phase 3.
@@ -34,7 +40,7 @@ pub enum Phase2Result<C: Curve, P: Phase3<C>> {
     GoToPhase3(P),
 }
 
-type NodeResult<T> = std::result::Result<T, NodeError>;
+type NodeResult<T> = std::result::Result<T, DKGNodeError>;
 
 /// A DKG Phase.
 #[async_trait]
@@ -72,7 +78,7 @@ where
         if let Some(sh) = shares {
             board.publish_shares(sh).await.map_err(|e| {
                 error!("{:?}", e);
-                NodeError::PublisherError
+                DKGNodeError::PublisherError
             })?;
         }
 
@@ -98,16 +104,24 @@ where
     where
         C: 'async_trait,
     {
-        let (next, bundle) = self.process_shares(shares, true)?;
+        match self.process_shares(shares, true) {
+            Ok((next, bundle)) => {
+                if let Some(bundle) = bundle {
+                    board.publish_responses(bundle).await.map_err(|e| {
+                        error!("{:?}", e);
+                        DKGNodeError::PublisherError
+                    })?;
+                }
 
-        if let Some(bundle) = bundle {
-            board.publish_responses(bundle).await.map_err(|e| {
-                error!("{:?}", e);
-                NodeError::PublisherError
-            })?;
+                Ok(next)
+            }
+            Err(e) => match e {
+                DKGError::NotEnoughValidShares(got, required, disqualified_node_indices) => Err(
+                    DKGNodeError::NotEnoughValidShares(got, required, disqualified_node_indices),
+                ),
+                _ => Err(DKGNodeError::DKGError(e)),
+            },
         }
-
-        Ok(next)
     }
 }
 
@@ -144,13 +158,13 @@ where
                                 .await
                                 .map_err(|e| {
                                     error!("{:?}", e);
-                                    NodeError::PublisherError
+                                    DKGNodeError::PublisherError
                                 })?;
                         }
 
                         Ok(Phase2Result::GoToPhase3(next))
                     }
-                    Err(e) => Err(NodeError::DKGError(e)),
+                    Err(e) => Err(DKGNodeError::DKGError(e)),
                 }
             }
         }
@@ -317,7 +331,7 @@ mod tests {
         let mut errs = Vec::new();
         for phase1 in phase1s {
             let err = match phase1.run(&mut board, &shares).await.unwrap_err() {
-                NodeError::DKGError(err) => err,
+                DKGNodeError::DKGError(err) => err,
                 _ => panic!("should get dkg error"),
             };
             errs.push(err);
@@ -327,7 +341,7 @@ mod tests {
         // will get `honest`
         for err in &errs[..bad] {
             match err {
-                DKGError::NotEnoughValidShares(got, required) => {
+                DKGError::NotEnoughValidShares(got, required, _) => {
                     assert_eq!(*got, honest);
                     assert_eq!(*required, t);
                 }
@@ -339,7 +353,7 @@ mod tests {
         // (which were not enough)
         for err in &errs[bad..] {
             match err {
-                DKGError::NotEnoughValidShares(got, required) => {
+                DKGError::NotEnoughValidShares(got, required, _) => {
                     assert_eq!(*got, honest - 1);
                     assert_eq!(*required, t);
                 }

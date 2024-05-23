@@ -191,9 +191,28 @@ impl<C: Curve> Phase1<C> for DKGWaitingShare<C> {
 
         // we check with `thr - 1` because we already have our shares
         if shares.len() < thr - 1 {
+            // find out the nodes whose shares are not valid
+            let disqualified_node_indices = self
+                .info
+                .group
+                .nodes
+                .iter()
+                .filter_map(|node| {
+                    if node.id() != my_idx && !shares.contains_key(&node.id()) {
+                        Some(node.id())
+                    } else {
+                        None
+                    }
+                })
+                .collect::<Vec<_>>();
+
             // that means the threat model is not respected since there should
             // be at least a threshold of honest shares
-            return Err(DKGError::NotEnoughValidShares(shares.len(), thr));
+            return Err(DKGError::NotEnoughValidShares(
+                shares.len(),
+                thr,
+                disqualified_node_indices,
+            ));
         }
 
         // The user's secret share is the sum of all received shares (remember:
@@ -307,6 +326,7 @@ impl<C: Curve> Phase2<C> for DKGWaitingResponse<C> {
             qual: info.group,
             public: self.dist_pub,
             share,
+            disqualified_node_indices: vec![],
         })
     }
 }
@@ -367,7 +387,14 @@ where
         let thr = self.info.group.threshold;
         if qual_indices.len() < thr {
             // too many unanswered justifications, DKG abort !
-            return Err(DKGError::NotEnoughJustifications(qual_indices.len(), thr));
+            let disqualified_node_indices = (0..self.info.n() as Idx)
+                .filter(|idx| !qual_indices.contains(&(*idx as usize)))
+                .collect::<Vec<_>>();
+            return Err(DKGError::NotEnoughJustifications(
+                qual_indices.len(),
+                thr,
+                disqualified_node_indices,
+            ));
         }
 
         // create a group out of the qualifying nodes
@@ -392,6 +419,7 @@ where
             qual: group,
             public: add_public,
             share: ds,
+            disqualified_node_indices: vec![],
         })
     }
 }

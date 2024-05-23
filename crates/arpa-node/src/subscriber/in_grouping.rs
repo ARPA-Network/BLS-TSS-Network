@@ -132,56 +132,41 @@ impl<
             .run_dkg(dkg_private_key, node_rpc_endpoint, self.rng)
             .await
         {
-            Ok(output) => {
-                let (public_key, partial_public_key, disqualified_nodes) = self
-                    .group_cache
-                    .write()
-                    .await
-                    .save_output(task_group_index, task_epoch, output)
-                    .await?;
+            Ok(output) => match output.disqualified_node_indices.len() {
+                0 => {
+                    let (public_key, partial_public_key, disqualified_nodes) = self
+                        .group_cache
+                        .write()
+                        .await
+                        .save_successful_output(task_group_index, task_epoch, output)
+                        .await?;
 
-                info!(
-                    "{}",
-                    build_group_related_payload(
-                        LogType::DKGGroupingFinished,
-                        "DKG grouping finished.",
-                        chain_id,
-                        self.group_cache.read().await.get_group()?
-                    )
-                );
+                    info!(
+                        "{}",
+                        build_group_related_payload(
+                            LogType::DKGGroupingFinished,
+                            "DKG grouping finished.",
+                            chain_id,
+                            self.group_cache.read().await.get_group()?
+                        )
+                    );
 
-                match controller_client
-                    .commit_dkg(
-                        task_group_index,
-                        task_epoch,
-                        bincode::serialize(&public_key).unwrap(),
-                        bincode::serialize(&partial_public_key).unwrap(),
-                        disqualified_nodes,
-                    )
-                    .await
-                {
-                    Ok(receipt) => {
-                        info!(
-                            "{}",
-                            build_group_related_transaction_receipt_payload(
-                                LogType::DKGGroupingCommitted,
-                                "DKG grouping result committed.",
-                                chain_id,
-                                self.group_cache.read().await.get_group()?,
-                                None,
-                                receipt.transaction_hash,
-                                receipt.gas_used.unwrap_or(U256::zero()),
-                                receipt.effective_gas_price.unwrap_or(U256::zero())
-                            )
-                        );
-                    }
-                    Err(e) => match e {
-                        ContractClientError::TransactionFailed(receipt) => {
-                            error!(
+                    match controller_client
+                        .commit_dkg(
+                            task_group_index,
+                            task_epoch,
+                            bincode::serialize(&public_key).unwrap(),
+                            bincode::serialize(&partial_public_key).unwrap(),
+                            disqualified_nodes,
+                        )
+                        .await
+                    {
+                        Ok(receipt) => {
+                            info!(
                                 "{}",
                                 build_group_related_transaction_receipt_payload(
-                                    LogType::DKGGroupingCommitFailed,
-                                    "DKG grouping commit failed.",
+                                    LogType::DKGGroupingCommitted,
+                                    "DKG grouping result committed.",
                                     chain_id,
                                     self.group_cache.read().await.get_group()?,
                                     None,
@@ -191,20 +176,124 @@ impl<
                                 )
                             );
                         }
-                        _ => {
-                            error!(
+                        Err(e) => match e {
+                            ContractClientError::TransactionFailed(receipt) => {
+                                error!(
+                                    "{}",
+                                    build_group_related_transaction_receipt_payload(
+                                        LogType::DKGGroupingCommitFailed,
+                                        "DKG grouping commit failed.",
+                                        chain_id,
+                                        self.group_cache.read().await.get_group()?,
+                                        None,
+                                        receipt.transaction_hash,
+                                        receipt.gas_used.unwrap_or(U256::zero()),
+                                        receipt.effective_gas_price.unwrap_or(U256::zero())
+                                    )
+                                );
+                            }
+                            _ => {
+                                error!(
+                                    "{}",
+                                    build_group_related_payload(
+                                        LogType::DKGGroupingCommitFailed,
+                                        &format!("DKG grouping commit failed with error: {:?}", e),
+                                        chain_id,
+                                        self.group_cache.read().await.get_group()?
+                                    )
+                                );
+                            }
+                        },
+                    }
+                }
+                _ => {
+                    info!(
+                        "Disqualified node indices: {:?}",
+                        output.disqualified_node_indices
+                    );
+
+                    let disqualified_nodes = self
+                        .group_cache
+                        .write()
+                        .await
+                        .save_failed_output(
+                            task_group_index,
+                            task_epoch,
+                            output.disqualified_node_indices,
+                        )
+                        .await?;
+
+                    info!("Disqualified node addresses: {:?}", disqualified_nodes);
+
+                    info!(
+                        "{}",
+                        build_group_related_payload(
+                            LogType::DKGGroupingAborted,
+                            "DKG grouping aborted due to disqualified nodes.",
+                            chain_id,
+                            self.group_cache.read().await.get_group()?
+                        )
+                    );
+
+                    let g_public_key = PC::point();
+                    let g_partial_public_key = PC::point();
+
+                    match controller_client
+                        .commit_dkg(
+                            task_group_index,
+                            task_epoch,
+                            bincode::serialize(&g_public_key).unwrap(),
+                            bincode::serialize(&g_partial_public_key).unwrap(),
+                            disqualified_nodes,
+                        )
+                        .await
+                    {
+                        Ok(receipt) => {
+                            info!(
                                 "{}",
-                                build_group_related_payload(
-                                    LogType::DKGGroupingCommitFailed,
-                                    &format!("DKG grouping commit failed with error: {:?}", e),
+                                build_group_related_transaction_receipt_payload(
+                                    LogType::DKGGroupingCommitted,
+                                    "DKG grouping result committed.",
                                     chain_id,
-                                    self.group_cache.read().await.get_group()?
+                                    self.group_cache.read().await.get_group()?,
+                                    None,
+                                    receipt.transaction_hash,
+                                    receipt.gas_used.unwrap_or(U256::zero()),
+                                    receipt.effective_gas_price.unwrap_or(U256::zero())
                                 )
                             );
                         }
-                    },
+                        Err(e) => match e {
+                            ContractClientError::TransactionFailed(receipt) => {
+                                error!(
+                                    "{}",
+                                    build_group_related_transaction_receipt_payload(
+                                        LogType::DKGGroupingCommitFailed,
+                                        "DKG grouping commit failed.",
+                                        chain_id,
+                                        self.group_cache.read().await.get_group()?,
+                                        None,
+                                        receipt.transaction_hash,
+                                        receipt.gas_used.unwrap_or(U256::zero()),
+                                        receipt.effective_gas_price.unwrap_or(U256::zero())
+                                    )
+                                );
+                            }
+                            _ => {
+                                error!(
+                                    "{}",
+                                    build_group_related_payload(
+                                        LogType::DKGGroupingCommitFailed,
+                                        &format!("DKG grouping commit failed with error: {:?}", e),
+                                        chain_id,
+                                        self.group_cache.read().await.get_group()?
+                                    )
+                                );
+                            }
+                        },
+                    }
                 }
-            }
+            },
             Err(e) => {
                 error!(
                     "{}",
