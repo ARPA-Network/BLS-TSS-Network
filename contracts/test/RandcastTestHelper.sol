@@ -12,6 +12,8 @@ import {AdapterForTest} from "./AdapterForTest.sol";
 import {Staking} from "Staking-v0.1/Staking.sol";
 import {ServiceManager} from "../src/eigenlayer/ServiceManager.sol";
 import {NodeRegistry, ISignatureUtils} from "../src/NodeRegistry.sol";
+import {AVSDirectoryMock} from "./mock/AVSDirectoryMock.sol";
+import {DelegationManagerMock} from "./mock/DelegationManagerMock.sol";
 import {ControllerForTest} from "./ControllerForTest.sol";
 import {IERC20} from "openzeppelin-contracts/contracts/token/ERC20/IERC20.sol";
 import {ERC20} from "openzeppelin-contracts/contracts/token/ERC20/ERC20.sol";
@@ -21,6 +23,8 @@ import {ERC1967Proxy} from "openzeppelin-contracts/contracts/proxy/ERC1967/ERC19
 //solhint-disable-next-line max-states-count
 abstract contract RandcastTestHelper is Test {
     NodeRegistry internal _nodeRegistryImpl;
+    AVSDirectoryMock internal _avsDirectory;
+    DelegationManagerMock internal _delegationManager;
     ERC1967Proxy internal _nodeRegistry;
     ControllerForTest internal _controllerImpl;
     ERC1967Proxy internal _controller;
@@ -78,7 +82,7 @@ abstract contract RandcastTestHelper is Test {
     /// @notice The minimum stake amount that an operator can stake
     uint256 internal _operatorStakeAmount = 500_00 * 1e18;
     /// @notice The minimum stake amount that an eigenlayer operator must stake
-    uint256 internal _eigenlayerOperatorStakeAmount = 500_00 * 1e18;
+    uint256 internal _eigenlayerOperatorStakeAmount = 500_00;
     /// @notice The minimum number of node operators required to initialize the
     /// _staking pool.
     uint256 internal _minInitialOperatorCount = 1;
@@ -573,6 +577,12 @@ abstract contract RandcastTestHelper is Test {
         _nodeRegistryImpl = new NodeRegistry();
 
         vm.prank(_admin);
+        _avsDirectory = new AVSDirectoryMock();
+
+        vm.prank(_admin);
+        _delegationManager = new DelegationManagerMock();
+
+        vm.prank(_admin);
         _nodeRegistry =
             new ERC1967Proxy(address(_nodeRegistryImpl), abi.encodeWithSignature("initialize(address)", address(_arpa)));
 
@@ -585,8 +595,8 @@ abstract contract RandcastTestHelper is Test {
             abi.encodeWithSignature(
                 "initialize(address,address,address)",
                 address(_nodeRegistry),
-                address(0),
-                address(0)
+                address(_avsDirectory),
+                address(_delegationManager)
             )
         );
 

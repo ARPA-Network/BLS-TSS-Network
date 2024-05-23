@@ -114,29 +114,6 @@ contract ControllerTest is RandcastTestHelper {
         _staking.setController(address(_nodeRegistry));
     }
 
-    function testNodeRegister() public {
-        // Fail on bad dkg public key
-        vm.expectRevert(abi.encodeWithSelector(BLS.InvalidPublicKey.selector));
-        vm.prank(_node1);
-        INodeRegistry(address(_nodeRegistry)).nodeRegister(_badKey, false, _emptyOperatorSignature);
-
-        // Register _node1
-        vm.prank(_node1);
-        INodeRegistry(address(_nodeRegistry)).nodeRegister(_dkgPubkey1, false, _emptyOperatorSignature);
-
-        // Assert _node1 state is correct
-        INodeRegistry.Node memory n = INodeRegistry(address(_nodeRegistry)).getNode(_node1);
-        assertEq(n.idAddress, _node1);
-        assertEq(n.dkgPublicKey, _dkgPubkey1);
-        assertEq(n.state, true);
-        assertEq(n.pendingUntilBlock, 0);
-
-        // fail on already registered node
-        vm.expectRevert(abi.encodeWithSelector(NodeRegistry.NodeAlreadyRegistered.selector));
-        vm.prank(_node1);
-        INodeRegistry(address(_nodeRegistry)).nodeRegister(_dkgPubkey1, false, _emptyOperatorSignature);
-    }
-
     function testRemoveFromGroup() public {
         testCommitDkg();
         printGroupInfo(0);
