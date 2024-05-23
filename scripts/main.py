@@ -203,7 +203,12 @@ def get_l1_addresses():
 
 
 def get_l2_addresses():
-    l2_addresses = get_addresses_from_json(CONTRACTS_DEPLOYMENT_ADDRESSES_PATH)["L2"]
+    l2_addresses = get_addresses_from_broadcast_json(
+        OP_CONTRACTS_DEPLOYMENT_BROADCAST_PATH
+    )
+    l2_addresses.update(
+        get_addresses_from_json(CONTRACTS_DEPLOYMENT_ADDRESSES_PATH)["L2"]
+    )
     if ARPA_EXISTS:
         l2_addresses["Arpa"] = EXISTING_OP_ARPA_ADDRESS
     return l2_addresses
