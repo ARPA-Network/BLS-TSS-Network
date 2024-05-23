@@ -124,7 +124,7 @@ impl AdapterTransactions for AdapterClient {
 
         let rd = RequestDetail {
             sub_id: task.subscription_id,
-            group_index: group_index as u32,
+            group_index: task.group_index,
             request_type: task.request_type.to_u8(),
             params: task.params.into(),
             callback_contract: task.requester,
