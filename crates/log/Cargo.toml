@@ -4,7 +4,7 @@ version = "0.2.0"
 edition = "2021"
 
 [dependencies]
-arpa-log-impl = { path = "./impl" }
+arpa-log-impl = { version = "0.1.0", path = "./impl" }
 log = "0.4"
 log-mdc = "0.1.0"
 
