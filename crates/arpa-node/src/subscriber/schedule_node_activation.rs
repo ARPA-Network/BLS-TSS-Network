@@ -53,7 +53,10 @@ impl<PC: Curve + std::fmt::Debug + Sync + Send + 'static> Subscriber
             .await
             .build_node_registry_client(node_registry_address);
 
-        match node_registry_client.node_activate(is_eigenlayer).await {
+        match node_registry_client
+            .node_activate_by_native_staking(is_eigenlayer)
+            .await
+        {
             Ok(receipt) => {
                 info!(
                     "{}",

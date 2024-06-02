@@ -417,7 +417,7 @@ async fn send<PC: Curve>(
             let dkg_public_key = node_cache.get_dkg_public_key()?;
 
             let trx_hash = client
-                .node_register(bincode::serialize(&dkg_public_key)?, false)
+                .node_register_by_native_staking(bincode::serialize(&dkg_public_key)?)
                 .await?;
 
             Ok(Some(format!(

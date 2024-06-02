@@ -18,6 +18,7 @@ use std::sync::Arc;
 
 pub struct NodeRegistryClient {
     chain_id: usize,
+    id_address: Address,
     node_registry_address: Address,
     client: Arc<WsWalletSigner>,
     contract_transaction_retry_descriptor: ExponentialBackoffRetryDescriptor,
@@ -34,6 +35,7 @@ impl NodeRegistryClient {
     ) -> Self {
         NodeRegistryClient {
             chain_id,
+            id_address: identity.get_id_address(),
             node_registry_address,
             client: identity.get_client(),
             contract_transaction_retry_descriptor,
@@ -129,27 +131,23 @@ impl ViewCaller for NodeRegistryClient {}
 
 #[async_trait]
 impl NodeRegistryTransactions for NodeRegistryClient {
-    async fn node_register(
+    async fn node_register_by_native_staking(
         &self,
         id_public_key: Vec<u8>,
-        is_eigenlayer: bool,
     ) -> ContractClientResult<TransactionReceipt> {
         let node_registry_contract =
             ServiceClient::<NodeRegistryContract>::prepare_service_client(self).await?;
 
-        let signature = if is_eigenlayer {
-            self.build_signature_with_salt_and_expiry(&node_registry_contract)
-                .await?
-        } else {
+        let call = node_registry_contract.node_register(
+            id_public_key.into(),
+            false,
+            self.id_address,
             SignatureWithSaltAndExpiry {
                 signature: vec![0u8; 65].into(),
                 salt: [0u8; 32],
                 expiry: 0u64.into(),
-            }
-        };
-
-        let call =
-            node_registry_contract.node_register(id_public_key.into(), is_eigenlayer, signature);
+            },
+        );
 
         NodeRegistryClient::call_contract_transaction(
             self.chain_id,
@@ -162,7 +160,10 @@ impl NodeRegistryTransactions for NodeRegistryClient {
         .await
     }
 
-    async fn node_activate(&self, is_eigenlayer: bool) -> ContractClientResult<TransactionReceipt> {
+    async fn node_activate_by_native_staking(
+        &self,
+        is_eigenlayer: bool,
+    ) -> ContractClientResult<TransactionReceipt> {
         let node_registry_contract =
             ServiceClient::<NodeRegistryContract>::prepare_service_client(self).await?;
 

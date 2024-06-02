@@ -228,13 +228,12 @@ pub mod node_registry {
 
     #[async_trait]
     pub trait NodeRegistryTransactions {
-        async fn node_register(
+        async fn node_register_by_native_staking(
             &self,
             id_public_key: Vec<u8>,
-            is_eigenlayer: bool,
         ) -> ContractClientResult<TransactionReceipt>;
 
-        async fn node_activate(
+        async fn node_activate_by_native_staking(
             &self,
             is_eigenlayer: bool,
         ) -> ContractClientResult<TransactionReceipt>;
