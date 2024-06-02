@@ -1,15 +1,13 @@
 [package]
 name = "arpa-dal"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2021"
 publish = false
 
 [dependencies]
-arpa-core = { path = "../core" }
-dkg-core = { path = "../dkg-core" }
-threshold-bls = { path = "../threshold-bls", default-features = false, features = [
-    "bn254",
-] }
+arpa-core.workspace = true
+dkg-core.workspace = true
+threshold-bls.workspace = true
 
 tokio = { version = "1.37.0", features = ["full"] }
 ethers-core.workspace = true

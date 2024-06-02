@@ -1,6 +1,6 @@
 [package]
 name = "arpa-user-cli"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2021"
 publish = false
 
@@ -9,8 +9,8 @@ name = "user-shell"
 path = "src/user_shell.rs"
 
 [dependencies]
-arpa-contract-client = { path = "../contract-client" }
-arpa-core = { path = "../core" }
+arpa-contract-client.workspace = true
+arpa-core.workspace = true
 
 tokio = { version = "1.37.0", features = ["full"] }
 serde = "1.0.106"

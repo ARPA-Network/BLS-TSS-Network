@@ -1,18 +1,16 @@
 [package]
 name = "arpa-sqlite-db"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2021"
 publish = false
 
 [dependencies]
 entity = { path = "./entity" }
 migration = { path = "./migration" }
-arpa-core = { path = "../../core" }
-arpa-dal = { path = "../../dal" }
-threshold-bls = { path = "../../threshold-bls", default-features = false, features = [
-      "bn254",
-] }
-dkg-core = { path = "../../dkg-core" }
+arpa-core.workspace = true
+arpa-dal.workspace = true
+threshold-bls.workspace = true
+dkg-core.workspace = true
 
 sea-orm = { version = "0.12", features = [
       "sqlx-sqlite",

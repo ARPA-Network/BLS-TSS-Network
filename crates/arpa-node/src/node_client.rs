@@ -1,6 +1,7 @@
 use arpa_contract_client::controller::ControllerClientBuilder;
 use arpa_contract_client::controller::ControllerViews;
 use arpa_contract_client::error::ContractClientError;
+use arpa_contract_client::node_registry::NodeRegistryViews;
 use arpa_contract_client::node_registry::{NodeRegistryClientBuilder, NodeRegistryTransactions};
 use arpa_core::address_to_string;
 use arpa_core::build_wallet_from_config;
@@ -20,6 +21,7 @@ use arpa_node::context::chain::types::GeneralRelayedChain;
 use arpa_node::context::types::GeneralContext;
 use arpa_node::context::{Context, TaskWaiter};
 use arpa_sqlite_db::SqliteDB;
+use check_latest::check_max;
 use ethers::core::k256::ecdsa::SigningKey;
 use ethers::providers::Provider;
 use ethers::providers::Ws;
@@ -163,6 +165,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     info!("{:?}", config);
 
+    if let Ok(Some(version)) = check_max!() {
+        error!(
+            "Version {} is now available, please update your node.",
+            version
+        );
+        return Ok(());
+    }
+
     if let Err(e) = start(config, wallet).await {
         error!("{:?}", e);
     };
@@ -205,7 +215,14 @@ async fn start(
 
         let (dkg_private_key, dkg_public_key) = G2Scheme::keypair(rng);
 
-        info!("dkg public_key: {}", point_to_hex(&dkg_public_key));
+        info!(
+            "{}",
+            build_general_payload(
+                LogType::DKGKeyGenerated,
+                &format!("dkg public_key: {}", point_to_hex(&dkg_public_key)),
+                Some(l1_chain_id)
+            )
+        );
 
         node_cache
             .save_node_info(
@@ -221,11 +238,12 @@ async fn start(
         dkg_public_key_to_register = Some(bincode::serialize(&dkg_public_key)?);
     } else {
         if let Ok(false) = node_cache.refresh_current_node_info().await {
-            panic!("It seems there is no existing node record. Please check the database or remove it.");
+            return Err("It seems there is no existing node record. Please check the database or remove it.".into());
         }
 
-        assert_eq!(node_cache.get_id_address()?, id_address,
-        "Node identity is different from the database, please check config or remove the existed database.");
+        if node_cache.get_id_address()? != id_address {
+            return Err("Node identity is different from the database, please check config or remove the existed database.".into());
+        }
 
         // update committer rpc endpoint according to config
         node_cache
@@ -358,22 +376,32 @@ async fn start(
         context.add_relayed_chain(Box::new(relayed_chain))?;
     }
 
+    // check if the node is registered and dkg public key matches the one in the database
+    let controller_client =
+        ControllerClientBuilder::<G2Curve>::build_controller_client(&main_chain_identity);
+
+    let node_registry_address =
+        ControllerViews::<G2Curve>::get_node_registry_address(&controller_client).await?;
+
+    let node_registry_client = NodeRegistryClientBuilder::build_node_registry_client(
+        &main_chain_identity,
+        node_registry_address,
+    );
+
+    let node = node_registry_client.get_node(id_address).await?;
+    if !node.id_address.is_zero()
+        && node.id_public_key != bincode::serialize(&node_cache.read().await.get_dkg_public_key()?)?
+    {
+        return Err("Node is registered with different dkg public key".into());
+    }
+
+    // deploy the node context and start the node
     let handle = context.deploy().await?;
 
-    if is_new_run {
-        let controller_client =
-            ControllerClientBuilder::<G2Curve>::build_controller_client(&main_chain_identity);
-
-        let node_registry_address =
-            ControllerViews::<G2Curve>::get_node_registry_address(&controller_client).await?;
-
-        let node_registry_client = NodeRegistryClientBuilder::build_node_registry_client(
-            &main_chain_identity,
-            node_registry_address,
-        );
-
+    // register node to the NodeRegistry contract if it is a new run and a native staking node
+    if is_new_run && !is_eigenlayer {
         match node_registry_client
-            .node_register(dkg_public_key_to_register.unwrap(), is_eigenlayer)
+            .node_register_by_native_staking(dkg_public_key_to_register.unwrap())
             .await
         {
             Ok(receipt) => {
