@@ -32,10 +32,10 @@ interface IAdapter is IRequestTypeBase {
         uint256 blockNum;
     }
 
-    // controller transaction
+    // NodeRegistry / ControllerOracle transaction
     function nodeWithdrawETH(address recipient, uint256 ethAmount) external;
 
-    // consumer contract transaction
+    // Consumer contract transaction
     function requestRandomness(RandomnessRequestParams calldata params) external returns (bytes32);
 
     function fulfillRandomness(
@@ -46,7 +46,7 @@ interface IAdapter is IRequestTypeBase {
         PartialSignature[] calldata partialSignatures
     ) external;
 
-    // user transaction
+    // User transaction
     function createSubscription() external returns (uint64);
 
     function addConsumer(uint64 subId, address consumer) external;
@@ -62,7 +62,7 @@ interface IAdapter is IRequestTypeBase {
     // delete the request that cannot be fulfilled, triggered by user themselves
     function cancelOvertimeRequest(bytes32 requestId, RequestDetail calldata requestDetail) external;
 
-    // view
+    // View
     function getLastSubscription(address consumer) external view returns (uint64);
 
     function getSubscription(uint64 subId)

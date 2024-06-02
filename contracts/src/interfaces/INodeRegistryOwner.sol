@@ -28,4 +28,11 @@ interface INodeRegistryOwner {
      * @param pendingBlock The number of blocks the node must wait before activating again
      */
     function dismissNode(address nodeIdAddress, uint256 pendingBlock) external;
+
+    /**
+     * @notice Set the asset account of the node
+     * @param assetAccountAddresses The addresses of the asset accounts
+     * @param nodeAddresses The addresses of the nodes
+     */
+    function setAssetAccount(address[] calldata assetAccountAddresses, address[] calldata nodeAddresses) external;
 }

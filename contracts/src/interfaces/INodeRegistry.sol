@@ -25,10 +25,11 @@ interface INodeRegistry {
     function nodeRegister(
         bytes calldata dkgPublicKey,
         bool isEigenlayerNode,
-        ISignatureUtils.SignatureWithSaltAndExpiry memory operatorSignature
+        address assetAccountAddress,
+        ISignatureUtils.SignatureWithSaltAndExpiry memory assetAccountSignature
     ) external;
 
-    function nodeActivate(ISignatureUtils.SignatureWithSaltAndExpiry memory operatorSignature) external;
+    function nodeActivate(ISignatureUtils.SignatureWithSaltAndExpiry memory assetAccountSignature) external;
 
     function nodeQuit() external;
 
@@ -60,4 +61,17 @@ interface INodeRegistry {
             uint256 eigenlayerNodeStakingAmount,
             uint256 pendingBlockAfterQuit
         );
+
+    function getNodeAddressByAssetAccountAddress(address assetAccountAddress) external view returns (address);
+
+    function getAssetAccountAddressByNodeAddress(address nodeAddress) external view returns (address);
+
+    function calculateNativeNodeRegistrationDigestHash(address assetAccountAddress, bytes32 salt, uint256 expiry)
+        external
+        view
+        returns (bytes32);
+
+    function domainSeparator() external view returns (bytes32);
+
+    function assetAccountSaltIsSpent(address assetAccountAddress, bytes32 salt) external view returns (bool);
 }

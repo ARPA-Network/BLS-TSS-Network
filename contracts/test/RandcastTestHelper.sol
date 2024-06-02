@@ -678,7 +678,7 @@ abstract contract RandcastTestHelper is Test {
         for (uint256 i = 0; i < nodes.length; i++) {
             vm.deal(nodes[i], 1 * 10 ** 18);
             vm.prank(nodes[i]);
-            INodeRegistry(address(_nodeRegistry)).nodeRegister(pubKeys[i], false, _emptyOperatorSignature);
+            INodeRegistry(address(_nodeRegistry)).nodeRegister(pubKeys[i], false, nodes[i], _emptyOperatorSignature);
         }
 
         for (uint256 i = 0; i < nodes.length; i++) {
