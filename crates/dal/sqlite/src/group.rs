@@ -484,6 +484,53 @@ impl<C: Curve + Sync + Send> GroupInfoUpdater<C> for GroupInfoDBClient<C> {
 
         Ok(())
     }
+
+    async fn sync_up_members(
+        &mut self,
+        index: usize,
+        epoch: usize,
+        members: BTreeMap<Address, Member<C>>,
+    ) -> DataAccessResult<bool> {
+        let group_info_cache = self.get_group_info_cache()?;
+
+        let group = group_info_cache.get_group()?;
+
+        if group.index != index {
+            return Err(GroupError::GroupIndexObsolete(group.index).into());
+        }
+
+        if group.epoch != epoch {
+            return Err(GroupError::GroupEpochObsolete(group.epoch).into());
+        }
+
+        if group.state {
+            return Err(GroupError::GroupAlreadyReady.into());
+        }
+
+        if group.members.len() != members.len() {
+            let mut local_members = group.members.clone();
+            // update members with input but with original index
+            local_members.retain(|id_address, _| members.contains_key(id_address));
+
+            GroupMutation::update_members(
+                self.get_connection(),
+                self.group_info_cache_model.to_owned().unwrap(),
+                local_members.len() as i32,
+                serde_json::to_string(&local_members).unwrap(),
+            )
+            .await
+            .map_err(|e| {
+                let e: DBError = e.into();
+                e
+            })?;
+
+            self.refresh_current_group_info().await?;
+
+            return Ok(false);
+        }
+
+        Ok(true)
+    }
 }
 
 pub struct GroupQuery;

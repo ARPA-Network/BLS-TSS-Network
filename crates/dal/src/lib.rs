@@ -102,6 +102,13 @@ pub trait GroupInfoUpdater<C: Curve> {
         epoch: usize,
         committer_indices: Vec<Address>,
     ) -> DataAccessResult<()>;
+
+    async fn sync_up_members(
+        &mut self,
+        index: usize,
+        epoch: usize,
+        members: BTreeMap<Address, Member<C>>,
+    ) -> DataAccessResult<bool>;
 }
 
 pub trait GroupInfoFetcher<C: Curve>: std::fmt::Debug {
