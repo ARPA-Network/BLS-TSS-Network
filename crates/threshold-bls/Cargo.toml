@@ -1,8 +1,16 @@
 [package]
 name = "threshold-bls"
-version = "0.2.0"
 authors = ["nikkolasg", "kafeikui"]
-edition = "2021"
+description = "Threshold BLS signature scheme implementation library"
+
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+documentation.workspace = true
+repository.workspace = true
+homepage.workspace = true
+keywords.workspace = true
+exclude.workspace = true
 
 [lib]
 crate-type = ["lib"]

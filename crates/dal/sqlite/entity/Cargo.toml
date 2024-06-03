@@ -1,8 +1,15 @@
 [package]
 name = "entity"
-version = "0.1.0"
-edition = "2021"
-publish = false
+description = "SeaORM Entity for ARPA"
+
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+documentation.workspace = true
+repository.workspace = true
+homepage.workspace = true
+keywords.workspace = true
+exclude.workspace = true
 
 [lib]
 name = "entity"

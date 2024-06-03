@@ -1,8 +1,15 @@
 [package]
 name = "arpa-contract-client"
-version = "0.2.0"
-edition = "2021"
-publish = false
+description = "ARPA contract client library"
+
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+documentation.workspace = true
+repository.workspace = true
+homepage.workspace = true
+keywords.workspace = true
+exclude.workspace = true
 
 [dependencies]
 dkg-core.workspace = true

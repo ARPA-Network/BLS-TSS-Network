@@ -1,12 +1,19 @@
 [package]
 name = "arpa-sqlite-db"
-version = "0.2.0"
-edition = "2021"
-publish = false
+description = "SQLite Database Implementation for ARPA"
+
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+documentation.workspace = true
+repository.workspace = true
+homepage.workspace = true
+keywords.workspace = true
+exclude.workspace = true
 
 [dependencies]
-entity = { version = "0.1.0", path = "./entity" }
-migration = { version = "0.1.0", path = "./migration" }
+entity = { version = "0.2.0", path = "./entity" }
+migration = { version = "0.2.0", path = "./migration" }
 arpa-core.workspace = true
 arpa-dal.workspace = true
 threshold-bls.workspace = true

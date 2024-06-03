@@ -1,7 +1,15 @@
 [package]
 name = "arpa-log-impl"
-version = "0.1.0"
-edition = "2021"
+description = "Implementation of the arpa-log crate"
+
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+documentation.workspace = true
+repository.workspace = true
+homepage.workspace = true
+keywords.workspace = true
+exclude.workspace = true
 
 [lib]
 proc-macro = true

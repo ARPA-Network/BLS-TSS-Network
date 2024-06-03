@@ -1,10 +1,16 @@
 [package]
 name = "arpa-node"
-version = "0.2.0"
-authors = ["arpa-network"]
-edition = "2021"
-repository = "https://github.com/ARPA-Network/BLS-TSS-Network/tree/main/crates/arpa-node"
+authors = ["kafeikui"]
 description = "This crate provides a set of tools on the node side of the ARPA BLS Threshold Signature Scheme (BLS-TSS) Network, including Threshold-BLS based on-chain randomness service(Randcast)."
+
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+documentation.workspace = true
+repository.workspace = true
+homepage.workspace = true
+keywords.workspace = true
+exclude.workspace = true
 
 [[bin]]
 name = "node-client"

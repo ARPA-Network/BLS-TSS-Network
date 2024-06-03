@@ -1,15 +1,22 @@
 [package]
 name = "migration"
-version = "0.1.0"
-edition = "2021"
-publish = false
+description = "SeaORM Migration for ARPA"
+
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+documentation.workspace = true
+repository.workspace = true
+homepage.workspace = true
+keywords.workspace = true
+exclude.workspace = true
 
 [lib]
 name = "migration"
 path = "src/lib.rs"
 
 [dependencies]
-entity = { version = "0.1.0", path = "../entity" }
+entity = { version = "0.2.0", path = "../entity" }
 async-std = { version = "^1", features = ["attributes", "tokio1"] }
 libsqlite3-sys = { version = "^0.26.0", default-features = false, features = [
       "pkg-config",
