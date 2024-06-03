@@ -63,9 +63,16 @@ impl<PC: Curve + Sync + Send + 'static> Listener for PostCommitGroupingListener<
 
             let client = self.chain_identity.read().await.build_controller_client();
 
+            let id_address = self.chain_identity.read().await.get_id_address();
+
             if let Ok(group) = client.get_group(group_index).await {
                 if group.state {
-                    self.publish(DKGSuccess { chain_id, group }).await;
+                    self.publish(DKGSuccess {
+                        chain_id,
+                        id_address,
+                        group,
+                    })
+                    .await;
                 }
             }
         }

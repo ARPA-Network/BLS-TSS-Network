@@ -1,15 +1,25 @@
+[workspace.package]
+version = "0.2.0"
+edition = "2021"
+license = "MIT OR Apache-2.0"
+documentation = "https://docs.arpanetwork.io/"
+repository = "https://github.com/ARPA-Network/BLS-TSS-Network"
+homepage = "https://github.com/ARPA-Network/BLS-TSS-Network"
+keywords = ["arpa", "randcast", "DKG", "BLS", "threshold"]
+exclude = ["scripts/", "tests/", "test/", "docker/", "docs/"]
+
 [workspace]
 
 members = [
-    "crates/dkg-core",
     "crates/arpa-node",
+    "crates/user-cli",
+    "crates/core",
+    "crates/dkg-core",
     "crates/threshold-bls",
     "crates/log",
-    "crates/core",
     "crates/dal",
     "crates/dal/sqlite",
     "crates/contract-client",
-    "crates/user-cli",
 ]
 
 resolver = "2"
@@ -39,6 +49,15 @@ debug-assertions = true
 debug = true
 
 [workspace.dependencies]
+arpa-log = { version = "0.2.0", path = "crates/log" }
+arpa-core = { version = "0.2.0", path = "crates/core" }
+arpa-dal = { version = "0.2.0", path = "crates/dal" }
+arpa-sqlite-db = { version = "0.2.0", path = "crates/dal/sqlite" }
+arpa-contract-client = { version = "0.2.0", path = "crates/contract-client" }
+dkg-core = { version = "0.2.0", path = "crates/dkg-core" }
+threshold-bls = { version = "0.2.0", path = "crates/threshold-bls", default-features = false, features = [
+    "bn254",
+] }
 ethers = "2.0"
 ethers-core = "2.0"
 ethers-signers = "2.0"

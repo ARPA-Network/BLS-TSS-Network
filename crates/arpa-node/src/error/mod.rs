@@ -86,4 +86,7 @@ pub enum NodeError {
 
     #[error("DKG has ended")]
     DKGEnded,
+
+    #[error("the group is not available since unbearable mismatch happened")]
+    DKGGroupingTwisted,
 }

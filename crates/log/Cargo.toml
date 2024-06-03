@@ -1,10 +1,18 @@
 [package]
 name = "arpa-log"
-version = "0.1.0"
-edition = "2021"
+description = "An attribute macro for logging function context with MDC"
+
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+documentation.workspace = true
+repository.workspace = true
+homepage.workspace = true
+keywords.workspace = true
+exclude.workspace = true
 
 [dependencies]
-arpa-log-impl = { path = "./impl" }
+arpa-log-impl = { version = "0.2.0", path = "./impl" }
 log = "0.4"
 log-mdc = "0.1.0"
 

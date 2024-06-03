@@ -167,7 +167,7 @@ contract ExtendedDKGScenarioTest is RandcastTestHelper {
     function registerIndex(uint256 nodeIndex) public {
         vm.prank(_testNodes[nodeIndex].nodeAddress);
         INodeRegistry(address(_nodeRegistry)).nodeRegister(
-            _testNodes[nodeIndex]._publicKey, false, _emptyOperatorSignature
+            _testNodes[nodeIndex]._publicKey, false, _testNodes[nodeIndex].nodeAddress, _emptyOperatorSignature
         );
     }
 

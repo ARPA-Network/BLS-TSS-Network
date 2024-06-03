@@ -13,6 +13,7 @@ pub mod encoder;
 
 #[derive(Serialize, Deserialize, Debug)]
 pub enum LogType {
+    DKGKeyGenerated,
     NodeRegistered,
     NodeRegisterFailed,
     NodeActivated,
@@ -25,6 +26,8 @@ pub enum LogType {
     DKGGroupingCommitted,
     DKGGroupingCommitFailed,
     DKGGroupingAvailable,
+    DKGGroupingTwisted,
+    DKGGroupingMemberMisMatch,
     DKGPostProcessFinished,
     DKGPostProcessGroupRelayFinished,
     PartialSignatureFinished,

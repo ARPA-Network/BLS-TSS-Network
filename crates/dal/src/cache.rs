@@ -443,6 +443,42 @@ impl<C: Curve> GroupInfoUpdater<C> for InMemoryGroupInfoCache<C> {
 
         Ok(())
     }
+
+    async fn sync_up_members(
+        &mut self,
+        index: usize,
+        epoch: usize,
+        members: BTreeMap<Address, Member<C>>,
+    ) -> DataAccessResult<bool> {
+        self.only_has_group_task()?;
+
+        if self.group.index != index {
+            return Err(GroupError::GroupIndexObsolete(self.group.index).into());
+        }
+
+        if self.group.epoch != epoch {
+            return Err(GroupError::GroupEpochObsolete(self.group.epoch).into());
+        }
+
+        if self.group.state {
+            return Err(GroupError::GroupAlreadyReady.into());
+        }
+
+        if self.group.members.len() != members.len() {
+            // update members with input but with original index
+            self.group
+                .members
+                .retain(|id_address, _| members.contains_key(id_address));
+
+            self.group.size = self.group.members.len();
+
+            self.refresh_context_entry();
+
+            return Ok(false);
+        }
+
+        Ok(true)
+    }
 }
 
 impl<C: Curve> GroupInfoFetcher<C> for InMemoryGroupInfoCache<C> {

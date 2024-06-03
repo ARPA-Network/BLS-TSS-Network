@@ -1,14 +1,22 @@
 [package]
 name = "dkg-core"
-version = "0.1.0"
-authors = ["nikkolasg", "Georgios Konstantopoulos <me@gakonst.com>"]
-edition = "2021"
+authors = ["nikkolasg", "Georgios Konstantopoulos <me@gakonst.com>", "kafeikui"]
+description = "Distributed Key Generation (DKG) core library"
+
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+documentation.workspace = true
+repository.workspace = true
+homepage.workspace = true
+keywords.workspace = true
+exclude.workspace = true
 
 [lib]
 crate-type = ["lib"]
 
 [dependencies]
-threshold-bls = { path = "../threshold-bls", default-features = false }
+threshold-bls.workspace = true
 
 async-trait = "0.1.35"
 bitvec = { version = "0.17.4", default-features = false, features = [
@@ -25,7 +33,5 @@ thiserror = "1.0.15"
 log = "0.4"
 
 [dev-dependencies]
-threshold-bls = { path = "../threshold-bls", default-features = false, features = [
-    "bn254",
-] }
+threshold-bls.workspace = true
 tokio = { version = "1.37.0", features = ["full"] }

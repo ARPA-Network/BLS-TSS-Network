@@ -64,10 +64,7 @@ contract DKGScenarioTest is RandcastTestHelper {
         _serviceManager = new ERC1967Proxy(
             address(_serviceManagerImpl),
             abi.encodeWithSignature(
-                "initialize(address,address,address)",
-                address(_nodeRegistry),
-                address(0),
-                address(0)
+                "initialize(address,address,address)", address(_nodeRegistry), address(0), address(0)
             )
         );
 
@@ -98,15 +95,15 @@ contract DKGScenarioTest is RandcastTestHelper {
 
         // Register Nodes
         vm.prank(_node1);
-        INodeRegistry(address(_nodeRegistry)).nodeRegister(_dkgPubkey1, false, _emptyOperatorSignature);
+        INodeRegistry(address(_nodeRegistry)).nodeRegister(_dkgPubkey1, false, _node1, _emptyOperatorSignature);
         vm.prank(_node2);
-        INodeRegistry(address(_nodeRegistry)).nodeRegister(_dkgPubkey2, false, _emptyOperatorSignature);
+        INodeRegistry(address(_nodeRegistry)).nodeRegister(_dkgPubkey2, false, _node2, _emptyOperatorSignature);
         vm.prank(_node3);
-        INodeRegistry(address(_nodeRegistry)).nodeRegister(_dkgPubkey3, false, _emptyOperatorSignature);
+        INodeRegistry(address(_nodeRegistry)).nodeRegister(_dkgPubkey3, false, _node3, _emptyOperatorSignature);
         vm.prank(_node4);
-        INodeRegistry(address(_nodeRegistry)).nodeRegister(_dkgPubkey4, false, _emptyOperatorSignature);
+        INodeRegistry(address(_nodeRegistry)).nodeRegister(_dkgPubkey4, false, _node4, _emptyOperatorSignature);
         vm.prank(_node5);
-        INodeRegistry(address(_nodeRegistry)).nodeRegister(_dkgPubkey5, false, _emptyOperatorSignature);
+        INodeRegistry(address(_nodeRegistry)).nodeRegister(_dkgPubkey5, false, _node5, _emptyOperatorSignature);
     }
 
     struct Params {

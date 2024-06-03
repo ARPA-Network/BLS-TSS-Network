@@ -1,13 +1,18 @@
 [package]
 name = "arpa-core"
-version = "0.1.0"
-edition = "2021"
-publish = false
+description = "ARPA core library"
+
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+documentation.workspace = true
+repository.workspace = true
+homepage.workspace = true
+keywords.workspace = true
+exclude.workspace = true
 
 [dependencies]
-threshold-bls = { path = "../threshold-bls", default-features = false, features = [
-    "bn254",
-] }
+threshold-bls.workspace = true
 
 ethers-providers = { workspace = true, features = ["rustls", "ws"] }
 ethers-core.workspace = true

@@ -1,8 +1,16 @@
 [package]
 name = "arpa-node"
-version = "0.1.0"
-authors = ["arpa-network"]
-edition = "2021"
+authors = ["kafeikui"]
+description = "This crate provides a set of tools on the node side of the ARPA BLS Threshold Signature Scheme (BLS-TSS) Network, including Threshold-BLS based on-chain randomness service(Randcast)."
+
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+documentation.workspace = true
+repository.workspace = true
+homepage.workspace = true
+keywords.workspace = true
+exclude.workspace = true
 
 [[bin]]
 name = "node-client"
@@ -17,15 +25,13 @@ name = "node-config-checker"
 path = "src/node_config_checker.rs"
 
 [dependencies]
-arpa-log = { path = "../log" }
-arpa-core = { path = "../core" }
-arpa-dal = { path = "../dal" }
-arpa-sqlite-db = { path = "../dal/sqlite" }
-arpa-contract-client = { path = "../contract-client" }
-dkg-core = { path = "../dkg-core" }
-threshold-bls = { path = "../threshold-bls", default-features = false, features = [
-    "bn254",
-] }
+arpa-log.workspace = true
+arpa-core.workspace = true
+arpa-dal.workspace = true
+arpa-sqlite-db.workspace = true
+arpa-contract-client.workspace = true
+dkg-core.workspace = true
+threshold-bls.workspace = true
 
 gumdrop = "0.7.0"
 rand = "0.8"
@@ -55,6 +61,9 @@ tower = "0.4"
 hyper = "0.14"
 reedline-repl-rs = { version = "1.0.6", features = ["async"] }
 actix-web = "4"
+check-latest = { version = "1.0.2", default-features = false, features = [
+    "async",
+] }
 
 [build-dependencies]
 tonic-build = "0.11"

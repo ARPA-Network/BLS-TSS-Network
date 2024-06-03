@@ -1,44 +1,40 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.18;
 
-import {RandcastTestHelper} from "./RandcastTestHelper.sol";
 import {
     RandcastTestHelper,
-    IController,
-    ControllerForTest,
-    ERC20,
     INodeRegistry,
     NodeRegistry,
     ServiceManager,
-    ERC1967Proxy,
-    INodeRegistryOwner,
-    IControllerOwner
+    INodeRegistryOwner
 } from "./RandcastTestHelper.sol";
 import {IServiceManager} from "../src/interfaces/IServiceManager.sol";
 import {INodeStaking} from "Staking-v0.1/interfaces/INodeStaking.sol";
 import {BLS} from "../src/libraries/BLS.sol";
 
 contract NodeRegistryTest is RandcastTestHelper {
-    address[] tempAddresses;
+    address[] internal _tempAddresses;
+
     event NodeQuit(address indexed nodeAddress);
     event DkgPublicKeyChanged(address indexed nodeAddress, bytes dkgPublicKey);
     event NodeRewarded(address indexed nodeAddress, uint256 ethAmount, uint256 arpaAmount);
     event NodeSlashed(address indexed nodeIdAddress, uint256 stakingRewardPenalty, uint256 pendingBlock);
+
     function setUp() public {
         _prepareRandcastContracts();
-        tempAddresses = new address[](1);
-        tempAddresses[0] = _node2;
+        _tempAddresses = new address[](1);
+        _tempAddresses[0] = _node2;
     }
 
     function testNodeRegister() public {
         // Fail on bad dkg public key
         vm.expectRevert(abi.encodeWithSelector(BLS.InvalidPublicKey.selector));
         vm.prank(_node1);
-        INodeRegistry(address(_nodeRegistry)).nodeRegister(_badKey, false, _emptyOperatorSignature);
+        INodeRegistry(address(_nodeRegistry)).nodeRegister(_badKey, false, _node1, _emptyOperatorSignature);
 
         // Register _node1
         vm.prank(_node1);
-        INodeRegistry(address(_nodeRegistry)).nodeRegister(_dkgPubkey1, false, _emptyOperatorSignature);
+        INodeRegistry(address(_nodeRegistry)).nodeRegister(_dkgPubkey1, false, _node1, _emptyOperatorSignature);
 
         // Assert _node1 state is correct
         INodeRegistry.Node memory n = INodeRegistry(address(_nodeRegistry)).getNode(_node1);
@@ -50,44 +46,47 @@ contract NodeRegistryTest is RandcastTestHelper {
         // fail on already registered node
         vm.expectRevert(abi.encodeWithSelector(NodeRegistry.NodeAlreadyRegistered.selector));
         vm.prank(_node1);
-        INodeRegistry(address(_nodeRegistry)).nodeRegister(_dkgPubkey1, false, _emptyOperatorSignature);
+        INodeRegistry(address(_nodeRegistry)).nodeRegister(_dkgPubkey1, false, _node1, _emptyOperatorSignature);
 
         // If is EigenLayer node, and share amount insufficient, error and revert
         vm.prank(_node3);
         vm.expectRevert(abi.encodeWithSelector(NodeRegistry.OperatorUnderStaking.selector));
-        INodeRegistry(address(_nodeRegistry)).nodeRegister(_dkgPubkey1, true, _emptyOperatorSignature);
+        INodeRegistry(address(_nodeRegistry)).nodeRegister(_dkgPubkey1, true, _node3, _emptyOperatorSignature);
 
         // If is EigenLayer node, and share amount sufficient
-        tempAddresses[0] = _node3;
+        _tempAddresses[0] = _node3;
         vm.prank(_admin);
-        ServiceManager(address(_serviceManager)).addToWhitelist(tempAddresses);
+        ServiceManager(address(_serviceManager)).addToWhitelist(_tempAddresses);
         assertTrue(ServiceManager(address(_serviceManager)).whitelist(_node3));
 
-        vm.prank(_admin); 
+        vm.prank(_admin);
         uint256[] memory tempWeights = new uint256[](1);
         tempWeights[0] = 100;
-        ServiceManager(address(_serviceManager)).setStrategyAndWeights(tempAddresses, tempWeights);
+        ServiceManager(address(_serviceManager)).setStrategyAndWeights(_tempAddresses, tempWeights);
 
         vm.prank(_node3);
-        vm.expectCall(address(_serviceManager), abi.encodeWithSelector(IServiceManager.registerOperator.selector, _node3, _emptyOperatorSignature));
-        INodeRegistry(address(_nodeRegistry)).nodeRegister(_dkgPubkey1, true, _emptyOperatorSignature);
+        vm.expectCall(
+            address(_serviceManager),
+            abi.encodeWithSelector(IServiceManager.registerOperator.selector, _node3, _emptyOperatorSignature)
+        );
+        INodeRegistry(address(_nodeRegistry)).nodeRegister(_dkgPubkey1, true, _node3, _emptyOperatorSignature);
 
         // If not Eigenlayer node, call lock of NodeStaking
         vm.prank(_node4);
         vm.expectCall(address(_staking), abi.encodeWithSelector(INodeStaking.lock.selector, _node4, 500_00 * 1e18));
-        INodeRegistry(address(_nodeRegistry)).nodeRegister(_dkgPubkey4, false, _emptyOperatorSignature);
+        INodeRegistry(address(_nodeRegistry)).nodeRegister(_dkgPubkey4, false, _node4, _emptyOperatorSignature);
     }
 
     function testNodeActivate() public {
-        // When call nodeActivate, 
+        // When call nodeActivate,
         // If not registered (_nodes doesn't contain record), error and revert
         vm.prank(_node1);
         vm.expectRevert(abi.encodeWithSelector(NodeRegistry.NodeNotRegistered.selector));
         INodeRegistry(address(_nodeRegistry)).nodeActivate(_emptyOperatorSignature);
-        
+
         // Register a node
         vm.prank(_node1);
-        INodeRegistry(address(_nodeRegistry)).nodeRegister(_dkgPubkey1, false, _emptyOperatorSignature);
+        INodeRegistry(address(_nodeRegistry)).nodeRegister(_dkgPubkey1, false, _node1, _emptyOperatorSignature);
 
         // If already activated (node.state), error and revert
         vm.prank(_node1);
@@ -99,21 +98,23 @@ contract NodeRegistryTest is RandcastTestHelper {
         vm.prank(_node1);
         INodeRegistry(address(_nodeRegistry)).nodeQuit();
         vm.prank(_node1);
-        vm.expectRevert(abi.encodeWithSelector(NodeRegistry.NodeStillPending.selector, block.number + _pendingBlockAfterQuit));
+        vm.expectRevert(
+            abi.encodeWithSelector(NodeRegistry.NodeStillPending.selector, block.number + _pendingBlockAfterQuit)
+        );
         INodeRegistry(address(_nodeRegistry)).nodeActivate(_emptyOperatorSignature);
 
         // If is EigenLayer node, and share amount insufficient, error and revert
         vm.prank(_node2);
         vm.expectRevert(abi.encodeWithSelector(NodeRegistry.OperatorUnderStaking.selector));
-        INodeRegistry(address(_nodeRegistry)).nodeRegister(_dkgPubkey2, true, _emptyOperatorSignature); 
+        INodeRegistry(address(_nodeRegistry)).nodeRegister(_dkgPubkey2, true, _node2, _emptyOperatorSignature);
     }
 
     function testDismissNodeAndNodeQuit() public {
         // Register a node
         vm.prank(_node1);
-        INodeRegistry(address(_nodeRegistry)).nodeRegister(_dkgPubkey1, false, _emptyOperatorSignature);
+        INodeRegistry(address(_nodeRegistry)).nodeRegister(_dkgPubkey1, false, _node1, _emptyOperatorSignature);
 
-        // When call nodeQuit, 
+        // When call nodeQuit,
         // If not registered (_nodes address doesn't match), error and revert
         vm.prank(_admin);
         vm.expectRevert(abi.encodeWithSelector(NodeRegistry.NodeNotRegistered.selector));
@@ -133,7 +134,7 @@ contract NodeRegistryTest is RandcastTestHelper {
     function testChangeDkgPublicKey() public {
         // Register a node
         vm.prank(_node1);
-        INodeRegistry(address(_nodeRegistry)).nodeRegister(_dkgPubkey1, false, _emptyOperatorSignature);
+        INodeRegistry(address(_nodeRegistry)).nodeRegister(_dkgPubkey1, false, _node1, _emptyOperatorSignature);
 
         // When not registered (_nodes address doesn't match), error and revert
         vm.prank(_node2);
@@ -155,7 +156,7 @@ contract NodeRegistryTest is RandcastTestHelper {
     function testNodeWithdraw() public {
         // Register a node
         vm.prank(_node1);
-        INodeRegistry(address(_nodeRegistry)).nodeRegister(_dkgPubkey1, false, _emptyOperatorSignature);
+        INodeRegistry(address(_nodeRegistry)).nodeRegister(_dkgPubkey1, false, _node1, _emptyOperatorSignature);
 
         // When call nodeWithdraw, if address is zero, error and revert
         vm.prank(_node1);
@@ -166,11 +167,11 @@ contract NodeRegistryTest is RandcastTestHelper {
     function testAddReward() public {
         // Register some nodes
         vm.prank(_node1);
-        INodeRegistry(address(_nodeRegistry)).nodeRegister(_dkgPubkey1, false, _emptyOperatorSignature);
+        INodeRegistry(address(_nodeRegistry)).nodeRegister(_dkgPubkey1, false, _node1, _emptyOperatorSignature);
         vm.prank(_node2);
-        INodeRegistry(address(_nodeRegistry)).nodeRegister(_dkgPubkey2, false, _emptyOperatorSignature);
+        INodeRegistry(address(_nodeRegistry)).nodeRegister(_dkgPubkey2, false, _node2, _emptyOperatorSignature);
 
-        // When call addReward, 
+        // When call addReward,
         // If sender not controller address, error and revert
         uint256 ethAmount = 100;
         uint256 arpaAmount = 50;
@@ -190,8 +191,10 @@ contract NodeRegistryTest is RandcastTestHelper {
         emit NodeRewarded(_node2, ethAmount, arpaAmount);
         INodeRegistry(address(_nodeRegistry)).addReward(nodes, ethAmount, arpaAmount);
 
-        (uint256 node1EthAmount, uint256 node1ArpaAmount) = INodeRegistry(address(_nodeRegistry)).getNodeWithdrawableTokens(_node1);
-        (uint256 node2EthAmount, uint256 node2ArpaAmount) = INodeRegistry(address(_nodeRegistry)).getNodeWithdrawableTokens(_node2);
+        (uint256 node1EthAmount, uint256 node1ArpaAmount) =
+            INodeRegistry(address(_nodeRegistry)).getNodeWithdrawableTokens(_node1);
+        (uint256 node2EthAmount, uint256 node2ArpaAmount) =
+            INodeRegistry(address(_nodeRegistry)).getNodeWithdrawableTokens(_node2);
 
         assertEq(node1EthAmount, ethAmount);
         assertEq(node1ArpaAmount, arpaAmount);
@@ -202,7 +205,7 @@ contract NodeRegistryTest is RandcastTestHelper {
     function testRegistrySlashNode() public {
         // Register a node
         vm.prank(_node1);
-        INodeRegistry(address(_nodeRegistry)).nodeRegister(_dkgPubkey1, false, _emptyOperatorSignature);
+        INodeRegistry(address(_nodeRegistry)).nodeRegister(_dkgPubkey1, false, _node1, _emptyOperatorSignature);
 
         // When sender is not the controller address, error and revert
         vm.prank(_node2);
@@ -211,14 +214,12 @@ contract NodeRegistryTest is RandcastTestHelper {
 
         uint256 stakingRewardPenalty = 100;
         uint256 pendingBlock = 10;
-        
+
         // If is not EigenLayer node, call slashDelegationReward of NodeStaking
         vm.prank(address(_controller));
         vm.expectCall(
             address(_staking),
-            abi.encodeWithSelector(
-                INodeStaking.slashDelegationReward.selector, _node1, stakingRewardPenalty
-            )
+            abi.encodeWithSelector(INodeStaking.slashDelegationReward.selector, _node1, stakingRewardPenalty)
         );
 
         // Expect to emit NodeSlashed event

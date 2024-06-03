@@ -105,25 +105,25 @@ contract ControllerOracleTest is RandcastTestHelper {
 
         // Register Nodes to max capacity of one group
         vm.prank(_node1);
-        INodeRegistry(address(_nodeRegistry)).nodeRegister(_dkgPubkey1, false, _emptyOperatorSignature);
+        INodeRegistry(address(_nodeRegistry)).nodeRegister(_dkgPubkey1, false, _node1, _emptyOperatorSignature);
         vm.prank(_node2);
-        INodeRegistry(address(_nodeRegistry)).nodeRegister(_dkgPubkey2, false, _emptyOperatorSignature);
+        INodeRegistry(address(_nodeRegistry)).nodeRegister(_dkgPubkey2, false, _node2, _emptyOperatorSignature);
         vm.prank(_node3);
-        INodeRegistry(address(_nodeRegistry)).nodeRegister(_dkgPubkey3, false, _emptyOperatorSignature);
+        INodeRegistry(address(_nodeRegistry)).nodeRegister(_dkgPubkey3, false, _node3, _emptyOperatorSignature);
         vm.prank(_node4);
-        INodeRegistry(address(_nodeRegistry)).nodeRegister(_dkgPubkey4, false, _emptyOperatorSignature);
+        INodeRegistry(address(_nodeRegistry)).nodeRegister(_dkgPubkey4, false, _node4, _emptyOperatorSignature);
         vm.prank(_node5);
-        INodeRegistry(address(_nodeRegistry)).nodeRegister(_dkgPubkey5, false, _emptyOperatorSignature);
+        INodeRegistry(address(_nodeRegistry)).nodeRegister(_dkgPubkey5, false, _node5, _emptyOperatorSignature);
         vm.prank(_node6);
-        INodeRegistry(address(_nodeRegistry)).nodeRegister(_dkgPubkey6, false, _emptyOperatorSignature);
+        INodeRegistry(address(_nodeRegistry)).nodeRegister(_dkgPubkey6, false, _node6, _emptyOperatorSignature);
         vm.prank(_node7);
-        INodeRegistry(address(_nodeRegistry)).nodeRegister(_dkgPubkey7, false, _emptyOperatorSignature);
+        INodeRegistry(address(_nodeRegistry)).nodeRegister(_dkgPubkey7, false, _node7, _emptyOperatorSignature);
         vm.prank(_node8);
-        INodeRegistry(address(_nodeRegistry)).nodeRegister(_dkgPubkey8, false, _emptyOperatorSignature);
+        INodeRegistry(address(_nodeRegistry)).nodeRegister(_dkgPubkey8, false, _node8, _emptyOperatorSignature);
         vm.prank(_node9);
-        INodeRegistry(address(_nodeRegistry)).nodeRegister(_dkgPubkey9, false, _emptyOperatorSignature);
+        INodeRegistry(address(_nodeRegistry)).nodeRegister(_dkgPubkey9, false, _node9, _emptyOperatorSignature);
         vm.prank(_node10);
-        INodeRegistry(address(_nodeRegistry)).nodeRegister(_dkgPubkey10, false, _emptyOperatorSignature);
+        INodeRegistry(address(_nodeRegistry)).nodeRegister(_dkgPubkey10, false, _node10, _emptyOperatorSignature);
     }
 
     struct Params {

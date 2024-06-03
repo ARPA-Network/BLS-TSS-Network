@@ -1,15 +1,20 @@
 [package]
 name = "arpa-contract-client"
-version = "0.1.0"
-edition = "2021"
-publish = false
+description = "ARPA contract client library"
+
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+documentation.workspace = true
+repository.workspace = true
+homepage.workspace = true
+keywords.workspace = true
+exclude.workspace = true
 
 [dependencies]
-dkg-core = { path = "../dkg-core" }
-threshold-bls = { path = "../threshold-bls", default-features = false, features = [
-    "bn254",
-] }
-arpa-core = { path = "../core" }
+dkg-core.workspace = true
+threshold-bls.workspace = true
+arpa-core.workspace = true
 
 tokio = { version = "1.37.0", features = ["full"] }
 thiserror = "1.0.15"

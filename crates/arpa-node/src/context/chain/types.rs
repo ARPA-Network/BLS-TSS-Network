@@ -341,17 +341,19 @@ where
         &self,
         context: &(dyn ContextFetcher + Sync + Send),
     ) -> SchedulerResult<()> {
-        self.init_listener(
-            context.get_event_queue(),
-            context.get_fixed_task_handler(),
-            ListenerDescriptor {
-                l_type: ListenerType::ScheduleNodeActivation,
-                interval_millis: DEFAULT_NODE_ACTIVATION_INTERVAL_MILLIS,
-                use_jitter: false,
-                reset_descriptor: self.time_limits.provider_reset_descriptor,
-            },
-        )
-        .await?;
+        if !self.is_eigenlayer {
+            self.init_listener(
+                context.get_event_queue(),
+                context.get_fixed_task_handler(),
+                ListenerDescriptor {
+                    l_type: ListenerType::ScheduleNodeActivation,
+                    interval_millis: DEFAULT_NODE_ACTIVATION_INTERVAL_MILLIS,
+                    use_jitter: false,
+                    reset_descriptor: self.time_limits.provider_reset_descriptor,
+                },
+            )
+            .await?;
+        }
 
         Ok(())
     }
