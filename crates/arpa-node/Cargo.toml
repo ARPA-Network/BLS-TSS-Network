@@ -61,7 +61,9 @@ tower = "0.4"
 hyper = "0.14"
 reedline-repl-rs = { version = "1.0.6", features = ["async"] }
 actix-web = "4"
-check-latest = "1.0.2"
+check-latest = { version = "1.0.2", default-features = false, features = [
+    "async",
+] }
 
 [build-dependencies]
 tonic-build = "0.11"

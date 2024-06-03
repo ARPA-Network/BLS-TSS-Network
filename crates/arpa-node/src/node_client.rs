@@ -21,7 +21,7 @@ use arpa_node::context::chain::types::GeneralRelayedChain;
 use arpa_node::context::types::GeneralContext;
 use arpa_node::context::{Context, TaskWaiter};
 use arpa_sqlite_db::SqliteDB;
-use check_latest::check_max;
+use check_latest::check_max_async;
 use ethers::core::k256::ecdsa::SigningKey;
 use ethers::providers::Provider;
 use ethers::providers::Ws;
@@ -165,7 +165,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     info!("{:?}", config);
 
-    if let Ok(Some(version)) = check_max!() {
+    if let Ok(Some(version)) = check_max_async!().await {
         error!(
             "Version {} is now available, please update your node.",
             version
