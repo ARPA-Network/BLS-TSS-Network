@@ -5,21 +5,21 @@ license = "MIT OR Apache-2.0"
 documentation = "https://docs.arpanetwork.io/"
 repository = "https://github.com/ARPA-Network/BLS-TSS-Network"
 homepage = "https://github.com/ARPA-Network/BLS-TSS-Network"
-keywords = ["crypto", "arpa", "randcast", "DKG", "BLS", "threshold", "web3"]
+keywords = ["arpa", "randcast", "DKG", "BLS", "threshold"]
 exclude = ["scripts/", "tests/", "test/", "docker/", "docs/"]
 
 [workspace]
 
 members = [
-    "crates/dkg-core",
     "crates/arpa-node",
+    "crates/user-cli",
+    "crates/core",
+    "crates/dkg-core",
     "crates/threshold-bls",
     "crates/log",
-    "crates/core",
     "crates/dal",
     "crates/dal/sqlite",
     "crates/contract-client",
-    "crates/user-cli",
 ]
 
 resolver = "2"
