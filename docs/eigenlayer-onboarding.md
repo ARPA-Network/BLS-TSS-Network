@@ -159,7 +159,8 @@ vi log/node.log
     ghcr.io/arpa-network/node-client:latest
     ```
     
-    - At present, we will collect data in log file `node.log` to locate and troubleshoot issues, but please be aware that the logs **WILL NOT** contain node private content.
+    - At present, we will collect data in log file `node.log` to locate and troubleshoot issues, but please be aware that the logs **WILL NOT** contain node private content or running environment metrics
+    - For existing user, to upgrade to v0.2.0, please follow [upgrade instruction ](/docs/upgrade-instruction.md)
 1. Observe to confirm running status
     - The following ports should be on listening(according to your config)
         - node_committer_rpc_endpoint: "0.0.0.0:50061"
