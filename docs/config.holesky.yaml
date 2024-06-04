@@ -1,4 +1,4 @@
-ode_committer_rpc_endpoint: "0.0.0.0:50061"
+node_committer_rpc_endpoint: "0.0.0.0:50061"
 
 node_advertised_committer_rpc_endpoint: "<EXTERNAL_IP>:50061"
 

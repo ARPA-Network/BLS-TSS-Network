@@ -26,5 +26,5 @@
     ```-v <db file path>:/app/db/data.sqlite```
 
 5. After about 1 minute, search the log for the keyword "public_key" or "DKGKeyGenerated" and copy the public key value.
-6. Generate a signature and call the [nodeRegister contract method](https://github.com/ARPA-Network/BLS-TSS-Network/blob/0732850fe39f869a7dea899e445dfe6332462ab7/contracts/src/interfaces/INodeRegistry.sol#L25) manually with your generated public key. You can find the method definition here.
+6. Generate a signature and call the [nodeRegister contract method](https://github.com/ARPA-Network/BLS-TSS-Network/blob/0732850fe39f869a7dea899e445dfe6332462ab7/contracts/src/interfaces/INodeRegistry.sol#L25) manually with your generated public key. The address of the contract is listed in our [Official Document](https://docs.arpanetwork.io/randcast/supported-networks-and-parameters). 
 7. After calling the nodeRegister method, you should expect to see the Node Client log running correctly.
