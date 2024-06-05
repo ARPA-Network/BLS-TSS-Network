@@ -25,7 +25,7 @@ logger:
   rolling_file_size: 10 gb
 
 account:
-  private_key: "<YOUR_PRIVATE_KEY>"
+  private_key: "<YOUR_PRIVATE_KEY_OF_NODE_ACCOUNT>"
   
 listeners:
   - l_type: Block
