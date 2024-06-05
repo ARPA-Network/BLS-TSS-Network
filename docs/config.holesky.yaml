@@ -25,7 +25,9 @@ logger:
   rolling_file_size: 10 gb
 
 account:
-  private_key: "<YOUR_PRIVATE_KEY_OF_NODE_ACCOUNT>"
+  keystore:
+    password: <KEYSTORE_PASSWORD_OF_NODE_ACCOUNT>
+    path: node.keystore
   
 listeners:
   - l_type: Block

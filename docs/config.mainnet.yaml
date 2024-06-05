@@ -21,7 +21,9 @@ adapter_address: "0x4363154E1eC107F81239A4F0b1CB3AB5161129Ca"
 controller_relayer_address: "0xF098A30c21dF6Bc1aED15e172001E4675131aD4A"
 
 account:
-  private_key: "<YOUR_PRIVATE_KEY_OF_NODE_ACCOUNT>"
+  keystore:
+    password: <KEYSTORE_PASSWORD_OF_NODE_ACCOUNT>
+    path: node.keystore
 
 logger:
   context_logging: false

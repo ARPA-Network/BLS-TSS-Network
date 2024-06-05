@@ -86,17 +86,17 @@ Please copy the template below, and to change:
 ***Note:*** 
 
 - The contract addresses in the following example are currently the latest available.
-- We recommend setup account by keystore or hdwallet. Please refer to [here](https://github.com/ARPA-Network/BLS-TSS-Network/tree/main/crates/arpa-node#node-config) for detailed instructions.
-- Please **DO NOT use comments** in the config file.
-- Please confirm that the `node_advertised_committer_rpc_endpoint` can be accessed by the external network.
-    - example:
+- We recommend setup account by keystore or hdwallet. Please refer to [here](https://github.com/ARPA-Network/BLS-TSS-Network/tree/main/crates/arpa-node#node-config) for detailed instructions. The priority order is 1. hdwallet 2. keystore 3. private key
+ - example:
     
-    ```jsx
+    ```yaml
     account:
         keystore:
             password: <KEYSTORE_PASSWORD>
             path: node.keystore
     ```
+- Please **DO NOT use comments** in the config file.
+- Please confirm that the `node_advertised_committer_rpc_endpoint` can be accessed by the external network.  
     
 
 **Testnet config.yml example**
@@ -133,7 +133,7 @@ docker pull ghcr.io/arpa-network/node-client:latest
 ## 1. config file path on your host machine
 ## 2. DB folder path on your host machine
 ## 3. log folder path on your host machine
-## 4. (Optional) keystore file path on your host machine. Note that if you provide keystore, you don't need to provide private key again in your config as the keystore will override private key. 
+## 4. (Optional) Node account keystore file path on your host machine. If you provide keystore, you don't need to provide private key again in your config as the keystore will override private key. 
 
 docker run -d \
 --name arpa-node \
@@ -156,13 +156,13 @@ vi log/node.log
 - Warning:
     - Node registration will NOT be automatically performed on the first startup anymore since `V0.2.0`.
     - Please **DO NOT move or modify database file** after the first run, and **DO NOT modify node identity configuration arbitrarily**, otherwise errors will occur during runtime. (such as [DKG Key Mismatch](/docs//issue%20fix/dkg-public-key-mismatch.md))
-    - It is recommended to **keep the nodes long-running**. Please DO NOT frequently start and stop, which may result in missing grouping or task events and cause unnecessary slashing.
+    - It is recommended to **keep the nodes long-running**. Please DO NOT frequently start and stop, which may result in missing grouping or task events and cause unnecessary slashing. (see [Reactivate once Slashed](/docs//issue%20fix/reactivate-once-slashed.md))
     - Please ensure regular backup of the database file `./db/data.sqlite`.
     - It is recommended to observe and analyze the complete `node.log` on the host machine. If the container starts and stops every time using the `docker rm` command, the standard output log is incomplete.
 
 - Note:
     - At present, we will collect data in log file `node.log` to locate and troubleshoot issues, but please note that the logs **WILL NOT** contain node private content or running environment metrics
-    - To run multiple node clients on the same machine, you may need to change the path to “/<YOUR_EXPECTED_SUBFOLDER>” behind of the “db” or “log” directory. 
+    - To run multiple node clients on the same machine, you may need to change the path to "/<YOUR_EXPECTED_SUBFOLDER>" behind of the "db" or "log" directory. 
 
 ### Register to ARPA Network: 
 
@@ -182,7 +182,7 @@ vi log/node.log
     assetAccountSignature.expiry | uint256 | 1717429132 
 
     - For more information about signature generation, please refer to [eigenlayer doc](https://github.com/Layr-Labs/eigenlayer-contracts/blob/dev/docs/core/AVSDirectory.md#registeroperatortoavs)
-3. It is normal to NOT have instant log output since it may be waiting for other nodes to group.   
+3. After successful registration transaction, it is normal to NOT have instant log output in node.log since it may be waiting for other nodes to group.   
 
 
 ### Confirm Running Status
