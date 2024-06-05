@@ -1,10 +1,10 @@
 # Node Setup Instruction for Eigenlayer Operator
 
-## **Node**
+## Node
 
 The ARPA BLS-TSS Network consists of multiple groups of nodes. Within a group, each node is responsible for completing a BLS task (generating a BLS-TSS signature jointly with the other nodes of the group).
 
-## **Prerequisites**
+## Prerequisites
 
 - **Minimum Hardware Requirements**
     
@@ -18,7 +18,7 @@ The ARPA BLS-TSS Network consists of multiple groups of nodes. Within a group, e
 - [Docker](https://www.docker.com/get-started/)
 - Externally accessible IP and ports
 
-## **EL Operator Setup**
+## EL Operator Setup
 
 Follow the [official document](https://docs.eigenlayer.xyz/eigenlayer/operator-guides/operator-installation) to install and set up the operator accordingly.
 
@@ -27,7 +27,7 @@ After this, you should have:
 - operator private key / address setup
 - docker installed
 
-## **Staking and Whitelist**
+## Staking and Whitelist
 
 Due to the fact that Eigenlayer in the M2 phase does not support slashing, we collaborate with operators through a whitelist approach. Currently, there are no staking requirements set.
 
@@ -71,7 +71,7 @@ For gas fee of grouping operations and task submission, please ensure you have a
 ***Note:*** The gas cost of fulfilling tasks(the signature verification and callback function) is directly paid by the committer node and then reimbursed by the requesting user. `Node` account can retrieve both the prepaid ETH and extra ARPA reward at any time by calling the `nodeWithdraw` method from the `NodeRegistry` contract on L1, or `ControllerOracle` contract on L2s.
 
 
-## **Setup Steps**
+## Setup Steps
 
 ### Build a config (yml file) in your running environment
     
@@ -219,7 +219,7 @@ Known issues fix:
 - 06/03/2024
     - Fixed known bugs
     - Separated operator and node client private keys for EigenLayer users
-    - Release new version (0.2.0)
+    - Released new version (0.2.0)
 - 05/24/2024
     - Mainnet published
     - Added log collection component (will not collect sensitive data)
