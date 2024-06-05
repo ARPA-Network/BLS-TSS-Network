@@ -3,8 +3,8 @@
 ## General Guidance
 
 Since there is a mismatch, all we are trying to do here is to remove the mismatch or make they sync up.
-- If the original DB file still exists, we can try to sync it up
-- If not, we can try to remove it and reset DKG key on-chain.
+- If the original DB file still exists (which means you maybe just used wrong command), we can try to sync it up 
+- If it does not exist anymore (which means the file is damaged or deleted), we can try to remove it and reset DKG key on-chain.
 
 Below steps require manual operation with DB file and on-chain contract. For the contract part, you are going to need 
 - [NodeRegistry Contract](https://github.com/ARPA-Network/BLS-TSS-Network/blob/0732850fe39f869a7dea899e445dfe6332462ab7/contracts/src/interfaces/INodeRegistry.sol)
