@@ -1,10 +1,10 @@
 # Node Setup Instruction for Eigenlayer Operator
 
-### **Node**
+## Node
 
 The ARPA BLS-TSS Network consists of multiple groups of nodes. Within a group, each node is responsible for completing a BLS task (generating a BLS-TSS signature jointly with the other nodes of the group).
 
-### **Prerequisites**
+## Prerequisites
 
 - **Minimum Hardware Requirements**
     
@@ -18,22 +18,22 @@ The ARPA BLS-TSS Network consists of multiple groups of nodes. Within a group, e
 - [Docker](https://www.docker.com/get-started/)
 - Externally accessible IP and ports
 
-### **EL Operator Setup**
+## EL Operator Setup
 
 Follow the [official document](https://docs.eigenlayer.xyz/eigenlayer/operator-guides/operator-installation) to install and set up the operator accordingly.
 
 After this, you should have:
 
-- mainnet private key / address setup
+- operator private key / address setup
 - docker installed
 
-### **Staking and Whitelist**
+## Staking and Whitelist
 
 Due to the fact that Eigenlayer in the M2 phase does not support slashing, we collaborate with operators through a whitelist approach. Currently, there are no staking requirements set.
 
 Nodes on the whitelist can join the ARPA Network and earn rewards by correctly performing the BLS tasks.
 
-### **Reward**
+## Reward
 
 Besides the cooperation agreement, there are three types of rewards a node can earn through smart contract if acted responsibly in a timely manner:
 
@@ -44,9 +44,20 @@ Besides the cooperation agreement, there are three types of rewards a node can e
 - DKG post-process reward
     - 60 ARPA each time a node completes the DKG post-proccess task during node grouping.
 
-### **Balance**
+## Basic Account Concepts
 
-For gas fee of grouping operations and task submission, please ensure you have a sufficient ETH balance ready on all the L1/L2s that you need to support, which currently are:
+Before we start, let's talk about some basic concepts.
+
+To serve both Eigenlayer and ARPA architecture, we have 2 types of account, `Asset` and `Node` account.
+
+- Asset Account: **Eigenlayer Operator account**, which is used for registration check, and slashing purposes (not implemented yet).
+- Node Account: **The account that interacts with ARPA**, which is used for identity in ARPA network, gas provision and rewards. You may use same account info as your asset account or create a new ECDSA account as you wish.
+
+``Note``: unlike common account pattern, the `Node` account is also very important, therefore you need to make sure the account secret is secured.
+
+## Balance
+
+For gas fee of grouping operations and task submission, please ensure you have a sufficient ETH balance ready on all the L1/L2s `Node` account that you need to support, which currently are:
 
 - Testnet
     - ETH Holesky (17000)
@@ -57,53 +68,46 @@ For gas fee of grouping operations and task submission, please ensure you have a
     - Base Mainnet (8453)
     - Redstone Mainnet (690)
 
-***Note:*** The gas cost of fulfilling tasks(the signature verification and callback function) is directly paid by the committer node and then reimbursed by the requesting user. *N*ode operator can retrieve both the prepaid ETH and extra ARPA reward at any time by calling the `nodeWithdraw` method from the `NodeRegistry` contract on L1, or `ControllerOracle` contract on L2s.
+***Note:*** The gas cost of fulfilling tasks(the signature verification and callback function) is directly paid by the committer node and then reimbursed by the requesting user. `Node` account can retrieve both the prepaid ETH and extra ARPA reward at any time by calling the `nodeWithdraw` method from the `NodeRegistry` contract on L1, or `ControllerOracle` contract on L2s.
 
-### **Setup Steps**
 
-1. Build a config (yml file) in your running environment
+## Setup Steps
+
+### Build a config (yml file) in your running environment
     
-    Please copy the template below, and to change:
+Please copy the template below, and to change:
+
+- **provider_endpoint (Necessary, both main chain and relayed chains)**
+- **account (Necessary)**
+- node_management_rpc_endpoint, node_management_rpc_token (Optional)
+- listeners and time_limits (Optional and please modify carefully if needed)
+
+
+***Note:*** 
+
+- The contract addresses in the following example are currently the latest available.
+- We recommend setup account by keystore or hdwallet. Please refer to [here](https://github.com/ARPA-Network/BLS-TSS-Network/tree/main/crates/arpa-node#node-config) for detailed instructions. The priority order is 1. hdwallet 2. keystore 3. private key
+ - example:
     
-    - **provider_endpoint (Necessary, both main chain and relayed chains)**
-    - **account (Necessary)**
-    - node_management_rpc_endpoint, node_management_rpc_token (Optional)
-    - listeners and time_limits (Optional and please modify carefully if needed)
+    ```yaml
+    account:
+        keystore:
+            password: <KEYSTORE_PASSWORD>
+            path: node.keystore
+    ```
+- Please **DO NOT use comments** in the config file.
+- Please confirm that the `node_advertised_committer_rpc_endpoint` can be accessed by the external network.  
     
-    Please refer to [here](https://github.com/ARPA-Network/BLS-TSS-Network/tree/main/crates/arpa-node#node-config) for detailed instructions.
+
+**Testnet config.yml example**
+
+[Config for Testnet](/docs/config.holesky.yaml)
+
+**Mainnet config.yml example**
+
+[Config for Mainnet](/docs/config.mainnet.yaml)
     
-    ***Note:*** 
-    
-    - The contract addresses in the following example are currently the latest available.
-    - We recommend setup account by keystore or hdwallet. Please **DO NOT use comments** in the config file.
-    - Please confirm that the `node_advertised_committer_rpc_endpoint` can be accessed by the external network.
-        - example:
-        
-        ```jsx
-        account:
-          private_key: "<YOUR_PRIVATE_KEY>"
-          
-        	# keystore:
-          #   password: env
-          #   path: test.keystore
-        
-          # hdwallet:
-          #   mnemonic: env
-          #   path: "m/44'/60'/0'/0"
-          #   index: 0
-          #   passphrase: "custom_password"
-        ```
-        
-    
-    **Testnet config.yml example**
-    
-    [config for Testnet](/docs/config.holesky.yaml)
-    
-    **Mainnet config.yml example**
-    
-    [config for Mainnet](/docs/config.mainnet.yaml)
-    
-2. Run below commands to register and start the node-client:
+### Run below commands to start the node-client:
 
 ```bash
 #!/bin/bash
@@ -115,7 +119,7 @@ cd <YOUR_ARPA_NETWORK_ROOT_DIRECTORY>
 # otherwise the error reason will be printed
 docker run -v ./config.yml:/app/config.yml ghcr.io/arpa-network/node-config-checker:latest "node-config-checker -c /app/config.yml"
 
-# Create the necessary directories
+# Create the necessary directories if it's your first run
 mkdir db
 mkdir log
 
@@ -125,11 +129,18 @@ mkdir log
 docker pull ghcr.io/arpa-network/node-client:latest
 
 # Run the Docker container
+## Parameters needs to be provided as below to your docker instance: 
+## 1. config file path on your host machine
+## 2. DB folder path on your host machine
+## 3. log folder path on your host machine
+## 4. (Optional) Node account keystore file path on your host machine. If you provide keystore, you don't need to provide private key again in your config as the keystore will override private key. 
+
 docker run -d \
 --name arpa-node \
--v ./config.yml:/app/config.yml \
--v ./db:/app/db\
--v ./log:/app/log \
+-v <path of config file>:/app/config.yml \
+-v <path of DB folder>:/app/db \
+-v <path of node account keystore file>:/app/node.keystore \
+-v <path of log folder>:/app/log \
 --network=host \
 ghcr.io/arpa-network/node-client:latest
 
@@ -142,53 +153,73 @@ docker exec -it arpa-node sh
 vi log/node.log
 ```
 
-- Note:
-    - Node registration will be automatically performed on the first startup. Please **DO NOT move or modify database file** after the first run, and **DO NOT modify node identity configuration arbitrarily**, otherwise errors will occur during runtime.
-    - It is recommended to **keep the nodes long-running**. Please avoid frequent start and stop, which may result in missing grouping or task events and causing unnecessary slashing.
+- Warning:
+    - Node registration will NOT be automatically performed on the first startup anymore since `V0.2.0`.
+    - Please **DO NOT move or modify database file** after the first run, and **DO NOT modify node identity configuration arbitrarily**, otherwise errors will occur during runtime. (such as [DKG Key Mismatch](/docs//issue%20fix/dkg-public-key-mismatch.md))
+    - It is recommended to **keep the nodes long-running**. Please DO NOT frequently start and stop, which may result in missing grouping or task events and cause unnecessary slashing. (see [Reactivate once Slashed](/docs//issue%20fix/reactivate-once-slashed.md))
     - Please ensure regular backup of the database file `./db/data.sqlite`.
     - It is recommended to observe and analyze the complete `node.log` on the host machine. If the container starts and stops every time using the `docker rm` command, the standard output log is incomplete.
-    - If you run multiple node clients on the same machine, you may need to run it like below to add “/<YOUR_EXPECTED_SUBFOLDER>” behind of the “db” or “log” directory (highlighted in blue). Note that please **DO NOT** change the “app/db” or “app/log” part as they are relative path in docker instance.
-    
-    ```bash
-    docker run -d \
-    --name arpa-node-1 \
-    -v ./config_1.yml:/app/config.yml \
-    -v ./db/1:/app/db\
-    -v ./log/1:/app/log \
-    --network=host \
-    ghcr.io/arpa-network/node-client:latest
-    ```
-    
-    - At present, we will collect data in log file `node.log` to locate and troubleshoot issues, but please be aware that the logs **WILL NOT** contain node private content or running environment metrics
-    - For existing user, to upgrade to v0.2.0, please follow [upgrade instruction ](/docs/upgrade-instruction.md)
-1. Observe to confirm running status
-    - The following ports should be on listening(according to your config)
-        - node_committer_rpc_endpoint: "0.0.0.0:50061"
-        - node_management_rpc_endpoint: "0.0.0.0:50091"
-        - node_statistics_http_endpoint: "0.0.0.0:50081"
-    - The `node.log` under `/db` should have following logs with `log_type` under certain conditions:
-        - After the first run  `NodeRegistered`
-        - After automatic activation from being slashed unexpectedly  `NodeActivated`
-        - After the successful DKG process  `DKGGroupingAvailable`
-        - After receiving any task  `TaskReceived`
-        - After working as normal node  `PartialSignatureFinished` and `PartialSignatureSent`
-        - After working as committer node  `AggregatedSignatureFinished` and `FulfillmentFinished`
-    - Error logs do not necessarily represent irreversible errors. If you find that the error logs have grown significantly in a short period of time, please contact us.
 
-### **Reference**
+- Note:
+    - At present, we will collect data in log file `node.log` to locate and troubleshoot issues, but please note that the logs **WILL NOT** contain node private content or running environment metrics
+    - To run multiple node clients on the same machine, you may need to change the path to "/<YOUR_EXPECTED_SUBFOLDER>" behind of the "db" or "log" directory. 
+
+### Register to ARPA Network: 
+
+1. Go to the log and search the log for the keyword "public_key"(or "DKGKeyGenerated") and copy the DKG public key value.
+2. Call `nodeRegister` method of `NodeRegistry` contract, for your reference:
+    - Generate the EIP1271 Operator signature for AVS registration with your `Asset` Account
+    - [NodeRegistry Contract](https://github.com/ARPA-Network/BLS-TSS-Network/blob/0732850fe39f869a7dea899e445dfe6332462ab7/contracts/src/interfaces/INodeRegistry.sol#L25)
+    - Contract address listed in our [Official Document](https://docs.arpanetwork.io/randcast/supported-networks-and-parameters)
+    - Example call data should look like this
+
+    Name | Type | Data
+    --- | --- | --- 
+    dkgPublicKey | bytes | 0x1b0eec420a74cdd1fdbf7ed48c03b70ddfd2507f14aa54a2bbdefe6a92da93b72832d11c106610b175cc04b3fd7d5b6b869d0571d80b5c240b9213d8e1a1d0b7030f40df5cd261d4497ba15de4bb1769ec45c0ecc69a477fbecfc82c96668916042a01a85083f80174c55b5d6959ba3c29c589676978a37d4f6646c4bb6da116
+    isEigenlayerNode | bool | true 
+    assetAccountSignature.signature | bytes | 0x444c3c9a6d487299162b02ac7e705ba533bc03445eda8d2e4f498bf430cbe21421a3c8933b0fa08e5fb43ee2a38896028694accebd0f77620eebf9bb93a3d4fc1c 
+    assetAccountSignature.salt	 | bytes32 | 0x7fe94cad56d5aaeb5921b08ca90668654210fde42fed0c9507e8b5d796491bfc
+    assetAccountSignature.expiry | uint256 | 1717429132 
+
+    - For more information about signature generation, please refer to [eigenlayer doc](https://github.com/Layr-Labs/eigenlayer-contracts/blob/dev/docs/core/AVSDirectory.md#registeroperatortoavs)
+3. After successful registration transaction, it is normal to NOT have instant log output in node.log since it may be waiting for other nodes to group.   
+
+
+### Confirm Running Status
+
+- The following ports should be listening (according to your config). You can try to access those ports from external environments (such as telnet)
+    - node_advertised_committer_rpc_endpoint: "<EXTERNAL_IP>:50061"
+    - node_management_rpc_endpoint: "0.0.0.0:50091"
+    - node_statistics_http_endpoint: "0.0.0.0:50081"
+- Under certain conditions, the `node.log` located in `/db` directory should contain following logs with corresponding`log_type`:
+    - After the successful DKG process  `DKGGroupingAvailable`
+    - After receiving any task  `TaskReceived`
+    - After working as normal node  `PartialSignatureFinished` and `PartialSignatureSent`
+    - After working as committer node  `AggregatedSignatureFinished` and `FulfillmentFinished`
+- Error logs do not necessarily represent irreversible errors. If you find that the error logs have grown significantly in a short period of time, please contact us.
+
+## Troubleshooting
+
+Known issues fix:
+
+- [DKG Key Mismatch](/docs//issue%20fix/dkg-public-key-mismatch.md)
+- [Reactivate once Slashed](/docs//issue%20fix/reactivate-once-slashed.md)
+
+## **Reference**
 
 - GitHub Repositories
     - [BLS-TSS-Network](https://github.com/ARPA-Network/BLS-TSS-Network)
     - [Arpa Node](https://github.com/ARPA-Network/BLS-TSS-Network/tree/main/crates/arpa-node)
 - [ARPA Network Gitbook](https://docs.arpanetwork.io/)
 - [ARPA Official Website](https://www.arpanetwork.io/en-US)
+- [Contract Addresses](https://docs.arpanetwork.io/randcast/supported-networks-and-parameters)
 
-### Update Log
+## Update Log
 
-- 06/03/20234
+- 06/03/2024
     - Fixed known bugs
     - Separated operator and node client private keys for EigenLayer users
-    - Release new version (0.2.0)
+    - Released new version (0.2.0)
 - 05/24/2024
     - Mainnet published
     - Added log collection component (will not collect sensitive data)
