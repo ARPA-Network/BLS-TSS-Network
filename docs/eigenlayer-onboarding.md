@@ -54,7 +54,7 @@ To serve both Eigenlayer and ARPA architecture, we have 2 types of account, `Ass
 
 - Unlike other account pattern, the `Node` account is also very important, therefore you need to make sure the account secret is secured.
 - Only the `Node` account identity needs to be provided in the configuration file of node-client.
-- When the node is in a non working state(exited or slashed), the `Asset` account can be used to reset the binding relationship of the `Node` account. Please refer to the [Log Off Node Account by Asset Account](#log-off-node-account-by-asset-account) section for more details.
+- When the node is in a non-working state(exited or slashed), the `Asset` account can be used to reset the binding relationship of the `Node` account. Please refer to the [Log Off Node Account by Asset Account](#log-off-node-account-by-asset-account) section for more details.
 
 ## Balance
 
@@ -211,10 +211,9 @@ When the `Node` account needs to be exited from the ARPA Network, you can call t
 
 If the gas estimation fails, this is usually because the node is still in an unfinished DKG grouping process. Please check your `node.log` and find the latest log with "DKG grouping task received." message, wait for 40 blocks after the `assignment_block_height`, and then try again.
 
-If it still fails, please call the `postProcessDkg` method of `Controller` contract by the `Node` account, with `group_index` and `epoch` found in the `node.log` above. This usually does not happen because it is automatically called in the node-client by all group members, and the successful caller is incentivized financially.
-If the problem persists, please contact us.
+If it still fails, please call the `postProcessDkg` method of `Controller` contract by the `Node` account, with `group_index` and `epoch` found in the `node.log` above. This usually does not happen because it is automatically called in the node-client by all group members, and the successful caller is incentivized financially. If the problem persists, please contact us.
 
-Afterwards, the AVS is also deregistered from the Eigenlayer contract, and you can
+Afterwards, the operator is also deregistered from our AVS, and you can
 
 - activate the node, make it groupable and workable again by calling `nodeActivate` method of `NodeRegistry` contract.
 - change the DKG public key by calling `changeDkgPublicKey` method of `NodeRegistry` contract.

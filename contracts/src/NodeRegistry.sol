@@ -202,6 +202,20 @@ contract NodeRegistry is UUPSUpgradeable, INodeRegistry, INodeRegistryOwner, Own
         _nodeQuitHelper(msg.sender, _config.pendingBlockAfterQuit);
     }
 
+    function nodeLogOff() external override(INodeRegistry) {
+        address nodeAccountAddress = _assetAccountsToNodes[msg.sender];
+        if (nodeAccountAddress == address(0)) {
+            revert NodeNotRegistered();
+        }
+        if (_nodes[nodeAccountAddress].state) {
+            revert NodeAlreadyActive();
+        }
+        delete _assetAccountsToNodes[msg.sender];
+        delete _nodesToAssetAccounts[nodeAccountAddress];
+
+        emit AssetAccountSet(msg.sender, address(0));
+    }
+
     function changeDkgPublicKey(bytes calldata dkgPublicKey) external override(INodeRegistry) {
         Node storage node = _nodes[msg.sender];
         if (node.idAddress != msg.sender) {
