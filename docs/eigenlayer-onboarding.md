@@ -8,10 +8,13 @@ The ARPA BLS-TSS Network consists of multiple groups of nodes. Within a group, e
 
 - **Minimum Hardware Requirements**
   Using AWS EC2 as an example, to ensure a steady performance, each node should be hosted on a virtual instance that meets the following specs:
+
   **t2.small (~$23/month)**
+
   - **1** vCPU
   - **2G** Memory
   - **30G** Storage
+
 - [Docker](https://www.docker.com/get-started/)
 - Externally accessible IP and ports
 
