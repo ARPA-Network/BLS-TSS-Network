@@ -7,30 +7,33 @@ The node-client program exits with an error log: "Node is registered with differ
 ## General Guidance
 
 Since there is a mismatch, all we are trying to do here is to remove the mismatch or make they sync up.
-- If the original DB file still exists (which means you maybe just used wrong command), we can try to sync it up 
+
+- If the original DB file still exists (which means you maybe just used wrong command), we can try to sync it up
 - If it does not exist anymore (which means the file is damaged or deleted), we can try to remove it and reset DKG key on-chain.
 
-Below steps require manual operation with DB file and on-chain contract. For the contract part, you are going to need 
+Below steps require manual operation with DB file and on-chain contract. For the contract part, you are going to need
+
 - [NodeRegistry Contract](https://github.com/ARPA-Network/BLS-TSS-Network/blob/0732850fe39f869a7dea899e445dfe6332462ab7/contracts/src/interfaces/INodeRegistry.sol)
 - The address of the contract is listed in our [Official Document](https://docs.arpanetwork.io/randcast/supported-networks-and-parameters)
 
 ## Detailed Steps
 
 0. Stop your existing Docker instance and remove it.
-1. Confirm your node status. 
-    - Go to NodeRegistry and call getNode and check the second last value of the `Node` struct
-    - If `state` is true: call `nodeQuit` by `Node` account to prepare for changing DKG key before continue. (If it fails, contact us via telegram group)
+1. Confirm your node status as non-working:
+   - Go to NodeRegistry and call getNode and check the second last value of the `Node` struct
+   - If `state` is true: call `nodeQuit` by `Node` account to prepare for changing DKG key before continue. Please refer to **Exit Node from ARPA Network** section in our [onboarding doc](/docs/eigenlayer-onboarding.md) for more details.
 2. Database file handling, as mentioned:
-    - If the original DB file does not exist and the file you currently have causes the mismatch, delete your current database file.
-    - If the original DB file still exists, you can try to re-run as long as start command points to it correctly.
+
+   - If the original DB file does not exist and the file you currently have causes the mismatch, delete your current database file.
+   - If the original DB file still exists, you can try to re-run as long as start command points to it correctly.
 
 3. Pull the most recent version of the ARPA Node Client Docker image by running the following command:
 
-    ```docker pull ghcr.io/arpa-network/node-client:latest```
+   `docker pull ghcr.io/arpa-network/node-client:latest`
 
 4. Start the Docker container by running the command in [onboarding doc](/docs/eigenlayer-onboarding.md)
 
-``Note``: If your database file is named differently than "data.sqlite", you need to rename it since by default node client looks for the "data.sqlite" file.
+`Note`: If your database file is named differently than "data.sqlite", you need to rename it since by default node client looks for the "data.sqlite" file.
 
 #### For people without original DB file, please continue.
 
