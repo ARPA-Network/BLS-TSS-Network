@@ -33,6 +33,8 @@ interface INodeRegistry {
 
     function nodeQuit() external;
 
+    function nodeLogOff() external;
+
     function changeDkgPublicKey(bytes calldata dkgPublicKey) external;
 
     function nodeWithdraw(address recipient) external;
