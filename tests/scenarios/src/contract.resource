@@ -94,6 +94,7 @@ Request Randomness
     [Documentation]    Request randomness
     ${key} =    Get Value From Env    USER_PRIVATE_KEY
     ${request_id} =    Contract Function Transact    ${USER_CONTRACT}    getRandomNumber
+    Should Not Be Empty    ${request_id}
     RETURN    ${request_id}
 
 Check Randomness

@@ -57,8 +57,8 @@ def contract_function_transact(contract, function_name, *args):
     function = getattr(contract.functions, function_name)
     max_fee = get_average_gas_price('http://127.0.0.1:8545')
     # Call the function with the provided parameters
-    gas_estimate = function(*args).estimate_gas()
-    result = function(*args).transact({'gasPrice': max_fee, 'gas': int(gas_estimate * 1.2)})
+    #gas_estimate = function(*args).estimate_gas()
+    result = function(*args).transact({'gasPrice': int(max_fee)})
     return result
 
 def get_average_gas_price(url):
@@ -107,10 +107,10 @@ def exec_script(script_name, url='http://localhost:8545'):
     """
     Executes a script from the "contracts/script" directory.
     """
-    #max_fee = get_average_gas_price(url)
+    max_fee = get_average_gas_price(url)
     os.chdir("contracts")
     cmd = ("forge script script/" + script_name
-        + " --fork-url " + url  + " --broadcast --slow")
+        + " --fork-url " + url +  " --with-gas-price " + str(max_fee) + " --broadcast --slow")
     os.system(cmd)
     os.chdir("..")
 
@@ -131,6 +131,7 @@ def get_contract_address_from_file(file_name):
     for transaction in transactions:
         if transaction.get('transactionType') == 'CREATE':
             contract_address = transaction.get('contractAddress')
+            contract_address = to_checksum_address(contract_address)
             contract_name = transaction.get('contractName')
             if contract_address is not None and contract_name is not None:
                 # create a mapping between the contract name and its address
