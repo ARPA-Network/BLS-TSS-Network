@@ -26,35 +26,32 @@ contract StakeOperatorScenarioTestScript is Script {
     Staking internal _staking;
     Arpa internal _arpa;
 
-    uint32 internal _nodePrivateKeyCount = uint32(vm.envUint("NODE_PRIVATE_KEY_COUNT")); // ! New
-
     function run() external {
         _arpa = Arpa(_arpaAddress);
         _staking = Staking(_stakingAddress);
 
         // add operators
         if (_isAddOperator) {
-            // New
-            for (uint32 i = 1; i <= _nodePrivateKeyCount; i++) {
-                string memory keyName = string(abi.encodePacked("NODE_PRIVATE_KEY_", Strings.toString(i)));
-                uint256 privateKey = vm.envUint(keyName);
-                address operator = vm.rememberKey(privateKey);
-                _operators.push(operator);
-
-                address payable toOperator = payable(operator);
-                vm.broadcast(_deployerPrivateKey);
-                toOperator.transfer(1 ether);
-            }
-
-            // Old
-            // for (uint32 i = _stakingNodesIndexOffset; i < _stakingNodesIndexOffset + _stakingNodesIndexLength; i++) {
-            //     address operator = vm.rememberKey(vm.deriveKey(_mnemonic, i));
+            // // New
+            // for (uint32 i = 1; i <= _nodePrivateKeyCount; i++) {
+            //     string memory keyName = string(abi.encodePacked("NODE_PRIVATE_KEY_", Strings.toString(i)));
+            //     uint256 privateKey = vm.envUint(keyName);
+            //     address operator = vm.rememberKey(privateKey);
             //     _operators.push(operator);
 
             //     address payable toOperator = payable(operator);
             //     vm.broadcast(_deployerPrivateKey);
             //     toOperator.transfer(1 ether);
             // }
+
+            for (uint32 i = _stakingNodesIndexOffset; i < _stakingNodesIndexOffset + _stakingNodesIndexLength; i++) {
+                address operator = vm.rememberKey(vm.deriveKey(_mnemonic, i));
+                _operators.push(operator);
+
+                address payable toOperator = payable(operator);
+                vm.broadcast(_deployerPrivateKey);
+                toOperator.transfer(1 ether);
+            }
 
             vm.broadcast(_deployerPrivateKey);
             _staking.addOperators(_operators);

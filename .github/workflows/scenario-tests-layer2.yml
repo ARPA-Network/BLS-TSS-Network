@@ -1,7 +1,7 @@
 name: scenario-test-layer2
 
 on:
-  pull_request:
+  push:
 
 jobs:
   scenario-test-layer2:
@@ -31,7 +31,7 @@ jobs:
           go-version: "^1.20.0"
 
       - name: Clone Optimism
-        run: git clone https://github.com/Andlyn666/optimism.git --recurse-submodules
+        run: git clone -b randcast https://github.com/Andlyn666/optimism.git --recurse-submodules
         working-directory: ../
 
       - name: Setup Rust

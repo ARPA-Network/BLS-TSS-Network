@@ -4,8 +4,9 @@ pragma solidity ^0.8.15;
 import "openzeppelin-contracts/contracts/access/Ownable.sol";
 import "./Adapter.sol";
 import "./interfaces/IController.sol";
+import {ERC1967Proxy} from "openzeppelin-contracts/contracts/proxy/ERC1967/ERC1967Proxy.sol";
 
-contract ControllerProxy {
+contract ControllerProxy is ERC1967Proxy {
     struct ModifiedDkgData {
         bytes publicKey;
         bytes partialPublicKey;
@@ -15,53 +16,7 @@ contract ControllerProxy {
 
     mapping(address => ModifiedDkgData) modifyDkgData;
 
-    constructor(address controller) {
-        setImplementation(controller);
-    }
-
-    /**
-     * @dev Storage slot with the address of the current implementation.
-     * This is the keccak-256 hash of "eip1967.proxy.implementation" subtracted by 1, and is
-     * validated in the constructor.
-     */
-    bytes32 internal constant _IMPLEMENTATION_SLOT = 0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc;
-
-    function implementation() public view returns (address r) {
-        assembly {
-            r := sload(_IMPLEMENTATION_SLOT)
-        }
-    }
-
-    function setImplementation(address newImplementation) public {
-        assembly {
-            sstore(_IMPLEMENTATION_SLOT, newImplementation)
-        }
-    }
-
-    /**
-     * @dev Delegates the current call to `implementation`.
-     *
-     * This function does not return to its internal call site, it will return directly to the external caller.
-     */
-    function _delegate(address _implementation) internal virtual {
-        assembly {
-            // Copy msg.data. We take full control of memory in this inline assembly
-            // block because it will not return to Solidity code. We overwrite the
-            // Solidity scratch pad at memory position 0.
-            calldatacopy(0, 0, calldatasize())
-
-            // Call the implementation.
-            // out and outsize are 0 because we don't know the size yet.
-            let result := delegatecall(gas(), _implementation, 0, calldatasize(), 0, 0)
-
-            // Copy the returned data.
-            returndatacopy(0, 0, returndatasize())
-
-            switch result
-            // delegatecall returns 0 on error.
-            case 0 { revert(0, returndatasize()) }
-            default { return(0, returndatasize()) }
-        }
+    constructor(address _logic, bytes memory _data) ERC1967Proxy(_logic, _data){
     }
 
     function setModifiedPublicKey(address node, bytes calldata publicKey) external {
@@ -110,15 +65,7 @@ contract ControllerProxy {
         params.partialPublicKey = partialPublicKeyModified;
         params.disqualifiedNodes = disqualifiedNodesModified;
 
-        (bool success,) = implementation().delegatecall(abi.encodeWithSelector(IController.commitDkg.selector, params));
+        (bool success,) = _implementation().delegatecall(abi.encodeWithSelector(IController.commitDkg.selector, params));
         require(success, "modified delegatecall reverted");
-    }
-
-    fallback() external payable {
-        _delegate(implementation());
-    }
-
-    receive() external payable {
-        _delegate(implementation());
     }
 }

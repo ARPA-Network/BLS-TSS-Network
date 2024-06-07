@@ -19,6 +19,7 @@ ${PROXY_CONTRACT_ADDRESS}
 ${PROXY_OUTPUT}                          contracts/out/
 ${PROXY_CONTRACT}
 ${CONTROLLER_CONTRACT}
+${NODE_REGISTRY_CONTRACT}
 ${STAKE_CONTRACT}
 ${ADAPTER_CONTRACT}
 ${USER_CONTRACT_ADDRESS}                 NULL
@@ -44,12 +45,12 @@ Set Enviorment And Deploy Contract
     Set Environment Variable    ARPA_ADDRESS    ${contract_addresses['Arpa']}
     Set Environment Variable    CONTROLLER_ADDRESS    ${contract_addresses['ControllerProxy']}
     Set Environment Variable    STAKING_ADDRESS    ${contract_addresses['Staking']}
-    Set Environment Variable   ADAPTER_ADDRESS    ${contract_addresses['ERC1967Proxy']}
+    Set Environment Variable   ADAPTER_ADDRESS    ${contract_addresses['ERC1967Proxy2']}
     ${result} =    Exec Script    StakeOperatorScenarioTest.s.sol:StakeOperatorScenarioTestScript
     Bound Contract ABI
     Set ARPA Address
     Parse Node
-    ${result} =    Create Node Config    ${CONTRACT_ADDRESSES['ControllerProxy']}    ${CONTRACT_ADDRESSES['ERC1967Proxy']}    ${CONTRACT_ADDRESSES['ControllerRelayer']}    31337    []
+    ${result} =    Create Node Config    ${CONTRACT_ADDRESSES['ControllerProxy']}    ${CONTRACT_ADDRESSES['ERC1967Proxy2']}    ${CONTRACT_ADDRESSES['ERC1967Proxy3']}    31337    []
     Clear Database
 
 Init Envioirmnet
@@ -70,6 +71,8 @@ Bound Contract ABI
     Set Global Variable    $PROXY_CONTRACT   ${proxy_contract}
     ${controller_contract} =    Get Contract    ${PROXY_OUTPUT}Controller.sol/Controller.json    ${PROXY_CONTRACT_ADDRESS}
     Set Global Variable    $CONTROLLER_CONTRACT   ${controller_contract}
+    ${node_registry_address} =    Get Contract    ${PROXY_OUTPUT}NodeRegistry.sol/NodeRegistry.json    ${CONTRACT_ADDRESSES['ERC1967Proxy0']}
+    Set Global Variable    $NODE_REGISTRY_CONTRACT   ${node_registry_address}
     ${stake_address} =    Get Value From Env    STAKING_ADDRESS
     ${stake_address} =    To Checksum Address    ${stake_address}
     ${stake_contract} =    Get Contract    ${PROXY_OUTPUT}Staking.sol/Staking.json    ${stake_address}
@@ -339,4 +342,4 @@ Node Quit
     [Documentation]    Node quit
     [Arguments]    ${index}
     ${key} =    Get Private Key By Index    ${index}
-    ${result} =    Cast Send    ${PROXY_CONTRACT_ADDRESS}    "nodeQuit()"    ${key}    ${EMPTY}
+    ${result} =    Cast Send    ${CONTRACT_ADDRESSES['ERC1967Proxy0']}    "nodeQuit()"    ${key}    ${EMPTY}

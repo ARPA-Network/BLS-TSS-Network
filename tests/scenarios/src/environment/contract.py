@@ -107,10 +107,10 @@ def exec_script(script_name, url='http://localhost:8545'):
     """
     Executes a script from the "contracts/script" directory.
     """
-    max_fee = get_average_gas_price(url)
+    #max_fee = get_average_gas_price(url)
     os.chdir("contracts")
     cmd = ("forge script script/" + script_name
-        + " --fork-url " + url +  " --with-gas-price " + str(max_fee) + " --broadcast --slow")
+        + " --fork-url " + url  + " --broadcast --slow")
     os.system(cmd)
     os.chdir("..")
 
@@ -127,13 +127,16 @@ def get_contract_address_from_file(file_name):
 
     # initialize an empty dictionary to hold the mapping
     contract_addresses = {}
-
+    count = 0
     for transaction in transactions:
         if transaction.get('transactionType') == 'CREATE':
             contract_address = transaction.get('contractAddress')
             contract_name = transaction.get('contractName')
             if contract_address is not None and contract_name is not None:
                 # create a mapping between the contract name and its address
+                if (contract_name == "ERC1967Proxy"):
+                    contract_name = "ERC1967Proxy" + str(count)
+                    count += 1
                 contract_addresses[contract_name] = contract_address
             if contract_name is None:
                 contract_addresses['default'] = contract_address
