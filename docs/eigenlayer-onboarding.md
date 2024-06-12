@@ -56,7 +56,7 @@ To serve both Eigenlayer and ARPA architecture, we have 2 types of account, `Ass
 `Note`:
 
 - Unlike other account pattern, the `Node` account is also very important, therefore you need to make sure the account secret is secured.
-- Only the `Node` account identity needs to be provided in the configuration file of node-client.
+- Only the `Node` account identity needs to be provided in the configuration file of `node-client`.
 - When the node is in a non-working state(exited or slashed), the `Asset` account can be used to reset the binding relationship of the `Node` account. Please refer to the [Log Off Node Account by Asset Account](#log-off-node-account-by-asset-account) section for more details.
 
 ## Balance
@@ -107,7 +107,7 @@ Please copy the template below, and to change:
 
 [Config for Mainnet](/docs/config.mainnet.yaml)
 
-### Run below commands to start the node-client:
+### Run below commands to start the `node-client`:
 
 ```bash
 #!/bin/bash
@@ -155,7 +155,8 @@ vi log/node.log
 
 - Warning:
 
-  - Node registration will NOT be automatically performed on the first startup anymore since `V0.2.0`.
+  - Please wait about 1 minute for the `node-client` to fully start, then [confirm the running status](#confirm-running-status).
+  - Node registration will NOT be automatically performed on the first startup anymore since `v0.2.0`.
   - Please **DO NOT move or modify database file** after the first run, and **DO NOT modify node identity configuration arbitrarily**, otherwise errors will occur during runtime. (such as [DKG Key Mismatch](/docs//issue%20fix/dkg-public-key-mismatch.md))
   - It is recommended to **keep the nodes long-running**. Please DO NOT frequently start and stop, which may result in missing grouping or task events and cause unnecessary slashing. (see [Reactivate once Slashed](/docs//issue%20fix/reactivate-once-slashed.md))
   - Please ensure regular backup of the database file `./db/data.sqlite`.
@@ -170,25 +171,35 @@ vi log/node.log
 1. Go to the log and search the log for the keyword "public_key"(or "DKGKeyGenerated") and copy the DKG public key value.
 2. Call `nodeRegister` method of `NodeRegistry` contract, for your reference:
 
-   - Generate the EIP1271 Operator signature for AVS registration with your `Asset` Account
-   - [NodeRegistry Contract](https://github.com/ARPA-Network/BLS-TSS-Network/blob/0732850fe39f869a7dea899e445dfe6332462ab7/contracts/src/interfaces/INodeRegistry.sol#L25)
-   - Contract address listed in our [Official Document](https://docs.arpanetwork.io/randcast/supported-networks-and-parameters)
-   - Example call data should look like this
+- Currently, sending transactions through Etherscan may encounter issues with incorrect number of parameters. We recommend using [Foundry Cast](https://book.getfoundry.sh/reference/cast/cast-send) or other programming language libraries for registration.
+- [NodeRegistry Contract](https://github.com/ARPA-Network/BLS-TSS-Network/blob/0732850fe39f869a7dea899e445dfe6332462ab7/contracts/src/interfaces/INodeRegistry.sol#L25)
+- [Generate the EIP1271 Operator signature](#generate-the-eip1271-operator-signature-for-avs-registration-with-your-asset-account)
+- Contract address listed in our [Official Document](https://docs.arpanetwork.io/randcast/supported-networks-and-parameters)
+- Example calldata should look like this
 
-   | Name                            | Type    | Data                                                                                                                                                                                                                                                               |
-   | ------------------------------- | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-   | dkgPublicKey                    | bytes   | 0x1b0eec420a74cdd1fdbf7ed48c03b70ddfd2507f14aa54a2bbdefe6a92da93b72832d11c106610b175cc04b3fd7d5b6b869d0571d80b5c240b9213d8e1a1d0b7030f40df5cd261d4497ba15de4bb1769ec45c0ecc69a477fbecfc82c96668916042a01a85083f80174c55b5d6959ba3c29c589676978a37d4f6646c4bb6da116 |
-   | isEigenlayerNode                | bool    | true                                                                                                                                                                                                                                                               |
-   | assetAccountSignature.signature | bytes   | 0x444c3c9a6d487299162b02ac7e705ba533bc03445eda8d2e4f498bf430cbe21421a3c8933b0fa08e5fb43ee2a38896028694accebd0f77620eebf9bb93a3d4fc1c                                                                                                                               |
-   | assetAccountSignature.salt      | bytes32 | 0x7fe94cad56d5aaeb5921b08ca90668654210fde42fed0c9507e8b5d796491bfc                                                                                                                                                                                                 |
-   | assetAccountSignature.expiry    | uint256 | 1717429132                                                                                                                                                                                                                                                         |
+| Name                            | Type    | Data                                                                                                                                                                                                                                                               |
+| ------------------------------- | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| dkgPublicKey                    | bytes   | 0x1b0eec420a74cdd1fdbf7ed48c03b70ddfd2507f14aa54a2bbdefe6a92da93b72832d11c106610b175cc04b3fd7d5b6b869d0571d80b5c240b9213d8e1a1d0b7030f40df5cd261d4497ba15de4bb1769ec45c0ecc69a477fbecfc82c96668916042a01a85083f80174c55b5d6959ba3c29c589676978a37d4f6646c4bb6da116 |
+| isEigenlayerNode                | bool    | true                                                                                                                                                                                                                                                               |
+| assetAccountAddress             | address | 0xE473d420C10a4e12c90408198B750Bf38a92Fa16                                                                                                                                                                                                                         |
+| assetAccountSignature.signature | bytes   | 0x444c3c9a6d487299162b02ac7e705ba533bc03445eda8d2e4f498bf430cbe21421a3c8933b0fa08e5fb43ee2a38896028694accebd0f77620eebf9bb93a3d4fc1c                                                                                                                               |
+| assetAccountSignature.salt      | bytes32 | 0x7fe94cad56d5aaeb5921b08ca90668654210fde42fed0c9507e8b5d796491bfc                                                                                                                                                                                                 |
+| assetAccountSignature.expiry    | uint256 | 1717429132                                                                                                                                                                                                                                                         |
 
-   - For more information about signature generation, please refer to [eigenlayer doc](https://github.com/Layr-Labs/eigenlayer-contracts/blob/dev/docs/core/AVSDirectory.md#registeroperatortoavs)
+Note: After successful registration transaction, it is normal to NOT have instant log output in node.log since it may be waiting for other nodes to group.
 
-3. After successful registration transaction, it is normal to NOT have instant log output in node.log since it may be waiting for other nodes to group.
+#### Generate the EIP1271 Operator signature for AVS registration with your `Asset` Account
+
+- The signature we need is the same as the signature needed by the `registerOperatorToAVS` method in the `AVSDirectory` contract, used for proving that the `Node` account has the right to register the corresponding operator to our ARPA Network AVS.
+- For more information about the format of the signature, please refer to [Eigenlayer AVSDirectory Doc](https://github.com/Layr-Labs/eigenlayer-contracts/blob/dev/docs/core/AVSDirectory.md#registeroperatortoavs).
+- If you are a smart-contract operator, please upgrade the contract to generate / verify the signature. If you are an EOA operator, we have prepared a script that you can modify the parameters to run directly, or refer to the content to obtain the `digest_hash` of the signature and sign it with your operator account.
+  - [signature-generation-holesky.sh](/docs/signature-generation-holesky.sh)
+  - [signature-generation-mainnet.sh](/docs/signature-generation-mainnet.sh)
+- Our AVS contract is named `ServiceManager` and the address is listed in our [Official Document](https://docs.arpanetwork.io/randcast/supported-networks-and-parameters).
 
 ### Confirm Running Status
 
+- New logs are generated after the `node-client` starts up.
 - The following ports should be listening (according to your config). You can try to access those ports from external environments (such as telnet)
   - node_advertised_committer_rpc_endpoint: "<EXTERNAL_IP>:50061"
   - node_management_rpc_endpoint: "0.0.0.0:50091"
@@ -214,7 +225,7 @@ When the `Node` account needs to be exited from the ARPA Network, you can call t
 
 If the gas estimation fails, this is usually because the node is still in an unfinished DKG grouping process. Please check your `node.log` and find the latest log with "DKG grouping task received." message, wait for 40 blocks after the `assignment_block_height`, and then try again.
 
-If it still fails, please call the `postProcessDkg` method of `Controller` contract by the `Node` account, with `group_index` and `epoch` found in the `node.log` above. This usually does not happen because it is automatically called in the node-client by all group members, and the successful caller is incentivized financially. If the problem persists, please contact us.
+If it still fails, please call the `postProcessDkg` method of `Controller` contract by the `Node` account, with `group_index` and `epoch` found in the `node.log` above. This usually does not happen because it is automatically called in the `node-client` by all group members, and the successful caller is incentivized financially. If the problem persists, please contact us.
 
 Afterwards, the operator is also deregistered from our AVS, and you can
 
