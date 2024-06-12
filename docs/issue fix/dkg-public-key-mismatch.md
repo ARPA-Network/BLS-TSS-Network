@@ -35,11 +35,13 @@ Below steps require manual operation with DB file and on-chain contract. For the
 
 `Note`: If your database file is named differently than "data.sqlite", you need to rename it since by default node client looks for the "data.sqlite" file.
 
-#### For people without original DB file, please continue.
+#### For people with original DB file, skip step 5-7
 
 5. After about 1 minute, you should expect the program to exit with error log "Node is registered with different dkg public key", search the log for the keyword "public_key"(or "DKGKeyGenerated") and copy the public key value.
 6. Call the `changeDkgPublicKey` contract method manually by `Node` account with your generated public key.
 7. Re-run your node-client
+
+#### Rejoin ARPA network
 8. Generate the EIP1271 Operator signature for AVS registration with your `Asset` Account (for details, check our [onboarding doc](/docs/eigenlayer-onboarding.md))
 9. Call `nodeActivate` method by `Node` account to activate your node again.
 10. You should now expect it to group correctly
