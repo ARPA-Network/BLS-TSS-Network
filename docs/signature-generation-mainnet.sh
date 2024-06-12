@@ -7,7 +7,7 @@ operator_address= "<your operator address>"
 avs_address= "0x1DE75EaAb2df55d467494A172652579E6FA4540E" # Our AVS contract address
 salt= "<your salt value>" #example: "0x4d4b520000000000000000000000000000000000000000000000000000000000", just make sure you pick some random value that wasn’t used previously
 expiry= "<your expiry value>" #example: "134234235" This is the expiration time for your signature.
-rpc_url= "<your holesky rpc endpoint url>"
+rpc_url= "<your mainnet rpc endpoint url>"
 
 # Call calculateOperatorAVSRegistrationDigestHash function provided by eigenlayer contract 
 # Note, if you want to do step #1 through etherscan, here is the link: https://holesky.etherscan.io/address/0x055733000064333CaDDbC92763c58BF0192fFeBf#readProxyContract
