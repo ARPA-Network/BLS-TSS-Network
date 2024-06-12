@@ -1,7 +1,7 @@
 #!/bin/bash
 # Parameters needed
 
-avs_directory_address="0x135dda560e946695d6f155dacafc6f1f25c1f5af" # Eigen AVS address on holesky testnet
+avs_directory_address="0x135dda560e946695d6f155dacafc6f1f25c1f5af" # Eigen AVS address on mainnet testnet
 function_signature="calculateOperatorAVSRegistrationDigestHash(address,address,bytes32,uint256)(bytes32)"
 operator_address= "<your operator address>"
 avs_address= "0x1DE75EaAb2df55d467494A172652579E6FA4540E" # Our AVS contract address
@@ -9,8 +9,7 @@ salt= "<your salt value>" #example: "0x4d4b5200000000000000000000000000000000000
 expiry= "<your expiry value>" #example: "134234235" This is the expiration time for your signature.
 rpc_url= "<your mainnet rpc endpoint url>"
 
-# Call calculateOperatorAVSRegistrationDigestHash function provided by eigenlayer contract 
-# Note, if you want to do step #1 through etherscan, here is the link: https://holesky.etherscan.io/address/0x055733000064333CaDDbC92763c58BF0192fFeBf#readProxyContract
+# Call calculateOperatorAVSRegistrationDigestHash function provided by eigenlayer contract
 
 echo "Calling calculateOperatorAVSRegistrationDigestHash function..."
 digest_hash=$(cast call $avs_directory_address "$function_signature" $operator_address $avs_address $salt $expiry --rpc-url $rpc_url)
