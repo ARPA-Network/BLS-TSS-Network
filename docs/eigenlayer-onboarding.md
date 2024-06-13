@@ -48,13 +48,14 @@ Besides the cooperation agreement, there are three types of rewards a node can e
 
 Before we start, let's talk about some basic concepts.
 
-To serve both Eigenlayer and ARPA architecture, we have 2 types of account, `Asset` and `Node` account.
+To serve both Eigenlayer and ARPA architecture, we have 2 types of ECDSA account, `Asset` account and `Node` account.
 
-- Asset Account: **Eigenlayer Operator account**, which is used for registration check, and slashing purposes (not implemented yet).
-- Node Account: **The account that interacts with ARPA**, which is used for identity in ARPA network, gas provision and rewards. You may use same account info as your asset account or create a new ECDSA account as you wish.
+- Asset Account: **Eigenlayer Operator account**, which is used for registration check, and slashing purposes (not implemented by EL yet).
+- Node Account: **The account that interacts with ARPA**, which is used for identity & operation in ARPA network, gas provision and rewards. Please be informed that **all on-chain operations**, except for `nodeLogOff`, should be sent by the `Node` account(as `msg.sender`).
 
 `Note`:
 
+- If your account management strategy allows, the `Asset` account and `Node` account can be the same.
 - Unlike other account pattern, the `Node` account is also very important, therefore you need to make sure the account secret is secured.
 - Only the `Node` account identity needs to be provided in the configuration file of `node-client`.
 - When the node is in a non-working state(exited or slashed), the `Asset` account can be used to reset the binding relationship of the `Node` account. Please refer to the [Log Off Node Account by Asset Account](#log-off-node-account-by-asset-account) section for more details.
@@ -169,9 +170,21 @@ vi log/node.log
 ### Register to ARPA Network:
 
 1. Go to the log and search the log for the keyword "public_key"(or "DKGKeyGenerated") and copy the DKG public key value.
-2. Call `nodeRegister` method of `NodeRegistry` contract, for your reference:
+2. Call `nodeRegister` method of `NodeRegistry` contract by your `Node` account, for your reference:
 
 - Currently, sending transactions through Etherscan may encounter issues with incorrect number of parameters. We recommend using [Foundry Cast](https://book.getfoundry.sh/reference/cast/cast-send) or other programming language libraries for registration.
+
+  - for reference, the command should look like this:
+
+    ```
+    cast send --rpc-url $NETWORK_PROVIDER_RPC_URL --interactive $ARPA_NODE_REGISTERY_CONTRACT_ADDRESS \
+    "nodeRegister(bytes,bool,address,(bytes,bytes32,uint256))" \
+    $ARPA_DKG_PUBLIC_KEY \
+    true \
+    $ARPA_ASSET_ACCOUNT_ADDRESS \
+    "($ARPA_ASSET_ACCOUNT_SIGNATURE,$ARPA_ASSET_ACCOUNT_SALT,$ARPA_ASSET_ACCOUNT_EXPIRY)"
+    ```
+
 - [NodeRegistry Contract](https://github.com/ARPA-Network/BLS-TSS-Network/blob/0732850fe39f869a7dea899e445dfe6332462ab7/contracts/src/interfaces/INodeRegistry.sol#L25)
 - [Generate the EIP1271 Operator signature](#generate-the-eip1271-operator-signature-for-avs-registration-with-your-asset-account)
 - Contract address listed in our [Official Document](https://docs.arpanetwork.io/randcast/supported-networks-and-parameters)
