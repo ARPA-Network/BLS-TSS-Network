@@ -118,7 +118,11 @@ cd <YOUR_ARPA_NETWORK_ROOT_DIRECTORY>
 # Use `node-config-checker` to make the integrity check
 # It will print out the address of the account provided in the configuration file,
 # otherwise the error reason will be printed
-docker run -v ./config.yml:/app/config.yml ghcr.io/arpa-network/node-config-checker:latest "node-config-checker -c /app/config.yml"
+# If you choose to use keystore, please provide Node account keystore file path on your host machine.
+docker run \
+-v ./config.yml:/app/config.yml \
+-v <path of node account keystore file>:/app/node.keystore \
+ghcr.io/arpa-network/node-config-checker:latest "node-config-checker -c /app/config.yml"
 
 # Create the necessary directories if it's your first run
 mkdir db
@@ -145,13 +149,13 @@ docker run -d \
 --network=host \
 ghcr.io/arpa-network/node-client:latest
 
-# To login the docker container and check the stdout_log
+# To check the node.log on the host machine
+vi <path of log folder>/node.log
+
+# (Optional)To login the docker container and check the stdout_log
 docker exec -it arpa-node sh
 / # vi /var/log/randcast_node_client.log
 / # exit
-
-# To check the node.log on the host machine
-vi log/node.log
 ```
 
 - Warning:
@@ -205,7 +209,7 @@ Note: After successful registration transaction, it is normal to NOT have instan
 
 - The signature we need is the same as the signature needed by the `registerOperatorToAVS` method in the `AVSDirectory` contract, used for proving that the `Node` account has the right to register the corresponding operator to our ARPA Network AVS.
 - For more information about the format of the signature, please refer to [Eigenlayer AVSDirectory Doc](https://github.com/Layr-Labs/eigenlayer-contracts/blob/dev/docs/core/AVSDirectory.md#registeroperatortoavs).
-- If you are a smart-contract operator, please upgrade the contract to generate / verify the signature. If you are an EOA operator, we have prepared a script that you can modify the parameters to run directly, or refer to the content to obtain the `digest_hash` of the signature and sign it with your operator account.
+- If you are a smart-contract operator, please upgrade the contract to generate / verify the signature. If you are an EOA operator, we have prepared a script that you can modify the parameters to run it directly to get the signature, or refer to the content to obtain the `digest_hash` of the signature and sign it with your operator account.
   - [signature-generation-holesky.sh](/docs/signature-generation-holesky.sh)
   - [signature-generation-mainnet.sh](/docs/signature-generation-mainnet.sh)
 - Our AVS contract is named `ServiceManager` and the address is listed in our [Official Document](https://docs.arpanetwork.io/randcast/supported-networks-and-parameters).
