@@ -20,5 +20,5 @@ echo "Digest hash: $digest_hash"
 # 1. The "--no-hash" tag is essential for this signature to work
 # 2. Original issue reference: https://github.com/foundry-rs/foundry/issues/6794
 echo "Signing digest hash..."
-signature=$(cast wallet sign {$digest_hash} --interactive --no-hash)
+signature=$(cast wallet sign $digest_hash --interactive --no-hash)
 echo "Signature: $signature"
