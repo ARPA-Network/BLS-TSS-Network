@@ -9,8 +9,7 @@ salt= "<your salt value>" #example: "0x4d4b5200000000000000000000000000000000000
 expiry= "<your expiry value>" #example: "134234235" This is the expiration time for your signature.
 rpc_url= "<your holesky rpc endpoint url>"
 
-# Call calculateOperatorAVSRegistrationDigestHash function provided by eigenlayer contract 
-# Note, if you want to do step #1 through etherscan, here is the link: https://holesky.etherscan.io/address/0x055733000064333CaDDbC92763c58BF0192fFeBf#readProxyContract
+# Call calculateOperatorAVSRegistrationDigestHash function provided by eigenlayer contract
 
 echo "Calling calculateOperatorAVSRegistrationDigestHash function..."
 digest_hash=$(cast call $avs_directory_address "$function_signature" $operator_address $avs_address $salt $expiry --rpc-url $rpc_url)
@@ -21,5 +20,5 @@ echo "Digest hash: $digest_hash"
 # 1. The "--no-hash" tag is essential for this signature to work
 # 2. Original issue reference: https://github.com/foundry-rs/foundry/issues/6794
 echo "Signing digest hash..."
-signature=$(cast wallet sign {$digest_hash} --interactive --no-hash)
+signature=$(cast wallet sign $digest_hash --interactive --no-hash)
 echo "Signature: $signature"
