@@ -51,27 +51,29 @@ Before we start, let's talk about some basic concepts.
 To serve both Eigenlayer and ARPA architecture, we have 2 types of ECDSA account, `Asset` account and `Node` account.
 
 - Asset Account: **Eigenlayer Operator account**, which is used for registration check, and slashing purposes (not implemented by EL yet).
-- Node Account: **The account that interacts with ARPA**, which is used for identity & operation in ARPA network, gas provision and rewards. Please be informed that **all on-chain operations**, except for `nodeLogOff`, should be sent by the `Node` account(as `msg.sender`).
+  - This is only actively used for generating the signature for EL AVS registration and calling the `nodeLogOff` method.
+- Node Account: **The account that interacts with ARPA**, which is used for identity & operation in ARPA network, gas provision and rewards.
+  - Please be informed that **all on-chain operations, except for `nodeLogOff`, should be sent by the `Node` account(as `msg.sender`)**.
+  - Only the `Node` account identity needs to be provided in the configuration file of `node-client`.
+  - Unlike other account pattern, the `Node` account is also very important, therefore you need to make sure the account secret is secured.
 
 `Note`:
 
 - If your account management strategy allows, the `Asset` account and `Node` account can be the same.
-- Unlike other account pattern, the `Node` account is also very important, therefore you need to make sure the account secret is secured.
-- Only the `Node` account identity needs to be provided in the configuration file of `node-client`.
 - When the node is in a non-working state(exited or slashed), the `Asset` account can be used to reset the binding relationship of the `Node` account. Please refer to the [Log Off Node Account by Asset Account](#log-off-node-account-by-asset-account) section for more details.
 
 ## Balance
 
-For gas fee of grouping operations and task submission, please ensure you have a sufficient ETH balance ready on all the L1/L2s `Node` account that you need to support, which currently are:
+**To avoid unnecessary slashes**, for gas fee of grouping operations and task submission, please **keep your account balance above 0.2 ETH** on all the L1/L2s `Node` account that you need to support, which currently are:
 
 - Testnet
   - ETH Holesky (17000)
-  - Redstone Garnet (17069)
+  - [Redstone Garnet (17069)](https://garnetchain.com/deposit)
 - Mainnet
   - ETH Mainnet (1)
-  - OP Mainnet (10)
-  - Base Mainnet (8453)
-  - Redstone Mainnet (690)
+  - [OP Mainnet (10)](https://app.optimism.io/bridge/deposit)
+  - [Base Mainnet (8453)](https://bridge.base.org/deposit)
+  - [Redstone Mainnet (690)](https://redstone.xyz/deposit)
 
 **_Note:_** The gas cost of fulfilling tasks(the signature verification and callback function) is directly paid by the committer node and then reimbursed by the requesting user. `Node` account can retrieve both the prepaid ETH and extra ARPA reward at any time by calling the `nodeWithdraw` method from the `NodeRegistry` contract on L1, or `ControllerOracle` contract on L2s.
 
@@ -172,10 +174,10 @@ docker exec -it arpa-node sh
   - At present, we will collect data in log file `node.log` to locate and troubleshoot issues, but please note that the logs **WILL NOT** contain node private content or running environment metrics
   - To run multiple node clients on the same machine, you may need to change the path to "/<YOUR_EXPECTED_SUBFOLDER>" behind of the "db" or "log" directory.
 
-### Register to ARPA Network:
+### Register to ARPA Network by your `Node` account:
 
-1. Go to the log and search the log for the keyword "public_key"(or "DKGKeyGenerated") and copy the DKG public key value.
-2. Call `nodeRegister` method of `NodeRegistry` contract by your `Node` account, for your reference:
+1. Keep the `node-client` running, go to the log and search the log for the keyword "public_key"(or "DKGKeyGenerated") and copy the DKG public key value.
+2. Call `nodeRegister` method of `NodeRegistry` contract **by your `Node` account**, for your reference:
 
 - Currently, sending transactions through Etherscan may encounter issues with incorrect number of parameters. We recommend using [Foundry Cast](https://book.getfoundry.sh/reference/cast/cast-send) or other programming language libraries for registration.
 
@@ -254,7 +256,20 @@ Afterwards, the operator is also deregistered from our AVS, and you can
 ## Troubleshooting
 
 If you encounter on-chain operation issues, we recommend using [Tenderly Simulation UI](https://docs.tenderly.co/simulator-ui/using-simulation-ui)
-to simulate the transaction and sharing it with us.
+to simulate the transaction and sharing it with us. To give calldata including the tuple struct, you should use json format like below:
+
+```json
+{
+  "dkgPublicKey": "0x1b0eec420a74cdd1fdbf7ed48c03b70ddfd2507f14aa54a2bbdefe6a92da93b72832d11c106610b175cc04b3fd7d5b6b869d0571d80b5c240b9213d8e1a1d0b7030f40df5cd261d4497ba15de4bb1769ec45c0ecc69a477fbecfc82c96668916042a01a85083f80174c55b5d6959ba3c29c589676978a37d4f6646c4bb6da116",
+  "isEigenlayerNode": true,
+  "assetAccountAddress": "0xE473d420C10a4e12c90408198B750Bf38a92Fa16",
+  "assetAccountSignature": {
+    "signature": "0x444c3c9a6d487299162b02ac7e705ba533bc03445eda8d2e4f498bf430cbe21421a3c8933b0fa08e5fb43ee2a38896028694accebd0f77620eebf9bb93a3d4fc1c",
+    "salt": "0x7fe94cad56d5aaeb5921b08ca90668654210fde42fed0c9507e8b5d796491bfc",
+    "expiry": 1717429132
+  }
+}
+```
 
 Other typical known issues fix:
 
