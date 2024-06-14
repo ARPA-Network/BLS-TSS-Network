@@ -120,6 +120,7 @@ cd <YOUR_ARPA_NETWORK_ROOT_DIRECTORY>
 # otherwise the error reason will be printed
 # If you choose to use keystore, please provide Node account keystore file path on your host machine.
 docker run \
+-w /app \
 -v ./config.yml:/app/config.yml \
 -v <path of node account keystore file>:/app/node.keystore \
 ghcr.io/arpa-network/node-config-checker:latest "node-config-checker -c /app/config.yml"
@@ -252,7 +253,10 @@ Afterwards, the operator is also deregistered from our AVS, and you can
 
 ## Troubleshooting
 
-Known issues fix:
+If you encounter on-chain operation issues, we recommend using [Tenderly Simulation UI](https://docs.tenderly.co/simulator-ui/using-simulation-ui)
+to simulate the transaction and sharing it with us.
+
+Other typical known issues fix:
 
 - [DKG Key Mismatch](/docs//issue%20fix/dkg-public-key-mismatch.md)
 - [Reactivate once Slashed](/docs//issue%20fix/reactivate-once-slashed.md)
