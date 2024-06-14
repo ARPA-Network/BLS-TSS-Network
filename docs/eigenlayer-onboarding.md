@@ -64,7 +64,7 @@ To serve both Eigenlayer and ARPA architecture, we have 2 types of ECDSA account
 
 ## Balance
 
-**To avoid unnecessary slashes**, for gas fee of grouping operations and task submission, please **keep your account balance above 0.2 ETH** on all the L1/L2s `Node` account that you need to support, which currently are:
+**To avoid unnecessary slashes**, for gas fee of grouping operations and task submission, please **keep your `Node` account balance above 0.2 ETH** on all the L1/L2s that you need to support, which currently are:
 
 - Testnet
   - ETH Holesky (17000)
@@ -75,7 +75,10 @@ To serve both Eigenlayer and ARPA architecture, we have 2 types of ECDSA account
   - [Base Mainnet (8453)](https://bridge.base.org/deposit)
   - [Redstone Mainnet (690)](https://redstone.xyz/deposit)
 
-**_Note:_** The gas cost of fulfilling tasks(the signature verification and callback function) is directly paid by the committer node and then reimbursed by the requesting user. `Node` account can retrieve both the prepaid ETH and extra ARPA reward at any time by calling the `nodeWithdraw` method from the `NodeRegistry` contract on L1, or `ControllerOracle` contract on L2s.
+**_Note:_**
+
+- The gas consumption of `Node` account on mainnet generally does not exceed 0.2 ETH within a month, depending on the joining and exiting behavior of nodes in the same group. Please make sure to maintain sufficient balance on mainnet to avoid being unable to respond during the grouping process and triggering a slash.
+- The gas cost of fulfilling tasks(the signature verification and callback function) is directly paid by the committer node and then reimbursed by the requesting user. `Node` account can retrieve both the prepaid ETH and extra ARPA reward at any time by calling the `nodeWithdraw` method from the `NodeRegistry` contract on L1, or `ControllerOracle` contract on L2s.
 
 ## Setup Steps
 
