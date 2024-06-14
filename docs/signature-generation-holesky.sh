@@ -3,11 +3,11 @@
 
 avs_directory_address="0x055733000064333CaDDbC92763c58BF0192fFeBf" # Eigen AVS address on holesky testnet
 function_signature="calculateOperatorAVSRegistrationDigestHash(address,address,bytes32,uint256)(bytes32)"
-operator_address= "<your operator address>"
-avs_address= "0xd36b6E5eEe8311d7Bffb2f3Bb33301A1AB7De101" # Our AVS contract address
-salt= "<your salt value>" #example: "0x4d4b520000000000000000000000000000000000000000000000000000000000", just make sure you pick some random value that wasn’t used previously
-expiry= "<your expiry value>" #example: "134234235" This is the expiration time for your signature.
-rpc_url= "<your holesky rpc endpoint url>"
+operator_address="<your operator address>"
+avs_address="0xd36b6E5eEe8311d7Bffb2f3Bb33301A1AB7De101" # Our AVS contract address
+salt="<your salt value>" #example: "0x4d4b520000000000000000000000000000000000000000000000000000000000", just make sure you pick some random value that wasn’t used previously
+expiry="<your expiry value>" #example: "134234235" This is the expiration time for your signature.
+rpc_url="<your holesky rpc endpoint url>"
 
 # Call calculateOperatorAVSRegistrationDigestHash function provided by eigenlayer contract
 

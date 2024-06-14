@@ -3,11 +3,11 @@
 
 avs_directory_address="0x135dda560e946695d6f155dacafc6f1f25c1f5af" # Eigen AVS address on mainnet testnet
 function_signature="calculateOperatorAVSRegistrationDigestHash(address,address,bytes32,uint256)(bytes32)"
-operator_address= "<your operator address>"
-avs_address= "0x1DE75EaAb2df55d467494A172652579E6FA4540E" # Our AVS contract address
-salt= "<your salt value>" #example: "0x4d4b520000000000000000000000000000000000000000000000000000000000", just make sure you pick some random value that wasn’t used previously
-expiry= "<your expiry value>" #example: "134234235" This is the expiration time for your signature.
-rpc_url= "<your mainnet rpc endpoint url>"
+operator_address="<your operator address>"
+avs_address="0x1DE75EaAb2df55d467494A172652579E6FA4540E" # Our AVS contract address
+salt="<your salt value>" #example: "0x4d4b520000000000000000000000000000000000000000000000000000000000", just make sure you pick some random value that wasn’t used previously
+expiry="<your expiry value>" #example: "134234235" This is the expiration time for your signature.
+rpc_url="<your mainnet rpc endpoint url>"
 
 # Call calculateOperatorAVSRegistrationDigestHash function provided by eigenlayer contract
 
