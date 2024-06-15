@@ -42,6 +42,7 @@ Below steps require manual operation with DB file and on-chain contract. For the
 7. Re-run your node-client
 
 #### Rejoin ARPA network
-8. Generate the EIP1271 Operator signature for AVS registration with your `Asset` Account (for details, check our [onboarding doc](/docs/eigenlayer-onboarding.md))
+
+8. Generate the EIP1271 Operator signature for AVS registration with your `Asset` Account (for details, check our [onboarding doc](/docs/eigenlayer-onboarding.md#generate-the-eip1271-operator-signature-for-avs-registration-with-your-asset-account))
 9. Call `nodeActivate` method by `Node` account to activate your node again.
 10. You should now expect it to group correctly
