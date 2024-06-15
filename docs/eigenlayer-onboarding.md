@@ -91,6 +91,12 @@ Please copy the template below, and to change:
 - node_management_rpc_endpoint, node_management_rpc_token (Optional)
 - listeners and time_limits (Optional and please modify carefully if needed)
 
+**_Warning:_**
+
+- Please **DO NOT use comments** in the config file.
+- Please confirm that the `node_advertised_committer_rpc_endpoint` **can be accessed by the external network**.
+- All provider endpoints require the use of WSS connections. **To avoid unnecessary slashes**, please ensure the quality of WSS connections, **especially on mainnet**, and **select a provider plan that supports auto scaling**. We test and recommend Tenderly's Starter plan.
+
 **_Note:_**
 
 - The contract addresses in the following example are currently the latest available.
@@ -102,8 +108,6 @@ Please copy the template below, and to change:
       password: <KEYSTORE_PASSWORD>
       path: node.keystore
   ```
-- Please **DO NOT use comments** in the config file.
-- Please confirm that the `node_advertised_committer_rpc_endpoint` can be accessed by the external network.
 
 **Testnet config.yml example**
 
@@ -236,15 +240,17 @@ Note: After successful registration transaction, it is normal to NOT have instan
 
 ### Log Off Node Account by Asset Account:
 
-When the `Node` account needs to be replaced, make sure the `Node` account is in a non-working state (exited or slashed), then you can use the `Asset` account to call the `nodeLogOff` method of `NodeRegistry` contract, to reset the binding relationship between the `Asset` account and the `Node` account.
+If you need to reset the Node account, refer to troubleshooting [Reset Node Account](/docs//issue%20fix/reset-node-account.md).
 
-Afterwards, you can register a new `Node` account by calling `nodeRegister` method of `NodeRegistry` contract, to update the binding relationship between the `Asset` account and the `Node` account.
+When the `Node` account needs to be replaced, make sure the `Node` account is in a non-working state (exited or slashed), then use the `Asset` account to call the `nodeLogOff` method of `NodeRegistry` contract, to reset the binding relationship between the `Asset` account and the `Node` account.
+
+Afterwards, register a new `Node` account by calling `nodeRegister` method of `NodeRegistry` contract, to update the binding relationship between the `Asset` account and the `Node` account.
 
 The old `Node` account **cannot** be activated or bound again. If you still hold its private key, you can retrieve the accumulated rewards through `nodeWithdraw` from the `NodeRegistry` contract.
 
 ### Exit Node from ARPA Network:
 
-When the `Node` account needs to be exited from the ARPA Network, you can call the `nodeQuit` method of `NodeRegistry` contract by the `Node` account.
+When the `Node` account needs to be exited from the ARPA Network, call the `nodeQuit` method of `NodeRegistry` contract by the `Node` account.
 
 If the gas estimation fails, this is usually because the node is still in an unfinished DKG grouping process. Please check your `node.log` and find the latest log with "DKG grouping task received." message, wait for 40 blocks after the `assignment_block_height`, and then try again.
 
@@ -276,6 +282,7 @@ to simulate the transaction and sharing it with us. To give calldata including t
 
 Other typical known issues fix:
 
+- [Reset Node Account](/docs//issue%20fix/reset-node-account.md)
 - [DKG Key Mismatch](/docs//issue%20fix/dkg-public-key-mismatch.md)
 - [Reactivate once Slashed](/docs//issue%20fix/reactivate-once-slashed.md)
 
