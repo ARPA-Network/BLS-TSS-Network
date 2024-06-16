@@ -30,7 +30,7 @@ It consists of:
 
 The ARPA Node Client is a long-running program to run the ARPA node.
 
-If the data path in the config file doesn't exist, as the first time to run the node, the client will generate a DKG keypair(served as the identity during a grouping process), then register the node address with dkg public key to the ARPA Network on-chain. In early access, make sure the address of the node has been added to eligible operators list in the Staking contract with sufficient stake in advance.
+If the data path in the config file doesn't exist, as the first time to run the node, the client will generate a DKG keypair(served as the identity during a grouping process).
 
 ## Usage
 
@@ -69,7 +69,7 @@ cargo run --bin node-config-checker -- -c conf/config.yml
 
 # ARPA Node CLI
 
-The ARPA Node CLI is a fast and verbose REPL for the operator of a ARPA node. The same node config file as ARPA Node Client will be used. As a supplement to ARPA Node Client, it provides a set of commands to inspect the node status and interact with the on-chain contracts, e.g. register node to the network manually when error occurs in the node client.
+The ARPA Node CLI is a fast and verbose REPL for the operator of a ARPA node. The same node config file as ARPA Node Client will be used. As a supplement to ARPA Node Client, it provides a set of commands to inspect the node status and interact with the on-chain contracts, e.g. register node to the network manually as an Eigenlayer EOA operator.
 
 ## Usage
 
@@ -314,10 +314,18 @@ Configuration items in [`conf/config.yml`](conf/config.yml) are listed here:
 
     To protect secrets, several items can be set with literal `env` as placeholder. Their env keys are:
 
-  - ARPA_NODE_MANAGEMENT_SERVER_TOKEN (node_management_rpc_token)
-  - ARPA_NODE_ACCOUNT_PRIVATE_KEY (account, private_key)
-  - ARPA_NODE_ACCOUNT_KEYSTORE_PASSWORD (account, keystore, password)
-  - ARPA_NODE_HD_ACCOUNT_MNEMONIC (account, hdwallet, mnemonic)
+    - ARPA_NODE_MANAGEMENT_SERVER_TOKEN (node_management_rpc_token)
+    - ARPA_NODE_ACCOUNT_PRIVATE_KEY (account, private_key)
+    - ARPA_NODE_ACCOUNT_KEYSTORE_PASSWORD (account, keystore, password)
+    - ARPA_NODE_HD_ACCOUNT_MNEMONIC (account, hdwallet, mnemonic)
+
+    Items below can also be set with arbitrary environment variables starting with `$`:
+
+    - $<CUSTOMIZED_ENV_VARIABLE_KEY>(provider_endpoint / relayed_chains.provider_endpoint)
+    - $<CUSTOMIZED_ENV_VARIABLE_KEY>(node_management_rpc_token)
+    - $<CUSTOMIZED_ENV_VARIABLE_KEY>(account, private_key)
+    - $<CUSTOMIZED_ENV_VARIABLE_KEY>(account, keystore, password)
+    - $<CUSTOMIZED_ENV_VARIABLE_KEY>(account, hdwallet, mnemonic)
 
 - time_limits(Optional): Config time limits for different tasks. All the time limits are in milliseconds or block numbers.
 
