@@ -192,6 +192,9 @@ If you are EOA operator, we recommend using `node-shell`, the REPL for the opera
 #!/bin/bash
 cd <YOUR_ARPA_NETWORK_ROOT_DIRECTORY>
 
+# Pull the latest Docker image
+docker pull ghcr.io/arpa-network/node-shell:latest
+
 docker run \
 -w /app \
 -v <path of config file>:/app/config.yml \
