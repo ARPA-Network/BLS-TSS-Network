@@ -100,7 +100,7 @@ impl CoordinatorTransactions for CoordinatorClient {
             coordinator_contract.client_ref(),
             call,
             self.contract_transaction_retry_descriptor,
-            false,
+            true,
         )
         .await
     }
