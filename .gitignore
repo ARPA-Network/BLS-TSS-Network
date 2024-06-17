@@ -40,3 +40,5 @@ passwd
 *.history
 /tests/scenarios/src/environment/node_config
 /contracts/output/
+
+*.log

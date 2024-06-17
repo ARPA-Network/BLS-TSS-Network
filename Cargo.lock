@@ -481,7 +481,7 @@ dependencies = [
 
 [[package]]
 name = "arpa-contract-client"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "anyhow",
  "arpa-core",
@@ -506,7 +506,7 @@ dependencies = [
 
 [[package]]
 name = "arpa-core"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -531,7 +531,7 @@ dependencies = [
 
 [[package]]
 name = "arpa-dal"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "anyhow",
  "arpa-core",
@@ -550,7 +550,7 @@ dependencies = [
 
 [[package]]
 name = "arpa-log"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "anyhow",
  "arpa-log-impl",
@@ -566,7 +566,7 @@ dependencies = [
 
 [[package]]
 name = "arpa-log-impl"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -575,7 +575,7 @@ dependencies = [
 
 [[package]]
 name = "arpa-node"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "actix-web",
  "anyhow",
@@ -619,7 +619,7 @@ dependencies = [
 
 [[package]]
 name = "arpa-sqlite-db"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "anyhow",
  "arpa-core",
@@ -644,7 +644,7 @@ dependencies = [
 
 [[package]]
 name = "arpa-user-cli"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "anyhow",
  "arpa-contract-client",
@@ -1893,7 +1893,7 @@ dependencies = [
 
 [[package]]
 name = "dkg-core"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "async-trait",
  "bincode",
@@ -2000,7 +2000,7 @@ dependencies = [
 
 [[package]]
 name = "entity"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "sea-orm",
  "serde",
@@ -3453,7 +3453,7 @@ checksum = "6c8640c5d730cb13ebd907d8d04b52f55ac9a2eec55b440c8892f40d56c76c1d"
 
 [[package]]
 name = "migration"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "async-std",
  "entity",
@@ -5964,7 +5964,7 @@ dependencies = [
 
 [[package]]
 name = "threshold-bls"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "ark-bls12-381",
  "ark-bn254",
