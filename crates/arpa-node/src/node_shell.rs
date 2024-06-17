@@ -11,7 +11,6 @@ use arpa_contract_client::{ServiceClient, TransactionCaller, ViewCaller};
 use arpa_core::{
     address_to_string, build_wallet_from_config, pad_to_bytes32, Account, Config, ConfigError,
     GeneralMainChainIdentity, GeneralRelayedChainIdentity, Keystore, WsWalletSigner,
-    DEFAULT_WEBSOCKET_PROVIDER_RECONNECT_TIMES,
 };
 use arpa_dal::NodeInfoFetcher;
 use arpa_node::context::ChainIdentityHandlerType;
@@ -26,6 +25,7 @@ use ethers::types::{Address, BlockId, BlockNumber, H256, U256, U64};
 use reedline_repl_rs::clap::{value_parser, Arg, ArgAction, ArgMatches, Command};
 use reedline_repl_rs::Repl;
 use std::collections::BTreeMap;
+use std::env;
 use std::fs::File;
 use std::io::{BufRead, BufReader};
 use std::path::PathBuf;
@@ -397,14 +397,20 @@ async fn send<PC: Curve>(
         Some(("register-as-eigenlayer-operator", sub_matches)) => {
             let asset_account_keystore_path = sub_matches
                 .get_one::<String>("asset-account-keystore-path")
-                .unwrap();
-            let asset_account_keystore_password = sub_matches
+                .unwrap()
+                .to_string();
+            let mut asset_account_keystore_password = sub_matches
                 .get_one::<String>("asset-account-keystore-password")
-                .unwrap();
+                .unwrap()
+                .to_string();
+            if asset_account_keystore_password.starts_with("$") {
+                asset_account_keystore_password =
+                    env::var(asset_account_keystore_password.trim_start_matches('$')).unwrap();
+            }
             let asset_account = Account {
                 keystore: Some(Keystore {
-                    path: asset_account_keystore_path.to_string(),
-                    password: asset_account_keystore_password.to_string(),
+                    path: asset_account_keystore_path,
+                    password: asset_account_keystore_password,
                 }),
                 hdwallet: None,
                 private_key: None,
@@ -444,10 +450,16 @@ async fn send<PC: Curve>(
         Some(("activate-as-eigenlayer-operator", sub_matches)) => {
             let asset_account_keystore_path = sub_matches
                 .get_one::<String>("asset-account-keystore-path")
-                .unwrap();
-            let asset_account_keystore_password = sub_matches
+                .unwrap()
+                .to_string();
+            let mut asset_account_keystore_password = sub_matches
                 .get_one::<String>("asset-account-keystore-password")
-                .unwrap();
+                .unwrap()
+                .to_string();
+            if asset_account_keystore_password.starts_with("$") {
+                asset_account_keystore_password =
+                    env::var(asset_account_keystore_password.trim_start_matches('$')).unwrap();
+            }
             let asset_account = Account {
                 keystore: Some(Keystore {
                     path: asset_account_keystore_path.to_string(),
@@ -1543,14 +1555,11 @@ async fn main() -> anyhow::Result<()> {
     let mut chain_identities = BTreeMap::new();
 
     let provider = Arc::new(
-        Provider::<Ws>::connect_with_reconnects(
-            config.get_provider_endpoint(),
-            DEFAULT_WEBSOCKET_PROVIDER_RECONNECT_TIMES,
-        )
-        .await?
-        .interval(Duration::from_millis(
-            config.get_time_limits().provider_polling_interval_millis,
-        )),
+        Provider::<Ws>::connect_with_reconnects(config.get_provider_endpoint(), 0)
+            .await?
+            .interval(Duration::from_millis(
+                config.get_time_limits().provider_polling_interval_millis,
+            )),
     );
 
     let main_chain_identity = GeneralMainChainIdentity::new(
@@ -1582,16 +1591,13 @@ async fn main() -> anyhow::Result<()> {
 
     for relayed_chain in config.get_relayed_chains().iter() {
         let provider = Arc::new(
-            Provider::<Ws>::connect_with_reconnects(
-                relayed_chain.get_provider_endpoint(),
-                DEFAULT_WEBSOCKET_PROVIDER_RECONNECT_TIMES,
-            )
-            .await?
-            .interval(Duration::from_millis(
-                relayed_chain
-                    .get_time_limits()
-                    .provider_polling_interval_millis,
-            )),
+            Provider::<Ws>::connect_with_reconnects(relayed_chain.get_provider_endpoint(), 0)
+                .await?
+                .interval(Duration::from_millis(
+                    relayed_chain
+                        .get_time_limits()
+                        .provider_polling_interval_millis,
+                )),
         );
 
         let relayed_chain_identity = GeneralRelayedChainIdentity::new(
@@ -1783,12 +1789,12 @@ async fn main() -> anyhow::Result<()> {
                     Command::new("register-as-eigenlayer-operator").visible_alias("raeo")
                     .about("Register node as Eigenlayer operator")
                     .arg(Arg::new("asset-account-keystore-path").required(true).help("path to keystore file of asset account"))
-                    .arg(Arg::new("asset-account-keystore-password").required(true).help("password of keystore file of asset account"))
+                    .arg(Arg::new("asset-account-keystore-password").required(true).help("password of keystore file of asset account, can be prefixed with '$' to read from environment variable"))
                 ).subcommand(
                     Command::new("activate-as-eigenlayer-operator").visible_alias("aaeo")
                     .about("Activate node after exit or slashing as Eigenlayer operator")
                     .arg(Arg::new("asset-account-keystore-path").required(true).help("path to keystore file of asset account"))
-                    .arg(Arg::new("asset-account-keystore-password").required(true).help("password of keystore file of asset account"))
+                    .arg(Arg::new("asset-account-keystore-password").required(true).help("password of keystore file of asset account, can be prefixed with '$' to read from environment variable"))
                 ).subcommand(
                     Command::new("quit").visible_alias("q").about("Quit node from Randcast network")
                 ).subcommand(

@@ -195,19 +195,25 @@ cd <YOUR_ARPA_NETWORK_ROOT_DIRECTORY>
 # Pull the latest Docker image
 docker pull ghcr.io/arpa-network/node-shell:latest
 
-docker run \
+docker run -it \
 -w /app \
 -v <path of config file>:/app/config.yml \
 -v <path of DB folder>:/app/db \
 -v <path of node account keystore file>:/app/node.keystore \
+-v <path of asset account keystore file>:/app/asset.keystore \
 --network=host \
 ghcr.io/arpa-network/node-shell:latest "node-shell -c /app/config.yml"
 
-ARPA Node CLI〉send register-as-eigenlayer-operator <asset-account-keystore-path> <asset-account-keystore-password>
+ARPA Node CLI〉send register-as-eigenlayer-operator asset.keystore <asset-account-keystore-password>
 
 ```
 
-For more information about the `node-shell`, please refer to the [node-shell](https://github.com/ARPA-Network/BLS-TSS-Network/blob/main/crates/arpa-node/README.md#arpa-node-cli) documentation.
+Note:
+
+- Based on the fluctuation of the websocket connection, the `node-shell` may hang at startup. It doesn't always mean a poor connection. Please double-check the provider endpoint, then **shut it down and restart it**.
+- Password of keystore file of asset account can be prefixed with '\$' to read from environment variable. Example: `$ARPA_ASSET_ACCOUNT_KEYSTORE_PASSWORD`.
+
+Exit repl with CTRL+D. For more information about the `node-shell`, please refer to the [node-shell](https://github.com/ARPA-Network/BLS-TSS-Network/blob/main/crates/arpa-node/README.md#arpa-node-cli) documentation.
 
 If you are a smart-contract operator or want to manually register, please follow the steps below:
 
