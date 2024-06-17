@@ -46,6 +46,7 @@ impl NodeRegistryClient {
     async fn build_signature_with_salt_and_expiry(
         &self,
         node_registry_contract: &NodeRegistryContract,
+        signer: &LocalWallet,
     ) -> ContractClientResult<SignatureWithSaltAndExpiry> {
         let service_manager_address = node_registry_contract.get_node_registry_config().await?.2;
         let service_manager_contract =
@@ -73,13 +74,7 @@ impl NodeRegistryClient {
                 expiry,
             )
             .await?;
-        let signature = self
-            .client
-            .inner()
-            .signer()
-            .sign_hash(digest_hash.into())?
-            .to_vec()
-            .into();
+        let signature = signer.sign_hash(digest_hash.into())?.to_vec().into();
 
         Ok(SignatureWithSaltAndExpiry {
             signature,
@@ -131,7 +126,37 @@ impl ViewCaller for NodeRegistryClient {}
 
 #[async_trait]
 impl NodeRegistryTransactions for NodeRegistryClient {
-    async fn node_register_by_native_staking(
+    async fn node_register_as_eigenlayer_operator(
+        &self,
+        id_public_key: Vec<u8>,
+        asset_account_signer: &LocalWallet,
+    ) -> ContractClientResult<TransactionReceipt> {
+        let node_registry_contract =
+            ServiceClient::<NodeRegistryContract>::prepare_service_client(self).await?;
+
+        let signature = self
+            .build_signature_with_salt_and_expiry(&node_registry_contract, asset_account_signer)
+            .await?;
+
+        let call = node_registry_contract.node_register(
+            id_public_key.into(),
+            true,
+            asset_account_signer.address(),
+            signature,
+        );
+
+        NodeRegistryClient::call_contract_transaction(
+            self.chain_id,
+            "node_register",
+            node_registry_contract.client_ref(),
+            call,
+            self.contract_transaction_retry_descriptor,
+            true,
+        )
+        .await
+    }
+
+    async fn node_register_by_consistent_native_staking(
         &self,
         id_public_key: Vec<u8>,
     ) -> ContractClientResult<TransactionReceipt> {
@@ -160,25 +185,41 @@ impl NodeRegistryTransactions for NodeRegistryClient {
         .await
     }
 
-    async fn node_activate_by_native_staking(
+    async fn node_activate_as_eigenlayer_operator(
         &self,
-        is_eigenlayer: bool,
+        asset_account_signer: &LocalWallet,
     ) -> ContractClientResult<TransactionReceipt> {
         let node_registry_contract =
             ServiceClient::<NodeRegistryContract>::prepare_service_client(self).await?;
 
-        let signature = if is_eigenlayer {
-            self.build_signature_with_salt_and_expiry(&node_registry_contract)
-                .await?
-        } else {
-            SignatureWithSaltAndExpiry {
-                signature: vec![0u8; 65].into(),
-                salt: [0u8; 32],
-                expiry: 0u64.into(),
-            }
-        };
+        let signature = self
+            .build_signature_with_salt_and_expiry(&node_registry_contract, asset_account_signer)
+            .await?;
 
         let call = node_registry_contract.node_activate(signature);
+
+        NodeRegistryClient::call_contract_transaction(
+            self.chain_id,
+            "node_activate",
+            node_registry_contract.client_ref(),
+            call,
+            self.contract_transaction_retry_descriptor,
+            true,
+        )
+        .await
+    }
+
+    async fn node_activate_by_consistent_native_staking(
+        &self,
+    ) -> ContractClientResult<TransactionReceipt> {
+        let node_registry_contract =
+            ServiceClient::<NodeRegistryContract>::prepare_service_client(self).await?;
+
+        let call = node_registry_contract.node_activate(SignatureWithSaltAndExpiry {
+            signature: vec![0u8; 65].into(),
+            salt: [0u8; 32],
+            expiry: 0u64.into(),
+        });
 
         NodeRegistryClient::call_contract_transaction(
             self.chain_id,
@@ -208,6 +249,7 @@ impl NodeRegistryViews for NodeRegistryClient {
         .map(|n| Node {
             id_address: n.id_address,
             id_public_key: n.dkg_public_key.to_vec(),
+            is_eigenlayer_node: n.is_eigenlayer_node,
             state: n.state,
             pending_until_block: n.pending_until_block.as_usize(),
         })

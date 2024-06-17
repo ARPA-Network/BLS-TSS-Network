@@ -101,13 +101,14 @@ Please copy the template below, and to change:
 
 - The contract addresses in the following example are currently the latest available.
 - We recommend setup account by keystore or hdwallet. Please refer to [here](https://github.com/ARPA-Network/BLS-TSS-Network/tree/main/crates/arpa-node#node-config) for detailed instructions. The priority order is 1. hdwallet 2. keystore 3. private key
-- example:
-  ```yaml
-  account:
-    keystore:
-      password: <KEYSTORE_PASSWORD>
-      path: node.keystore
-  ```
+  - example:
+    ```yaml
+    account:
+      keystore:
+        password: <KEYSTORE_PASSWORD>
+        path: node.keystore
+    ```
+- To protect secrets, several items can be set with literal `env` or prefixed with `$` to read from environment variables. Please refer to arpa-node [config](https://github.com/ARPA-Network/BLS-TSS-Network/blob/main/crates/arpa-node/README.md#node-config) for more details.
 
 **Testnet config.yml example**
 
@@ -183,6 +184,33 @@ docker exec -it arpa-node sh
 
 ### Register to ARPA Network by your `Node` account:
 
+If you are EOA operator, we recommend using `node-shell`, the REPL for the operator of a ARPA node, to automate the registration process.
+
+#### Keep the `node-client` running and run below commands to use the `node-shell`:
+
+```bash
+#!/bin/bash
+cd <YOUR_ARPA_NETWORK_ROOT_DIRECTORY>
+
+# Pull the latest Docker image
+docker pull ghcr.io/arpa-network/node-shell:latest
+
+docker run \
+-w /app \
+-v <path of config file>:/app/config.yml \
+-v <path of DB folder>:/app/db \
+-v <path of node account keystore file>:/app/node.keystore \
+--network=host \
+ghcr.io/arpa-network/node-shell:latest "node-shell -c /app/config.yml"
+
+ARPA Node CLI〉send register-as-eigenlayer-operator <asset-account-keystore-path> <asset-account-keystore-password>
+
+```
+
+For more information about the `node-shell`, please refer to the [node-shell](https://github.com/ARPA-Network/BLS-TSS-Network/blob/main/crates/arpa-node/README.md#arpa-node-cli) documentation.
+
+If you are a smart-contract operator or want to manually register, please follow the steps below:
+
 1. Keep the `node-client` running, go to the log and search the log for the keyword "public_key"(or "DKGKeyGenerated") and copy the DKG public key value.
 2. Call `nodeRegister` method of `NodeRegistry` contract **by your `Node` account**, for your reference:
 
@@ -199,7 +227,7 @@ docker exec -it arpa-node sh
     "($ARPA_ASSET_ACCOUNT_SIGNATURE,$ARPA_ASSET_ACCOUNT_SALT,$ARPA_ASSET_ACCOUNT_EXPIRY)"
     ```
 
-- [NodeRegistry Contract](https://github.com/ARPA-Network/BLS-TSS-Network/blob/0732850fe39f869a7dea899e445dfe6332462ab7/contracts/src/interfaces/INodeRegistry.sol#L25)
+- [NodeRegistry Contract](https://github.com/ARPA-Network/BLS-TSS-Network/blob/main/contracts/src/NodeRegistry.sol)
 - [Generate the EIP1271 Operator signature](#generate-the-eip1271-operator-signature-for-avs-registration-with-your-asset-account)
 - Contract address listed in our [Official Document](https://docs.arpanetwork.io/randcast/supported-networks-and-parameters)
 - Example calldata should look like this

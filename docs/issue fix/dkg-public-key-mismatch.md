@@ -13,7 +13,7 @@ Since there is a mismatch, all we are trying to do here is to remove the mismatc
 
 Below steps require manual operation with DB file and on-chain contract. For the contract part, you are going to need
 
-- [NodeRegistry Contract](https://github.com/ARPA-Network/BLS-TSS-Network/blob/0732850fe39f869a7dea899e445dfe6332462ab7/contracts/src/interfaces/INodeRegistry.sol)
+- [NodeRegistry Contract](https://github.com/ARPA-Network/BLS-TSS-Network/blob/main/contracts/src/NodeRegistry.sol)
 - The address of the contract is listed in our [Official Document](https://docs.arpanetwork.io/randcast/supported-networks-and-parameters)
 
 ## Detailed Steps

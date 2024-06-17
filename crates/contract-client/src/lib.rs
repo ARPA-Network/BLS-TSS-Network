@@ -224,18 +224,29 @@ pub mod node_registry {
     use arpa_core::Node;
     use async_trait::async_trait;
     use ethers::core::types::Address;
+    use ethers::signers::LocalWallet;
     use ethers::types::TransactionReceipt;
 
     #[async_trait]
     pub trait NodeRegistryTransactions {
-        async fn node_register_by_native_staking(
+        async fn node_register_as_eigenlayer_operator(
+            &self,
+            id_public_key: Vec<u8>,
+            asset_account_signer: &LocalWallet,
+        ) -> ContractClientResult<TransactionReceipt>;
+
+        async fn node_register_by_consistent_native_staking(
             &self,
             id_public_key: Vec<u8>,
         ) -> ContractClientResult<TransactionReceipt>;
 
-        async fn node_activate_by_native_staking(
+        async fn node_activate_as_eigenlayer_operator(
             &self,
-            is_eigenlayer: bool,
+            asset_account_signer: &LocalWallet,
+        ) -> ContractClientResult<TransactionReceipt>;
+
+        async fn node_activate_by_consistent_native_staking(
+            &self,
         ) -> ContractClientResult<TransactionReceipt>;
     }
 

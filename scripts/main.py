@@ -564,6 +564,9 @@ def deploy_nodes():  # ! Deploy Nodes
         # set is_eigenlayer
         data["is_eigenlayer"] = False
 
+        # set is_consistent_asset_and_node_account
+        data["is_consistent_asset_and_node_account"] = True
+
         # set node_id, data_path, and log_file_path
         data["data_path"] = f"./db/data{i+1}.sqlite"
         data["logger"]["log_file_path"] = f"log/{i+1}/"

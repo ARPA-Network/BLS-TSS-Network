@@ -194,6 +194,8 @@ async fn start(
 
     let is_eigenlayer = config.is_eigenlayer();
 
+    let is_consistent_asset_and_node_account = config.is_consistent_asset_and_node_account();
+
     if let Some(parent) = data_path.parent() {
         fs::create_dir_all(parent)?;
     }
@@ -399,9 +401,9 @@ async fn start(
     let handle = context.deploy().await?;
 
     // register node to the NodeRegistry contract if it is a new run and a native staking node
-    if is_new_run && !is_eigenlayer {
+    if is_new_run && !is_eigenlayer && is_consistent_asset_and_node_account {
         match node_registry_client
-            .node_register_by_native_staking(dkg_public_key_to_register.unwrap())
+            .node_register_by_consistent_native_staking(dkg_public_key_to_register.unwrap())
             .await
         {
             Ok(receipt) => {

@@ -72,6 +72,7 @@ struct ConfigHolder {
     pub provider_endpoint: String,
     pub chain_id: usize,
     pub is_eigenlayer: Option<bool>,
+    pub is_consistent_asset_and_node_account: Option<bool>,
     pub controller_address: String,
     pub controller_relayer_address: String,
     pub adapter_address: String,
@@ -97,6 +98,7 @@ impl Default for ConfigHolder {
             provider_endpoint: "localhost:8545".to_string(),
             chain_id: 0,
             is_eigenlayer: Some(false),
+            is_consistent_asset_and_node_account: Some(false),
             controller_address: PLACEHOLDER_ADDRESS.to_string(),
             controller_relayer_address: PLACEHOLDER_ADDRESS.to_string(),
             adapter_address: PLACEHOLDER_ADDRESS.to_string(),
@@ -452,6 +454,7 @@ pub struct Config {
     provider_endpoint: String,
     chain_id: usize,
     is_eigenlayer: bool,
+    is_consistent_asset_and_node_account: bool,
     controller_address: String,
     controller_relayer_address: String,
     adapter_address: String,
@@ -489,6 +492,10 @@ impl std::fmt::Debug for Config {
             .field("provider_endpoint", &"ignored")
             .field("chain_id", &self.chain_id)
             .field("is_eigenlayer", &self.is_eigenlayer)
+            .field(
+                "is_consistent_asset_and_node_account",
+                &self.is_consistent_asset_and_node_account,
+            )
             .field("controller_address", &self.controller_address)
             .field(
                 "controller_relayer_address",
@@ -525,19 +532,41 @@ impl From<ConfigHolder> for Config {
                 .unwrap()
         };
         let node_management_rpc_endpoint = config_holder.node_management_rpc_endpoint.clone();
-        let node_management_rpc_token = if config_holder.node_management_rpc_token.eq("env") {
+        let node_management_rpc_token = if config_holder.node_management_rpc_token.starts_with('$')
+        {
+            env::var(
+                config_holder
+                    .node_management_rpc_token
+                    .trim_start_matches('$'),
+            )
+            .unwrap()
+        } else if config_holder.node_management_rpc_token.eq("env") {
             env::var("ARPA_NODE_MANAGEMENT_SERVER_TOKEN").unwrap()
         } else {
             config_holder.node_management_rpc_token.clone()
         };
+
         let node_statistics_http_endpoint = config_holder.node_statistics_http_endpoint.clone();
-        let provider_endpoint = config_holder.provider_endpoint.clone();
+        let provider_endpoint = if config_holder.provider_endpoint.starts_with('$') {
+            env::var(config_holder.provider_endpoint.trim_start_matches('$')).unwrap()
+        } else {
+            config_holder.provider_endpoint
+        };
+        if !provider_endpoint.starts_with("ws") {
+            panic!("Provider endpoint must be a websocket endpoint");
+        }
         let chain_id = config_holder.chain_id;
         let is_eigenlayer = if config_holder.is_eigenlayer.is_none() {
             false
         } else {
             config_holder.is_eigenlayer.unwrap()
         };
+        let is_consistent_asset_and_node_account =
+            if config_holder.is_consistent_asset_and_node_account.is_none() {
+                false
+            } else {
+                config_holder.is_consistent_asset_and_node_account.unwrap()
+            };
         let controller_address = config_holder.controller_address.clone();
         let controller_relayer_address = config_holder.controller_relayer_address.clone();
         let adapter_address = config_holder.adapter_address.clone();
@@ -634,6 +663,7 @@ impl From<ConfigHolder> for Config {
             provider_endpoint,
             chain_id,
             is_eigenlayer,
+            is_consistent_asset_and_node_account,
             controller_address,
             controller_relayer_address,
             adapter_address,
@@ -665,13 +695,17 @@ impl Config {
         });
 
         let config: ConfigHolder =
-            serde_yaml::from_str(config_str).expect("Error loading configuration file");
+            serde_yaml::from_str(config_str).expect("Error parsing configuration file");
 
         config.into()
     }
 
     pub fn is_eigenlayer(&self) -> bool {
         self.is_eigenlayer
+    }
+
+    pub fn is_consistent_asset_and_node_account(&self) -> bool {
+        self.is_consistent_asset_and_node_account
     }
 
     pub fn get_main_chain_id(&self) -> usize {
@@ -910,7 +944,19 @@ impl From<RelayedChainHolder> for RelayedChain {
     fn from(relayed_chain_holder: RelayedChainHolder) -> Self {
         let chain_id = relayed_chain_holder.chain_id;
         let description = relayed_chain_holder.description;
-        let provider_endpoint = relayed_chain_holder.provider_endpoint;
+        let provider_endpoint = if relayed_chain_holder.provider_endpoint.starts_with('$') {
+            env::var(
+                relayed_chain_holder
+                    .provider_endpoint
+                    .trim_start_matches('$'),
+            )
+            .unwrap()
+        } else {
+            relayed_chain_holder.provider_endpoint
+        };
+        if !provider_endpoint.starts_with("ws") {
+            panic!("Provider endpoint must be a websocket endpoint");
+        }
         let controller_oracle_address = relayed_chain_holder.controller_oracle_address;
         let adapter_address = relayed_chain_holder.adapter_address;
         let adapter_deployed_block_height =
@@ -1180,7 +1226,9 @@ pub struct HDWallet {
 pub fn build_wallet_from_config(account: &Account) -> Result<Wallet<SigningKey>, ConfigError> {
     if account.hdwallet.is_some() {
         let mut hd = account.hdwallet.clone().unwrap();
-        if hd.mnemonic.eq("env") {
+        if hd.mnemonic.starts_with('$') {
+            hd.mnemonic = env::var(hd.mnemonic.trim_start_matches('$'))?;
+        } else if hd.mnemonic.eq("env") {
             hd.mnemonic = env::var("ARPA_NODE_HD_ACCOUNT_MNEMONIC")?;
         }
         let mut wallet = MnemonicBuilder::<English>::default().phrase(&*hd.mnemonic);
@@ -1194,7 +1242,9 @@ pub fn build_wallet_from_config(account: &Account) -> Result<Wallet<SigningKey>,
         return Ok(wallet.index(hd.index).unwrap().build()?);
     } else if account.keystore.is_some() {
         let mut keystore = account.keystore.clone().unwrap();
-        if keystore.password.eq("env") {
+        if keystore.password.starts_with('$') {
+            keystore.password = env::var(keystore.password.trim_start_matches('$'))?;
+        } else if keystore.password.eq("env") {
             keystore.password = env::var("ARPA_NODE_ACCOUNT_KEYSTORE_PASSWORD")?;
         }
         return Ok(LocalWallet::decrypt_keystore(
@@ -1203,7 +1253,9 @@ pub fn build_wallet_from_config(account: &Account) -> Result<Wallet<SigningKey>,
         )?);
     } else if account.private_key.is_some() {
         let mut private_key = account.private_key.clone().unwrap();
-        if private_key.eq("env") {
+        if private_key.starts_with('$') {
+            private_key = env::var(private_key.trim_start_matches('$'))?;
+        } else if private_key.eq("env") {
             private_key = env::var("ARPA_NODE_ACCOUNT_PRIVATE_KEY")?;
         }
         return Ok(private_key.parse::<Wallet<SigningKey>>()?);
