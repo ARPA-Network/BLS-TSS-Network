@@ -10,6 +10,7 @@ use threshold_bls::group::Curve;
 pub struct Node {
     pub id_address: Address,
     pub id_public_key: Vec<u8>,
+    pub is_eigenlayer_node: bool,
     pub state: bool,
     pub pending_until_block: usize,
 }
@@ -22,6 +23,7 @@ impl std::fmt::Debug for Node {
                 "id_public_key",
                 &format!("0x{}", hex::encode(&self.id_public_key)),
             )
+            .field("is_eigenlayer_node", &self.is_eigenlayer_node)
             .field("state", &self.state)
             .field("pending_until_block", &self.pending_until_block)
             .finish()

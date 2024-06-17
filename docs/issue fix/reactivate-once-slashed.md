@@ -12,7 +12,7 @@ Note: The `Node` account that has been logged out **cannot** be activated again.
 
 Call `nodeActivate` method by `Node` account to activate your node again.(if it still doesn't work, contact us via telagram group):
 
-- [NodeRegistry Contract](https://github.com/ARPA-Network/BLS-TSS-Network/blob/0732850fe39f869a7dea899e445dfe6332462ab7/contracts/src/interfaces/INodeRegistry.sol)
+- [NodeRegistry Contract](https://github.com/ARPA-Network/BLS-TSS-Network/blob/main/contracts/src/NodeRegistry.sol)
 - The address of the contract: listed in our [Official Document](https://docs.arpanetwork.io/randcast/supported-networks-and-parameters)
 
 - Example calldata should look like this

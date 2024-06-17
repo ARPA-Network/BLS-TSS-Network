@@ -175,16 +175,16 @@ Send trxs to on-chain contracts
 Usage: send [COMMAND]
 
 Commands:
-  approve-arpa-to-staking  Approve arpa to staking contract [aliases: aats]
-  stake                    Stake arpa to staking contract [aliases: s]
-  unstake                  Unstake(then freeze) arpa from staking contract and claim delegation rewards instantly after exit [aliases: u]
-  claim-frozen-principal   Claim frozen principal from staking after unstake [aliases: cfp]
-  register                 Register node to Randcast network [aliases: r]
-  activate                 Activate node after exit or slashing [aliases: a]
-  quit                     Quit node from Randcast network [aliases: q]
-  change-dkg-public-key    Change dkg public key(recorded in node database) after exit or slashing [aliases: cdpk]
-  withdraw                 Withdraw node reward to any address [aliases: w]
-  help                     Print this message or the help of the given subcommand(s)
+  approve-arpa-to-staking          Approve arpa to staking contract [aliases: aats]
+  stake                            Stake arpa to staking contract [aliases: s]
+  unstake                          Unstake(then freeze) arpa from staking contract and claim delegation rewards instantly after exit [aliases: u]
+  claim-frozen-principal           Claim frozen principal from staking after unstake [aliases: cfp]
+  register-as-eigenlayer-operator  Register node as Eigenlayer operator [aliases: raeo]
+  activate-as-eigenlayer-operator  Activate node after exit or slashing as Eigenlayer operator [aliases: aaeo]
+  quit                             Quit node from Randcast network [aliases: q]
+  change-dkg-public-key            Change dkg public key(recorded in node database) after exit or slashing [aliases: cdpk]
+  withdraw                         Withdraw node reward to any address [aliases: w]
+  help                             Print this message or the help of the given subcommand(s)
 
 Options:
   -h, --help  Print help
@@ -247,6 +247,23 @@ sudo apt install libssh-dev
 
 Configuration items in [`conf/config.yml`](conf/config.yml) are listed here:
 
+```
+Note: To protect secrets, several items can be set with literal `env` as placeholder. Their env keys are:
+
+    - ARPA_NODE_MANAGEMENT_SERVER_TOKEN (node_management_rpc_token)
+    - ARPA_NODE_ACCOUNT_PRIVATE_KEY (account, private_key)
+    - ARPA_NODE_ACCOUNT_KEYSTORE_PASSWORD (account, keystore, password)
+    - ARPA_NODE_HD_ACCOUNT_MNEMONIC (account, hdwallet, mnemonic)
+
+    Items below can also be set with arbitrary environment variables starting with `$`:
+
+    - $<CUSTOMIZED_ENV_VARIABLE_KEY>(provider_endpoint / relayed_chains.provider_endpoint)
+    - $<CUSTOMIZED_ENV_VARIABLE_KEY>(node_management_rpc_token)
+    - $<CUSTOMIZED_ENV_VARIABLE_KEY>(account, private_key)
+    - $<CUSTOMIZED_ENV_VARIABLE_KEY>(account, keystore, password)
+    - $<CUSTOMIZED_ENV_VARIABLE_KEY>(account, hdwallet, mnemonic)
+```
+
 - node_committer_rpc_endpoint: Endpoint that this node will use to create server socket to expose committer grpc services. Once this get changed, the node MUST re-activate itself to the controller so that the controller can update the endpoint by re-grouping. (example: "0.0.0.0:50060")
 
 - node_advertised_committer_rpc_endpoint: Endpoint that other members in the group will use to connect to this node. If this setting is not set, then value of node_committer_rpc_endpoint will be used here and published to other nodes. Note: This setting is updated every time the node starts, but it will not be broadcasted to other nodes until next re-grouping. (example: "10.0.0.1:50060")
@@ -260,6 +277,8 @@ Configuration items in [`conf/config.yml`](conf/config.yml) are listed here:
 - provider_endpoint: Config websocket endpoint to interact with chain provider. (example: "ws://127.0.0.1:8546")
 
 - is_eigenlayer: Config whether the node is registered as an eigenlayer operator, or a native staking operator. (example: false)
+
+- is_consistent_asset_and_node_account: Config whether the node's asset account is consistent with the node account. (example: false)
 
 - chain_id: Config chain id of main chain. (example: 31337)
 
@@ -311,21 +330,6 @@ Configuration items in [`conf/config.yml`](conf/config.yml) are listed here:
     ```
 
     Path and passphrase are optional.
-
-    To protect secrets, several items can be set with literal `env` as placeholder. Their env keys are:
-
-    - ARPA_NODE_MANAGEMENT_SERVER_TOKEN (node_management_rpc_token)
-    - ARPA_NODE_ACCOUNT_PRIVATE_KEY (account, private_key)
-    - ARPA_NODE_ACCOUNT_KEYSTORE_PASSWORD (account, keystore, password)
-    - ARPA_NODE_HD_ACCOUNT_MNEMONIC (account, hdwallet, mnemonic)
-
-    Items below can also be set with arbitrary environment variables starting with `$`:
-
-    - $<CUSTOMIZED_ENV_VARIABLE_KEY>(provider_endpoint / relayed_chains.provider_endpoint)
-    - $<CUSTOMIZED_ENV_VARIABLE_KEY>(node_management_rpc_token)
-    - $<CUSTOMIZED_ENV_VARIABLE_KEY>(account, private_key)
-    - $<CUSTOMIZED_ENV_VARIABLE_KEY>(account, keystore, password)
-    - $<CUSTOMIZED_ENV_VARIABLE_KEY>(account, hdwallet, mnemonic)
 
 - time_limits(Optional): Config time limits for different tasks. All the time limits are in milliseconds or block numbers.
 

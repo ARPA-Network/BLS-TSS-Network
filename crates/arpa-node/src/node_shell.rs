@@ -1,7 +1,5 @@
 use arpa_contract_client::adapter::AdapterViews;
-use arpa_contract_client::contract_stub::adapter::{
-    Adapter as AdapterContract, SignatureWithSaltAndExpiry,
-};
+use arpa_contract_client::contract_stub::adapter::Adapter as AdapterContract;
 use arpa_contract_client::contract_stub::ierc20::IERC20 as ArpaContract;
 use arpa_contract_client::contract_stub::staking::Staking as StakingContract;
 use arpa_contract_client::ethers::adapter::AdapterClient;
@@ -11,8 +9,8 @@ use arpa_contract_client::ethers::node_registry::NodeRegistryClient;
 use arpa_contract_client::node_registry::{NodeRegistryTransactions, NodeRegistryViews};
 use arpa_contract_client::{ServiceClient, TransactionCaller, ViewCaller};
 use arpa_core::{
-    address_to_string, build_wallet_from_config, pad_to_bytes32, Config, ConfigError,
-    GeneralMainChainIdentity, GeneralRelayedChainIdentity, WsWalletSigner,
+    address_to_string, build_wallet_from_config, pad_to_bytes32, Account, Config, ConfigError,
+    GeneralMainChainIdentity, GeneralRelayedChainIdentity, Keystore, WsWalletSigner,
     DEFAULT_WEBSOCKET_PROVIDER_RECONNECT_TIMES,
 };
 use arpa_dal::NodeInfoFetcher;
@@ -127,7 +125,7 @@ impl<PC: Curve> Context<PC> {
                 self.config.get_time_limits().contract_view_retry_descriptor,
             )
             .await?
-            .1;
+            .0;
 
             self.node_registry_address = Some(node_registry_address);
 
@@ -396,8 +394,23 @@ async fn send<PC: Curve>(
                 trx_hash
             )))
         }
-        Some(("register", _sub_matches)) => {
-            // TODO support register from eigenlayer
+        Some(("register-as-eigenlayer-operator", sub_matches)) => {
+            let asset_account_keystore_path = sub_matches
+                .get_one::<String>("asset-account-keystore-path")
+                .unwrap();
+            let asset_account_keystore_password = sub_matches
+                .get_one::<String>("asset-account-keystore-password")
+                .unwrap();
+            let asset_account = Account {
+                keystore: Some(Keystore {
+                    path: asset_account_keystore_path.to_string(),
+                    password: asset_account_keystore_password.to_string(),
+                }),
+                hdwallet: None,
+                private_key: None,
+            };
+            let asset_account_signer = build_wallet_from_config(&asset_account)?;
+
             let main_chain_id = context.config.get_main_chain_id();
             let node_registry_address = context.node_registry_address().await?;
             let client = context
@@ -417,7 +430,10 @@ async fn send<PC: Curve>(
             let dkg_public_key = node_cache.get_dkg_public_key()?;
 
             let trx_hash = client
-                .node_register_by_native_staking(bincode::serialize(&dkg_public_key)?)
+                .node_register_as_eigenlayer_operator(
+                    bincode::serialize(&dkg_public_key)?,
+                    &asset_account_signer,
+                )
                 .await?;
 
             Ok(Some(format!(
@@ -425,7 +441,23 @@ async fn send<PC: Curve>(
                 trx_hash
             )))
         }
-        Some(("activate", _sub_matches)) => {
+        Some(("activate-as-eigenlayer-operator", sub_matches)) => {
+            let asset_account_keystore_path = sub_matches
+                .get_one::<String>("asset-account-keystore-path")
+                .unwrap();
+            let asset_account_keystore_password = sub_matches
+                .get_one::<String>("asset-account-keystore-password")
+                .unwrap();
+            let asset_account = Account {
+                keystore: Some(Keystore {
+                    path: asset_account_keystore_path.to_string(),
+                    password: asset_account_keystore_password.to_string(),
+                }),
+                hdwallet: None,
+                private_key: None,
+            };
+            let asset_account_signer = build_wallet_from_config(&asset_account)?;
+
             let main_chain_id = context.config.get_main_chain_id();
             let node_registry_address = context.node_registry_address().await?;
             let client = context
@@ -442,24 +474,9 @@ async fn send<PC: Curve>(
                 return Ok(Some("Node already activated".to_string()));
             }
 
-            let controller_contract = client.prepare_service_client().await?;
-
-            let trx_hash = ControllerClient::call_contract_transaction(
-                main_chain_id,
-                "node_activate",
-                controller_contract.client_ref(),
-                controller_contract.node_activate(SignatureWithSaltAndExpiry {
-                    signature: vec![0u8; 65].into(),
-                    salt: [0u8; 32],
-                    expiry: 0u64.into(),
-                }),
-                context
-                    .config
-                    .get_time_limits()
-                    .contract_transaction_retry_descriptor,
-                true,
-            )
-            .await?;
+            let trx_hash = client
+                .node_activate_as_eigenlayer_operator(&asset_account_signer)
+                .await?;
 
             Ok(Some(format!(
                 "Activate node successfully, transaction hash: {:?}",
@@ -1744,8 +1761,7 @@ async fn main() -> anyhow::Result<()> {
                 ).subcommand(
                     Command::new("frozen-principal").visible_alias("fp")
                     .about("Get frozen principal and unfreeze time")
-                )
-                .about("Get views and events from on-chain contracts"),
+                ).about("Get views and events from on-chain contracts"),
             |args, context| Box::pin(call(args, context)),
         ).with_command_async(
             Command::new("send")
@@ -1764,9 +1780,15 @@ async fn main() -> anyhow::Result<()> {
                 ).subcommand(
                     Command::new("claim-frozen-principal").visible_alias("cfp").about("Claim frozen principal from staking after unstake")
                 ).subcommand(
-                    Command::new("register").visible_alias("r").about("Register node to Randcast network")
+                    Command::new("register-as-eigenlayer-operator").visible_alias("raeo")
+                    .about("Register node as Eigenlayer operator")
+                    .arg(Arg::new("asset-account-keystore-path").required(true).help("path to keystore file of asset account"))
+                    .arg(Arg::new("asset-account-keystore-password").required(true).help("password of keystore file of asset account"))
                 ).subcommand(
-                    Command::new("activate").visible_alias("a").about("Activate node after exit or slashing")
+                    Command::new("activate-as-eigenlayer-operator").visible_alias("aaeo")
+                    .about("Activate node after exit or slashing as Eigenlayer operator")
+                    .arg(Arg::new("asset-account-keystore-path").required(true).help("path to keystore file of asset account"))
+                    .arg(Arg::new("asset-account-keystore-password").required(true).help("password of keystore file of asset account"))
                 ).subcommand(
                     Command::new("quit").visible_alias("q").about("Quit node from Randcast network")
                 ).subcommand(
@@ -1774,10 +1796,10 @@ async fn main() -> anyhow::Result<()> {
                     .about("Change dkg public key(recorded in node database) after exit or slashing")
                 ).subcommand(
                     Command::new("withdraw").visible_alias("w")
-                    .about("Withdraw node reward to any address"))
+                    .about("Withdraw node reward to any address")
                     .arg(Arg::new("chain-id").required(true).value_parser(value_parser!(usize)).help("chain id in decimal format"))
-                    .arg(Arg::new("recipient").required(true).help("path to keystore file"))
-                .about("*** Be careful this will change on-chain state and cost gas as well as block time***\nSend trxs to on-chain contracts"),
+                    .arg(Arg::new("recipient").required(true).help("recipient address in hex format"))
+                ).about("*** Be careful this will change on-chain state and cost gas as well as block time***\nSend trxs to on-chain contracts"),
             |args, context| Box::pin(send(args, context)),
         ).with_command(
             Command::new("generate")
@@ -1797,8 +1819,7 @@ async fn main() -> anyhow::Result<()> {
                     .arg(Arg::new("path").required(true).help("path to mnemonic file").value_parser(value_parser!(PathBuf)))
                     .arg(Arg::new("password").required(true).help("password to encrypt hd-wallet"))
                     .arg(Arg::new("derivation-path").required(false).help("derivation path, default is m/44'/60'/0'/0/0"))
-                )
-                .about("Generate node identity(wallet) corresponding to ARPA node format"),
+                ).about("Generate node identity(wallet) corresponding to ARPA node format"),
             generate
         ).with_command_async(
             Command::new("show")
@@ -1812,16 +1833,14 @@ async fn main() -> anyhow::Result<()> {
                     Command::new("node").visible_alias("n")
                     .about("Print node info from node database")
                     .arg(Arg::new("display-sensitive").short('s').long("display-sensitive").value_parser(value_parser!(bool)).action(ArgAction::SetTrue).required(false).help("display sensitive info"))
-                )
-                .about("Show information of the config file and node database"),
+                ).about("Show information of the config file and node database"),
                 |args, context| Box::pin(show(args, context)),
         ).with_command_async(
             Command::new("inspect")
                 .subcommand(
                     Command::new("list-fixed-tasks").visible_alias("lft")
                     .about("List fixed tasks of the node")
-                )
-                .about("Connect to the node client and inspect the node status"),
+                ).about("Connect to the node client and inspect the node status"),
                 |args, context| Box::pin(inspect(args, context)),
         ).with_on_after_command_async(|context| Box::pin(update_prompt(context)));
 

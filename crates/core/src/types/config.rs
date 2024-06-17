@@ -72,6 +72,7 @@ struct ConfigHolder {
     pub provider_endpoint: String,
     pub chain_id: usize,
     pub is_eigenlayer: Option<bool>,
+    pub is_consistent_asset_and_node_account: Option<bool>,
     pub controller_address: String,
     pub controller_relayer_address: String,
     pub adapter_address: String,
@@ -97,6 +98,7 @@ impl Default for ConfigHolder {
             provider_endpoint: "localhost:8545".to_string(),
             chain_id: 0,
             is_eigenlayer: Some(false),
+            is_consistent_asset_and_node_account: Some(false),
             controller_address: PLACEHOLDER_ADDRESS.to_string(),
             controller_relayer_address: PLACEHOLDER_ADDRESS.to_string(),
             adapter_address: PLACEHOLDER_ADDRESS.to_string(),
@@ -452,6 +454,7 @@ pub struct Config {
     provider_endpoint: String,
     chain_id: usize,
     is_eigenlayer: bool,
+    is_consistent_asset_and_node_account: bool,
     controller_address: String,
     controller_relayer_address: String,
     adapter_address: String,
@@ -489,6 +492,10 @@ impl std::fmt::Debug for Config {
             .field("provider_endpoint", &"ignored")
             .field("chain_id", &self.chain_id)
             .field("is_eigenlayer", &self.is_eigenlayer)
+            .field(
+                "is_consistent_asset_and_node_account",
+                &self.is_consistent_asset_and_node_account,
+            )
             .field("controller_address", &self.controller_address)
             .field(
                 "controller_relayer_address",
@@ -554,6 +561,12 @@ impl From<ConfigHolder> for Config {
         } else {
             config_holder.is_eigenlayer.unwrap()
         };
+        let is_consistent_asset_and_node_account =
+            if config_holder.is_consistent_asset_and_node_account.is_none() {
+                false
+            } else {
+                config_holder.is_consistent_asset_and_node_account.unwrap()
+            };
         let controller_address = config_holder.controller_address.clone();
         let controller_relayer_address = config_holder.controller_relayer_address.clone();
         let adapter_address = config_holder.adapter_address.clone();
@@ -650,6 +663,7 @@ impl From<ConfigHolder> for Config {
             provider_endpoint,
             chain_id,
             is_eigenlayer,
+            is_consistent_asset_and_node_account,
             controller_address,
             controller_relayer_address,
             adapter_address,
@@ -688,6 +702,10 @@ impl Config {
 
     pub fn is_eigenlayer(&self) -> bool {
         self.is_eigenlayer
+    }
+
+    pub fn is_consistent_asset_and_node_account(&self) -> bool {
+        self.is_consistent_asset_and_node_account
     }
 
     pub fn get_main_chain_id(&self) -> usize {
