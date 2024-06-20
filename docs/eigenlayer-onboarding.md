@@ -261,6 +261,7 @@ Note: After successful registration transaction, it is normal to NOT have instan
 ### Confirm Running Status
 
 - New logs are generated after the `node-client` starts up.
+- Call `NodeRegistry.getNode(Node account address)` and check `state`(the last bool value) of the `Node` struct, if `state` is true, the node is working.
 - The following ports should be listening (according to your config). You can try to access those ports from external environments (such as telnet)
   - node_advertised_committer_rpc_endpoint: "<EXTERNAL_IP>:50061"
   - node_management_rpc_endpoint: "0.0.0.0:50091"
@@ -271,6 +272,8 @@ Note: After successful registration transaction, it is normal to NOT have instan
   - After working as normal node `PartialSignatureFinished` and `PartialSignatureSent`
   - After working as committer node `AggregatedSignatureFinished` and `FulfillmentFinished`
 - Error logs do not necessarily represent irreversible errors. If you find that the error logs have grown significantly in a short period of time, please contact us.
+
+Note: We are currently developing a metrics and monitoring system to help you monitor the status of the node. Please stay tuned for updates.
 
 ### Log Off Node Account by Asset Account:
 
