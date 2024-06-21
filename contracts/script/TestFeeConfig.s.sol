@@ -14,7 +14,7 @@ import {Staking} from "Staking-v0.1/Staking.sol";
 
 // solhint-disable-next-line max-states-count
 contract TestFeeConfigScript is Script {
-    uint256 internal _deployerPrivateKey = vm.envUint("DEPLOY_PRIVATE_KEY");
+    uint256 internal _deployerPrivateKey = vm.envUint("ADMIN_PRIVATE_KEY");
 
     uint32 internal _fulfillmentFlatFeeEthPPMTier1 = uint32(vm.envUint("FULFILLMENT_FLAT_FEE_ARPA_PPM_TIER1"));
     uint32 internal _fulfillmentFlatFeeEthPPMTier2 = uint32(vm.envUint("FULFILLMENT_FLAT_FEE_ARPA_PPM_TIER2"));

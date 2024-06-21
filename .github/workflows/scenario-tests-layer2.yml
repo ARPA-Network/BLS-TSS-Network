@@ -31,7 +31,7 @@ jobs:
           go-version: "^1.20.0"
 
       - name: Clone Optimism
-        run: git clone https://github.com/Andlyn666/optimism.git --recurse-submodules
+        run: git clone -b randcast https://github.com/Andlyn666/optimism.git --recurse-submodules
         working-directory: ../
 
       - name: Setup Rust
@@ -44,10 +44,10 @@ jobs:
       - name: Install Anvil
         uses: foundry-rs/foundry-toolchain@v1
         with:
-          version: nightly-cc5637a979050c39b3d06bc4cc6134f0591ee8d0
+          version: nightly-5ac78a9cd4b94dc53d1fe5e0f42372b28b5a7559
       - name: start devnet
         run: |
-          make devnet-up-deploy > op.log
+          make devnet-up > op.log
         working-directory: ../optimism
       - name: Run Forge build
         run: |

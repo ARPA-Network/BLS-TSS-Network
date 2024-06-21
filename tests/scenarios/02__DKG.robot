@@ -27,15 +27,12 @@ Test Rebalance
     ${node4} =    Stake And Run Node    4
     ${node5} =    Stake And Run Node    5
 
-    ${result} =    All Nodes Have Keyword    Transaction successful(node_register)    ${NODE_PROCESS_LIST}
-    Should Be True    ${result}
-    ${get_share} =    All Nodes Have Keyword    Calling contract view get_shares    ${NODE_PROCESS_LIST}
-    ${group_result} =    Have Node Got Keyword    Group index:0 epoch:3 is available    ${NODE_PROCESS_LIST}    
+    ${group_result} =    All Nodes Have Keyword    dkg_status transfered from CommitSuccess to WaitForPostProcess    ${NODE_PROCESS_LIST}    
     Group Node Number Should Be    0    5
 
     ${node6} =    Stake And Run Node    6
     ${result} =        Get Keyword From Node Log    6    Transaction successful(node_register)
-    ${get_share} =    All Nodes Have Keyword    Calling contract view get_shares    ${NODE_PROCESS_LIST}
+
     ${group_result} =    Get Keyword From Node Log    6    is available
 
     Group Node Number Should Be    0    3
@@ -73,17 +70,19 @@ DKG Happy Path1
     Mine Blocks    8
     ${log_phase_2} =   Get Keyword From Node Log    2    Waiting for Phase 2 to start
     Mine Blocks    9
-    ${log_group_available} =   Get Keyword From Node Log    2    Group index:
+    ${log_group_available} =   Get Keyword From Node Log    2    dkg_status transfered from CommitSuccess to WaitForPostProcess:
+    Mine Blocks    20
+    Sleep    2s
     Group Node Number Should Be    0    3
     
-    ${slash_event} =    Get Event    ${CONTROLLER_CONTRACT}    NodeSlashed
+    ${slash_event} =    Get Event    ${NODE_REGISTRY_CONTRACT}    NodeSlashed
     Should Be Equal As Strings    ${slash_event['args']['nodeIdAddress']}    ${address4}
     Mine Blocks    20
     Sleep    10s
     Deploy User Contract
     Request Randomness
     Mine Blocks    6
-    ${result} =    Have Node Got Keyword    fulfill randomness successfully    ${NODE_PROCESS_LIST}
+    ${result} =    Have Node Got Keyword    Transaction successful(fulfill_randomness)    ${NODE_PROCESS_LIST}
     Sleep    5s
     Check Randomness
     Teardown Scenario Testing Environment
@@ -110,14 +109,16 @@ DKG Happy Path2
     Mine Blocks    8
     ${log_phase_2} =   Get Keyword From Node Log    2    Waiting for Phase 2 to start
     Mine Blocks    9
-    ${log_group_available} =       All Nodes Have Keyword    Group index:    ${NODE_PROCESS_LIST}
+    ${log_group_available} =       All Nodes Have Keyword    dkg_status transfered from CommitSuccess to WaitForPostProcess    ${NODE_PROCESS_LIST}
+    Mine Blocks    20
+    Sleep    2s
     Group Node Number Should Be    0    4
     ${group} =   Get Group    0
     ${ckeck_result} =    Check Group Status    ${group}
     
     Mine Blocks    20
     Sleep    2s
-    ${node_rewards} =    Get Event    ${CONTROLLER_CONTRACT}    NodeRewarded
+    ${node_rewards} =    Get Event    ${NODE_REGISTRY_CONTRACT}    NodeRewarded
 
     ${result} =    Has Equal Value    ${node_rewards['args']['nodeAddress']}    ${address1}    ${address2}    ${address3}    ${address4}
     Should Be True    ${result}
@@ -126,7 +127,7 @@ DKG Happy Path2
     Deploy User Contract
     Request Randomness
     
-    Have Node Got Keyword    Partial signature sent and accepted by committer    ${NODE_PROCESS_LIST}
+    Have Node Got Keyword    send partial signature to committer    ${NODE_PROCESS_LIST}
     Mine Blocks    10
     Sleep    3s
     Check Randomness
@@ -157,14 +158,12 @@ DKG Sad Path1
     ${node2} =    Stake And Run Node    2
     ${node3} =    Stake And Run Node    3
     ${node4} =    Stake And Run Node    4
-
-    ${result} =    All Nodes Have Keyword    Transaction successful(node_register)    ${NODE_PROCESS_LIST}
-
-    ${log_phase_1} =    All Nodes Have Keyword    Transaction successful(commit_dkg)    ${NODE_PROCESS_LIST}
+    
+    ${log_phase_1} =    All Nodes Have Keyword    dkg_status transfered from CommitSuccess to WaitForPostProcess    ${NODE_PROCESS_LIST}
     
     Mine Blocks    20
-    Sleep    5s
-    ${slash_events} =    Get Events    ${CONTROLLER_CONTRACT}    NodeSlashed
+    Sleep    2s
+    ${slash_events} =    Get Events    ${NODE_REGISTRY_CONTRACT}    NodeSlashed
     
     ${result} =    Events Should Contain All Value    ${slash_events}    nodeIdAddress    ${address1}    ${address2}    ${address3}    ${address4}
     Should Be True    ${result}
@@ -172,11 +171,109 @@ DKG Sad Path1
     Should Be Equal As Strings    ${group[7]}    False
     Teardown Scenario Testing Environment
 
+DKG Commit1
+    [Documentation]
+    ...    1. Given a group of nodes do DKG
+    ...    2. When 1, 2 submit their results
+    ...    3. 3 quit
+    ...    4. Expect 3 be slashed
+    Sleep    3s
+    Set Global Variable    $BLOCK_TIME    1
+    Set Enviorment And Deploy Contract
+    Sleep    3s
+    ${address1} =    Get Address By Index    1
+    ${address2} =    Get Address By Index    2
+    ${address3} =    Get Address By Index    3
+
+    ${node3} =    Stake And Run Node    3
+    ${log_register} =    Get Keyword From Node Log    3    Transaction successful(node_register)
+    Kill Node By Index    3
+    ${node1} =    Stake And Run Node    1
+    ${node2} =    Stake And Run Node    2
+    
+    Have Node Got Keyword    Transaction successful(post_process_dkg)    ${NODE_PROCESS_LIST}
+    Mine Blocks    20
+    Sleep    2s
+    ${slash_event} =    Get Event    ${NODE_REGISTRY_CONTRACT}    NodeSlashed
+    ${address3} =    To Checksum Address    ${address3}
+    Should Be Equal As Strings    ${slash_event['args']['nodeIdAddress']}    ${address3}
+    Teardown Scenario Testing Environment
+
+DKG Commit2
+    [Documentation]
+    ...    1. Given a group of nodes do DKG
+    ...    2. When 1 submit their results
+    ...    3. 2, 3 quit
+    ...    4. Expect 2, 3 be slashed
+    Sleep    3s
+    Set Global Variable    $BLOCK_TIME    1
+    Set Enviorment And Deploy Contract
+    Sleep    3s
+    ${address1} =    Get Address By Index    1
+    ${address2} =    Get Address By Index    2
+    ${address3} =    Get Address By Index    3
+
+    ${node3} =    Stake And Run Node    3
+    ${log_register} =    Get Keyword From Node Log    3    Transaction successful(node_register)
+    Kill Node By Index    3
+    
+    ${node2} =    Stake And Run Node    2
+    ${log_register} =    Get Keyword From Node Log    2    Transaction successful(node_register)
+    Kill Node By Index    2
+
+    ${node1} =    Stake And Run Node    1
+
+    Have Node Got Keyword    Transaction successful(post_process_dkg)    ${NODE_PROCESS_LIST}
+    Mine Blocks    20
+    Sleep    2s
+    ${slash_events} =    Get Events    ${NODE_REGISTRY_CONTRACT}    NodeSlashed
+    
+    ${result} =    Events Should Contain All Value    ${slash_events}    nodeIdAddress    ${address2}    ${address3}
+    Teardown Scenario Testing Environment
+
+DKG Commit3
+    [Documentation]
+    ...    1. Given a group of nodes do DKG
+    ...    2. When 1, 2, 3 submit their results
+    ...    3. 4 quit
+    ...    4. Expect 4 be slashed and gorup 0 has 3 nodes
+    Sleep    3s
+    Set Global Variable    $BLOCK_TIME    1
+    Set Enviorment And Deploy Contract
+    Sleep    3s
+    ${address1} =    Get Address By Index    1
+    ${address2} =    Get Address By Index    2
+    ${address3} =    Get Address By Index    3
+    ${address4} =    Get Address By Index    4
+
+    ${node3} =    Stake And Run Node    4
+    ${log_register} =    Get Keyword From Node Log    4    Transaction successful(node_register)
+    Kill Node By Index    4
+    
+    ${node2} =    Stake And Run Node    3
+    ${node2} =    Stake And Run Node    2
+    ${node1} =    Stake And Run Node    1
+
+    Have Node Got Keyword    Transaction successful(post_process_dkg)    ${NODE_PROCESS_LIST}
+    Mine Blocks    20
+    Sleep    2s
+    ${slash_events} =    Get Events    ${NODE_REGISTRY_CONTRACT}    NodeSlashed
+    
+    ${result} =    Events Should Contain All Value    ${slash_events}    nodeIdAddress    ${address4}
+
+    ${group} =   Get Group    0
+    Group Node Number Should Be    0    3
+
+    Teardown Scenario Testing Environment
+
 *** Test Cases ***
 
 Run DKG Test cases
     [Tags]    l1
     Repeat Keyword    1    Test Rebalance
-    #Repeat Keyword    1    DKG Happy Path1
+    Repeat Keyword    1    DKG Happy Path1
     Repeat Keyword    1    DKG Happy Path2
     Repeat Keyword    1    DKG Sad Path1
+    Repeat Keyword    1    DKG Commit1
+    Repeat Keyword    1    DKG Commit2
+    Repeat Keyword    1    DKG Commit3

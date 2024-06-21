@@ -18,6 +18,7 @@ def get_log_info(log, keyword):
         try:
             log_json = json.loads(line)
             message = log_json["message"]
+            message = json.dumps(message)
             if message.find(keyword) != -1:
                 return message
         except ValueError:
@@ -44,7 +45,7 @@ def get_keyword_from_node_log(node_idx, keyword, retry_time=30):
     return None
 
 
-def have_node_got_keyword(keyword, node_process_list, retry_time=10):
+def have_node_got_keyword(keyword, node_process_list, retry_time=30):
     """
     Get a keyword from all nodes
     :param keyword: keyword to look for in the log
@@ -54,14 +55,14 @@ def have_node_got_keyword(keyword, node_process_list, retry_time=10):
         retry_time = retry_time - 1
         node_idx = 1
         while node_idx <= len(node_process_list):
-            log_info = get_keyword_from_node_log(node_idx, keyword, 30)
+            log_info = get_keyword_from_node_log(node_idx, keyword, 2)
             if log_info is not None:
                 return True
             node_idx = node_idx + 1
     return False
 
 
-def all_nodes_have_keyword(keyword, node_process_list, retry_time=300, node_idx=1):
+def all_nodes_have_keyword(keyword, node_process_list, retry_time=30, node_idx=1):
     """
     Check if all nodes have a keyword in their logs
     :param keyword: keyword to look for in the log

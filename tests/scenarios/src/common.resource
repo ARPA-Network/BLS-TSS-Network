@@ -128,7 +128,7 @@ Get ARPA Balance
     [Documentation]    Gets the ARPA balance of a given address
     [Arguments]    ${address}
     ${result} =    Run Process    cast    call    ${ARPA_CONTRACT_ADDRESS}
-    ...    balanceOf(address)(uint256)    ${address}    
+    ...    balanceOf(address)    ${address}    
     Process Completes Successfully    ${result}
     RETURN    ${result.stdout}
 
@@ -209,11 +209,9 @@ Get Tip
 Cast Send   
     [Documentation]    Package Cast Send   
     [Arguments]    ${address}    ${method}   ${key}    ${rpc_url}
-    ${tip} =    Get Tip    ${rpc_url}
-    ${tip} =    Convert To Integer    ${tip * 6 / 5}
     IF  ${rpc_url == ''}
-         ${result} =    Run    cast send ${address} ${method} --private-key=${key} --priority-gas-price=${tip}
+         ${result} =    Run    cast send ${address} ${method} --private-key=${key}
     ELSE
-        ${result} =    Run  cast send ${address} ${method} --private-key=${key} --rpc-url=${rpc_url} --priority-gas-price=${tip}
+        ${result} =    Run  cast send ${address} ${method} --private-key=${key} --rpc-url=${rpc_url}
     END
     

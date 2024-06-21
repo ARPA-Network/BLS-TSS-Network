@@ -32,38 +32,45 @@ Set Op Enviorment And Deploy Contract
     Bound OP Contract ABI
     Set ARPA Address
     Parse Node
-    ${relay_config} =    Create Relay List    ws://127.0.0.1:9546    901    ws://127.0.0.1:9646    8453
-    Create Node Config    ${CONTRACT_ADDRESSES['Controller']}    ${CONTRACT_ADDRESSES['ERC1967Proxy']}    ${CONTRACT_ADDRESSES['ControllerRelayer']}    900    ${relay_config}
+    ${contract_oracle} =    Get Value From Env    OP_CONTROLLER_ORACLE_ADDRESS
+    ${adapter} =    Get Value From Env    OP_ADAPTER_ADDRESS
+
+    ${relay_config} =    Create Relay List    ${contract_oracle}    ${adapter}    ws://127.0.0.1:9546    901
+    Create Node Config    ${contract_addresses['ERC1967Proxy2']}    ${contract_addresses['ERC1967Proxy3']}    ${contract_addresses['ERC1967Proxy4']}    900    ${relay_config}
 
 Set Op Enviormnet
-    ${result} =    Exec Script    OPControllerOracleLocalTest.s.sol:OPControllerOracleLocalTestScript    http://localhost:9645
-    ${contract_addresses} =    Get Contract Address From File    contracts/broadcast/OPControllerOracleLocalTest.s.sol/8453/run-latest.json
-    Set Environment Variable    BASE_ARPA_ADDRESS    ${contract_addresses['Arpa']}
-    Set Environment Variable    BASE_CONTROLLER_ORACLE_ADDRESS    ${contract_addresses['ControllerOracle']}
-    Set Environment Variable    BASE_ADAPTER_ADDRESS    ${contract_addresses['ERC1967Proxy']}
+    # ${result} =    Exec Script    OPControllerOracleLocalTest.s.sol:OPControllerOracleLocalTestScript    http://localhost:9645
+    # ${contract_addresses} =    Get Contract Address From File    contracts/broadcast/OPControllerOracleLocalTest.s.sol/8453/run-latest.json
+    # Set Environment Variable    BASE_ARPA_ADDRESS    ${contract_addresses['Arpa']}
+    # Set Environment Variable    BASE_CONTROLLER_ORACLE_ADDRESS    ${contract_addresses['ControllerOracle']}
+    # Set Environment Variable    BASE_ADAPTER_ADDRESS    ${contract_addresses['ERC1967Proxy']}
     ${result} =    Exec Script    OPControllerOracleLocalTest.s.sol:OPControllerOracleLocalTestScript    http://localhost:9545
     ${contract_addresses} =    Get Contract Address From File    contracts/broadcast/OPControllerOracleLocalTest.s.sol/901/run-latest.json
     Set Environment Variable    OP_ARPA_ADDRESS    ${contract_addresses['Arpa']}
-    Set Environment Variable    OP_CONTROLLER_ORACLE_ADDRESS    ${contract_addresses['ControllerOracle']}
-    Set Environment Variable    OP_ADAPTER_ADDRESS    ${contract_addresses['ERC1967Proxy']}
+    Set Environment Variable    OP_CONTROLLER_ORACLE_ADDRESS    ${contract_addresses['ERC1967Proxy0']}
+    Set Environment Variable    OP_ADAPTER_ADDRESS    ${contract_addresses['ERC1967Proxy1']}
  
-    ${result} =    Exec Script    ControllerLocalTestScenario.s.sol:ControllerLocalTestScript
+    ${result} =    Exec Script    ControllerLocalTest.s.sol:ControllerLocalTestScript
     
-    ${contract_addresses} =    Get Contract Address From File    contracts/broadcast/ControllerLocalTestScenario.s.sol/900/run-latest.json
+    ${contract_addresses} =    Get Contract Address From File    contracts/broadcast/ControllerLocalTest.s.sol/900/run-latest.json
     Set Global Variable    $CONTRACT_ADDRESSES    ${contract_addresses}
     Set Environment Variable    ARPA_ADDRESS    ${contract_addresses['Arpa']}
-    Set Environment Variable    CONTROLLER_ADDRESS    ${contract_addresses['Controller']}
+    Set Environment Variable    CONTROLLER_ADDRESS    ${contract_addresses['ERC1967Proxy2']}
     Set Environment Variable    STAKING_ADDRESS    ${contract_addresses['Staking']}
-    Set Environment Variable   ADAPTER_ADDRESS    ${contract_addresses['ERC1967Proxy']}
+    Set Environment Variable   ADAPTER_ADDRESS    ${contract_addresses['ERC1967Proxy3']}
+    Set Environment Variable    EXISTING_L1_CONTROLLER_RELAYER    ${contract_addresses['ERC1967Proxy4']}
+
+    ${result} =    Exec Script    CreateAndSetOPChainMessenger.s.sol:CreateAndSetOPChainMessengerScript
+    ${contract_addresses} =    Get Contract Address From File    contracts/broadcast/CreateAndSetOPChainMessenger.s.sol/900/run-latest.json
     Set Environment Variable    L1_CHAIN_MESSENGER_ADDRESS    ${contract_addresses['OPChainMessenger']}
     ${result} =    Exec Script    OPControllerOracleInitializationLocalTest.s.sol:OPControllerOracleInitializationLocalTestScript    http://localhost:9545
-    ${result} =    Exec Script    OPControllerOracleInitializationLocalTest.s.sol:OPControllerOracleInitializationLocalTestScript    http://localhost:9645
-    ${result} =    Exec Script    InitStakingLocalTest.s.sol:InitStakingLocalTestScript
+    # ${result} =    Exec Script    OPControllerOracleInitializationLocalTest.s.sol:OPControllerOracleInitializationLocalTestScript    http://localhost:9645
+    ${result} =    Exec Script    InitStakingLocalScenarioTest.s.sol:InitStakingLocalTestScript
     ${result} =    Exec Script    StakeOperatorScenarioTest.s.sol:StakeOperatorScenarioTestScript
 
 Bound OP Contract ABI
     [Documentation]    Bound contract ABI to handle contract function call
-    ${proxy_address} =    Set Variable    ${CONTRACT_ADDRESSES['Controller']}
+    ${proxy_address} =    Set Variable    ${contract_addresses['ERC1967Proxy2']}
     ${proxy_address} =    To Checksum Address    ${proxy_address}
     Set Global Variable    $PROXY_CONTRACT_ADDRESS    ${proxy_address}
     ${proxy_contract} =    Get Contract    ${PROXY_OUTPUT}Controller.sol/Controller.json    ${PROXY_CONTRACT_ADDRESS}
@@ -100,7 +107,7 @@ Request Randomness OP
     [Documentation]    Cast request randomness
     [Arguments]    ${url}
     ${key} =       Get Value From Env    USER_PRIVATE_KEY
-    ${result} =    Cast Send    ${USER_CONTRACT_ADDRESS}    "requestRandomness()"  ${key}    ${url}
+    ${result} =    Cast Send    ${USER_CONTRACT_ADDRESS}    "getRandomNumber()"  ${key}    ${url}
 
 Check Randomness OP
     [Documentation]    Check the randomness
