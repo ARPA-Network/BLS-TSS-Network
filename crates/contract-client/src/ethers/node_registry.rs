@@ -68,7 +68,7 @@ impl NodeRegistryClient {
 
         let digest_hash = avs_directory_contract
             .calculate_operator_avs_registration_digest_hash(
-                self.client.inner().address(),
+                signer.address(),
                 service_manager_address,
                 salt,
                 expiry,

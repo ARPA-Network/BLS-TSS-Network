@@ -95,7 +95,7 @@ impl Default for ConfigHolder {
             node_management_rpc_endpoint: "[::1]:50090".to_string(),
             node_management_rpc_token: "for_test".to_string(),
             node_statistics_http_endpoint: "http://localhost:50080".to_string(),
-            provider_endpoint: "localhost:8545".to_string(),
+            provider_endpoint: "ws://localhost:8545".to_string(),
             chain_id: 0,
             is_eigenlayer: Some(false),
             is_consistent_asset_and_node_account: Some(false),

@@ -195,19 +195,25 @@ cd <YOUR_ARPA_NETWORK_ROOT_DIRECTORY>
 # Pull the latest Docker image
 docker pull ghcr.io/arpa-network/node-shell:latest
 
-docker run \
+docker run -it \
 -w /app \
 -v <path of config file>:/app/config.yml \
 -v <path of DB folder>:/app/db \
 -v <path of node account keystore file>:/app/node.keystore \
+-v <path of asset account keystore file>:/app/asset.keystore \
 --network=host \
 ghcr.io/arpa-network/node-shell:latest "node-shell -c /app/config.yml"
 
-ARPA Node CLI〉send register-as-eigenlayer-operator <asset-account-keystore-path> <asset-account-keystore-password>
+ARPA Node CLI〉send register-as-eigenlayer-operator asset.keystore <asset-account-keystore-password>
 
 ```
 
-For more information about the `node-shell`, please refer to the [node-shell](https://github.com/ARPA-Network/BLS-TSS-Network/blob/main/crates/arpa-node/README.md#arpa-node-cli) documentation.
+Note:
+
+- Based on the fluctuation of the websocket connection, the `node-shell` may hang at startup. It doesn't always mean a poor connection. Please double-check the provider endpoint, then **shut it down and restart it**.
+- Password of keystore file of asset account can be prefixed with '\$' to read from environment variable. Example: `$ARPA_ASSET_ACCOUNT_KEYSTORE_PASSWORD`.
+
+Exit repl with CTRL+D. For more information about the `node-shell`, please refer to the [node-shell](https://github.com/ARPA-Network/BLS-TSS-Network/blob/main/crates/arpa-node/README.md#arpa-node-cli) documentation.
 
 If you are a smart-contract operator or want to manually register, please follow the steps below:
 
@@ -255,6 +261,7 @@ Note: After successful registration transaction, it is normal to NOT have instan
 ### Confirm Running Status
 
 - New logs are generated after the `node-client` starts up.
+- Call `NodeRegistry.getNode(Node account address)` and check `state`(the last bool value) of the `Node` struct, if `state` is true, the node is working.
 - The following ports should be listening (according to your config). You can try to access those ports from external environments (such as telnet)
   - node_advertised_committer_rpc_endpoint: "<EXTERNAL_IP>:50061"
   - node_management_rpc_endpoint: "0.0.0.0:50091"
@@ -265,6 +272,8 @@ Note: After successful registration transaction, it is normal to NOT have instan
   - After working as normal node `PartialSignatureFinished` and `PartialSignatureSent`
   - After working as committer node `AggregatedSignatureFinished` and `FulfillmentFinished`
 - Error logs do not necessarily represent irreversible errors. If you find that the error logs have grown significantly in a short period of time, please contact us.
+
+Note: We are currently developing a metrics and monitoring system to help you monitor the status of the node. Please stay tuned for updates.
 
 ### Log Off Node Account by Asset Account:
 
