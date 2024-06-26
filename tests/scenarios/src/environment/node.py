@@ -103,18 +103,18 @@ def parse_chain_result_to_account_list():
 
 
 def create_relay_list(
-    op_endpoint=None, op_chain_id=None, base_endpoint=None, base_chain_id=None
+    controller_oracle_address, adapter_address,op_endpoint=None, op_chain_id=None, base_endpoint=None, base_chain_id=None
 ):
     """
     Create the relay list.
     """
 
-    def generate_relay_string(description, chain_id, endpoint):
+    def generate_relay_string(description, chain_id, endpoint, controller_oracle_address, adapter_address):
         return f"""- chain_id: {chain_id}
     description: "{description}"
-    provider_endpoint: {endpoint}
-    controller_oracle_address: "0xCf7Ed3AccA5a467e9e704C703E8D87F634fB0Fc9"
-    adapter_address: "0x5FC8d32690cc91D4c39d9d3abcBD16989F875707"
+    provider_endpoint: "{endpoint}"
+    controller_oracle_address: "{controller_oracle_address}"
+    adapter_address: "{adapter_address}"
     
     listeners:
       - l_type: Block
@@ -158,11 +158,11 @@ def create_relay_list(
     relay_chain_config = []
 
     if op_endpoint is not None and op_chain_id is not None:
-        relay_chain_config.append(generate_relay_string("OP", op_chain_id, op_endpoint))
+        relay_chain_config.append(generate_relay_string("OP", op_chain_id, op_endpoint,controller_oracle_address, adapter_address))
 
     if base_endpoint is not None and base_chain_id is not None:
         relay_chain_config.append(
-            generate_relay_string("base", base_chain_id, base_endpoint)
+            generate_relay_string("base", base_chain_id, base_endpoint, controller_oracle_address, adapter_address)
         )
 
     joined_list = "\n  ".join(relay_chain_config)
@@ -195,6 +195,10 @@ node_management_rpc_endpoint: \"[::1]:50{201 + i}\"
 node_management_rpc_token: "for_test"
 
 provider_endpoint: "{provider_endpoint}"
+
+node_statistics_http_endpoint: "[::1]:501{81 + i}"
+
+is_eigenlayer: false
 
 chain_id: {chain_id}
 
@@ -317,6 +321,7 @@ def kill_process_by_port(port):
         os.system(command)
     else:
         command = f"lsof -ti :{port} | xargs -r kill -9"
+        print(command)
         subprocess.call(command, shell=True)
 
 

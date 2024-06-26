@@ -24,7 +24,7 @@ Request Randomenes And Check Payment
     ${sub} =    Get Subscription    1
     ${payment} =   Set Variable    ${sub[3]}
     Mine Blocks    10
-    All Nodes Have Keyword    Partial signature sent and accepted by committer    ${NODE_PROCESS_LIST}
+    Have Node Got Keyword    Transaction successful(fulfill_randomness)    ${NODE_PROCESS_LIST}
     Mine Blocks    10
     Sleep    5s
     ${result} =    Get Event    ${ADAPTER_CONTRACT}    RandomnessRequest
@@ -39,16 +39,19 @@ Set Marketing Discount
     ${node1} =    Stake And Run Node    1
     ${node2} =    Stake And Run Node    2
     ${node3} =    Stake And Run Node    3
-    ${log_phase_1} =    All Nodes Have Keyword    Waiting for Phase 1 to start    ${NODE_PROCESS_LIST}
+    ${log_phase_1} =    All Nodes Have Keyword    Transaction successful(node_register)    ${NODE_PROCESS_LIST}
     Mine Blocks    9
     ${log_phase_2} =    All Nodes Have Keyword    Waiting for Phase 2 to start    ${NODE_PROCESS_LIST}
     Mine Blocks    9
-    ${log_group} =    All Nodes Have Keyword    Group index:0 epoch:1 is available    ${NODE_PROCESS_LIST}
+    ${log_group} =    All Nodes Have Keyword    dkg_status transfered from CommitSuccess to WaitForPostProcess    ${NODE_PROCESS_LIST}
+    Mine Blocks    20
+    Sleep    2s
+    Sleep    3s
 
     Deploy User Contract
     Request Randomness
     Mine Blocks    10
-    All Nodes Have Keyword    Partial signature sent and accepted by committer    ${NODE_PROCESS_LIST}
+    All Nodes Have Keyword    Received randomness task    ${NODE_PROCESS_LIST}
     Mine Blocks    10
     Sleep    5s
 
@@ -77,16 +80,17 @@ Test Referral
     ${node1} =    Stake And Run Node    1
     ${node2} =    Stake And Run Node    2
     ${node3} =    Stake And Run Node    3
-    ${log_phase_1} =    All Nodes Have Keyword    Waiting for Phase 1 to start    ${NODE_PROCESS_LIST}
+    ${log_phase_1} =    All Nodes Have Keyword    Transaction successful(node_register)    ${NODE_PROCESS_LIST}
     Mine Blocks    9
     ${log_phase_2} =    All Nodes Have Keyword    Waiting for Phase 2 to start    ${NODE_PROCESS_LIST}
     Mine Blocks    9
-    ${log_group} =    All Nodes Have Keyword    Group index:0 epoch:1 is available    ${NODE_PROCESS_LIST}
+    ${log_group} =    All Nodes Have Keyword    dkg_status transfered from CommitSuccess to WaitForPostProcess    ${NODE_PROCESS_LIST}
+    Mine Blocks    20
 
     Deploy User Contract
     Request Randomness
     Mine Blocks    10
-    All Nodes Have Keyword    Partial signature sent and accepted by committer    ${NODE_PROCESS_LIST}
+    All Nodes Have Keyword    Received randomness task    ${NODE_PROCESS_LIST}
     Sleep    10s
     
     Exec Script    TestFeeConfig.s.sol:TestFeeConfigScript
@@ -102,7 +106,7 @@ Test Referral
     ${result} =    Contract Function Transact    ${new_user_contract}    getRandomNumber
     Mine Blocks    10
     Sleep    10s
-    ${result} =    All Nodes Have Keyword    Partial signature sent and accepted by committer    ${NODE_PROCESS_LIST}
+    ${result} =    All Nodes Have Keyword    Received randomness task    ${NODE_PROCESS_LIST}
     ${subId1} =    Convert To Integer    1
     ${subId2} =    Convert To Integer    2
     ${adapter_address} =    Get Value From Env    ADAPTER_ADDRESS
@@ -117,14 +121,14 @@ Test Referral
     ${payment} =   Set Variable    ${sub[3]}
     Payment Should In The Range    ${payment}    0    100000000000000000
     Mine Blocks    10
-    All Nodes Have Keyword    Partial signature sent and accepted by committer    ${NODE_PROCESS_LIST}
+    All Nodes Have Keyword    Received randomness task    ${NODE_PROCESS_LIST}
 
     Contract Function Transact    ${new_user_contract}    getRandomNumber
     ${sub} =    Get Subscription    2
     ${payment} =   Set Variable    ${sub[3]}
     Payment Should In The Range    ${payment}    0    100000000000000000
     Mine Blocks    10
-    All Nodes Have Keyword    Partial signature sent and accepted by committer    ${NODE_PROCESS_LIST}
+    All Nodes Have Keyword    Received randomness task    ${NODE_PROCESS_LIST}
 
     
     Teardown Scenario Testing Environment

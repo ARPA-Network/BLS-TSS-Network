@@ -27,7 +27,7 @@ contract OPGetRandomNumberLocalTestScript is Script {
 
         adapter.addConsumer(subId, address(getRandomNumberExample));
 
-        getRandomNumberExample.getRandomNumber();
+       getRandomNumberExample.getRandomNumber();
 
         // getRandomNumberExample.getRandomNumber();
     }

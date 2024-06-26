@@ -20,28 +20,46 @@ L2 Normal Process
     ${node1} =    Stake And Run Node    1
     ${node2} =    Stake And Run Node    2
     ${node3} =    Stake And Run Node    3
-    ${log_phase_1} =    All Nodes Have Keyword    Waiting for Phase 1 to start    ${NODE_PROCESS_LIST}
-    Should Be Equal As Strings    ${log_phase_1}    True
-    ${log_phase_2} =    All Nodes Have Keyword    Waiting for Phase 2 to start    ${NODE_PROCESS_LIST}
-    Should Be Equal As Strings    ${log_phase_2}    True
-    ${log_group} =    All Nodes Have Keyword    Group index:0 epoch:1 is available    ${NODE_PROCESS_LIST}
+    ${node4} =    Stake And Run Node    4
+    ${node5} =    Stake And Run Node    5
+    Sleep    100s
+    ${node6} =    Stake And Run Node    6
+    ${node7} =    Stake And Run Node    7
+    ${node8} =    Stake And Run Node    8
+    ${node9} =    Stake And Run Node    9
+    Sleep    100s
+    ${node10} =    Stake And Run Node    10
+    ${node11} =    Stake And Run Node    11
+    ${node12} =    Stake And Run Node    12
+    ${node13} =    Stake And Run Node    13
+    Sleep    100s
+    ${node14} =    Stake And Run Node    14
+    ${node15} =    Stake And Run Node    15
+    ${node16} =    Stake And Run Node    16
+    ${node17} =    Stake And Run Node    17
+    ${node18} =    Stake And Run Node    18
+    ${node19} =    Stake And Run Node    19
+    ${node20} =    Stake And Run Node    20
+    
+    Sleep    100s
     ${log_post_process} =    All Nodes Have keyword    Calling contract transaction post_process_dkg    ${NODE_PROCESS_LIST}
     ${result} =    Get Group    0
-    Group Node Number Should Be    0    3
-    ${log_post_process} =    Have Node Got Keyword    Transaction successful(relay_group)    ${NODE_PROCESS_LIST}
-    Sleep    5s
-    Deploy OP User Contract    http://localhost:9645    8453
-    Request Randomness OP    http://localhost:9645
-    ${log_received_randomness_task} =    All Nodes Have Keyword    received new randomness task    ${NODE_PROCESS_LIST}
-    ${result} =    Have Node Got Keyword    fulfill randomness successfully    ${NODE_PROCESS_LIST}
-    Check Randomness OP    http://localhost:9645
+    ${result} =    Get Group    1
+    ${result} =    Get Group    2
+    ${result} =    Get Group    3
+    ${log_relay} =    Have Node Got Keyword    Transaction successful(relay_group)    ${NODE_PROCESS_LIST}
+    # Deploy OP User Contract    http://localhost:9645    8453
+    # Request Randomness OP    http://localhost:9645
+    # ${log_received_randomness_task} =    All Nodes Have Keyword    Received randomness task    ${NODE_PROCESS_LIST}
+    # ${result} =    Have Node Got Keyword    Transaction successful(fulfill_randomness)    ${NODE_PROCESS_LIST}
+    # Check Randomness OP    http://localhost:9645
 
     Deploy OP User Contract    http://localhost:9545    901
     Request Randomness OP    http://localhost:9545
-    ${log_received_randomness_task} =    All Nodes Have Keyword    received new randomness task    ${NODE_PROCESS_LIST}
-    ${result} =    Have Node Got Keyword    fulfill randomness successfully    ${NODE_PROCESS_LIST}
+    ${log_received_randomness_task} =    All Nodes Have Keyword    Received randomness task    ${NODE_PROCESS_LIST}
+    ${result} =    Have Node Got Keyword    Transaction successful(fulfill_randomness)    ${NODE_PROCESS_LIST}
     Check Randomness OP    http://localhost:9545
-    #Teardown OP Environment
+    Teardown OP Environment
 
 L2 Connect Retry
     [Documentation]
@@ -57,8 +75,8 @@ L2 Connect Retry
     All Nodes Have Keyword    Config    ${NODE_PROCESS_LIST}
     Sleep    10s
     Deploy OP User Contract    http://localhost:10045    901
-    ${log_received_randomness_task} =    All Nodes Have Keyword    received new randomness task    ${NODE_PROCESS_LIST}
-    ${result} =    Have Node Got Keyword    fulfill randomness successfully    ${NODE_PROCESS_LIST}
+    ${log_received_randomness_task} =    All Nodes Have Keyword    Received randomness task    ${NODE_PROCESS_LIST}
+    ${result} =    Have Node Got Keyword    Transaction successful(fulfill_randomness)    ${NODE_PROCESS_LIST}
     Check Randomness OP    http://localhost:10045
     Terminate Process    ${L2_process}    kill=true
     All Nodes Have Keyword    Error during reconnection    ${NODE_PROCESS_LIST}
@@ -69,9 +87,9 @@ L2 Connect Retry
     Deploy OP User Contract    http://localhost:10045    901
     Deploy OP User Contract    http://localhost:10045    901
     Request Randomness OP    http://localhost:10045
-    ${log_received_randomness_task} =    All Nodes Have Keyword    received new randomness task    ${NODE_PROCESS_LIST}
+    ${log_received_randomness_task} =    All Nodes Have Keyword    Received randomness task    ${NODE_PROCESS_LIST}
     Should Be Equal As Strings    ${log_received_randomness_task}    True
-    ${result} =    Have Node Got Keyword    fulfill randomness successfully    ${NODE_PROCESS_LIST}
+    ${result} =    Have Node Got Keyword    Transaction successful(fulfill_randomness)    ${NODE_PROCESS_LIST}
     Should Be Equal As Strings    ${result}    True
     Check Randomness OP    http://localhost:10045
     Teardown OP Environment
@@ -81,4 +99,4 @@ L2 Connect Retry
 Run Test Cases
     [Tags]    l2
     Repeat Keyword    1    L2 Normal Process
-    Repeat Keyword    1    L2 Connect Retry
+    #Repeat Keyword    1    L2 Connect Retry

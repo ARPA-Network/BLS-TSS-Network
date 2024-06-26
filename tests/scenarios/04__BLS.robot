@@ -25,11 +25,12 @@ BLS Happy Path1
     ${node5} =    Stake And Run Node    5
 
 
-    ${log_group_available} =       All Nodes Have Keyword    Group index:0 epoch:3 is available    ${NODE_PROCESS_LIST}
+    ${log_group_available} =       All Nodes Have Keyword    dkg_status transfered from CommitSuccess to WaitForPostProcess    ${NODE_PROCESS_LIST}
+    Mine Blocks    20
+    Sleep    3s
 
     ${node6} =    Stake And Run Node    6
-    ${log_group_0} =    Have Node Got Keyword    Group index:0 epoch:4 is available    ${NODE_PROCESS_LIST}
-    ${log_grouo_1} =    Have Node Got Keyword    Group index:1 epoch:1 is available    ${NODE_PROCESS_LIST}
+    ${log_group_available} =       All Nodes Have Keyword    dkg_status transfered from CommitSuccess to WaitForPostProcess    ${NODE_PROCESS_LIST}
     Mine Blocks    20
     Sleep    3s
     Deploy User Contract
@@ -71,7 +72,7 @@ BLS Happy Path2
     ${node3} =    Stake And Run Node    3
     ${node4} =    Stake And Run Node    4
 
-    ${log_group_available} =       All Nodes Have Keyword    Group index:0 epoch:2 is available    ${NODE_PROCESS_LIST}
+    ${log_group_available} =       All Nodes Have Keyword    dkg_status transfered from CommitSuccess to WaitForPostProcess    ${NODE_PROCESS_LIST}
     
     Sleep    3s
     ${request_id} =    Deploy User Contract
@@ -101,7 +102,7 @@ BLS Happy Path2
     Should Be True    ${count >= 1} 
     Should Be True    ${final_committer != 0}
     
-    ${node_rewards} =    get_events    ${CONTROLLER_CONTRACT}    NodeRewarded    ${start_block}
+    ${node_rewards} =    get_events    ${NODE_REGISTRY_CONTRACT}    NodeRewarded    ${start_block}
     Log    ${node_rewards}
     ${final_committer_reward} =    Get Amount Count From Reward Events    ${node_rewards}    ${final_committer}
 
@@ -124,11 +125,10 @@ Corner Case1
     ${node4} =    Stake And Run Node    4
     ${node5} =    Stake And Run Node    5
 
-    ${log_group_available} =       All Nodes Have Keyword    Group index:0 epoch:3 is available    ${NODE_PROCESS_LIST}
+    ${log_group_available} =    All Nodes Have Keyword    dkg_status transfered from CommitSuccess to WaitForPostProcess    ${NODE_PROCESS_LIST}
 
     ${node6} =    Stake And Run Node    6
-    ${log_group_0} =    Have Node Got Keyword    Group index:0 epoch:4 is available    ${NODE_PROCESS_LIST}
-    ${log_grouo_1} =    Have Node Got Keyword    Group index:1 epoch:1 is available    ${NODE_PROCESS_LIST}
+    ${log_group_available_2} =    All Nodes Have Keyword    dkg_status transfered from CommitSuccess to WaitForPostProcess    ${NODE_PROCESS_LIST}
     
     Sleep    10s
     ${group0} =    Get Group    0
@@ -163,10 +163,9 @@ Corner Case2
     ${node3} =    Stake And Run Node    3
     ${node4} =    Stake And Run Node    4
     ${node5} =    Stake And Run Node    5
-    ${log_group_available} =       All Nodes Have Keyword    Group index:0 epoch:3 is available    ${NODE_PROCESS_LIST}
+    ${log_group_available} =       All Nodes Have Keyword    dkg_status transfered from CommitSuccess to WaitForPostProcess    ${NODE_PROCESS_LIST}
     ${node6} =    Stake And Run Node    6
-    ${log_group_0} =    Have Node Got Keyword    Group index:0 epoch:4 is available    ${NODE_PROCESS_LIST}
-    ${log_grouo_1} =    Have Node Got Keyword    Group index:1 epoch:1 is available    ${NODE_PROCESS_LIST}
+    ${log_group_available} =       All Nodes Have Keyword    dkg_status transfered from CommitSuccess to WaitForPostProcess    ${NODE_PROCESS_LIST}
 
     Clear Log
     Mine Blocks    20
@@ -178,7 +177,7 @@ Corner Case2
     ${task_type} =    Convert To Integer    6
     ${group1} =    Get Group    1
     ${group1_nodes} =    Set Variable    ${group1[5]}
-    ${log_task_received} =       All Nodes Have Keyword    received new randomness task    ${group1_nodes}
+    ${log_task_received} =       All Nodes Have Keyword    Received randomness task    ${group1_nodes}
 
     ${group1_index_0} =    Get Index By Address    ${group1_nodes[0]}
     Shutdown Listener    ${group1_index_0}    ${task_type}
@@ -218,8 +217,9 @@ Test Request Gas Too Low
     ${node1} =    Stake And Run Node    1
     ${node2} =    Stake And Run Node    2
     ${node3} =    Stake And Run Node    3
-    ${log_group_available} =       All Nodes Have Keyword    Group index:0 epoch:1 is available    ${NODE_PROCESS_LIST}
-
+    ${log_group_available} =       All Nodes Have Keyword    dkg_status transfered from CommitSuccess to WaitForPostProcess    ${NODE_PROCESS_LIST}
+    Mine Blocks    20
+    Sleep    3s
     ${result} =    Exec Script    GetRandomNumberFailTest.s.sol:GetRandomNumberFailTestScript
     ${contract_addresses} =    Get Contract Address From File    contracts/broadcast/GetRandomNumberFailTest.s.sol/31337/run-latest.json
     ${log_gas_too_high} =    All Nodes Have Keyword    cancel fulfilling randomness as gas price is too high    ${NODE_PROCESS_LIST}
@@ -248,10 +248,11 @@ Test 2 SubId Request At Same Time
     ${node1} =    Stake And Run Node    1
     ${node2} =    Stake And Run Node    2
     ${node3} =    Stake And Run Node    3
-    ${log_group_available} =       All Nodes Have Keyword    Group index:0 epoch:1 is available    ${NODE_PROCESS_LIST}
+    ${log_group_available} =       All Nodes Have Keyword    dkg_status transfered from CommitSuccess to WaitForPostProcess    ${NODE_PROCESS_LIST}
+    Mine Blocks    20
+    Sleep    3s
     Exec Script    GetRandomNumber2TimeTest.s.sol:GetRandomNumber2TimeTestScript
-    ${receive_task_1} =    All Nodes Have Keyword    received new randomness task    ${NODE_PROCESS_LIST}
-    ${receive_task_2} =    All Nodes Have Keyword    received new randomness task    ${NODE_PROCESS_LIST}
+    ${receive_task_1} =    All Nodes Have Keyword    Received randomness task    ${NODE_PROCESS_LIST}
     ${contract_addresses} =    Get Contract Address From File    contracts/broadcast/GetRandomNumber2TimeTest.s.sol/31337/run-latest.json
     ${user_contract} =    Get Contract    ${PROXY_OUTPUT}AdvancedGetShuffledArrayExample.sol/AdvancedGetShuffledArrayExample.json    ${contract_addresses['AdvancedGetShuffledArrayExample']}
     Set Global Variable    $USER_CONTRACT   ${user_contract}

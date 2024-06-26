@@ -35,7 +35,7 @@ Long Running Request Randomness
     WHILE    ${current_randomness} != ${last_randomness}
         Request Randomness
         Wait For Process    timeout=20s
-        ${log_received_randomness_task} =       All Nodes Have Keyword    received new randomness task
+        ${log_received_randomness_task} =       All Nodes Have Keyword    Received randomness task
         ...    ${NODE_PROCESS_LIST}    100
         ${last_randomness} =    Set Variable    ${current_randomness}
         ${current_randomness} =    Check Randomness

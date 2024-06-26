@@ -74,7 +74,6 @@ contract ControllerScenarioTest is Script {
         NodeRegistry nodeRegistryImpl;
         ERC1967Proxy nodeRegistry;
         Controller controllerImpl;
-        ERC1967Proxy controller;
         Adapter adapterImpl;
         ERC1967Proxy adapter;
         ServiceManager serviceManagerImpl;
@@ -82,7 +81,7 @@ contract ControllerScenarioTest is Script {
         ControllerRelayer controllerRelayerImpl;
         ERC1967Proxy controllerRelayer;
         OPChainMessenger opChainMessenger;
-        ControllerProxy proxy;
+        ControllerProxy controllerProxy;
         Staking staking;
         IERC20 arpa;
 
@@ -129,12 +128,12 @@ contract ControllerScenarioTest is Script {
         controllerImpl = new Controller();
 
         vm.broadcast(_deployerPrivateKey);
-        controller =
-            new ERC1967Proxy(address(controllerImpl), abi.encodeWithSignature("initialize(uint256)", _lastOutput));
+        controllerProxy =
+            new ControllerProxy(address(controllerImpl), abi.encodeWithSignature("initialize(uint256)", _lastOutput));
 
         vm.broadcast(_deployerPrivateKey);
         INodeRegistryOwner(address(nodeRegistry)).setNodeRegistryConfig(
-            address(controller),
+            address(controllerProxy),
             address(staking),
             address(serviceManager),
             _operatorStakeAmount,
@@ -143,19 +142,13 @@ contract ControllerScenarioTest is Script {
         );
 
         vm.broadcast(_deployerPrivateKey);
-        proxy = new ControllerProxy(address(controller));
-
-        vm.broadcast(_deployerPrivateKey);
-        IControllerOwner(address(proxy)).initialize(_lastOutput);
-
-        vm.broadcast(_deployerPrivateKey);
         adapterImpl = new Adapter();
 
         vm.broadcast(_deployerPrivateKey);
-        adapter = new ERC1967Proxy(address(adapterImpl), abi.encodeWithSignature("initialize(address)", address(proxy)));
+        adapter = new ERC1967Proxy(address(adapterImpl), abi.encodeWithSignature("initialize(address)", address(controllerProxy)));
 
         vm.broadcast(_deployerPrivateKey);
-        IControllerOwner(address(proxy)).setControllerConfig(
+        IControllerOwner(address(controllerProxy)).setControllerConfig(
             address(nodeRegistry),
             address(adapter),
             _disqualifiedNodePenaltyAmount,
@@ -202,7 +195,7 @@ contract ControllerScenarioTest is Script {
 
         vm.broadcast(_deployerPrivateKey);
         controllerRelayer = new ERC1967Proxy(
-            address(controllerRelayerImpl), abi.encodeWithSignature("initialize(address)", address(proxy))
+            address(controllerRelayerImpl), abi.encodeWithSignature("initialize(address)", address(controllerProxy))
         );
 
         vm.broadcast(_deployerPrivateKey);

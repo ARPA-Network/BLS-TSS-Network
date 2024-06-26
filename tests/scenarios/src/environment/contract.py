@@ -57,8 +57,8 @@ def contract_function_transact(contract, function_name, *args):
     function = getattr(contract.functions, function_name)
     max_fee = get_average_gas_price('http://127.0.0.1:8545')
     # Call the function with the provided parameters
-    gas_estimate = function(*args).estimate_gas()
-    result = function(*args).transact({'gasPrice': max_fee, 'gas': int(gas_estimate * 1.2)})
+    #gas_estimate = function(*args).estimate_gas()
+    result = function(*args).transact({'gasPrice': int(max_fee)})
     return result
 
 def get_average_gas_price(url):
@@ -127,13 +127,17 @@ def get_contract_address_from_file(file_name):
 
     # initialize an empty dictionary to hold the mapping
     contract_addresses = {}
-
+    count = 0
     for transaction in transactions:
         if transaction.get('transactionType') == 'CREATE':
             contract_address = transaction.get('contractAddress')
+            contract_address = to_checksum_address(contract_address)
             contract_name = transaction.get('contractName')
             if contract_address is not None and contract_name is not None:
                 # create a mapping between the contract name and its address
+                if (contract_name == "ERC1967Proxy"):
+                    contract_name = "ERC1967Proxy" + str(count)
+                    count += 1
                 contract_addresses[contract_name] = contract_address
             if contract_name is None:
                 contract_addresses['default'] = contract_address
