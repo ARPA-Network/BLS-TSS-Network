@@ -286,7 +286,7 @@ DKG Commit3
 Run DKG Test cases
     [Tags]    l1
     Repeat Keyword    1    Test Rebalance
-    #Repeat Keyword    1    DKG Happy Path1
+    Repeat Keyword    1    DKG Happy Path1
     Repeat Keyword    1    DKG Happy Path2
     Repeat Keyword    1    DKG Sad Path1
     Repeat Keyword    1    DKG Commit1
