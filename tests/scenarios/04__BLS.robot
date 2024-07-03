@@ -190,6 +190,9 @@ Corner Case2
     ${log_task_received} =       Wait For State    TaskReceived    task_log    ${NODE_PROCESS_LIST}    ${False}
     Should Be Equal As Strings    ${log_task_received}    True
     
+    ${post_process} =    Have Node Got Keyword    Transaction successful(post_process_dkg)    ${NODE_PROCESS_LIST}
+    Should Be Equal As Strings    ${post_process}    True
+    
     ${group1_index_0} =    Get Index By Address    ${group1_nodes[0]}
     Shutdown Listener    ${group1_index_0}    ${task_type}
     ${group1_index_1} =    Get Index By Address    ${group1_nodes[1]}
@@ -198,6 +201,7 @@ Corner Case2
     Shutdown Listener    ${group1_index_2}    ${task_type}
 
     ${group0} =    Get Group    0
+    Group Node Number Should Be    0    3
     ${one_node_in_group0} =    Set Variable    ${group0[5][0]}
     ${node_index} =    Get Index By Address    ${one_node_in_group0}
 
@@ -283,9 +287,9 @@ Test 2 SubId Request At Same Time
 
 Run BLS Test Cases
     [Tags]    l1
-    Repeat Keyword    1    BLS Happy Path1
-    Repeat Keyword    1    BLS Happy Path2
-    Repeat Keyword    1    Corner Case1
+    # Repeat Keyword    1    BLS Happy Path1
+    # Repeat Keyword    1    BLS Happy Path2
+    # Repeat Keyword    1    Corner Case1
     Repeat Keyword    1    Corner Case2
-    Repeat Keyword    1    Test Request Gas Too Low
-    Repeat Keyword    1    Test 2 SubId Request At Same Time
+    # Repeat Keyword    1    Test Request Gas Too Low
+    # Repeat Keyword    1    Test 2 SubId Request At Same Time

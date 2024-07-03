@@ -50,7 +50,7 @@ Set Op Enviormnet
     Set Environment Variable    OP_CONTROLLER_ORACLE_ADDRESS    ${contract_addresses['L2']['ControllerOracle']}
     Set Environment Variable    OP_ADAPTER_ADDRESS    ${contract_addresses['L2']['Adapter']}
  
-    ${result} =    Execute Script    ControllerLocalTest.s.sol:ControllerLocalTestScript
+    ${result} =    Execute Script    ControllerLocalTest.s.sol:ControllerLocalTestScript    ${EMPTY}
     
     ${contract_addresses} =    Get Contract Address From Json    contracts/deployment-addresses.json
     Set Global Variable    $CONTRACT_ADDRESSES    ${contract_addresses}
@@ -60,13 +60,13 @@ Set Op Enviormnet
     Set Environment Variable   ADAPTER_ADDRESS    ${contract_addresses['L1']['Adapter']}
     Set Environment Variable    EXISTING_L1_CONTROLLER_RELAYER    ${contract_addresses['L1']['ControllerRelayer']}
 
-    ${result} =    Execute Script    CreateAndSetOPChainMessenger.s.sol:CreateAndSetOPChainMessengerScript
+    ${result} =    Execute Script    CreateAndSetOPChainMessenger.s.sol:CreateAndSetOPChainMessengerScript    ${EMPTY}
     ${contract_addresses} =    Get Contract Address From File    contracts/broadcast/CreateAndSetOPChainMessenger.s.sol/900/run-latest.json
     Set Environment Variable    L1_CHAIN_MESSENGER_ADDRESS    ${contract_addresses['OPChainMessenger']}
     ${result} =    Execute Script    OPControllerOracleInitializationLocalTest.s.sol:OPControllerOracleInitializationLocalTestScript    http://localhost:9545
     # ${result} =    Execute Script    OPControllerOracleInitializationLocalTest.s.sol:OPControllerOracleInitializationLocalTestScript    http://localhost:9645
-    ${result} =    Execute Script    InitStakingLocalScenarioTest.s.sol:InitStakingLocalTestScript
-    ${result} =    Execute Script    StakeOperatorScenarioTest.s.sol:StakeOperatorScenarioTestScript
+    ${result} =    Execute Script    InitStakingLocalScenarioTest.s.sol:InitStakingLocalTestScript    ${EMPTY}
+    ${result} =    Execute Script    StakeOperatorScenarioTest.s.sol:StakeOperatorScenarioTestScript    ${EMPTY}
 
 Bound OP Contract ABI
     [Documentation]    Bound contract ABI to handle contract function call
