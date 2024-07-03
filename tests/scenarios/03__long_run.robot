@@ -25,9 +25,9 @@ Long Running Request Randomness
     ${node2} =    Stake And Run Node    2
     ${node3} =    Stake And Run Node    3
 
-    ${log_group_available} =       All Nodes Have Keyword    Group index:    ${NODE_PROCESS_LIST}
-    Wait For Process    timeout=20s
-    Group Node Number Should Be    0    3
+    ${group_state} =    Wait For State    DKGGroupingAvailable    group_log    ${NODE_PROCESS_LIST}    index=0    epoch=1
+    Should Be Equal As Strings    ${group_state}    True
+
     ${current_randomness} =    Set Variable    1
     ${last_randomness} =    Set Variable    0
     Deploy User Contract
@@ -63,8 +63,9 @@ Test Log Size
     ${node10} =    Stake And Run Node    10
 
 
-    ${log_group_available} =       All Nodes Have Keyword    Group index:    ${NODE_PROCESS_LIST}
-    Wait For Process    timeout=20s
+    ${group_state} =    Wait For State    DKGGroupingAvailable    group_log    ${NODE_PROCESS_LIST}    index=0    epoch=1
+    Should Be Equal As Strings    ${group_state}    True
+    
     Group Node Number Should Be    0    10
     ${current_randomness} =    Convert To Integer    0
     Deploy User Contract

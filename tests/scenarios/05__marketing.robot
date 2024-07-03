@@ -24,11 +24,12 @@ Request Randomenes And Check Payment
     ${sub} =    Get Subscription    1
     ${payment} =   Set Variable    ${sub[3]}
     Mine Blocks    10
-    Have Node Got Keyword    Transaction successful(fulfill_randomness)    ${NODE_PROCESS_LIST}
+    ${fullfill_state} =    Wait For State    FulfillmentFinished    task_log    ${NODE_PROCESS_LIST}    ${False}
+    Should Be Equal As Strings    ${fullfill_state}    True
     Mine Blocks    10
     Sleep    5s
-    ${result} =    Get Event    ${ADAPTER_CONTRACT}    RandomnessRequest
-    Payment Should In The Range    ${payment}    ${min_value}    ${max_value}
+    ${result} =    Get Latest Event    ${ADAPTER_CONTRACT}    RandomnessRequest
+    Payment Should In The Range    ${result['args']['estimatedPayment']}    ${min_value}    ${max_value}
 
 Set Marketing Discount
     [Documentation]
@@ -39,19 +40,22 @@ Set Marketing Discount
     ${node1} =    Stake And Run Node    1
     ${node2} =    Stake And Run Node    2
     ${node3} =    Stake And Run Node    3
-    ${log_phase_1} =    All Nodes Have Keyword    Transaction successful(node_register)    ${NODE_PROCESS_LIST}
+    ${register_state} =    Wait For State    NodeRegistered    group_log    ${NODE_PROCESS_LIST}
+    Should Be Equal As Strings    ${register_state}    True
+
     Mine Blocks    9
     ${log_phase_2} =    All Nodes Have Keyword    Waiting for Phase 2 to start    ${NODE_PROCESS_LIST}
     Mine Blocks    9
-    ${log_group} =    All Nodes Have Keyword    dkg_status transfered from CommitSuccess to WaitForPostProcess    ${NODE_PROCESS_LIST}
+    ${group_result} =    Wait For State      DKGGroupingAvailable    group_log    ${NODE_PROCESS_LIST}    index=0    epoch=1    
+    Should Be Equal As Strings    ${group_result}    True
     Mine Blocks    20
-    Sleep    2s
     Sleep    3s
 
     Deploy User Contract
     Request Randomness
     Mine Blocks    10
-    All Nodes Have Keyword    Received randomness task    ${NODE_PROCESS_LIST}
+    ${log_task_received} =       Wait For State    TaskReceived    task_log    ${NODE_PROCESS_LIST}
+    Should Be Equal As Strings    ${log_task_received}    True
     Mine Blocks    10
     Sleep    5s
 
@@ -80,23 +84,26 @@ Test Referral
     ${node1} =    Stake And Run Node    1
     ${node2} =    Stake And Run Node    2
     ${node3} =    Stake And Run Node    3
-    ${log_phase_1} =    All Nodes Have Keyword    Transaction successful(node_register)    ${NODE_PROCESS_LIST}
+    ${register_state} =    Wait For State    NodeRegistered    group_log    ${NODE_PROCESS_LIST}
+    Should Be Equal As Strings    ${register_state}    True
     Mine Blocks    9
     ${log_phase_2} =    All Nodes Have Keyword    Waiting for Phase 2 to start    ${NODE_PROCESS_LIST}
     Mine Blocks    9
-    ${log_group} =    All Nodes Have Keyword    dkg_status transfered from CommitSuccess to WaitForPostProcess    ${NODE_PROCESS_LIST}
+    ${group_state} =    Wait For State    DKGGroupingAvailable    group_log    ${NODE_PROCESS_LIST}    index=0    epoch=1
+    Should Be Equal As Strings    ${group_state}    True
     Mine Blocks    20
 
     Deploy User Contract
     Request Randomness
     Mine Blocks    10
-    All Nodes Have Keyword    Received randomness task    ${NODE_PROCESS_LIST}
-    Sleep    10s
+    ${log_task_received} =       Wait For State    TaskReceived    task_log    ${NODE_PROCESS_LIST}
+    Should Be Equal As Strings    ${log_task_received}    True
+    Sleep    5s
     
-    Exec Script    TestFeeConfig.s.sol:TestFeeConfigScript
+    Execute Script    TestFeeConfig.s.sol:TestFeeConfigScript    ${EMPTY}
     ${original_private_key} =    Get Value From Env    USER_PRIVATE_KEY
     Set Value To Env    USER_PRIVATE_KEY    0xf214f2b2cd398c806f84e317254e0f0b801d0643303237d97a22a48e01628897
-    Exec Script    GetRandomNumberScenarioTest.s.sol:GetRandomNumberScenarioTestScript
+    Execute Script    GetRandomNumberScenarioTest.s.sol:GetRandomNumberScenarioTestScript    ${EMPTY}
 
     Mine Blocks    10
     Sleep    10s
@@ -106,7 +113,9 @@ Test Referral
     ${result} =    Contract Function Transact    ${new_user_contract}    getRandomNumber
     Mine Blocks    10
     Sleep    10s
-    ${result} =    All Nodes Have Keyword    Received randomness task    ${NODE_PROCESS_LIST}
+    ${log_task_received} =       Wait For State    TaskReceived    task_log    ${NODE_PROCESS_LIST}
+    Should Be Equal As Strings    ${log_task_received}    True
+
     ${subId1} =    Convert To Integer    1
     ${subId2} =    Convert To Integer    2
     ${adapter_address} =    Get Value From Env    ADAPTER_ADDRESS
@@ -128,7 +137,8 @@ Test Referral
     ${payment} =   Set Variable    ${sub[3]}
     Payment Should In The Range    ${payment}    0    100000000000000000
     Mine Blocks    10
-    All Nodes Have Keyword    Received randomness task    ${NODE_PROCESS_LIST}
+    ${log_task_received} =       Wait For State    TaskReceived    task_log    ${NODE_PROCESS_LIST}
+    Should Be Equal As Strings    ${log_task_received}    True
 
     
     Teardown Scenario Testing Environment

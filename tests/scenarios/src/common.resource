@@ -57,9 +57,11 @@ Start Local Ethereum Chain
     IF  ${BLOCK_TIME} == 0
         ${anvil_process_handle} =    Start Process    anvil
         ...    --accounts    ${NUM_ACCOUNTS}
+        ...    --base-fee    1
         ...    stdout=${LOG_PATH}/anvil-chain.log
     ELSE
         ${anvil_process_handle} =    Start Process    anvil
+        ...    --base-fee    1
         ...    --block-time    ${BLOCK_TIME}
         ...    --accounts    ${NUM_ACCOUNTS}
         ...    stdout=${LOG_PATH}/anvil-chain.log
@@ -185,33 +187,29 @@ Parse Node
     ${result} =    Parse Chain Result To Account List
     Set Global Variable    $NODE_ACCOUNT_LIST    ${result}
 
-Get Tip
+Get Base Fee
     [Documentation]    Get current tip
     [Arguments]    ${rpc_url}
-    ${tip} =    Set Variable    0
+    ${base_fee} =    Set Variable    0
     IF  ${rpc_url == ''}
-        ${gas_price} =    Run    cast gas-price
-        ${gas_price} =    Convert To Integer    ${gas_price}
         ${base_fee} =    Run    cast base-fee
         ${base_fee} =    Convert To Integer    ${base_fee}
-        ${tip} =    Set Variable    ${gas_price - ${base_fee}}
     ELSE
-        ${gas_price} =    Run    cast gas-price --rpc-url=${rpc_url}
-        ${gas_price} =    Convert To Integer    ${gas_price}
-        ${base_fee} =    Run    cast base-fee --rpc-url=${rpc_url}
-        ${base_fee} =    Convert To Integer    ${base_fee}
-        ${tip} =    Set Variable    ${gas_price - ${base_fee}}
+        ${base_fee} =    Run    cast gas-price --rpc-url=${rpc_url}
     END
 
-    RETURN    ${tip}
+    RETURN    ${base_fee}
 
 
 Cast Send   
     [Documentation]    Package Cast Send   
     [Arguments]    ${address}    ${method}   ${key}    ${rpc_url}
+    ${base_fee} =    Get Base Fee    ${rpc_url}
+    ${base_fee} =    Convert To Integer    ${base_fee * 6 / 5}
     IF  ${rpc_url == ''}
          ${result} =    Run    cast send ${address} ${method} --private-key=${key}
     ELSE
-        ${result} =    Run  cast send ${address} ${method} --private-key=${key} --rpc-url=${rpc_url}
+        ${result} =    Run  cast send ${address} ${method} --private-key=${key}
     END
+    RETURN    ${result}
     

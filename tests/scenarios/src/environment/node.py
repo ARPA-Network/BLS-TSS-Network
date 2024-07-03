@@ -118,16 +118,16 @@ def create_relay_list(
     
     listeners:
       - l_type: Block
-        interval_millis: 10000
+        interval_millis: 1000
         use_jitter: true
       - l_type: NewRandomnessTask
-        interval_millis: 10000
+        interval_millis: 1000
         use_jitter: true
       - l_type: ReadyToHandleRandomnessTask
-        interval_millis: 10000
+        interval_millis: 1000
         use_jitter: true
       - l_type: RandomnessSignatureAggregation
-        interval_millis: 20000
+        interval_millis: 2000
         use_jitter: false
 
     time_limits:
@@ -170,7 +170,7 @@ def create_relay_list(
 
 
 def create_node_config(
-    controller_address, adapter_address, relayer_address, chain_id, relay_config
+    controller_address, adapter_address, relayer_address, arpa_address, chain_id, relay_config
 ):
     """
     Create the node config files.
@@ -200,11 +200,14 @@ node_statistics_http_endpoint: "[::1]:501{81 + i}"
 
 is_eigenlayer: false
 
+is_consistent_asset_and_node_account: true
+
 chain_id: {chain_id}
 
 controller_address: "{controller_address}"
 adapter_address: "{adapter_address}"
 controller_relayer_address: "{relayer_address}"
+arpa_address: "{arpa_address}"
 
 data_path: "./data{i + 1}.sqlite"
 
@@ -332,8 +335,10 @@ def kill_node_by_index(index):
     """
     client_port = 50161 + int(index) - 1
     committer_port = 50201 + int(index) - 1
+    statistic_port = 50181 + int(index) - 1
     kill_process_by_port(client_port)
     kill_process_by_port(committer_port)
+    kill_process_by_port(statistic_port)
 
 
 def get_node_port_from_index(node_idx):

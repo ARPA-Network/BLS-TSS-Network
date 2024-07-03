@@ -108,8 +108,6 @@ def get_err_log_from_chain():
                 return line
     return None
 
-import time
-
 def wait_for_keyword_from_log(path, keyword, max_retry_time=300):
     '''
     Wait for a keyword from a log file
@@ -144,3 +142,82 @@ def get_address_from_file(path, title):
                 # assuming you want to return the address that follows the title
                 return result.group(2)
     return None
+
+
+def check_log_state(node_idx, log_type, log_name, **kwargs):
+    """
+    Retrieve information for a given log type from the log
+    :param node_idx: Node index to identify the correct log file
+    :param log_type: Type of log to search for
+    :param kwargs: Unlimited named parameters for matching specific log entry attributes
+    :return: True if a matching log entry is found, False otherwise
+    """
+    log_dic = {
+        'DKGGroupingAvailable': ["epoch", "index"],
+        'TaskReceived': ["task_type"],
+    }
+
+    log_path = f"crates/arpa-node/log/running/node{node_idx}.log"
+    with open(log_path, 'r', encoding='UTF-8') as process:
+        for line in process:
+            try:
+                log_json = json.loads(line)
+                if log_json["message"]["log_type"] == log_type:
+                    # Check if all required keys for this log_type are present and match the kwargs
+                    required_keys = log_dic.get(log_type, [])
+                    all_match = True
+                    for key in required_keys:
+                        if key in kwargs:
+                            if str(log_json["message"][log_name].get(key)) != str(kwargs[key]):
+                                all_match = False
+                                break
+                        else:
+                            # If a required key is not in kwargs, check if it's present in the log; if not, no match
+                            if key not in log_json["message"][log_name]:
+                                all_match = False
+                                break
+                    if all_match:
+                        return True
+            except (ValueError, TypeError):
+                continue
+        return False
+    
+
+
+def wait_for_state(log_type, log_name, node_process_list, need_all=True, **kwargs):
+    """
+    Check if all nodes have a log and state. If need_all is True, return True only if all nodes have the state
+    after the retry period; otherwise, return False. If need_all is False, return True once one node has the state.
+    """
+    retry_time = 300
+    node_states = [False] * len(node_process_list)  # Track state for each node
+
+    for _ in range(retry_time):
+        for node_idx in range(1, len(node_process_list) + 1) :
+            if not node_states[node_idx - 1]:  # Check only if the node doesn't have the state yet
+                have_state = check_log_state(node_idx, log_type, log_name, **kwargs)
+                node_states[node_idx - 1] = have_state  # Update the state
+
+                if not need_all and have_state:  # If need_all is False and one node has the state, return True
+                    clear_log()
+                    return True
+
+        if need_all and all(node_states):  # If need_all is True and all nodes have the state, return True
+            clear_log()
+            return True
+        time.sleep(1)
+    # Print the nodes that don't have the state
+    print(f"Nodes that don't have the state: {[i + 1 for i, x in enumerate(node_states) if not x]}")
+    return False  # Return False if the conditions are not met after all retries
+    
+def wait_for_state_one_node(log_type, log_name, node_idx, **kwargs):
+    """
+    Check if one node has a log and state. Return True if the node has the state after the retry period; otherwise, return False.
+    """
+    retry_time = 100
+    for _ in range(retry_time):
+        have_state = check_log_state(node_idx, log_type, log_name, **kwargs)
+        if have_state:
+            return True
+        time.sleep(1)
+    return False  # Return False if the conditions are not met after all retries

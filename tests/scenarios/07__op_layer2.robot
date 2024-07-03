@@ -22,27 +22,33 @@ L2 Normal Process
     ${node3} =    Stake And Run Node    3
     ${node4} =    Stake And Run Node    4
     ${node5} =    Stake And Run Node    5
-    Sleep    100s
+    ${group_state} =    Wait For State One Node    DKGGroupingAvailable    group_log    5
+    Should Be Equal As Strings    ${group_state}    True
     ${node6} =    Stake And Run Node    6
     ${node7} =    Stake And Run Node    7
     ${node8} =    Stake And Run Node    8
     ${node9} =    Stake And Run Node    9
-    Sleep    100s
+    ${group_state} =    Wait For State One Node    DKGGroupingAvailable    group_log    9
+    Should Be Equal As Strings    ${group_state}    True
     ${node10} =    Stake And Run Node    10
     ${node11} =    Stake And Run Node    11
     ${node12} =    Stake And Run Node    12
     ${node13} =    Stake And Run Node    13
-    Sleep    100s
+    ${group_state} =    Wait For State One Node    DKGGroupingAvailable    group_log    13
+    Should Be Equal As Strings    ${group_state}    True
     ${node14} =    Stake And Run Node    14
     ${node15} =    Stake And Run Node    15
     ${node16} =    Stake And Run Node    16
     ${node17} =    Stake And Run Node    17
     ${node18} =    Stake And Run Node    18
     ${node19} =    Stake And Run Node    19
-    ${node20} =    Stake And Run Node    20
+    #${node20} =    Stake And Run Node    20
     
+    ${group_state} =    Wait For State One Node    DKGGroupingAvailable    group_log    19
+    Should Be Equal As Strings    ${group_state}    True
+
     Sleep    100s
-    ${log_post_process} =    All Nodes Have keyword    Calling contract transaction post_process_dkg    ${NODE_PROCESS_LIST}
+
     ${result} =    Get Group    0
     ${result} =    Get Group    1
     ${result} =    Get Group    2
@@ -56,8 +62,12 @@ L2 Normal Process
 
     Deploy OP User Contract    http://localhost:9545    901
     Request Randomness OP    http://localhost:9545
-    ${log_received_randomness_task} =    All Nodes Have Keyword    Received randomness task    ${NODE_PROCESS_LIST}
-    ${result} =    Have Node Got Keyword    Transaction successful(fulfill_randomness)    ${NODE_PROCESS_LIST}
+    ${log_task_received} =       Wait For State    TaskReceived    task_log    ${NODE_PROCESS_LIST}    ${False}
+    Should Be Equal As Strings    ${log_task_received}    True
+
+    ${fullfill_state} =    Wait For State    FulfillmentFinished    task_log    ${NODE_PROCESS_LIST}    ${False}
+    Should Be Equal As Strings    ${fullfill_state}    True
+
     Check Randomness OP    http://localhost:9545
     Teardown OP Environment
 

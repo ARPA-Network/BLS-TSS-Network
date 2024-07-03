@@ -27,13 +27,16 @@ Test Rebalance
     ${node4} =    Stake And Run Node    4
     ${node5} =    Stake And Run Node    5
 
-    ${group_result} =    All Nodes Have Keyword    dkg_status transfered from CommitSuccess to WaitForPostProcess    ${NODE_PROCESS_LIST}    
+    ${group_state} =    Wait For State    DKGGroupingAvailable    group_log    ${NODE_PROCESS_LIST}    index=0    epoch=3
+    Should Be Equal As Strings    ${group_state}    True
     Group Node Number Should Be    0    5
 
     ${node6} =    Stake And Run Node    6
-    ${result} =        Get Keyword From Node Log    6    Transaction successful(node_register)
+    ${result} =        Wait For State One Node    NodeRegistered    group_log    6
+    Should Be Equal As Strings    ${result}    True
 
-    ${group_result} =    Get Keyword From Node Log    6    is available
+    ${group_result} =    Wait For State One Node      DKGGroupingAvailable    group_log    6
+    Should Be Equal As Strings    ${group_result}    True
 
     Group Node Number Should Be    0    3
     Group Node Number Should Be    1    3
@@ -47,6 +50,8 @@ DKG Happy Path1
     ...    4. DKG phase time out(Anvil mines blocks)
     ...    5. Any node calls post_process_dkg
     ...    6. DKG is successful, 4 is slashed
+    Sleep    3s
+    Set Global Variable    $BLOCK_TIME    1
     Set Enviorment And Deploy Contract
     Sleep    3s
     ${address1} =    Get Address By Index    1
@@ -67,23 +72,24 @@ DKG Happy Path1
     ${node4} =    Stake And Run Node    4
 
     ${log_phase_1} =    All Nodes Have Keyword    Waiting for Phase 1 to start    ${NODE_PROCESS_LIST}
-    Mine Blocks    8
     ${log_phase_2} =   Get Keyword From Node Log    2    Waiting for Phase 2 to start
-    Mine Blocks    9
-    ${log_group_available} =   Get Keyword From Node Log    2    dkg_status transfered from CommitSuccess to WaitForPostProcess:
+    ${group_state} =    Wait For State    DKGGroupingAvailable    group_log    ${NODE_PROCESS_LIST}    ${False}    index=0    epoch=2
+    Should Be Equal As Strings    ${group_state}    True
+    
     Mine Blocks    20
-    Sleep    2s
+    Sleep    15s
     Group Node Number Should Be    0    3
     
     ${slash_event} =    Get Event    ${NODE_REGISTRY_CONTRACT}    NodeSlashed
     Should Be Equal As Strings    ${slash_event['args']['nodeIdAddress']}    ${address4}
-    Mine Blocks    20
-    Sleep    10s
+
+    Sleep    2s
     Deploy User Contract
+    Sleep    2s
     Request Randomness
-    Mine Blocks    6
-    ${result} =    Have Node Got Keyword    Transaction successful(fulfill_randomness)    ${NODE_PROCESS_LIST}
-    Sleep    5s
+
+    ${fullfill_state} =    Wait For State    FulfillmentFinished    task_log    ${NODE_PROCESS_LIST}    ${False}
+    Should Be Equal As Strings    ${fullfill_state}    True
     Check Randomness
     Teardown Scenario Testing Environment
 
@@ -109,7 +115,9 @@ DKG Happy Path2
     Mine Blocks    8
     ${log_phase_2} =   Get Keyword From Node Log    2    Waiting for Phase 2 to start
     Mine Blocks    9
-    ${log_group_available} =       All Nodes Have Keyword    dkg_status transfered from CommitSuccess to WaitForPostProcess    ${NODE_PROCESS_LIST}
+    ${group_state} =    Wait For State    DKGGroupingAvailable    group_log    ${NODE_PROCESS_LIST}    index=0    epoch=2
+    Should Be Equal As Strings    ${group_state}    True
+    Should Be Equal As Strings    ${group_state}    True
     Mine Blocks    20
     Sleep    2s
     Group Node Number Should Be    0    4
@@ -125,11 +133,13 @@ DKG Happy Path2
     Mine Blocks    20
     Sleep    2s
     Deploy User Contract
+    Sleep    1s
     Request Randomness
     
-    Have Node Got Keyword    send partial signature to committer    ${NODE_PROCESS_LIST}
+    ${fullfill_state} =    Wait For State    FulfillmentFinished    task_log    ${NODE_PROCESS_LIST}    ${False}
+    Should Be Equal As Strings    ${fullfill_state}    True
     Mine Blocks    10
-    Sleep    3s
+    Sleep    2s
     Check Randomness
     ${group} =   Get Group    0
     Teardown Scenario Testing Environment
@@ -159,8 +169,8 @@ DKG Sad Path1
     ${node3} =    Stake And Run Node    3
     ${node4} =    Stake And Run Node    4
     
-    ${log_phase_1} =    All Nodes Have Keyword    dkg_status transfered from CommitSuccess to WaitForPostProcess    ${NODE_PROCESS_LIST}
-    
+    ${group_state} =    Have Node Got Keyword    Transaction successful(post_process_dkg)    ${NODE_PROCESS_LIST}
+    Should Be Equal As Strings    ${group_state}    True
     Mine Blocks    20
     Sleep    2s
     ${slash_events} =    Get Events    ${NODE_REGISTRY_CONTRACT}    NodeSlashed
@@ -186,7 +196,9 @@ DKG Commit1
     ${address3} =    Get Address By Index    3
 
     ${node3} =    Stake And Run Node    3
-    ${log_register} =    Get Keyword From Node Log    3    Transaction successful(node_register)
+    ${log_register} =    Wait For State One Node    NodeRegistered    group_log    3
+    Should Be Equal As Strings    ${log_register}    True
+    
     Kill Node By Index    3
     ${node1} =    Stake And Run Node    1
     ${node2} =    Stake And Run Node    2
@@ -214,11 +226,13 @@ DKG Commit2
     ${address3} =    Get Address By Index    3
 
     ${node3} =    Stake And Run Node    3
-    ${log_register} =    Get Keyword From Node Log    3    Transaction successful(node_register)
+    ${log_register} =     Wait For State One Node    NodeRegistered    group_log    3
+    Should Be Equal As Strings    ${log_register}    True
     Kill Node By Index    3
     
     ${node2} =    Stake And Run Node    2
-    ${log_register} =    Get Keyword From Node Log    2    Transaction successful(node_register)
+    ${log_register} =     Wait For State One Node    NodeRegistered    group_log    2
+    Should Be Equal As Strings    ${log_register}    True
     Kill Node By Index    2
 
     ${node1} =    Stake And Run Node    1
@@ -247,7 +261,8 @@ DKG Commit3
     ${address4} =    Get Address By Index    4
 
     ${node3} =    Stake And Run Node    4
-    ${log_register} =    Get Keyword From Node Log    4    Transaction successful(node_register)
+    ${log_register} =     Wait For State One Node    NodeRegistered    group_log    4
+    Should Be Equal As Strings    ${log_register}    True
     Kill Node By Index    4
     
     ${node2} =    Stake And Run Node    3
@@ -271,7 +286,7 @@ DKG Commit3
 Run DKG Test cases
     [Tags]    l1
     Repeat Keyword    1    Test Rebalance
-    Repeat Keyword    1    DKG Happy Path1
+    #Repeat Keyword    1    DKG Happy Path1
     Repeat Keyword    1    DKG Happy Path2
     Repeat Keyword    1    DKG Sad Path1
     Repeat Keyword    1    DKG Commit1

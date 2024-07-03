@@ -39,18 +39,18 @@ Set Enviorment And Deploy Contract
     Clear Database
     Set Global Variable    $NODE_PROCESS_LIST    ${EMPTY_LIST}
     Setup Chain Environment
-    ${result} =    Exec Script    ControllerScenarioTest.s.sol:ControllerScenarioTest
-    ${contract_addresses} =    Get Contract Address From File    contracts/broadcast/ControllerScenarioTest.s.sol/31337/run-latest.json
+    ${result} =    Execute Script    ControllerScenarioTest.s.sol:ControllerScenarioTest    ${EMPTY}
+    ${contract_addresses} =    Get Contract Address From Json    contracts/deployment-addresses.json
     Set Global Variable    $CONTRACT_ADDRESSES    ${contract_addresses}
-    Set Environment Variable    ARPA_ADDRESS    ${contract_addresses['Arpa']}
-    Set Environment Variable    CONTROLLER_ADDRESS    ${contract_addresses['ControllerProxy']}
-    Set Environment Variable    STAKING_ADDRESS    ${contract_addresses['Staking']}
-    Set Environment Variable   ADAPTER_ADDRESS    ${contract_addresses['ERC1967Proxy2']}
-    ${result} =    Exec Script    StakeOperatorScenarioTest.s.sol:StakeOperatorScenarioTestScript
+    Set Environment Variable    ARPA_ADDRESS    ${CONTRACT_ADDRESSES['L1']['Arpa']}
+    Set Environment Variable    CONTROLLER_ADDRESS    ${CONTRACT_ADDRESSES['L1']['ControllerProxy']}
+    Set Environment Variable    STAKING_ADDRESS    ${CONTRACT_ADDRESSES['L1']['Staking']}
+    Set Environment Variable   ADAPTER_ADDRESS    ${CONTRACT_ADDRESSES['L1']['Adapter']}
+    ${result} =    Execute Script    StakeOperatorScenarioTest.s.sol:StakeOperatorScenarioTestScript    ${EMPTY}
     Bound Contract ABI
     Set ARPA Address
     Parse Node
-    ${result} =    Create Node Config    ${CONTRACT_ADDRESSES['ControllerProxy']}    ${CONTRACT_ADDRESSES['ERC1967Proxy2']}    ${CONTRACT_ADDRESSES['ERC1967Proxy3']}    31337    []
+    ${result} =    Create Node Config    ${CONTRACT_ADDRESSES['L1']['ControllerProxy']}    ${CONTRACT_ADDRESSES['L1']['Adapter']}    ${CONTRACT_ADDRESSES['L1']['ControllerRelayer']}    ${CONTRACT_ADDRESSES['L1']['Arpa']}    31337    []
     Clear Database
 
 Init Envioirmnet
@@ -64,14 +64,14 @@ Build Contract
 
 Bound Contract ABI
     [Documentation]    Bound contract ABI to handle contract function call
-    ${proxy_address} =    Set Variable    ${CONTRACT_ADDRESSES['ControllerProxy']}
+    ${proxy_address} =    Set Variable    ${CONTRACT_ADDRESSES['L1']['ControllerProxy']}
     ${proxy_address} =    To Checksum Address    ${proxy_address}
     Set Global Variable    $PROXY_CONTRACT_ADDRESS    ${proxy_address}
     ${proxy_contract} =    Get Contract    ${PROXY_OUTPUT}ControllerProxy.sol/ControllerProxy.json    ${PROXY_CONTRACT_ADDRESS}
     Set Global Variable    $PROXY_CONTRACT   ${proxy_contract}
     ${controller_contract} =    Get Contract    ${PROXY_OUTPUT}Controller.sol/Controller.json    ${PROXY_CONTRACT_ADDRESS}
     Set Global Variable    $CONTROLLER_CONTRACT   ${controller_contract}
-    ${node_registry_address} =    Get Contract    ${PROXY_OUTPUT}NodeRegistry.sol/NodeRegistry.json    ${CONTRACT_ADDRESSES['ERC1967Proxy0']}
+    ${node_registry_address} =    Get Contract    ${PROXY_OUTPUT}NodeRegistry.sol/NodeRegistry.json    ${CONTRACT_ADDRESSES['L1']['NodeRegistry']}
     Set Global Variable    $NODE_REGISTRY_CONTRACT   ${node_registry_address}
     ${stake_address} =    Get Value From Env    STAKING_ADDRESS
     ${stake_address} =    To Checksum Address    ${stake_address}
@@ -84,7 +84,7 @@ Bound Contract ABI
 
 Deploy User Contract
     [Documentation]    Deploy user request contract
-    ${contract_output} =    Exec Script    GetRandomNumberScenarioTest.s.sol:GetRandomNumberScenarioTestScript
+    ${contract_output} =    Execute Script    GetRandomNumberScenarioTest.s.sol:GetRandomNumberScenarioTestScript    ${EMPTY}
     ${contract_address} =    Get Contract Address From File    contracts/broadcast/GetRandomNumberScenarioTest.s.sol/31337/run-latest.json
     Set Global Variable    $USER_CONTRACT_ADDRESS    ${contract_address['GetRandomNumberExample']}
     ${user_contract} =    Get Contract    ${PROXY_OUTPUT}GetRandomNumberExample.sol/GetRandomNumberExample.json    ${USER_CONTRACT_ADDRESS}
@@ -92,10 +92,12 @@ Deploy User Contract
 
 Request Randomness
     [Documentation]    Request randomness
+    ${base_fee} =    Get Base Fee    ${EMPTY}
+    ${base_fee} =    Convert To Integer    ${base_fee}
     ${key} =    Get Value From Env    USER_PRIVATE_KEY
-    ${request_id} =    Contract Function Transact    ${USER_CONTRACT}    getRandomNumber
-    Should Not Be Empty    ${request_id}
-    RETURN    ${request_id}
+    #${result} =    Contract Function Transact    ${USER_CONTRACT}    getRandomNumber    ${base_fee}
+    ${result} =    Cast Send   ${USER_CONTRACT_ADDRESS}    "getRandomNumber()"    ${key}    ${EMPTY}
+    RETURN    ${result}
 
 Check Randomness
     [Documentation]    Check the randomness
@@ -104,7 +106,7 @@ Check Randomness
     RETURN    ${last_output}
 
 Set ARPA Address
-    Set Global Variable    $ARPA_CONTRACT_ADDRESS    ${CONTRACT_ADDRESSES['Arpa']}
+    Set Global Variable    $ARPA_CONTRACT_ADDRESS    ${CONTRACT_ADDRESSES['L1']['Arpa']}
 
 Get Modified CommitdDkg
     [Documentation]    Get all modifed value of commitDkg
@@ -135,7 +137,9 @@ Set Modified Public Key
     [Documentation]    Set modifed public key of commitDkg
     [Arguments]    ${node}    ${pub_key}
     ${node} =    To Checksum Address    ${node}
-    ${result} =    Contract Function Transact    ${PROXY_CONTRACT}    setModifiedPublicKey
+    ${base_fee} =    Get Base Fee    ${EMPTY}
+    ${max_fee} =    Convert To Integer    ${base_fee / 5}
+    ${result} =    Contract Function Transact    ${PROXY_CONTRACT}    setModifiedPublicKey    ${max_fee}
     ...    ${node}    ${pub_key}
     Sleep    1s
     ${result} =    Contract Function Call    ${PROXY_CONTRACT}    getModifiedDkgData    ${node}
@@ -145,7 +149,9 @@ Set Modified Partial Public Key
     [Documentation]    Set modifed partial public key of commitDkg
     [Arguments]    ${node}    ${partial_pubKey}
     ${node} =    To Checksum Address    ${node}
-    ${result} =    Contract Function Transact    ${PROXY_CONTRACT}    setModifiedPartialPublicKey
+    ${base_fee} =    Get Base Fee    ${EMPTY}
+    ${max_fee} =    Convert To Integer    ${base_fee / 5}
+    ${result} =    Contract Function Transact    ${PROXY_CONTRACT}    setModifiedPartialPublicKey    ${max_fee}
     ...    ${node}    ${partial_pubKey}
     Log    Set node ${node} partial public key: ${partial_pubKey}
 
@@ -153,7 +159,9 @@ Set Modified Disqualified Nodes
     [Documentation]    Set modifed disqualified nodes of commitDkg
     [Arguments]    ${node}    ${disqualified_nodes}
     ${node} =    To Checksum Address    ${node}
-    ${result} =    Contract Function Transact    ${PROXY_CONTRACT}    setModifiedDisqualifiedNodes
+    ${base_fee} =    Get Base Fee    ${EMPTY}
+    ${max_fee} =    Convert To Integer    ${base_fee}
+    ${result} =    Contract Function Transact    ${PROXY_CONTRACT}    setModifiedDisqualifiedNodes    ${max_fee}
     ...    ${node}    ${disqualified_nodes}
     Log    Set node ${node} disqualified nodes: ${disqualified_nodes[0]}
 
@@ -343,4 +351,11 @@ Node Quit
     [Documentation]    Node quit
     [Arguments]    ${index}
     ${key} =    Get Private Key By Index    ${index}
-    ${result} =    Cast Send    ${CONTRACT_ADDRESSES['ERC1967Proxy0']}    "nodeQuit()"    ${key}    ${EMPTY}
+    ${result} =    Cast Send    ${CONTRACT_ADDRESSES['L1']['NodeRegistry']}    "nodeQuit()"    ${key}    ${EMPTY}
+
+Execute Script
+    [Arguments]    ${path}    ${url}   
+    ${base_fee} =    Get Base Fee    ${url}
+    ${max_fee} =    Convert To Integer    ${base_fee}
+    Exec Script    ${path}    ${url}    ${max_fee}
+

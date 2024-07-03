@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.18;
+pragma solidity ^0.8.13;
 
 import {Script} from "forge-std/Script.sol";
 import {IAdapter} from "../src/interfaces/IAdapter.sol";
@@ -25,10 +25,8 @@ contract GetRandomNumberScenarioTestScript is Script {
         adapter.fundSubscription{value: plentyOfEthBalance}(subId);
 
         adapter.addConsumer(subId, address(getRandomNumberExample));
-
-        //getRandomNumberExample.setCallbackGasConfig(2000000, 4000000000);
-        // getRandomNumberExample.setGasPriceCall();
-        // getRandomNumberExample.getRandomNumber();
+        
+        getRandomNumberExample.setCallbackGasConfig(0, 1000000007);
         // getRandomNumberExample.setGasPriceCall();
         // getRandomNumberExample.setGasPriceCall();
         // getRandomNumberExample.setGasPriceCall();

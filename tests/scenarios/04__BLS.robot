@@ -25,31 +25,39 @@ BLS Happy Path1
     ${node5} =    Stake And Run Node    5
 
 
-    ${log_group_available} =       All Nodes Have Keyword    dkg_status transfered from CommitSuccess to WaitForPostProcess    ${NODE_PROCESS_LIST}
+    ${group_state} =    Wait For State    DKGGroupingAvailable    group_log    ${NODE_PROCESS_LIST}    index=0    epoch=3
+    Should Be Equal As Strings    ${group_state}    True
     Mine Blocks    20
+    ${post_process} =    Have Node Got Keyword    Transaction successful(post_process_dkg)    ${NODE_PROCESS_LIST}
     Sleep    3s
 
     ${node6} =    Stake And Run Node    6
-    ${log_group_available} =       All Nodes Have Keyword    dkg_status transfered from CommitSuccess to WaitForPostProcess    ${NODE_PROCESS_LIST}
+    ${log_group_available} =       Wait For State One Node    DKGGroupingAvailable    group_log    6
+    ${group_state} =    Wait For State    DKGGroupingAvailable    group_log    ${NODE_PROCESS_LIST}    ${False}    index=0    epoch=4
     Mine Blocks    20
     Sleep    3s
+    ${post_process} =    Have Node Got Keyword    Transaction successful(post_process_dkg)    ${NODE_PROCESS_LIST}
+    Should Be Equal As Strings    ${post_process}    True
+    Sleep    10s
     Deploy User Contract
+    
     ${current_randomness} =    Set Variable    1
     ${cur_block} =    Convert To Integer    0
     ${last_group} =    Convert To Integer    -1
     ${cur_group} =    Convert To Integer    -2
     WHILE    ${cur_block < 400}
         ${cur_block} =    Get Latest Block Number
-        Mine Blocks    10
+        Sleep    10s
         Request Randomness
-        Mine Blocks    10
-        Sleep    5s
+        ${fullfill_state} =    Wait For State    FulfillmentFinished    task_log    ${NODE_PROCESS_LIST}    ${False}
+        Should Be Equal As Strings    ${fullfill_state}    True
         ${last_group} =    Set Variable    ${cur_group}
         ${current_randomness} =    Check Randomness
-        ${event} =    Get Latest Event    ${ADAPTER_CONTRACT}    RandomnessRequestResult        ${cur_block}
+        Sleep    5s
+        ${event} =    Get Latest Event    ${ADAPTER_CONTRACT}    RandomnessRequestResult    ${cur_block}
         ${cur_group} =    Set Variable    ${event['args']['groupIndex']}
         Should Not Be Equal As Strings    ${cur_group}    ${last_group}
-        Mine Blocks    10
+        Mine Blocks    20
         Sleep   3s
         ${cur_block} =    Convert To Integer    ${cur_block}
     END
@@ -72,8 +80,8 @@ BLS Happy Path2
     ${node3} =    Stake And Run Node    3
     ${node4} =    Stake And Run Node    4
 
-    ${log_group_available} =       All Nodes Have Keyword    dkg_status transfered from CommitSuccess to WaitForPostProcess    ${NODE_PROCESS_LIST}
-    
+    ${log_group_available} =       Wait For State    DKGGroupingAvailable    group_log    ${NODE_PROCESS_LIST}    index=0    epoch=2
+    Should Be Equal As Strings    ${log_group_available}    True
     Sleep    3s
     ${request_id} =    Deploy User Contract
     Clear Log
@@ -91,8 +99,8 @@ BLS Happy Path2
             ${node_address} =    Get Address By Index    ${index}
             ${is_committer} =    Is Committer    0    ${node_address}
             Should Be True    ${is_committer}
-            ${commit_success} =    Get Keyword From Node Log    ${index}    Transaction successful(fulfill_randomness)
-            IF  ${commit_success != None}
+            ${commit_success} =    Wait For State One Node    FulfillmentFinished    task_log    ${index}
+            IF  ${commit_success != False}
                 ${final_committer} =    Set Variable    ${node_address}
             END 
         END
@@ -125,10 +133,11 @@ Corner Case1
     ${node4} =    Stake And Run Node    4
     ${node5} =    Stake And Run Node    5
 
-    ${log_group_available} =    All Nodes Have Keyword    dkg_status transfered from CommitSuccess to WaitForPostProcess    ${NODE_PROCESS_LIST}
+    ${log_group_available} =       Wait For State    DKGGroupingAvailable    group_log    ${NODE_PROCESS_LIST}    index=0    epoch=3
+    Should Be Equal As Strings    ${log_group_available}    True
 
     ${node6} =    Stake And Run Node    6
-    ${log_group_available_2} =    All Nodes Have Keyword    dkg_status transfered from CommitSuccess to WaitForPostProcess    ${NODE_PROCESS_LIST}
+    ${log_group_available_2} =    Wait For State One Node    DKGGroupingAvailable    group_log    6
     
     Sleep    10s
     ${group0} =    Get Group    0
@@ -163,10 +172,11 @@ Corner Case2
     ${node3} =    Stake And Run Node    3
     ${node4} =    Stake And Run Node    4
     ${node5} =    Stake And Run Node    5
-    ${log_group_available} =       All Nodes Have Keyword    dkg_status transfered from CommitSuccess to WaitForPostProcess    ${NODE_PROCESS_LIST}
-    ${node6} =    Stake And Run Node    6
-    ${log_group_available} =       All Nodes Have Keyword    dkg_status transfered from CommitSuccess to WaitForPostProcess    ${NODE_PROCESS_LIST}
+    ${log_group_available} =       Wait For State    DKGGroupingAvailable    group_log    ${NODE_PROCESS_LIST}    index=0    epoch=3
+    Should Be Equal As Strings    ${log_group_available}    True
 
+    ${node6} =    Stake And Run Node    6
+    ${log_group_available_2} =    Wait For State One Node    DKGGroupingAvailable    group_log    6
     Clear Log
     Mine Blocks    20
     Sleep    3s
@@ -177,8 +187,9 @@ Corner Case2
     ${task_type} =    Convert To Integer    6
     ${group1} =    Get Group    1
     ${group1_nodes} =    Set Variable    ${group1[5]}
-    ${log_task_received} =       All Nodes Have Keyword    Received randomness task    ${group1_nodes}
-
+    ${log_task_received} =       Wait For State    TaskReceived    task_log    ${NODE_PROCESS_LIST}    ${False}
+    Should Be Equal As Strings    ${log_task_received}    True
+    
     ${group1_index_0} =    Get Index By Address    ${group1_nodes[0]}
     Shutdown Listener    ${group1_index_0}    ${task_type}
     ${group1_index_1} =    Get Index By Address    ${group1_nodes[1]}
@@ -193,7 +204,9 @@ Corner Case2
     ${cur_block} =    Get Latest Block Number
     Deploy User Contract
     ${request_id} =    Request Randomness
-    Get Keyword From Node Log    ${node_index}    send partial signature to committer
+    
+    ${fullfill_state} =    Wait For State    FulfillmentFinished    task_log    ${NODE_PROCESS_LIST}    ${False}
+    Should Be Equal As Strings    ${fullfill_state}    True
 
     Start Listener    ${group1_index_0}    ${task_type}
     Start Listener    ${group1_index_1}    ${task_type}
@@ -217,10 +230,11 @@ Test Request Gas Too Low
     ${node1} =    Stake And Run Node    1
     ${node2} =    Stake And Run Node    2
     ${node3} =    Stake And Run Node    3
-    ${log_group_available} =       All Nodes Have Keyword    dkg_status transfered from CommitSuccess to WaitForPostProcess    ${NODE_PROCESS_LIST}
+    ${log_group_available} =       Wait For State    DKGGroupingAvailable    group_log    ${NODE_PROCESS_LIST}    index=0    epoch=1
+    Should Be Equal As Strings    ${log_group_available}    True
     Mine Blocks    20
     Sleep    3s
-    ${result} =    Exec Script    GetRandomNumberFailTest.s.sol:GetRandomNumberFailTestScript
+    ${result} =    Execute Script    GetRandomNumberFailTest.s.sol:GetRandomNumberFailTestScript    ${EMPTY}
     ${contract_addresses} =    Get Contract Address From File    contracts/broadcast/GetRandomNumberFailTest.s.sol/31337/run-latest.json
     ${log_gas_too_high} =    All Nodes Have Keyword    cancel fulfilling randomness as gas price is too high    ${NODE_PROCESS_LIST}
     ${request_event} =    Get Latest Event    ${ADAPTER_CONTRACT}    RandomnessRequest
@@ -248,11 +262,12 @@ Test 2 SubId Request At Same Time
     ${node1} =    Stake And Run Node    1
     ${node2} =    Stake And Run Node    2
     ${node3} =    Stake And Run Node    3
-    ${log_group_available} =       All Nodes Have Keyword    dkg_status transfered from CommitSuccess to WaitForPostProcess    ${NODE_PROCESS_LIST}
+    ${log_group_available} =       Wait For State    DKGGroupingAvailable    group_log    ${NODE_PROCESS_LIST}    index=0    epoch=1
+    Should Be Equal As Strings    ${log_group_available}    True
     Mine Blocks    20
     Sleep    3s
-    Exec Script    GetRandomNumber2TimeTest.s.sol:GetRandomNumber2TimeTestScript
-    ${receive_task_1} =    All Nodes Have Keyword    Received randomness task    ${NODE_PROCESS_LIST}
+    Execute Script    GetRandomNumber2TimeTest.s.sol:GetRandomNumber2TimeTestScript    ${EMPTY}
+    ${log_task_received} =       Wait For State    TaskReceived    task_log    ${NODE_PROCESS_LIST}
     ${contract_addresses} =    Get Contract Address From File    contracts/broadcast/GetRandomNumber2TimeTest.s.sol/31337/run-latest.json
     ${user_contract} =    Get Contract    ${PROXY_OUTPUT}AdvancedGetShuffledArrayExample.sol/AdvancedGetShuffledArrayExample.json    ${contract_addresses['AdvancedGetShuffledArrayExample']}
     Set Global Variable    $USER_CONTRACT   ${user_contract}

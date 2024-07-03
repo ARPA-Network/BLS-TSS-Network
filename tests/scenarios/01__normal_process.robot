@@ -12,30 +12,27 @@ Resource            src/node.resource
 Normal Process
     [Documentation]
     ...    This test case is to test the normal node registration process.
+    Set Global Variable    $BLOCK_TIME    1
     Set Enviorment And Deploy Contract
-    Sleep    2s
+    Mine Blocks    20
+    Sleep    3s
+    Mine Blocks    20
     ${node1} =    Stake And Run Node    1
     ${node2} =    Stake And Run Node    2
     ${node3} =    Stake And Run Node    3
-    ${log_phase_1} =    All Nodes Have Keyword    Transaction successful(node_register)    ${NODE_PROCESS_LIST}    500
-    Should Be Equal As Strings    ${log_phase_1}    True
-    Mine Blocks    9
-    ${log_phase_2} =    All Nodes Have Keyword    Waiting for Phase 2 to start    ${NODE_PROCESS_LIST}
+    ${dkg_state} =     Wait For State    DKGKeyGenerated    group_log    ${NODE_PROCESS_LIST}
+    Should Be Equal As Strings    ${dkg_state}    True
+    ${log_phase_2} =    All Nodes Have Keyword    Waiting for Phase 2 to start    ${NODE_PROCESS_LIST}    300
     Should Be Equal As Strings    ${log_phase_2}    True
-    Mine Blocks    9
-    ${log_group} =    All Nodes Have Keyword    dkg_status transfered from CommitSuccess to WaitForPostProcess    ${NODE_PROCESS_LIST}
-    Should Be Equal As Strings    ${log_group}    True
-    Mine Blocks    20
-    Sleep    2s
+    ${group_state} =    Wait For State    DKGGroupingAvailable    group_log    ${NODE_PROCESS_LIST}    index=0    epoch=1
+    Should Be Equal As Strings    ${group_state}    True
     ${result} =    Get Group    0
     Group Node Number Should Be    0    3
-    Mine Blocks    25
-    Sleep    10s
+    Mine Blocks    20
+    Sleep    5s
     Deploy User Contract
     Request Randomness
-    Mine Blocks    10
-    ${result} =    Have Node Got Keyword    Transaction successful(fulfill_randomness)    ${NODE_PROCESS_LIST}
-    Sleep    5s
+    ${fullfill_state} =    Wait For State    FulfillmentFinished    task_log    ${NODE_PROCESS_LIST}    ${False}
     Check Randomness
     Teardown Scenario Testing Environment
 
