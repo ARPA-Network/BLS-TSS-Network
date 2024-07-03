@@ -205,6 +205,7 @@ Cast Send
     [Documentation]    Package Cast Send   
     [Arguments]    ${address}    ${method}   ${key}    ${rpc_url}
     ${base_fee} =    Get Base Fee    ${rpc_url}
+    ${base_fee} =    Convert To Integer    ${base_fee}
     ${base_fee} =    Convert To Integer    ${base_fee * 6 / 5}
     IF  ${rpc_url == ''}
          ${result} =    Run    cast send ${address} ${method} --private-key=${key}
