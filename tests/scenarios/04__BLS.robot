@@ -177,6 +177,10 @@ Corner Case2
 
     ${node6} =    Stake And Run Node    6
     ${log_group_available_2} =    Wait For State One Node    DKGGroupingAvailable    group_log    6
+
+    ${post_process} =    Have Node Got Keyword    Transaction successful(post_process_dkg)    ${NODE_PROCESS_LIST}
+    Should Be Equal As Strings    ${post_process}    True
+    
     Clear Log
     Mine Blocks    20
     Sleep    3s
@@ -190,8 +194,6 @@ Corner Case2
     ${log_task_received} =       Wait For State    TaskReceived    task_log    ${NODE_PROCESS_LIST}    ${False}
     Should Be Equal As Strings    ${log_task_received}    True
     
-    ${post_process} =    Have Node Got Keyword    Transaction successful(post_process_dkg)    ${NODE_PROCESS_LIST}
-    Should Be Equal As Strings    ${post_process}    True
     
     ${group1_index_0} =    Get Index By Address    ${group1_nodes[0]}
     Shutdown Listener    ${group1_index_0}    ${task_type}
@@ -202,6 +204,7 @@ Corner Case2
 
     ${group0} =    Get Group    0
     Group Node Number Should Be    0    3
+
     ${one_node_in_group0} =    Set Variable    ${group0[5][0]}
     ${node_index} =    Get Index By Address    ${one_node_in_group0}
 

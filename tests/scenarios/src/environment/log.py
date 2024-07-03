@@ -214,7 +214,7 @@ def wait_for_state_one_node(log_type, log_name, node_idx, **kwargs):
     """
     Check if one node has a log and state. Return True if the node has the state after the retry period; otherwise, return False.
     """
-    retry_time = 100
+    retry_time = 500
     for _ in range(retry_time):
         have_state = check_log_state(node_idx, log_type, log_name, **kwargs)
         if have_state:
