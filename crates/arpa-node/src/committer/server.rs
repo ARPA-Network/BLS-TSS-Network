@@ -92,6 +92,8 @@ where
         if let Ok(member) = self.group_cache.read().await.get_member(req_id_address) {
             let partial_public_key = member.partial_public_key.clone().unwrap();
 
+            let member_index = member.index;
+
             SimpleBLSCore::<PC, S>::partial_verify(
                 &partial_public_key,
                 &req.message,
@@ -167,6 +169,7 @@ where
                         .add_partial_signature(
                             req.request_id,
                             req_id_address,
+                            member_index,
                             req.partial_signature,
                         )
                         .await

@@ -24,14 +24,16 @@ use threshold_bls::sig::Share;
 #[derive(Clone)]
 pub struct GroupInfoDBClient<C: Curve> {
     pub(crate) db_client: Arc<SqliteDB>,
+    pub(crate) id_address: Address,
     pub(crate) group_info_cache_model: Option<group_info::Model>,
     pub(crate) group_info_cache: Option<InMemoryGroupInfoCache<C>>,
 }
 
 impl SqliteDB {
-    pub fn get_group_info_client<C: Curve>(&self) -> GroupInfoDBClient<C> {
+    pub fn get_group_info_client<C: Curve>(&self, id_address: Address) -> GroupInfoDBClient<C> {
         GroupInfoDBClient {
             db_client: Arc::new(self.clone()),
+            id_address,
             group_info_cache: None,
             group_info_cache_model: None,
         }
@@ -90,6 +92,7 @@ impl<C: Curve> GroupInfoDBClient<C> {
                 };
 
                 let group_info_cache = InMemoryGroupInfoCache::rebuild(
+                    self.id_address,
                     group_info
                         .share
                         .as_ref()
@@ -168,6 +171,12 @@ impl<C: Curve> GroupInfoFetcher<C> for GroupInfoDBClient<C> {
         group_info_cache.get_state()
     }
 
+    fn get_self_id_address(&self) -> DataAccessResult<Address> {
+        let group_info_cache = self.get_group_info_cache()?;
+
+        group_info_cache.get_self_id_address()
+    }
+
     fn get_self_index(&self) -> DataAccessResult<usize> {
         let group_info_cache = self.get_group_info_cache()?;
 
@@ -237,6 +246,7 @@ impl<C: Curve + Sync + Send> GroupInfoUpdater<C> for GroupInfoDBClient<C> {
             .map(|(index, address)| {
                 let member = Member {
                     index,
+                    dkg_index: index + 1,
                     id_address: *address,
                     rpc_endpoint: None,
                     partial_public_key: None,
@@ -507,10 +517,33 @@ impl<C: Curve + Sync + Send> GroupInfoUpdater<C> for GroupInfoDBClient<C> {
             return Err(GroupError::GroupAlreadyReady.into());
         }
 
+        // find members with the self_id_address and update index
+        let self_member_index = members
+            .get(&self.id_address)
+            .ok_or(GroupError::MemberNotExisted)?
+            .index;
+
+        GroupMutation::update_self_member_index(
+            self.get_connection(),
+            self.group_info_cache_model.to_owned().unwrap(),
+            self_member_index as i32,
+        )
+        .await
+        .map_err(|e| {
+            let e: DBError = e.into();
+            e
+        })?;
+
         if group.members.len() != members.len() {
             let mut local_members = group.members.clone();
-            // update members with input but with original index
-            local_members.retain(|id_address, _| members.contains_key(id_address));
+            // retain members and update member index with input
+            local_members.retain(|id_address, member| {
+                if members.contains_key(id_address) {
+                    member.index = members.get(id_address).unwrap().index;
+                    return true;
+                }
+                false
+            });
 
             GroupMutation::update_members(
                 self.get_connection(),
@@ -604,6 +637,20 @@ impl GroupMutation {
         group_info.public_key = Set(Some(public_key));
         group_info.share = Set(Some(share));
         group_info.members = Set(members);
+
+        group_info.update_at = Set(format_now_date());
+
+        group_info.update(db).await
+    }
+
+    pub async fn update_self_member_index(
+        db: &DbConn,
+        model: group_info::Model,
+        self_member_index: i32,
+    ) -> Result<group_info::Model, DbErr> {
+        let mut group_info: group_info::ActiveModel = model.into();
+
+        group_info.self_member_index = Set(self_member_index);
 
         group_info.update_at = Set(format_now_date());
 

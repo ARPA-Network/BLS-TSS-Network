@@ -150,7 +150,7 @@ where
                 self.group_cache.read().await.get_secret_share()?,
                 &actual_seed,
             ) {
-                Ok(partial_signature) => {
+                Ok(signed_partial_signature) => {
                     info!(
                         "{}",
                         build_task_related_payload(
@@ -164,7 +164,7 @@ where
                         )
                     );
 
-                    self.send_partial_signature(task, actual_seed, partial_signature)
+                    self.send_partial_signature(task, actual_seed, signed_partial_signature)
                         .await?;
                 }
                 Err(e) => {
@@ -196,6 +196,8 @@ where
         let threshold = self.group_cache.read().await.get_threshold()?;
 
         let current_group_index = self.group_cache.read().await.get_index()?;
+
+        let current_member_index = self.group_cache.read().await.get_self_index()?;
 
         if self
             .group_cache
@@ -230,6 +232,7 @@ where
                 .add_partial_signature(
                     task.request_id.clone(),
                     self.id_address,
+                    current_member_index,
                     partial_signature.clone(),
                 )
                 .await?;

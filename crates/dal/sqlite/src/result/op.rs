@@ -233,6 +233,7 @@ impl SignatureResultCacheUpdater<RandomnessResultCache>
         &mut self,
         task_request_id: Vec<u8>,
         member_address: Address,
+        member_index: usize,
         partial_signature: Vec<u8>,
     ) -> DataAccessResult<bool> {
         let txn = self.get_connection().begin().await.map_err(|e| {
@@ -267,7 +268,12 @@ impl SignatureResultCacheUpdater<RandomnessResultCache>
         })?;
 
         self.signature_results_cache
-            .add_partial_signature(task_request_id, member_address, partial_signature)
+            .add_partial_signature(
+                task_request_id,
+                member_address,
+                member_index,
+                partial_signature,
+            )
             .await?;
 
         Ok(true)

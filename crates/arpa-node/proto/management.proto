@@ -34,9 +34,6 @@ service ManagementService {
       returns (VerifyPartialSigsReply);
 
   rpc SendPartialSig(SendPartialSigRequest) returns (SendPartialSigReply);
-
-  rpc FulfillRandomness(FulfillRandomnessRequest)
-      returns (FulfillRandomnessReply);
 }
 
 enum ListenerType {
@@ -198,14 +195,3 @@ message SendPartialSigReply {
   bool res = 1;
 }
 
-message FulfillRandomnessRequest {
-  uint32 chain_id = 1;
-  uint32 group_index = 2;
-  bytes request_id = 3;
-  bytes sig = 4;
-  map<string, bytes> partial_sigs = 5;
-}
-
-message FulfillRandomnessReply {
-  bool res = 1;
-}

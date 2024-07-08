@@ -89,6 +89,7 @@ mod tests {
     };
     use arpa_core::{
         ComponentTaskType, Config, GeneralMainChainIdentity, ListenerType, RandomnessTask,
+        PLACEHOLDER_ADDRESS,
     };
     use arpa_dal::{
         cache::{
@@ -116,7 +117,7 @@ mod tests {
         ));
 
         let group_cache: Arc<RwLock<Box<dyn GroupInfoHandler<G2Curve>>>> = Arc::new(RwLock::new(
-            Box::new(InMemoryGroupInfoCache::<G2Curve>::default()),
+            Box::new(InMemoryGroupInfoCache::<G2Curve>::new(PLACEHOLDER_ADDRESS)),
         ));
 
         let randomness_tasks_cache: Arc<RwLock<Box<dyn BLSTasksHandler<RandomnessTask>>>> =
