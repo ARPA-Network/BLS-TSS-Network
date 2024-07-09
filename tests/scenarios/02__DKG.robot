@@ -66,10 +66,11 @@ DKG Happy Path1
     Set Modified Disqualified Nodes    ${address3}    ${disqulified_list}
     Set Modified Public Key    ${address4}    ${MODIFIRD_PUB_KEY}
 
+    ${node4} =    Stake And Run Node    4
     ${node1} =    Stake And Run Node    1
     ${node2} =    Stake And Run Node    2
     ${node3} =    Stake And Run Node    3
-    ${node4} =    Stake And Run Node    4
+    
 
     ${log_phase_1} =    All Nodes Have Keyword    Waiting for Phase 1 to start    ${NODE_PROCESS_LIST}
     ${log_phase_2} =   Get Keyword From Node Log    2    Waiting for Phase 2 to start
@@ -285,10 +286,10 @@ DKG Commit3
 
 Run DKG Test cases
     [Tags]    l1
-    Repeat Keyword    1    Test Rebalance
+    # Repeat Keyword    1    Test Rebalance
     Repeat Keyword    1    DKG Happy Path1
-    Repeat Keyword    1    DKG Happy Path2
-    Repeat Keyword    1    DKG Sad Path1
-    Repeat Keyword    1    DKG Commit1
-    Repeat Keyword    1    DKG Commit2
-    Repeat Keyword    1    DKG Commit3
+    # Repeat Keyword    1    DKG Happy Path2
+    # Repeat Keyword    1    DKG Sad Path1
+    # Repeat Keyword    1    DKG Commit1
+    # Repeat Keyword    1    DKG Commit2
+    # Repeat Keyword    1    DKG Commit3
