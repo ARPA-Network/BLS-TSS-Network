@@ -1,7 +1,7 @@
 {
   "name": "ARPA Network 2",
   "website": "https://www.arpanetwork.io/en-US",
-  "description": "The ARPA BLS Threshold Signature Scheme (BLS-TSS) Network is a cutting-edge decentralized cryptographic system designed to perform BLS threshold signature tasks. Randcast, our first product leveraging the ARPA Network, provides secure and reliable random number generation on multiple prevailing blockchains.",
+  "description": "The ARPA BLS Threshold Signature Scheme (BLS-TSS) Network is a cutting-edge decentralized cryptographic system designed to perform BLS threshold signature tasks. Leveraging the ARPA Network, Randcast provides secure and reliable random number generation on multiple prevailing blockchains.",
   "logo": "https://raw.githubusercontent.com/ARPA-Network/BLS-TSS-Network/main/scripts/eigen/holesky/logo.png",
   "twitter": "https://twitter.com/arpaofficial"
 }
