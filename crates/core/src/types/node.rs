@@ -139,6 +139,7 @@ impl<C: Curve> Group<C> {
 #[derive(Clone, Serialize, Deserialize)]
 pub struct Member<C: Curve> {
     pub index: usize,
+    pub dkg_index: usize,
     pub id_address: Address,
     pub rpc_endpoint: Option<String>,
     pub partial_public_key: Option<C::Point>,
@@ -148,6 +149,7 @@ impl<C: Curve> std::fmt::Debug for Member<C> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("Member")
             .field("index", &self.index)
+            .field("dkg_index", &self.dkg_index)
             .field("id_address", &self.id_address)
             .field("rpc_endpoint", &self.rpc_endpoint)
             .field(
@@ -158,10 +160,10 @@ impl<C: Curve> std::fmt::Debug for Member<C> {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Serialize, Deserialize, Debug)]
 pub struct PartialSignature {
     pub index: usize,
-    pub signature: Vec<u8>,
+    pub signed_partial_signature: Vec<u8>,
 }
 
 #[derive(Clone, Serialize, Deserialize, Debug)]

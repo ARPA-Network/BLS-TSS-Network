@@ -33,6 +33,8 @@ Due to the fact that Eigenlayer in the M2 phase does not support slashing, we co
 
 Nodes on the whitelist can join the ARPA Network and earn rewards by correctly performing the BLS tasks.
 
+**Note: At present, we do not set up slashing mechanisms that accompany economic penalties or cooling off periods. The meaning of slashing in the following text can be understood as deactivation. When a node does not respond correctly to the DKG grouping process in time, it will be deactivated for the operator to troubleshoot operational faults. Please refer to the [troubleshooting section](#troubleshooting) of the document and reactivate the node after confirming its condition.**
+
 ## Reward
 
 Besides the cooperation agreement, there are three types of rewards a node can earn through smart contract if acted responsibly in a timely manner:
@@ -59,12 +61,13 @@ To serve both Eigenlayer and ARPA architecture, we have 2 types of ECDSA account
 
 `Note`:
 
+- From a security perspective, we recommend that you **DO NOT copy the `Asset` account keystore to the environment where the node-client runs** during operations like registration and activation. Distinguishing environments between node maintenance operations and in which client operates can help mitigate the scope of losses involved in the event of an attack.
 - If your account management strategy allows, the `Asset` account and `Node` account can be the same.
 - When the node is in a non-working state(exited or slashed), the `Asset` account can be used to reset the binding relationship of the `Node` account. Please refer to the [Log Off Node Account by Asset Account](#log-off-node-account-by-asset-account) section for more details.
 
 ## Balance
 
-**To avoid unnecessary slashes**, for gas fee of grouping operations and task submission, please **keep your `Node` account balance above 0.2 ETH** on all the L1/L2s that you need to support, which currently are:
+**To avoid unnecessary slashes**, for gas fee of grouping operations and task submission, please **keep your `Node` account balance above 0.2 ETH on L1**, and 0.05 ETH on each L2 that you need to support, which currently are:
 
 - Testnet
   - ETH Holesky (17000)
@@ -77,7 +80,7 @@ To serve both Eigenlayer and ARPA architecture, we have 2 types of ECDSA account
 
 **_Note:_**
 
-- The gas consumption of `Node` account on mainnet generally does not exceed 0.2 ETH within a month, depending on the joining and exiting behavior of nodes in the same group. Please make sure to maintain sufficient balance on mainnet to avoid being unable to respond during the grouping process and triggering a slash.
+- The gas consumption of `Node` account on L1 generally does not exceed 0.2 ETH within a month, depending on the joining and exiting behavior of nodes in the same group. Please make sure to maintain sufficient balance on mainnet to avoid being unable to respond during the grouping process and triggering a slash.
 - The gas cost of fulfilling tasks(the signature verification and callback function) is directly paid by the committer node and then reimbursed by the requesting user. `Node` account can retrieve both the prepaid ETH and extra ARPA reward at any time by calling the `nodeWithdraw` method from the `NodeRegistry` contract on L1, or `ControllerOracle` contract on L2s.
 
 ## Setup Steps

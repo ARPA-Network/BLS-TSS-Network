@@ -208,7 +208,7 @@ async fn start(
 
     let mut node_cache = db.get_node_info_client();
 
-    let mut group_cache = db.get_group_info_client();
+    let mut group_cache = db.get_group_info_client(id_address);
 
     let mut dkg_public_key_to_register: Option<Vec<u8>> = None;
 

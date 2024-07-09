@@ -415,7 +415,7 @@ pub mod sqlite_tests {
 
         let db = build_sqlite_db().await.unwrap();
 
-        let mut db = db.get_group_info_client::<G2Curve>();
+        let mut db = db.get_group_info_client::<G2Curve>(PLACEHOLDER_ADDRESS);
 
         if let Ok(res) = db.refresh_current_group_info().await {
             assert_eq!(res, false);
@@ -431,7 +431,7 @@ pub mod sqlite_tests {
         setup();
         let db = build_sqlite_db().await.unwrap();
 
-        let mut db = db.get_group_info_client::<G2Curve>();
+        let mut db = db.get_group_info_client::<G2Curve>(PLACEHOLDER_ADDRESS);
         let member_1 = "0x0000000000000000000000000000000000000001"
             .parse()
             .unwrap();
@@ -476,7 +476,7 @@ pub mod sqlite_tests {
         setup();
         let db = build_sqlite_db().await.unwrap();
 
-        let mut db = db.get_group_info_client::<G2Curve>();
+        let mut db = db.get_group_info_client::<G2Curve>(PLACEHOLDER_ADDRESS);
         let member_1 = "0x0000000000000000000000000000000000000001"
             .parse()
             .unwrap();
@@ -521,7 +521,7 @@ pub mod sqlite_tests {
         setup();
         let db = build_sqlite_db().await.unwrap();
 
-        let mut db = db.get_group_info_client::<G2Curve>();
+        let mut db = db.get_group_info_client::<G2Curve>(PLACEHOLDER_ADDRESS);
         let member_1 = "0x0000000000000000000000000000000000000001"
             .parse()
             .unwrap();

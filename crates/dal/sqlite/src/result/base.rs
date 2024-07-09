@@ -3,6 +3,7 @@ use crate::types::RandomnessRecord;
 use crate::types::SqliteDB;
 use arpa_core::format_now_date;
 use arpa_core::BLSTaskError;
+use arpa_core::PartialSignature;
 use arpa_core::{RandomnessTask, Task};
 use arpa_dal::cache::BLSResultCache;
 use arpa_dal::cache::InMemorySignatureResultCache;
@@ -243,7 +244,8 @@ impl SignatureResultCacheUpdater<RandomnessResultCache>
         &mut self,
         task_request_id: Vec<u8>,
         member_address: Address,
-        partial_signature: Vec<u8>,
+        member_index: usize,
+        signed_partial_signature: Vec<u8>,
     ) -> DataAccessResult<bool> {
         let txn = self.get_connection().begin().await.map_err(|e| {
             let e: DBError = e.into();
@@ -265,7 +267,8 @@ impl SignatureResultCacheUpdater<RandomnessResultCache>
             self.get_connection(),
             model,
             member_address,
-            partial_signature.clone(),
+            member_index,
+            signed_partial_signature.clone(),
         )
         .await
         .map_err(|e| {
@@ -279,7 +282,12 @@ impl SignatureResultCacheUpdater<RandomnessResultCache>
         })?;
 
         self.signature_results_cache
-            .add_partial_signature(task_request_id, member_address, partial_signature)
+            .add_partial_signature(
+                task_request_id,
+                member_address,
+                member_index,
+                signed_partial_signature,
+            )
             .await?;
 
         Ok(true)
@@ -359,10 +367,16 @@ impl BaseRandomnessResultMutation {
         db: &DbConn,
         model: base_randomness_result::Model,
         member_address: Address,
-        partial_signature: Vec<u8>,
+        member_index: usize,
+        signed_partial_signature: Vec<u8>,
     ) -> Result<base_randomness_result::Model, DbErr> {
-        let mut partial_signatures: BTreeMap<Address, Vec<u8>> =
+        let mut partial_signatures: BTreeMap<Address, PartialSignature> =
             serde_json::from_str(&model.partial_signatures).unwrap();
+
+        let partial_signature = PartialSignature {
+            index: member_index,
+            signed_partial_signature,
+        };
 
         partial_signatures.insert(member_address, partial_signature);
 
