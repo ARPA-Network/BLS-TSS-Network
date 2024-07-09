@@ -16,7 +16,8 @@ use arpa_core::{
 use async_trait::async_trait;
 use ethers::{prelude::*, utils::hex};
 use log::info;
-use std::{collections::HashMap, future::Future, sync::Arc};
+use std::{collections::BTreeMap, future::Future, sync::Arc};
+use threshold_bls::poly::Eval;
 
 #[allow(dead_code)]
 pub struct AdapterClient {
@@ -102,7 +103,7 @@ impl AdapterTransactions for AdapterClient {
         group_index: usize,
         task: RandomnessTask,
         signature: Vec<u8>,
-        partial_signatures: HashMap<Address, PartialSignature>,
+        partial_signatures: BTreeMap<Address, PartialSignature>,
     ) -> ContractClientResult<TransactionReceipt> {
         let adapter_contract =
             ServiceClient::<AdapterContract>::prepare_service_client(self).await?;
@@ -114,7 +115,10 @@ impl AdapterTransactions for AdapterClient {
         let ps: Vec<ContractPartialSignature> = partial_signatures
             .values()
             .map(|ps| {
-                let sig: U256 = U256::from(ps.signature.as_slice());
+                let eval: Eval<Vec<u8>> =
+                    bincode::deserialize(&ps.signed_partial_signature).unwrap();
+
+                let sig: U256 = U256::from(eval.value.as_slice());
                 ContractPartialSignature {
                     index: ps.index.into(),
                     partial_signature: sig,

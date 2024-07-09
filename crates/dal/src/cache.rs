@@ -10,7 +10,10 @@ use super::{
     SignatureResultCacheUpdater,
 };
 use arpa_core::log::encoder;
-use arpa_core::{BLSTask, BLSTaskError, DKGStatus, DKGTask, Group, Member, RandomnessTask, Task};
+use arpa_core::{
+    BLSTask, BLSTaskError, DKGStatus, DKGTask, Group, Member, PartialSignature, RandomnessTask,
+    Task,
+};
 use async_trait::async_trait;
 use dkg_core::primitives::DKGOutput;
 use ethers_core::types::Address;
@@ -162,14 +165,9 @@ pub struct InMemoryGroupInfoCache<C: Curve> {
     pub(crate) share: Option<Share<C::Scalar>>,
     pub(crate) group: Group<C>,
     pub(crate) dkg_status: DKGStatus,
+    pub(crate) self_id_address: Address,
     pub(crate) self_index: usize,
     pub(crate) dkg_start_block_height: usize,
-}
-
-impl<C: Curve> Default for InMemoryGroupInfoCache<C> {
-    fn default() -> Self {
-        Self::new()
-    }
 }
 
 impl<C: Curve> std::fmt::Debug for InMemoryGroupInfoCache<C> {
@@ -185,19 +183,21 @@ impl<C: Curve> std::fmt::Debug for InMemoryGroupInfoCache<C> {
 }
 
 impl<C: Curve> InMemoryGroupInfoCache<C> {
-    pub fn new() -> Self {
+    pub fn new(id_address: Address) -> Self {
         let group: Group<C> = Group::new();
 
         InMemoryGroupInfoCache {
             share: None,
             group,
             dkg_status: DKGStatus::None,
+            self_id_address: id_address,
             self_index: 0,
             dkg_start_block_height: 0,
         }
     }
 
     pub fn rebuild(
+        id_address: Address,
         share: Option<Share<C::Scalar>>,
         group: Group<C>,
         dkg_status: DKGStatus,
@@ -208,6 +208,7 @@ impl<C: Curve> InMemoryGroupInfoCache<C> {
             share,
             group,
             dkg_status,
+            self_id_address: id_address,
             self_index,
             dkg_start_block_height,
         }
@@ -289,6 +290,7 @@ impl<C: Curve> GroupInfoUpdater<C> for InMemoryGroupInfoCache<C> {
             .for_each(|(index, address)| {
                 let member = Member {
                     index,
+                    dkg_index: index + 1,
                     id_address: *address,
                     rpc_endpoint: None,
                     partial_public_key: None,
@@ -464,11 +466,21 @@ impl<C: Curve> GroupInfoUpdater<C> for InMemoryGroupInfoCache<C> {
             return Err(GroupError::GroupAlreadyReady.into());
         }
 
+        // find members with the self_id_address and update index
+        self.self_index = members
+            .get(&self.self_id_address)
+            .ok_or(GroupError::MemberNotExisted)?
+            .index;
+
         if self.group.members.len() != members.len() {
-            // update members with input but with original index
-            self.group
-                .members
-                .retain(|id_address, _| members.contains_key(id_address));
+            // retain members and update member index with input
+            self.group.members.retain(|id_address, member| {
+                if members.contains_key(id_address) {
+                    member.index = members.get(id_address).unwrap().index;
+                    return true;
+                }
+                false
+            });
 
             self.group.size = self.group.members.len();
 
@@ -516,6 +528,10 @@ impl<C: Curve> GroupInfoFetcher<C> for InMemoryGroupInfoCache<C> {
         self.only_has_group_task()?;
 
         Ok(self.group.state)
+    }
+
+    fn get_self_id_address(&self) -> DataAccessResult<Address> {
+        Ok(self.self_id_address)
     }
 
     fn get_self_index(&self) -> DataAccessResult<usize> {
@@ -701,7 +717,7 @@ pub struct RandomnessResultCache {
     pub randomness_task: RandomnessTask,
     pub message: Vec<u8>,
     pub threshold: usize,
-    pub partial_signatures: BTreeMap<Address, Vec<u8>>,
+    pub partial_signatures: BTreeMap<Address, PartialSignature>,
     pub committed_times: usize,
 }
 
@@ -763,7 +779,8 @@ impl SignatureResultCacheUpdater<RandomnessResultCache>
         &mut self,
         task_request_id: Vec<u8>,
         member_address: Address,
-        partial_signature: Vec<u8>,
+        member_index: usize,
+        signed_partial_signature: Vec<u8>,
     ) -> DataAccessResult<bool> {
         let signature_result_cache = self
             .signature_result_caches
@@ -777,6 +794,11 @@ impl SignatureResultCacheUpdater<RandomnessResultCache>
         {
             return Ok(false);
         }
+
+        let partial_signature = PartialSignature {
+            index: member_index,
+            signed_partial_signature,
+        };
 
         signature_result_cache
             .result_cache

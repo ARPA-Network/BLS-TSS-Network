@@ -6,15 +6,14 @@ use crate::rpc_stub::management::management_service_server::{
     ManagementService, ManagementServiceServer,
 };
 use crate::rpc_stub::management::{
-    AggregatePartialSigsReply, AggregatePartialSigsRequest, FulfillRandomnessReply,
-    FulfillRandomnessRequest, GetGroupInfoReply, GetGroupInfoRequest, GetNodeInfoReply,
-    GetNodeInfoRequest, Group, ListFixedTasksReply, ListFixedTasksRequest, Member,
-    NodeActivateReply, NodeActivateRequest, NodeQuitReply, NodeQuitRequest, NodeRegisterReply,
-    NodeRegisterRequest, PartialSignReply, PartialSignRequest, PostProcessDkgReply,
-    PostProcessDkgRequest, SendPartialSigReply, SendPartialSigRequest, ShutdownListenerReply,
-    ShutdownListenerRequest, ShutdownNodeReply, ShutdownNodeRequest, StartListenerReply,
-    StartListenerRequest, VerifyPartialSigsReply, VerifyPartialSigsRequest, VerifySigReply,
-    VerifySigRequest,
+    AggregatePartialSigsReply, AggregatePartialSigsRequest, GetGroupInfoReply, GetGroupInfoRequest,
+    GetNodeInfoReply, GetNodeInfoRequest, Group, ListFixedTasksReply, ListFixedTasksRequest,
+    Member, NodeActivateReply, NodeActivateRequest, NodeQuitReply, NodeQuitRequest,
+    NodeRegisterReply, NodeRegisterRequest, PartialSignReply, PartialSignRequest,
+    PostProcessDkgReply, PostProcessDkgRequest, SendPartialSigReply, SendPartialSigRequest,
+    ShutdownListenerReply, ShutdownListenerRequest, ShutdownNodeReply, ShutdownNodeRequest,
+    StartListenerReply, StartListenerRequest, VerifyPartialSigsReply, VerifyPartialSigsRequest,
+    VerifySigReply, VerifySigRequest,
 };
 use arpa_core::{
     address_to_string, Group as ModelGroup, ListenerType, Member as ModelMember, SchedulerError,
@@ -320,34 +319,6 @@ where
             .await
             .map_err(|e: anyhow::Error| Status::unavailable(e.to_string()))?;
         return Ok(Response::new(SendPartialSigReply { res: true }));
-    }
-
-    async fn fulfill_randomness(
-        &self,
-        request: Request<FulfillRandomnessRequest>,
-    ) -> Result<tonic::Response<FulfillRandomnessReply>, tonic::Status> {
-        let req = request.into_inner();
-        let group_index = req.group_index as usize;
-        let request_id = req.request_id;
-        let sig = req.sig;
-        let partial_sigs = req
-            .partial_sigs
-            .into_iter()
-            .map(|(k, v)| (k.parse().unwrap(), v))
-            .collect();
-        self.context
-            .write()
-            .await
-            .fulfill_randomness(
-                req.chain_id as usize,
-                group_index,
-                request_id,
-                sig,
-                partial_sigs,
-            )
-            .await
-            .map_err(|e: anyhow::Error| Status::failed_precondition(e.to_string()))?;
-        return Ok(Response::new(FulfillRandomnessReply { res: true }));
     }
 }
 

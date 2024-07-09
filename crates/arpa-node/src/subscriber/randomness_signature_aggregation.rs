@@ -2,7 +2,7 @@ use super::{DebuggableEvent, DebuggableSubscriber, Subscriber};
 use crate::{
     algorithm::bls::{BLSCore, SimpleBLSCore},
     context::ChainIdentityHandlerType,
-    error::{NodeError, NodeResult},
+    error::NodeResult,
     event::{ready_to_fulfill_randomness_task::ReadyToFulfillRandomnessTask, types::Topic},
     queue::{event_queue::EventQueue, EventSubscriber},
     scheduler::{dynamic::SimpleDynamicTaskScheduler, TaskScheduler},
@@ -22,10 +22,9 @@ use async_trait::async_trait;
 use ethers::types::{Address, U256};
 use log::{debug, error, info};
 use serde_json::json;
-use std::{collections::HashMap, marker::PhantomData, sync::Arc};
+use std::{collections::BTreeMap, marker::PhantomData, sync::Arc};
 use threshold_bls::{
     group::Curve,
-    poly::Eval,
     sig::{SignatureScheme, ThresholdScheme},
 };
 use tokio::sync::RwLock;
@@ -82,7 +81,7 @@ pub trait FulfillRandomnessHandler {
         group_index: usize,
         randomness_task: RandomnessTask,
         signature: Vec<u8>,
-        partial_signatures: HashMap<Address, PartialSignature>,
+        partial_signatures: BTreeMap<Address, PartialSignature>,
     ) -> NodeResult<()>;
 }
 
@@ -102,7 +101,7 @@ impl<PC: Curve> FulfillRandomnessHandler for GeneralFulfillRandomnessHandler<PC>
         group_index: usize,
         randomness_task: RandomnessTask,
         signature: Vec<u8>,
-        partial_signatures: HashMap<Address, PartialSignature>,
+        partial_signatures: BTreeMap<Address, PartialSignature>,
     ) -> NodeResult<()> {
         let client = self
             .chain_identity
@@ -312,7 +311,7 @@ where
 
             let partials = partial_signatures
                 .values()
-                .cloned()
+                .map(|partial| partial.signed_partial_signature.clone())
                 .collect::<Vec<Vec<u8>>>();
 
             match SimpleBLSCore::<PC, S>::aggregate(threshold, &partials) {
@@ -329,18 +328,6 @@ where
                             None
                         )
                     );
-
-                    let partial_signatures = partial_signatures
-                        .iter()
-                        .map(|(addr, partial)| {
-                            let eval: Eval<Vec<u8>> = bincode::deserialize(partial)?;
-                            let partial = PartialSignature {
-                                index: eval.index as usize,
-                                signature: eval.value,
-                            };
-                            Ok((*addr, partial))
-                        })
-                        .collect::<Result<_, NodeError>>()?;
 
                     let id_address = self.id_address;
 

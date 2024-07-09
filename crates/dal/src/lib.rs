@@ -124,6 +124,8 @@ pub trait GroupInfoFetcher<C: Curve>: std::fmt::Debug {
 
     fn get_state(&self) -> DataAccessResult<bool>;
 
+    fn get_self_id_address(&self) -> DataAccessResult<Address>;
+
     fn get_self_index(&self) -> DataAccessResult<usize>;
 
     fn get_public_key(&self) -> DataAccessResult<&C::Point>;
@@ -227,7 +229,8 @@ pub trait SignatureResultCacheUpdater<T: ResultCache> {
         &mut self,
         task_request_id: Vec<u8>,
         member_address: Address,
-        partial_signature: Vec<u8>,
+        member_index: usize,
+        signed_partial_signature: Vec<u8>,
     ) -> DataAccessResult<bool>;
 
     async fn update_commit_result(

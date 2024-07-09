@@ -26,7 +26,8 @@ use arpa_core::OP_SEPOLIA_TESTNET_CHAIN_ID;
 use arpa_core::REDSTONE_GARNET_TESTNET_CHAIN_ID;
 use arpa_core::REDSTONE_HOLESKY_TESTNET_CHAIN_ID;
 use arpa_core::REDSTONE_MAINNET_CHAIN_ID;
-use arpa_core::TAIKO_KATLA_TEST_CHAIN_ID;
+use arpa_core::TAIKO_HEKLA_TESTNET_CHAIN_ID;
+use arpa_core::TAIKO_MAINNET_CHAIN_ID;
 use arpa_dal::cache::RandomnessResultCache;
 use arpa_dal::error::DataAccessError;
 use arpa_dal::error::DataAccessResult;
@@ -122,7 +123,7 @@ impl SqliteDB {
             LOOT_MAINNET_CHAIN_ID | LOOT_TESTNET_CHAIN_ID => {
                 Ok(Box::new(self.get_loot_bls_tasks_client::<RandomnessTask>()))
             }
-            TAIKO_KATLA_TEST_CHAIN_ID => Ok(Box::new(
+            TAIKO_HEKLA_TESTNET_CHAIN_ID | TAIKO_MAINNET_CHAIN_ID => Ok(Box::new(
                 self.get_taiko_bls_tasks_client::<RandomnessTask>(),
             )),
             _ => Err(DataAccessError::InvalidChainId(chain_id)),
@@ -152,7 +153,7 @@ impl SqliteDB {
             LOOT_MAINNET_CHAIN_ID | LOOT_TESTNET_CHAIN_ID => {
                 Ok(Box::new(self.get_loot_randomness_result_client().await?))
             }
-            TAIKO_KATLA_TEST_CHAIN_ID => {
+            TAIKO_HEKLA_TESTNET_CHAIN_ID | TAIKO_MAINNET_CHAIN_ID => {
                 Ok(Box::new(self.get_taiko_randomness_result_client().await?))
             }
             _ => Err(DataAccessError::InvalidChainId(chain_id)),
@@ -415,7 +416,7 @@ pub mod sqlite_tests {
 
         let db = build_sqlite_db().await.unwrap();
 
-        let mut db = db.get_group_info_client::<G2Curve>();
+        let mut db = db.get_group_info_client::<G2Curve>(PLACEHOLDER_ADDRESS);
 
         if let Ok(res) = db.refresh_current_group_info().await {
             assert_eq!(res, false);
@@ -431,7 +432,7 @@ pub mod sqlite_tests {
         setup();
         let db = build_sqlite_db().await.unwrap();
 
-        let mut db = db.get_group_info_client::<G2Curve>();
+        let mut db = db.get_group_info_client::<G2Curve>(PLACEHOLDER_ADDRESS);
         let member_1 = "0x0000000000000000000000000000000000000001"
             .parse()
             .unwrap();
@@ -476,7 +477,7 @@ pub mod sqlite_tests {
         setup();
         let db = build_sqlite_db().await.unwrap();
 
-        let mut db = db.get_group_info_client::<G2Curve>();
+        let mut db = db.get_group_info_client::<G2Curve>(PLACEHOLDER_ADDRESS);
         let member_1 = "0x0000000000000000000000000000000000000001"
             .parse()
             .unwrap();
@@ -521,7 +522,7 @@ pub mod sqlite_tests {
         setup();
         let db = build_sqlite_db().await.unwrap();
 
-        let mut db = db.get_group_info_client::<G2Curve>();
+        let mut db = db.get_group_info_client::<G2Curve>(PLACEHOLDER_ADDRESS);
         let member_1 = "0x0000000000000000000000000000000000000001"
             .parse()
             .unwrap();

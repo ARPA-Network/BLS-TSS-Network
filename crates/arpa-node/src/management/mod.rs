@@ -1,17 +1,15 @@
-use std::collections::HashMap;
-
 use super::{
     algorithm::bls::{BLSCore, SimpleBLSCore},
     committer::{client::GeneralCommitterClient, CommitterClient, CommitterService},
     context::{chain::Chain, types::GeneralContext, Context, ContextFetcher},
-    error::{NodeError, NodeResult},
+    error::NodeResult,
     scheduler::FixedTaskScheduler,
 };
 use anyhow::Result;
-use arpa_contract_client::{adapter::AdapterTransactions, controller::ControllerTransactions};
+use arpa_contract_client::controller::ControllerTransactions;
 use arpa_core::{
     BLSTaskType, ComponentTaskType, DKGStatus, ExponentialBackoffRetryDescriptor, Group,
-    ListenerDescriptor, ListenerType, PartialSignature, SchedulerError, SchedulerResult,
+    ListenerDescriptor, ListenerType, SchedulerError, SchedulerResult,
     DEFAULT_COMMIT_PARTIAL_SIGNATURE_RETRY_BASE, DEFAULT_COMMIT_PARTIAL_SIGNATURE_RETRY_FACTOR,
     DEFAULT_COMMIT_PARTIAL_SIGNATURE_RETRY_MAX_ATTEMPTS,
     DEFAULT_COMMIT_PARTIAL_SIGNATURE_RETRY_USE_JITTER,
@@ -20,7 +18,6 @@ use arpa_dal::error::DataAccessResult;
 use ethers::types::Address;
 use threshold_bls::{
     group::Curve,
-    poly::Eval,
     sig::{Share, SignatureScheme, ThresholdScheme},
 };
 
@@ -106,15 +103,6 @@ pub trait BLSRandomnessService<PC: Curve> {
         msg: Vec<u8>,
         randomness_task_request_id: Vec<u8>,
         partial: Vec<u8>,
-    ) -> Result<()>;
-
-    async fn fulfill_randomness(
-        &self,
-        chain_id: usize,
-        group_index: usize,
-        randomness_task_request_id: Vec<u8>,
-        sig: Vec<u8>,
-        partial_sigs: HashMap<Address, Vec<u8>>,
     ) -> Result<()>;
 }
 
@@ -452,6 +440,13 @@ where
                     .await?;
             }
 
+            let self_index = self
+                .get_main_chain()
+                .get_group_cache()
+                .read()
+                .await
+                .get_self_index()?;
+
             self.get_main_chain()
                 .get_randomness_result_cache()
                 .write()
@@ -459,6 +454,7 @@ where
                 .add_partial_signature(
                     randomness_task_request_id.clone(),
                     id_address,
+                    self_index,
                     partial_signature.clone(),
                 )
                 .await?;
@@ -544,82 +540,6 @@ where
                 msg,
                 partial,
             )
-            .await?;
-
-        Ok(())
-    }
-
-    async fn fulfill_randomness(
-        &self,
-        chain_id: usize,
-        group_index: usize,
-        randomness_task_request_id: Vec<u8>,
-        sig: Vec<u8>,
-        partial_sigs: HashMap<Address, Vec<u8>>,
-    ) -> Result<()> {
-        let id_address = self
-            .get_main_chain()
-            .get_node_cache()
-            .read()
-            .await
-            .get_id_address()?;
-
-        let main_chain_id = self
-            .get_main_chain()
-            .get_chain_identity()
-            .read()
-            .await
-            .get_chain_id();
-
-        let partial_signatures = partial_sigs
-            .iter()
-            .map(|(addr, partial)| {
-                let eval: Eval<Vec<u8>> = bincode::deserialize(partial)?;
-                let partial = PartialSignature {
-                    index: eval.index as usize,
-                    signature: eval.value,
-                };
-                Ok((*addr, partial))
-            })
-            .collect::<Result<_, NodeError>>()?;
-
-        let (client, randomness_task) = if chain_id == main_chain_id {
-            (
-                self.get_main_chain()
-                    .get_chain_identity()
-                    .read()
-                    .await
-                    .build_adapter_client(id_address),
-                self.get_main_chain()
-                    .get_randomness_tasks_cache()
-                    .read()
-                    .await
-                    .get(&randomness_task_request_id)
-                    .await?,
-            )
-        } else {
-            if !self.contains_relayed_chain(chain_id) {
-                return Err(SchedulerError::InvalidChainId(chain_id).into());
-            }
-            (
-                self.get_relayed_chain(chain_id)
-                    .unwrap()
-                    .get_chain_identity()
-                    .read()
-                    .await
-                    .build_adapter_client(id_address),
-                self.get_relayed_chain(chain_id)
-                    .unwrap()
-                    .get_randomness_tasks_cache()
-                    .read()
-                    .await
-                    .get(&randomness_task_request_id)
-                    .await?,
-            )
-        };
-
-        client
-            .fulfill_randomness(group_index, randomness_task, sig, partial_signatures)
             .await?;
 
         Ok(())

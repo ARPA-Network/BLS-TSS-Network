@@ -436,7 +436,8 @@ pub mod adapter {
     use async_trait::async_trait;
     use ethers::core::types::Address;
     use ethers::types::{TransactionReceipt, U256};
-    use std::{collections::HashMap, future::Future};
+    use std::collections::BTreeMap;
+    use std::future::Future;
 
     use crate::error::ContractClientResult;
 
@@ -447,7 +448,7 @@ pub mod adapter {
             group_index: usize,
             task: RandomnessTask,
             signature: Vec<u8>,
-            partial_signatures: HashMap<Address, PartialSignature>,
+            partial_signatures: BTreeMap<Address, PartialSignature>,
         ) -> ContractClientResult<TransactionReceipt>;
     }
 

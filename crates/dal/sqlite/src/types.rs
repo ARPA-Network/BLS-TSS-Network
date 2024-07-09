@@ -1,3 +1,4 @@
+use arpa_core::PartialSignature;
 use arpa_core::RandomnessRequestType;
 use arpa_core::RandomnessTask;
 use arpa_dal::cache::BLSResultCache;
@@ -76,8 +77,8 @@ impl From<RandomnessRecord> for BLSResultCache<RandomnessResultCache> {
             assignment_block_height: randomness_record.assignment_block_height as usize,
         };
 
-        let partial_signatures: BTreeMap<Address, Vec<u8>> =
-            serde_json::from_str(&randomness_record.partial_signatures).unwrap();
+        let partial_signatures: BTreeMap<Address, PartialSignature> =
+            serde_json::from_str(&randomness_record.partial_signatures).unwrap_or(BTreeMap::new());
 
         BLSResultCache {
             result_cache: RandomnessResultCache {
