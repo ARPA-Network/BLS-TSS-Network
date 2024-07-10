@@ -1,5 +1,5 @@
 *** Settings ***
-Documentation       Node Registration Scenarios
+Documentation       Long running Scenarios
 
 Library             src/environment/contract.py
 Library             src/environment/log.py

@@ -1,5 +1,5 @@
 *** Settings ***
-Documentation       Node Registration Scenarios
+Documentation       BLS Scenarios
 
 Library             src/environment/contract.py
 Library             src/environment/log.py

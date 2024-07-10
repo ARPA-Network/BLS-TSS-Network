@@ -1,5 +1,5 @@
 *** Settings ***
-Documentation       Node Registration Scenarios
+Documentation       DKG normal Scenarios
 
 Library             src/environment/contract.py
 Library             src/environment/log.py

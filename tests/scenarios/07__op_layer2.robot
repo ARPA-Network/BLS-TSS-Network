@@ -1,5 +1,5 @@
 *** Settings ***
-Documentation       Node Registration Scenarios
+Documentation       Layer2 Scenarios
 Library             src/environment/contract.py
 Library             src/environment/log.py
 Library             src/environment/node.py
