@@ -152,7 +152,7 @@ def create_relay_list(
       commit_partial_signature_retry_descriptor:
         base: 2
         factor: 1000
-        max_attempts: 5
+        max_attempts: 10
         use_jitter: false"""
 
     relay_chain_config = []
@@ -260,8 +260,8 @@ time_limits:
     use_jitter: true
   commit_partial_signature_retry_descriptor:
     base: 2
-    factor: 1000
-    max_attempts: 5
+    factor: 2000
+    max_attempts: 10
     use_jitter: false
 logger:
   context_logging: true

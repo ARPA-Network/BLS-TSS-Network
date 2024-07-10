@@ -76,18 +76,21 @@ DKG Happy Path1
     ${log_phase_2} =   Get Keyword From Node Log    2    Waiting for Phase 2 to start
     ${group_state} =    Wait For State    DKGGroupingAvailable    group_log    ${NODE_PROCESS_LIST}    ${False}    index=0    epoch=2
     Should Be Equal As Strings    ${group_state}    True
-    
-    Mine Blocks    20
-    Sleep    15s
+
+    ${group_state} =    Have Node Got Keyword    Transaction successful(post_process_dkg)    ${NODE_PROCESS_LIST}
     Group Node Number Should Be    0    3
+    Should Be Equal As Strings    ${group_state}    True
     
     ${slash_event} =    Get Event    ${NODE_REGISTRY_CONTRACT}    NodeSlashed
     Should Be Equal As Strings    ${slash_event['args']['nodeIdAddress']}    ${address4}
 
-    Sleep    2s
+    Sleep    5s
     Deploy User Contract
-    Sleep    2s
+    Sleep    3s
     Request Randomness
+    
+    ${log_task_received} =       Wait For State    TaskReceived    task_log    ${NODE_PROCESS_LIST}    ${False}
+    Should Be Equal As Strings    ${log_task_received}    True
 
     ${fullfill_state} =    Wait For State    FulfillmentFinished    task_log    ${NODE_PROCESS_LIST}    ${False}
     Should Be Equal As Strings    ${fullfill_state}    True
@@ -118,9 +121,8 @@ DKG Happy Path2
     Mine Blocks    9
     ${group_state} =    Wait For State    DKGGroupingAvailable    group_log    ${NODE_PROCESS_LIST}    index=0    epoch=2
     Should Be Equal As Strings    ${group_state}    True
-    Should Be Equal As Strings    ${group_state}    True
-    Mine Blocks    20
-    Sleep    2s
+    Mine Blocks    10
+    ${group_state} =    Have Node Got Keyword    Transaction successful(post_process_dkg)    ${NODE_PROCESS_LIST}
     Group Node Number Should Be    0    4
     ${group} =   Get Group    0
     ${ckeck_result} =    Check Group Status    ${group}
@@ -137,8 +139,12 @@ DKG Happy Path2
     Sleep    1s
     Request Randomness
     
+    ${log_task_received} =       Wait For State    TaskReceived    task_log    ${NODE_PROCESS_LIST}    ${False}
+    Should Be Equal As Strings    ${log_task_received}    True
+
     ${fullfill_state} =    Wait For State    FulfillmentFinished    task_log    ${NODE_PROCESS_LIST}    ${False}
     Should Be Equal As Strings    ${fullfill_state}    True
+    
     Mine Blocks    10
     Sleep    2s
     Check Randomness

@@ -97,6 +97,7 @@ Request Randomness
     ${key} =    Get Value From Env    USER_PRIVATE_KEY
     #${result} =    Contract Function Transact    ${USER_CONTRACT}    getRandomNumber    ${base_fee}
     ${result} =    Cast Send   ${USER_CONTRACT_ADDRESS}    "getRandomNumber()"    ${key}    ${EMPTY}
+    Log    ${result}
     RETURN    ${result}
 
 Check Randomness
