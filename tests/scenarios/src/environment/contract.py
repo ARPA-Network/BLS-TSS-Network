@@ -46,7 +46,7 @@ def contract_function_call(contract, function_name, *args):
     result = function(*args).call()
     return result
 
-def contract_function_transact(contract, function_name, *args):
+def contract_function_transact(contract, function_name, max_price=1000, *args):
     """
     contract is an instance of a web3 contract
     function_name is a string representing the name of the function to execute
@@ -55,62 +55,23 @@ def contract_function_transact(contract, function_name, *args):
     Get the function object from the contract instance
     """
     function = getattr(contract.functions, function_name)
-    max_fee = get_average_gas_price('http://127.0.0.1:8545')
     # Call the function with the provided parameters
-    gas_estimate = function(*args).estimate_gas()
-    result = function(*args).transact({'gasPrice': max_fee, 'gas': int(gas_estimate * 1.2)})
+    #gas_estimate = function(*args).estimate_gas()
+    print(max_price)
+    result = function(*args).transact()
     return result
 
-def get_average_gas_price(url):
-    """
-    This function calculates the average gas price for the last 10 blocks.
-    It connects to an Ethereum node at the given URL, fetches the gas used 
-    and gas limit for each of the last 10 blocks, calculates the gas price for
-    each block, and returns the average gas price.
-    
-    Parameters:
-    url (str): The HTTP provider address of the Ethereum node
 
-    Returns:
-    int: The average gas price for the last 10 blocks
-    """
-
-   # Connect to your Ethereum node
-    w3 = Web3(Web3.HTTPProvider(url))
-
-    # Get the latest block number
-    latest_block_number = w3.eth.block_number
-
-    # Initialize a list to store the gas prices
-    gas_prices = []
-    if url == 'http://localhost:8545':
-        try:
-            # Loop through the latest 10 blocks
-            for i in range(latest_block_number - 9, latest_block_number + 1):
-                # Get the block
-                block = w3.eth.get_block(i, full_transactions=True)
-
-                # Add the gas price of each transaction to the list
-                if block is not None:
-                    for tx in block['transactions']:
-                        gas_prices.append(tx['gasPrice'])
-                # Calculate the average gas price
-        except Exception as exception:
-            print(f"Error: {str(exception)}")
-    if len(gas_prices) == 0:
-        return w3.eth.gas_price
-    average_gas_price = sum(gas_prices) / len(gas_prices)
-    return int(average_gas_price * 1.2)
-
-
-def exec_script(script_name, url='http://localhost:8545'):
+def exec_script(script_name, url='http://localhost:8545', max_price=10000):
     """
     Executes a script from the "contracts/script" directory.
     """
-    max_fee = get_average_gas_price(url)
+    print(max_price)
+    if len(str(url)) == 0:
+        url = 'http://localhost:8545'
     os.chdir("contracts")
     cmd = ("forge script script/" + script_name
-        + " --fork-url " + url +  " --with-gas-price " + str(max_fee) + " --broadcast --slow")
+        + " --fork-url " + url +  " --gas-price " + str(max_price) + " --broadcast --slow")
     os.system(cmd)
     os.chdir("..")
 
@@ -127,18 +88,36 @@ def get_contract_address_from_file(file_name):
 
     # initialize an empty dictionary to hold the mapping
     contract_addresses = {}
-
+    count = 0
     for transaction in transactions:
         if transaction.get('transactionType') == 'CREATE':
             contract_address = transaction.get('contractAddress')
+            contract_address = to_checksum_address(contract_address)
             contract_name = transaction.get('contractName')
             if contract_address is not None and contract_name is not None:
                 # create a mapping between the contract name and its address
+                if (contract_name == "ERC1967Proxy"):
+                    contract_name = "ERC1967Proxy" + str(count)
+                    count += 1
                 contract_addresses[contract_name] = contract_address
             if contract_name is None:
                 contract_addresses['default'] = contract_address
 
     return contract_addresses
+
+def get_contract_address_from_json(path):
+    """
+    Fetches all contract addresses from a JSON file and returns them in a single dictionary.
+    """
+    
+    # Read and parse the JSON file
+    try:
+        with open(path, 'r') as file:
+            data = json.load(file)
+            return data
+    except FileNotFoundError:
+        print(f"File {path} not found.")
+        return None
 
 
 def get_event(contract, event_name, from_block=0):

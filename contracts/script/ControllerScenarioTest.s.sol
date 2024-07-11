@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: UNLICENSED
-pragma solidity ^0.8.13;
+pragma solidity ^0.8.18;
 
 import {Script} from "forge-std/Script.sol";
 import {Controller} from "../src/Controller.sol";
@@ -16,9 +16,10 @@ import {IERC20} from "openzeppelin-contracts/contracts/token/ERC20/IERC20.sol";
 import {ERC1967Proxy} from "openzeppelin-contracts/contracts/proxy/ERC1967/ERC1967Proxy.sol";
 import {Staking} from "Staking-v0.1/Staking.sol";
 import {ServiceManager} from "../src/eigenlayer/ServiceManager.sol";
+import {Deployer} from "./Deployer.s.sol";
 
 // solhint-disable-next-line max-states-count
-contract ControllerScenarioTest is Script {
+contract ControllerScenarioTest is Deployer {
     uint256 internal _deployerPrivateKey = vm.envUint("ADMIN_PRIVATE_KEY");
 
     uint256 internal _disqualifiedNodePenaltyAmount = vm.envUint("DISQUALIFIED_NODE_PENALTY_AMOUNT");
@@ -74,30 +75,32 @@ contract ControllerScenarioTest is Script {
         NodeRegistry nodeRegistryImpl;
         ERC1967Proxy nodeRegistry;
         Controller controllerImpl;
-        ERC1967Proxy controller;
         Adapter adapterImpl;
         ERC1967Proxy adapter;
         ServiceManager serviceManagerImpl;
         ERC1967Proxy serviceManager;
         ControllerRelayer controllerRelayerImpl;
         ERC1967Proxy controllerRelayer;
-        OPChainMessenger opChainMessenger;
-        ControllerProxy proxy;
+        ControllerProxy controllerProxy;
         Staking staking;
         IERC20 arpa;
-
+        _checkDeploymentAddressesFile();
         vm.broadcast(_deployerPrivateKey);
         arpa = new Arpa();
+        _addDeploymentAddress(Network.L1, "Arpa", address(arpa));
 
         vm.broadcast(_deployerPrivateKey);
         nodeRegistryImpl = new NodeRegistry();
+        _addDeploymentAddress(Network.L1, "NodeRegistryImpl", address(nodeRegistryImpl));
 
         vm.broadcast(_deployerPrivateKey);
         nodeRegistry =
             new ERC1967Proxy(address(nodeRegistryImpl), abi.encodeWithSignature("initialize(address)", address(arpa)));
+        _addDeploymentAddress(Network.L1, "NodeRegistry", address(nodeRegistry));
 
         vm.broadcast(_deployerPrivateKey);
         serviceManagerImpl = new ServiceManager();
+        _addDeploymentAddress(Network.L1, "ServiceManagerImpl", address(serviceManagerImpl));
 
         vm.broadcast(_deployerPrivateKey);
         serviceManager = new ERC1967Proxy(
@@ -106,6 +109,7 @@ contract ControllerScenarioTest is Script {
                 "initialize(address,address,address)", address(nodeRegistry), _avsDirectory, _delegationManager
             )
         );
+        _addDeploymentAddress(Network.L1, "ServiceManager", address(serviceManager));
 
         Staking.PoolConstructorParams memory params = Staking.PoolConstructorParams(
             IERC20(address(arpa)),
@@ -121,20 +125,23 @@ contract ControllerScenarioTest is Script {
 
         vm.broadcast(_deployerPrivateKey);
         staking = new Staking(params);
+        _addDeploymentAddress(Network.L1, "Staking", address(staking));
 
         vm.broadcast(_deployerPrivateKey);
         staking.setController(address(nodeRegistry));
 
         vm.broadcast(_deployerPrivateKey);
         controllerImpl = new Controller();
+        _addDeploymentAddress(Network.L1, "ControllerImpl", address(controllerImpl));
 
         vm.broadcast(_deployerPrivateKey);
-        controller =
-            new ERC1967Proxy(address(controllerImpl), abi.encodeWithSignature("initialize(uint256)", _lastOutput));
+        controllerProxy =
+            new ControllerProxy(address(controllerImpl), abi.encodeWithSignature("initialize(uint256)", _lastOutput));
+        _addDeploymentAddress(Network.L1, "ControllerProxy", address(controllerProxy));
 
         vm.broadcast(_deployerPrivateKey);
         INodeRegistryOwner(address(nodeRegistry)).setNodeRegistryConfig(
-            address(controller),
+            address(controllerProxy),
             address(staking),
             address(serviceManager),
             _operatorStakeAmount,
@@ -143,19 +150,16 @@ contract ControllerScenarioTest is Script {
         );
 
         vm.broadcast(_deployerPrivateKey);
-        proxy = new ControllerProxy(address(controller));
-
-        vm.broadcast(_deployerPrivateKey);
-        IControllerOwner(address(proxy)).initialize(_lastOutput);
-
-        vm.broadcast(_deployerPrivateKey);
         adapterImpl = new Adapter();
+        _addDeploymentAddress(Network.L1, "AdapterImpl", address(adapterImpl));
 
         vm.broadcast(_deployerPrivateKey);
-        adapter = new ERC1967Proxy(address(adapterImpl), abi.encodeWithSignature("initialize(address)", address(proxy)));
+        adapter = new ERC1967Proxy(address(adapterImpl), abi.encodeWithSignature("initialize(address)", address(controllerProxy)));
+        _addDeploymentAddress(Network.L1, "Adapter", address(adapter));
+
 
         vm.broadcast(_deployerPrivateKey);
-        IControllerOwner(address(proxy)).setControllerConfig(
+        IControllerOwner(address(controllerProxy)).setControllerConfig(
             address(nodeRegistry),
             address(adapter),
             _disqualifiedNodePenaltyAmount,
@@ -199,18 +203,12 @@ contract ControllerScenarioTest is Script {
 
         vm.broadcast(_deployerPrivateKey);
         controllerRelayerImpl = new ControllerRelayer();
+        _addDeploymentAddress(Network.L1, "ControllerRelayerImpl", address(controllerRelayerImpl));
 
         vm.broadcast(_deployerPrivateKey);
         controllerRelayer = new ERC1967Proxy(
-            address(controllerRelayerImpl), abi.encodeWithSignature("initialize(address)", address(proxy))
+            address(controllerRelayerImpl), abi.encodeWithSignature("initialize(address)", address(controllerProxy))
         );
-
-        vm.broadcast(_deployerPrivateKey);
-        opChainMessenger = new OPChainMessenger(
-            address(controllerRelayer), _opControllerOracleAddress, _opL1CrossDomainMessengerAddress
-        );
-
-        vm.broadcast(_deployerPrivateKey);
-        ControllerRelayer(address(controllerRelayer)).setChainMessenger(_opChainId, address(opChainMessenger));
+        _addDeploymentAddress(Network.L1, "ControllerRelayer", address(controllerRelayer));
     }
 }
