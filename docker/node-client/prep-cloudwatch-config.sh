@@ -5,6 +5,7 @@
 ######################################
 echo "########################################"
 # Run node-config-checker to compute wallet address from private key in config file
+cd /app # Change to the app directory so that node-config-checker can find keystore
 address=$(node-config-checker -c /app/config.yml)
 echo "Computed wallet address: $address from config file."
 
