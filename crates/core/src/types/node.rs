@@ -139,7 +139,7 @@ impl<C: Curve> Group<C> {
 #[derive(Clone, Serialize, Deserialize)]
 pub struct Member<C: Curve> {
     pub index: usize,
-    pub dkg_index: usize,
+    pub dkg_index: Option<usize>,
     pub id_address: Address,
     pub rpc_endpoint: Option<String>,
     pub partial_public_key: Option<C::Point>,

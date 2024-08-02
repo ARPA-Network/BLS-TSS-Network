@@ -290,7 +290,7 @@ impl<C: Curve> GroupInfoUpdater<C> for InMemoryGroupInfoCache<C> {
             .for_each(|(index, address)| {
                 let member = Member {
                     index,
-                    dkg_index: index + 1,
+                    dkg_index: Some(index + 1),
                     id_address: *address,
                     rpc_endpoint: None,
                     partial_public_key: None,
