@@ -226,11 +226,17 @@ where
 
     let group_cache = context.read().await.get_main_chain().get_group_cache();
 
+    let (mut health_reporter, health_service) = tonic_health::server::health_reporter();
+    health_reporter
+        .set_serving::<CommitterServiceServer<BLSCommitterServiceServer<PC, S>>>()
+        .await;
+
     Server::builder()
         .add_service(CommitterServiceServer::with_interceptor(
             BLSCommitterServiceServer::new(id_address, group_cache, context),
             intercept,
         ))
+        .add_service(health_service)
         .serve_with_shutdown(addr, shutdown_signal)
         .await?;
     Ok(())
@@ -266,11 +272,17 @@ where
 
     let group_cache = context.read().await.get_main_chain().get_group_cache();
 
+    let (mut health_reporter, health_service) = tonic_health::server::health_reporter();
+    health_reporter
+        .set_serving::<CommitterServiceServer<BLSCommitterServiceServer<PC, S>>>()
+        .await;
+
     Server::builder()
         .add_service(CommitterServiceServer::with_interceptor(
             BLSCommitterServiceServer::new(id_address, group_cache, context),
             intercept,
         ))
+        .add_service(health_service)
         .serve(addr)
         .await?;
 
