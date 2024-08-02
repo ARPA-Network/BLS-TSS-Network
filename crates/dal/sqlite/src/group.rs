@@ -246,7 +246,7 @@ impl<C: Curve + Sync + Send> GroupInfoUpdater<C> for GroupInfoDBClient<C> {
             .map(|(index, address)| {
                 let member = Member {
                     index,
-                    dkg_index: index + 1,
+                    dkg_index: Some(index + 1),
                     id_address: *address,
                     rpc_endpoint: None,
                     partial_public_key: None,

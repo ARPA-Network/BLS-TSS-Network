@@ -273,7 +273,7 @@ fn parse_contract_group<C: Curve>(cg: ContractGroup) -> Group<C> {
 
             let m = Member {
                 index,
-                dkg_index: 0,
+                dkg_index: Some(0),
                 id_address: cm.node_id_address,
                 rpc_endpoint: None,
                 partial_public_key,
