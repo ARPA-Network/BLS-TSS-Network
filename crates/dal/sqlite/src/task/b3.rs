@@ -1,4 +1,4 @@
-use crate::types::base_model_to_randomness_task;
+use crate::types::b3_model_to_randomness_task;
 use crate::types::DBError;
 use crate::types::SqliteDB;
 use arpa_core::format_now_date;
@@ -8,8 +8,8 @@ use arpa_dal::error::DataAccessResult;
 use arpa_dal::error::RandomnessTaskError;
 use arpa_dal::{BLSTasksFetcher, BLSTasksUpdater};
 use async_trait::async_trait;
-use entity::base_randomness_task;
-use entity::prelude::BaseRandomnessTask;
+use entity::b3_randomness_task;
+use entity::prelude::B3RandomnessTask;
 use sea_orm::{
     ActiveModelTrait, ColumnTrait, DbBackend, DbConn, DbErr, EntityTrait, FromQueryResult,
     QueryFilter, Set, Statement,
@@ -17,8 +17,8 @@ use sea_orm::{
 use std::{marker::PhantomData, sync::Arc};
 
 impl SqliteDB {
-    pub fn get_base_bls_tasks_client<T: Task>(&self) -> BaseBLSTasksDBClient<T> {
-        BaseBLSTasksDBClient {
+    pub fn get_b3_bls_tasks_client<T: Task>(&self) -> B3BLSTasksDBClient<T> {
+        B3BLSTasksDBClient {
             db_client: Arc::new(self.clone()),
             bls_tasks: PhantomData,
         }
@@ -26,22 +26,22 @@ impl SqliteDB {
 }
 
 #[derive(Debug, Clone)]
-pub struct BaseBLSTasksDBClient<T: Task> {
+pub struct B3BLSTasksDBClient<T: Task> {
     db_client: Arc<SqliteDB>,
     bls_tasks: PhantomData<T>,
 }
 
-impl BaseBLSTasksDBClient<RandomnessTask> {
+impl B3BLSTasksDBClient<RandomnessTask> {
     pub fn get_connection(&self) -> &DbConn {
         &self.db_client.connection
     }
 }
 
 #[async_trait]
-impl BLSTasksFetcher<RandomnessTask> for BaseBLSTasksDBClient<RandomnessTask> {
+impl BLSTasksFetcher<RandomnessTask> for B3BLSTasksDBClient<RandomnessTask> {
     async fn contains(&self, task_request_id: &[u8]) -> DataAccessResult<bool> {
         let conn = &self.db_client.connection;
-        let task = BaseRandomnessTaskQuery::select_by_request_id(conn, task_request_id)
+        let task = B3RandomnessTaskQuery::select_by_request_id(conn, task_request_id)
             .await
             .map_err(|e| {
                 let e: DBError = e.into();
@@ -52,21 +52,21 @@ impl BLSTasksFetcher<RandomnessTask> for BaseBLSTasksDBClient<RandomnessTask> {
 
     async fn get(&self, task_request_id: &[u8]) -> DataAccessResult<RandomnessTask> {
         let conn = &self.db_client.connection;
-        let task = BaseRandomnessTaskQuery::select_by_request_id(conn, task_request_id)
+        let task = B3RandomnessTaskQuery::select_by_request_id(conn, task_request_id)
             .await
             .map_err(|e| {
                 let e: DBError = e.into();
                 e
             })?;
 
-        task.map(base_model_to_randomness_task).ok_or_else(|| {
+        task.map(b3_model_to_randomness_task).ok_or_else(|| {
             RandomnessTaskError::NoRandomnessTask(format!("{:?}", task_request_id)).into()
         })
     }
 
     async fn is_handled(&self, task_request_id: &[u8]) -> DataAccessResult<bool> {
         let conn = &self.db_client.connection;
-        let task = BaseRandomnessTaskQuery::select_by_request_id(conn, task_request_id)
+        let task = B3RandomnessTaskQuery::select_by_request_id(conn, task_request_id)
             .await
             .map_err(|e| {
                 let e: DBError = e.into();
@@ -78,11 +78,11 @@ impl BLSTasksFetcher<RandomnessTask> for BaseBLSTasksDBClient<RandomnessTask> {
 }
 
 #[async_trait]
-impl BLSTasksUpdater<RandomnessTask> for BaseBLSTasksDBClient<RandomnessTask> {
+impl BLSTasksUpdater<RandomnessTask> for B3BLSTasksDBClient<RandomnessTask> {
     async fn add(&mut self, task: RandomnessTask) -> DataAccessResult<()> {
         let seed_bytes = u256_to_vec(&task.seed);
 
-        BaseRandomnessTaskMutation::add_task(
+        B3RandomnessTaskMutation::add_task(
             self.get_connection(),
             task.request_id,
             task.subscription_id as i64,
@@ -117,7 +117,7 @@ impl BLSTasksUpdater<RandomnessTask> for BaseBLSTasksDBClient<RandomnessTask> {
             } else {
                 0
             };
-        BaseRandomnessTaskMutation::fetch_available_tasks(
+        B3RandomnessTaskMutation::fetch_available_tasks(
             self.get_connection(),
             current_group_index as i32,
             before_assignment_block_height as i32,
@@ -126,7 +126,7 @@ impl BLSTasksUpdater<RandomnessTask> for BaseBLSTasksDBClient<RandomnessTask> {
         .map(|models| {
             models
                 .into_iter()
-                .map(base_model_to_randomness_task)
+                .map(b3_model_to_randomness_task)
                 .collect::<Vec<_>>()
         })
         .map_err(|e| {
@@ -136,23 +136,23 @@ impl BLSTasksUpdater<RandomnessTask> for BaseBLSTasksDBClient<RandomnessTask> {
     }
 }
 
-pub struct BaseRandomnessTaskQuery;
+pub struct B3RandomnessTaskQuery;
 
-impl BaseRandomnessTaskQuery {
+impl B3RandomnessTaskQuery {
     pub async fn select_by_request_id(
         db: &DbConn,
         request_id: &[u8],
-    ) -> Result<Option<base_randomness_task::Model>, DbErr> {
-        BaseRandomnessTask::find()
-            .filter(base_randomness_task::Column::RequestId.eq(request_id))
+    ) -> Result<Option<b3_randomness_task::Model>, DbErr> {
+        B3RandomnessTask::find()
+            .filter(b3_randomness_task::Column::RequestId.eq(request_id))
             .one(db)
             .await
     }
 }
 
-pub struct BaseRandomnessTaskMutation;
+pub struct B3RandomnessTaskMutation;
 
-impl BaseRandomnessTaskMutation {
+impl B3RandomnessTaskMutation {
     #[allow(clippy::too_many_arguments)]
     pub async fn add_task(
         db: &DbConn,
@@ -167,8 +167,8 @@ impl BaseRandomnessTaskMutation {
         callback_gas_limit: i32,
         callback_max_gas_price: Vec<u8>,
         assignment_block_height: i64,
-    ) -> Result<base_randomness_task::ActiveModel, DbErr> {
-        base_randomness_task::ActiveModel {
+    ) -> Result<b3_randomness_task::ActiveModel, DbErr> {
+        b3_randomness_task::ActiveModel {
             request_id: Set(request_id),
             subscription_id: Set(subscription_id),
             group_index: Set(group_index),
@@ -193,10 +193,10 @@ impl BaseRandomnessTaskMutation {
         db: &DbConn,
         group_index: i32,
         assignment_block_height: i32,
-    ) -> Result<Vec<base_randomness_task::Model>, DbErr> {
-        base_randomness_task::Model::find_by_statement(Statement::from_sql_and_values(
+    ) -> Result<Vec<b3_randomness_task::Model>, DbErr> {
+        b3_randomness_task::Model::find_by_statement(Statement::from_sql_and_values(
                 DbBackend::Sqlite,
-                r#"update base_randomness_task set state = 1, update_at = $1 where state = 0 and (group_index = $2 or assignment_block_height < $3) 
+                r#"update b3_randomness_task set state = 1, update_at = $1 where state = 0 and (group_index = $2 or assignment_block_height < $3) 
                 returning *"#,
                 vec![format_now_date().into(), group_index.into(), assignment_block_height.into()],
             ))

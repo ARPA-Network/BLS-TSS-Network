@@ -2,6 +2,8 @@
 
 pub mod prelude;
 
+pub mod b3_randomness_result;
+pub mod b3_randomness_task;
 pub mod base_randomness_result;
 pub mod base_randomness_task;
 pub mod group_info;

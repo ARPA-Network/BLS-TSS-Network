@@ -5,6 +5,7 @@ use arpa_dal::cache::BLSResultCache;
 use arpa_dal::cache::RandomnessResultCache;
 use arpa_dal::error::DataAccessError;
 use arpa_dal::BLSResultCacheState;
+use entity::b3_randomness_task;
 use entity::base_randomness_task;
 use entity::loot_randomness_task;
 use entity::op_randomness_task;
@@ -179,6 +180,22 @@ pub(crate) fn loot_model_to_randomness_task(model: loot_randomness_task::Model) 
 pub(crate) fn taiko_model_to_randomness_task(
     model: taiko_randomness_task::Model,
 ) -> RandomnessTask {
+    RandomnessTask {
+        request_id: model.request_id,
+        subscription_id: model.subscription_id as u64,
+        group_index: model.group_index as u32,
+        request_type: RandomnessRequestType::from(model.request_type as u8),
+        params: model.params,
+        requester: model.requester.parse::<Address>().unwrap(),
+        seed: U256::from_big_endian(&model.seed),
+        request_confirmations: model.request_confirmations as u16,
+        callback_gas_limit: model.callback_gas_limit as u32,
+        callback_max_gas_price: U256::from_big_endian(&model.callback_max_gas_price),
+        assignment_block_height: model.assignment_block_height as usize,
+    }
+}
+
+pub(crate) fn b3_model_to_randomness_task(model: b3_randomness_task::Model) -> RandomnessTask {
     RandomnessTask {
         request_id: model.request_id,
         subscription_id: model.subscription_id as u64,
