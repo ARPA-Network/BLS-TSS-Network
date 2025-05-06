@@ -1,9 +1,11 @@
 use super::Listener;
 use crate::{
+    context::ChainIdentityHandlerType,
     error::NodeResult,
     event::dkg_post_process::DKGPostProcess,
     queue::{event_queue::EventQueue, EventPublisher},
 };
+use arpa_contract_client::controller::ControllerViews;
 use arpa_core::DKGStatus;
 use arpa_dal::{BlockInfoHandler, GroupInfoHandler};
 use async_trait::async_trait;
@@ -14,6 +16,7 @@ use tokio::sync::RwLock;
 
 #[derive(Debug)]
 pub struct PostGroupingListener<PC: Curve> {
+    chain_identity: Arc<RwLock<ChainIdentityHandlerType<PC>>>,
     block_cache: Arc<RwLock<Box<dyn BlockInfoHandler>>>,
     group_cache: Arc<RwLock<Box<dyn GroupInfoHandler<PC>>>>,
     eq: Arc<RwLock<EventQueue>>,
@@ -29,12 +32,14 @@ impl<PC: Curve> std::fmt::Display for PostGroupingListener<PC> {
 
 impl<PC: Curve> PostGroupingListener<PC> {
     pub fn new(
+        chain_identity: Arc<RwLock<ChainIdentityHandlerType<PC>>>,
         block_cache: Arc<RwLock<Box<dyn BlockInfoHandler>>>,
         group_cache: Arc<RwLock<Box<dyn GroupInfoHandler<PC>>>>,
         eq: Arc<RwLock<EventQueue>>,
         dkg_timeout_duration: usize,
     ) -> Self {
         PostGroupingListener {
+            chain_identity,
             block_cache,
             group_cache,
             eq,
@@ -45,14 +50,16 @@ impl<PC: Curve> PostGroupingListener<PC> {
 }
 
 #[async_trait]
-impl<PC: Curve + Sync + Send> EventPublisher<DKGPostProcess> for PostGroupingListener<PC> {
-    async fn publish(&self, event: DKGPostProcess) {
+impl<PC: Curve + Sync + Send + 'static> EventPublisher<DKGPostProcess<PC>>
+    for PostGroupingListener<PC>
+{
+    async fn publish(&self, event: DKGPostProcess<PC>) {
         self.eq.read().await.publish(event).await;
     }
 }
 
 #[async_trait]
-impl<PC: Curve + Sync + Send> Listener for PostGroupingListener<PC> {
+impl<PC: Curve + Sync + Send + 'static> Listener for PostGroupingListener<PC> {
     async fn listen(&self) -> NodeResult<()> {
         let dkg_status = self.group_cache.read().await.get_dkg_status();
 
@@ -76,11 +83,16 @@ impl<PC: Curve + Sync + Send> Listener for PostGroupingListener<PC> {
 
                         let group_epoch = self.group_cache.read().await.get_epoch().unwrap_or(0);
 
-                        self.publish(DKGPostProcess {
-                            group_index,
-                            group_epoch,
-                        })
-                        .await;
+                        let client = self.chain_identity.read().await.build_controller_client();
+
+                        if let Ok(group) = client.get_group(group_index).await {
+                            self.publish(DKGPostProcess {
+                                group_index,
+                                group_epoch,
+                                group,
+                            })
+                            .await;
+                        }
                     }
                 }
             }

@@ -33,7 +33,7 @@ use arpa_dal::{
 };
 use async_trait::async_trait;
 use log::error;
-use std::{fmt::Display, marker::PhantomData, sync::Arc, time::Duration};
+use std::{marker::PhantomData, sync::Arc, time::Duration};
 use threshold_bls::{
     group::Curve,
     sig::{SignatureScheme, ThresholdScheme},
@@ -42,7 +42,7 @@ use tokio::sync::RwLock;
 
 async fn add_listener_task(
     chain_id: usize,
-    mut listener: impl Listener + Send + Sync + Display + 'static,
+    mut listener: impl Listener + Send + Sync + 'static,
     listener_descriptor: ListenerDescriptor,
     fs: Arc<RwLock<SimpleFixedTaskScheduler>>,
 ) -> SchedulerResult<()> {
@@ -252,6 +252,7 @@ where
             }
             ListenerType::PostGrouping => {
                 let p_post_grouping = PostGroupingListener::new(
+                    self.get_chain_identity(),
                     self.get_block_cache(),
                     self.get_group_cache(),
                     eq,

@@ -11,8 +11,8 @@ use arpa_contract_client::{
     controller_relayer::ControllerRelayerTransactions,
 };
 use arpa_core::{
-    log::{build_group_related_transaction_receipt_payload, LogType},
-    ComponentTaskType, DKGStatus, SubscriberType, PLACEHOLDER_ADDRESS,
+    log::{build_group_related_payload, build_group_related_transaction_receipt_payload, LogType},
+    ComponentTaskType, DKGStatus, Group, SubscriberType, PLACEHOLDER_ADDRESS,
 };
 use arpa_dal::GroupInfoHandler;
 use arpa_log::*;
@@ -53,8 +53,13 @@ impl<PC: Curve> PostGroupingSubscriber<PC> {
 }
 
 #[async_trait]
-pub trait DKGPostProcessHandler {
-    async fn handle(&self, group_index: usize, group_epoch: usize) -> NodeResult<()>;
+pub trait DKGPostProcessHandler<PC: Curve> {
+    async fn handle(
+        &self,
+        group_index: usize,
+        group_epoch: usize,
+        group: Group<PC>,
+    ) -> NodeResult<()>;
 }
 
 pub struct GeneralDKGPostProcessHandler<PC: Curve> {
@@ -65,9 +70,16 @@ pub struct GeneralDKGPostProcessHandler<PC: Curve> {
 }
 
 #[async_trait]
-impl<PC: Curve + Sync + Send + 'static> DKGPostProcessHandler for GeneralDKGPostProcessHandler<PC> {
+impl<PC: Curve + Sync + Send + 'static> DKGPostProcessHandler<PC>
+    for GeneralDKGPostProcessHandler<PC>
+{
     #[log_function]
-    async fn handle(&self, group_index: usize, group_epoch: usize) -> NodeResult<()> {
+    async fn handle(
+        &self,
+        group_index: usize,
+        group_epoch: usize,
+        group: Group<PC>,
+    ) -> NodeResult<()> {
         if self
             .group_cache
             .write()
@@ -81,6 +93,25 @@ impl<PC: Curve + Sync + Send + 'static> DKGPostProcessHandler for GeneralDKGPost
             );
 
             let chain_id = self.chain_identity.read().await.get_chain_id();
+
+            // sync up the members in the group
+            if !self
+                .group_cache
+                .write()
+                .await
+                .sync_up_members(group.index, group.epoch, group.members)
+                .await?
+            {
+                error!(
+                    "{}",
+                    build_group_related_payload(
+                        LogType::DKGGroupingMemberMisMatch,
+                        "After the DKG process, group members are not matched, attempt to run with contract records.",
+                        chain_id,
+                        self.group_cache.read().await.get_group()?
+                    )
+                );
+            }
 
             let controller_client = self.chain_identity.read().await.build_controller_client();
 
@@ -149,10 +180,15 @@ impl<PC: Curve + std::fmt::Debug + Sync + Send + 'static> Subscriber
     async fn notify(&self, topic: Topic, payload: &(dyn DebuggableEvent)) -> NodeResult<()> {
         debug!("{:?}", topic);
 
-        let &DKGPostProcess {
+        let DKGPostProcess {
             group_index,
             group_epoch,
-        } = payload.as_any().downcast_ref::<DKGPostProcess>().unwrap();
+            group,
+        } = payload
+            .as_any()
+            .downcast_ref::<DKGPostProcess<PC>>()
+            .unwrap()
+            .clone();
 
         let chain_identity = self.chain_identity.clone();
         let supported_relayed_chains = self.supported_relayed_chains.clone();
@@ -166,7 +202,7 @@ impl<PC: Curve + std::fmt::Debug + Sync + Send + 'static> Subscriber
                     c: PhantomData,
                 };
 
-                if let Err(e) = handler.handle(group_index, group_epoch).await {
+                if let Err(e) = handler.handle(group_index, group_epoch, group).await {
                     error!("{:?}", e);
                 } else {
                     info!("-------------------------call post process successfully-------------------------");

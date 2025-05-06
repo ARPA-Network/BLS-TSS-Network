@@ -104,7 +104,7 @@ impl<PC: Curve + std::fmt::Debug + Sync + Send + 'static> Subscriber
                     "{}",
                     build_group_related_payload(
                         LogType::DKGGroupingMemberMisMatch,
-                        "Group members are not matched, attempt to run with contract records.",
+                        "During the DKG process, group members are not matched, attempt to run with contract records.",
                         chain_id,
                         self.group_cache.read().await.get_group()?
                     )
