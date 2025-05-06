@@ -107,7 +107,7 @@ impl ChainIdentity for GeneralMainChainIdentity {
     }
 
     async fn get_current_gas_price(&self) -> Result<U256, ProviderError> {
-        if !supports_eip1559(self.chain_id) {
+        if !supports_eip1559(self.chain_id as usize) {
             return self.client.provider().get_gas_price().await;
         }
         let (max_fee, _) = self
@@ -240,7 +240,7 @@ impl ChainIdentity for GeneralRelayedChainIdentity {
     }
 
     async fn get_current_gas_price(&self) -> Result<U256, ProviderError> {
-        if !supports_eip1559(self.chain_id) {
+        if !supports_eip1559(self.chain_id as usize) {
             return self.client.provider().get_gas_price().await;
         }
         let (max_fee, _) = self

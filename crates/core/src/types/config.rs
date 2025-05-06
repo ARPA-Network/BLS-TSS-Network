@@ -44,6 +44,8 @@ pub const DEFAULT_PROVIDER_RESET_USE_JITTER: bool = true;
 
 pub const DEFAULT_PROVIDER_POLLING_INTERVAL_MILLIS: u64 = 10000;
 
+pub const DEFAULT_PROVIDER_RECONNECTION_INTERVAL_MILLIS: u64 = 30000;
+
 pub const DEFAULT_DYNAMIC_TASK_CLEANER_INTERVAL_MILLIS: u64 = 1000;
 
 pub const FULFILL_RANDOMNESS_GAS_EXCEPT_CALLBACK: u32 = 670000;
@@ -60,6 +62,10 @@ pub const DEFAULT_WEBSOCKET_PROVIDER_RECONNECT_TIMES: usize = 1000000;
 
 pub fn jitter(duration: Duration) -> Duration {
     duration.mul_f64(thread_rng().gen_range(0.5..=1.0))
+}
+
+pub fn jitter_fluctuate(duration: Duration, percentage: f64) -> Duration {
+    duration.mul_f64(thread_rng().gen_range(1.0 - percentage..=1.0 + percentage))
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -317,6 +323,7 @@ pub struct TimeLimitDescriptorHolder {
     pub dkg_timeout_duration: Option<usize>,
     pub randomness_task_exclusive_window: usize,
     pub provider_polling_interval_millis: u64,
+    pub provider_reconnection_interval_millis: Option<u64>,
     pub provider_reset_descriptor: FixedIntervalRetryDescriptor,
     pub contract_transaction_retry_descriptor: ExponentialBackoffRetryDescriptor,
     pub contract_view_retry_descriptor: ExponentialBackoffRetryDescriptor,
@@ -331,6 +338,7 @@ pub struct TimeLimitDescriptor {
     pub dkg_timeout_duration: usize,
     pub randomness_task_exclusive_window: usize,
     pub provider_polling_interval_millis: u64,
+    pub provider_reconnection_interval_millis: u64,
     pub provider_reset_descriptor: FixedIntervalRetryDescriptor,
     pub contract_transaction_retry_descriptor: ExponentialBackoffRetryDescriptor,
     pub contract_view_retry_descriptor: ExponentialBackoffRetryDescriptor,
@@ -346,6 +354,7 @@ impl Default for TimeLimitDescriptor {
             dkg_timeout_duration: DEFAULT_DKG_TIMEOUT_DURATION,
             randomness_task_exclusive_window: DEFAULT_RANDOMNESS_TASK_EXCLUSIVE_WINDOW,
             provider_polling_interval_millis: DEFAULT_PROVIDER_POLLING_INTERVAL_MILLIS,
+            provider_reconnection_interval_millis: DEFAULT_PROVIDER_RECONNECTION_INTERVAL_MILLIS,
             provider_reset_descriptor: FixedIntervalRetryDescriptor {
                 interval_millis: DEFAULT_PROVIDER_RESET_INTERVAL_MILLIS,
                 max_attempts: DEFAULT_PROVIDER_RESET_MAX_ATTEMPTS,
@@ -406,6 +415,12 @@ impl From<TimeLimitDescriptorHolder> for TimeLimitDescriptor {
             } else {
                 time_limit_descriptor_holder.provider_polling_interval_millis
             };
+        let provider_reconnection_interval_millis =
+            match time_limit_descriptor_holder.provider_reconnection_interval_millis {
+                None => DEFAULT_PROVIDER_RECONNECTION_INTERVAL_MILLIS,
+                Some(0) => DEFAULT_PROVIDER_RECONNECTION_INTERVAL_MILLIS,
+                Some(v) => v,
+            };
         let provider_reset_descriptor = time_limit_descriptor_holder.provider_reset_descriptor;
         let contract_transaction_retry_descriptor =
             time_limit_descriptor_holder.contract_transaction_retry_descriptor;
@@ -421,6 +436,7 @@ impl From<TimeLimitDescriptorHolder> for TimeLimitDescriptor {
             dkg_timeout_duration,
             randomness_task_exclusive_window,
             provider_polling_interval_millis,
+            provider_reconnection_interval_millis,
             provider_reset_descriptor,
             contract_transaction_retry_descriptor,
             contract_view_retry_descriptor,
@@ -1108,6 +1124,7 @@ pub enum ListenerType {
     ReadyToHandleRandomnessTask,
     RandomnessSignatureAggregation,
     ScheduleNodeActivation,
+    ScheduleProviderReconnection,
 }
 
 impl TryFrom<i32> for ListenerType {
@@ -1123,6 +1140,7 @@ impl TryFrom<i32> for ListenerType {
             5 => Ok(ListenerType::ReadyToHandleRandomnessTask),
             6 => Ok(ListenerType::RandomnessSignatureAggregation),
             7 => Ok(ListenerType::ScheduleNodeActivation),
+            8 => Ok(ListenerType::ScheduleProviderReconnection),
             _ => Err(SchedulerError::TaskNotFound),
         }
     }
@@ -1141,6 +1159,9 @@ impl std::fmt::Display for ListenerType {
             ListenerType::PostCommitGrouping => write!(f, "PostCommitGrouping"),
             ListenerType::NewRandomnessTask => write!(f, "NewRandomnessTask"),
             ListenerType::ScheduleNodeActivation => write!(f, "ScheduleNodeActivation"),
+            ListenerType::ScheduleProviderReconnection => {
+                write!(f, "ScheduleProviderReconnection")
+            }
         }
     }
 }

@@ -12,6 +12,7 @@ use std::{marker::PhantomData, sync::Arc};
 use threshold_bls::group::Curve;
 use tokio::sync::RwLock;
 
+#[derive(Debug)]
 pub struct NodeActivationListener<PC: Curve> {
     chain_id: usize,
     is_eigenlayer: bool,

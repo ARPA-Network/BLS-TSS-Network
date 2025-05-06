@@ -19,6 +19,8 @@ pub trait FixedTaskScheduler: TaskScheduler {
     async fn abort(&mut self, task_type: &ComponentTaskType) -> SchedulerResult<()>;
 
     fn get_tasks(&self) -> Vec<&ComponentTaskType>;
+
+    fn restart_listener(&mut self, task_type: &ComponentTaskType) -> SchedulerResult<()>;
 }
 
 pub trait DynamicTaskScheduler: TaskScheduler {

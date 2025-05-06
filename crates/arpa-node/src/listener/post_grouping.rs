@@ -12,6 +12,7 @@ use std::{marker::PhantomData, sync::Arc};
 use threshold_bls::group::Curve;
 use tokio::sync::RwLock;
 
+#[derive(Debug)]
 pub struct PostGroupingListener<PC: Curve> {
     block_cache: Arc<RwLock<Box<dyn BlockInfoHandler>>>,
     group_cache: Arc<RwLock<Box<dyn GroupInfoHandler<PC>>>>,
