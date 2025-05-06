@@ -18,4 +18,5 @@ pub enum Topic {
     ReadyToFulfillGroupRelayTask,
     ReadyToFulfillGroupRelayConfirmationTask(usize),
     NodeActivation,
+    ProviderReconnection,
 }

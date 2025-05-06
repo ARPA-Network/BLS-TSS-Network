@@ -1,11 +1,10 @@
+use super::{ComponentTaskType, DynamicTaskScheduler, TaskScheduler};
 use arpa_core::SchedulerResult;
 use futures::Future;
 use tokio::{
     sync::{oneshot::channel, oneshot::Receiver},
     task::JoinHandle,
 };
-
-use super::{ComponentTaskType, DynamicTaskScheduler, TaskScheduler};
 
 #[derive(Debug, Default)]
 pub struct SimpleDynamicTaskScheduler {

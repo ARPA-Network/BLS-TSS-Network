@@ -62,11 +62,11 @@ listeners:
     interval_millis: 10000
     use_jitter: true
   - l_type: ReadyToHandleRandomnessTask
-    interval_millis: 10000
+    interval_millis: 5000
     use_jitter: true
   - l_type: RandomnessSignatureAggregation
-    interval_millis: 2000
-    use_jitter: false
+    interval_millis: 1000
+    use_jitter: true
 
 time_limits:
   block_time: 3
@@ -75,6 +75,7 @@ time_limits:
   listener_interval_millis: 10000
   dkg_wait_for_phase_interval_millis: 10000
   provider_polling_interval_millis: 10000
+  provider_reconnection_interval_millis: 30000
   provider_reset_descriptor:
     interval_millis: 5000
     max_attempts: 17280
@@ -114,13 +115,14 @@ relayed_chains:
         interval_millis: 1000
         use_jitter: true
       - l_type: RandomnessSignatureAggregation
-        interval_millis: 2000
-        use_jitter: false
+        interval_millis: 1000
+        use_jitter: true
     time_limits:
       block_time: 2
       randomness_task_exclusive_window: 10
       listener_interval_millis: 1000
       provider_polling_interval_millis: 1000
+      provider_reconnection_interval_millis: 30000
       provider_reset_descriptor:
         interval_millis: 5000
         max_attempts: 17280

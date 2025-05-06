@@ -4,10 +4,11 @@ pub mod dkg_success;
 pub mod new_block;
 pub mod new_dkg_task;
 pub mod new_randomness_task;
+pub mod node_activation;
+pub mod provider_reconnection;
 pub mod ready_to_fulfill_randomness_task;
 pub mod ready_to_handle_randomness_task;
 pub mod run_dkg;
-pub mod node_activation;
 pub mod types;
 
 use std::any::Any;

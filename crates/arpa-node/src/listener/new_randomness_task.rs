@@ -19,6 +19,7 @@ use std::{marker::PhantomData, sync::Arc};
 use threshold_bls::group::Curve;
 use tokio::sync::RwLock;
 
+#[derive(Debug)]
 pub struct NewRandomnessTaskListener<PC: Curve> {
     chain_id: usize,
     id_address: Address,
