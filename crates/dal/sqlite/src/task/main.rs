@@ -86,7 +86,7 @@ impl BLSTasksUpdater<RandomnessTask> for BLSTasksDBClient<RandomnessTask> {
         RandomnessTaskMutation::add_task(
             self.get_connection(),
             task.request_id,
-            task.subscription_id as i32,
+            task.subscription_id as i64,
             task.group_index as i32,
             task.request_type as i32,
             task.params,
@@ -95,7 +95,7 @@ impl BLSTasksUpdater<RandomnessTask> for BLSTasksDBClient<RandomnessTask> {
             task.request_confirmations as i32,
             task.callback_gas_limit as i32,
             u256_to_vec(&task.callback_max_gas_price),
-            task.assignment_block_height as i32,
+            task.assignment_block_height as i64,
         )
         .await
         .map_err(|e| {
@@ -170,7 +170,7 @@ impl RandomnessTaskMutation {
     pub async fn add_task(
         db: &DbConn,
         request_id: Vec<u8>,
-        subscription_id: i32,
+        subscription_id: i64,
         group_index: i32,
         request_type: i32,
         params: Vec<u8>,
@@ -179,7 +179,7 @@ impl RandomnessTaskMutation {
         request_confirmations: i32,
         callback_gas_limit: i32,
         callback_max_gas_price: Vec<u8>,
-        assignment_block_height: i32,
+        assignment_block_height: i64,
     ) -> Result<randomness_task::ActiveModel, DbErr> {
         randomness_task::ActiveModel {
             request_id: Set(request_id),

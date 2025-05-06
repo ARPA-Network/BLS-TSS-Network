@@ -3,6 +3,7 @@
 This folder contains tooling to develop and build a container that runs a user-cli tool for interacting with randcast contracts.
 
 # Using the user-shell container
+
 ```bash
 # pull image from dockerhub
 docker pull arpachainio/user-shell:latest
@@ -27,7 +28,7 @@ ssh ubuntu@ip.com # place ssh public key in ec2_cdk/.env
 
 # Building container
 cd /home/ubuntu/BLS-TSS-Network/
-docker build -t user-shell ./docker/user-shell
+docker build -t user-shell -f docker/user-shell/Dockerfile .
 
 # Tagging and uploading to dockerhub
 docker tag user-shell arpachainio/user-shell:latest

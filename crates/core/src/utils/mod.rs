@@ -22,6 +22,8 @@ pub const LOOT_MAINNET_CHAIN_ID: usize = 5151706;
 pub const LOOT_TESTNET_CHAIN_ID: usize = 9088912;
 pub const TAIKO_HEKLA_TESTNET_CHAIN_ID: usize = 167009;
 pub const TAIKO_MAINNET_CHAIN_ID: usize = 167000;
+pub const B3_MAINNET_CHAIN_ID: usize = 8333;
+pub const B3_TESTNET_CHAIN_ID: usize = 1993;
 
 pub fn supports_eip1559(chain_id: usize) -> bool {
     chain_id != LOOT_MAINNET_CHAIN_ID && chain_id != LOOT_TESTNET_CHAIN_ID
