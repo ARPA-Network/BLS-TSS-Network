@@ -17,6 +17,8 @@ library ChainHelper {
     uint256 public constant LOOT_MAINNET_CHAIN_ID = 5151706;
     uint256 public constant LOOT_GOERLI_TESTNET_CHAIN_ID = 9088912;
     uint256 public constant TAIKO_KATLA_TEST_CHAIN_ID = 167008;
+    uint256 public constant B3_MAINNET_CHAIN_ID = 8333;
+    uint256 public constant B3_TESTNET_CHAIN_ID = 1993;
 
     uint32 public constant BASIC_FULFILLMENT_L1_GAS_USED = 5016;
     uint32 public constant FULFILLMENT_GAS_PER_PARTICIPANT = 652;
@@ -37,6 +39,8 @@ library ChainHelper {
             return 5;
         } else if (chainId == LOOT_GOERLI_TESTNET_CHAIN_ID) {
             return 200;
+        } else if (chainId == B3_MAINNET_CHAIN_ID || chainId == B3_TESTNET_CHAIN_ID) {
+            return 1;
         }
         return 12;
     }
@@ -47,6 +51,7 @@ library ChainHelper {
             chainId == OP_MAINNET_CHAIN_ID || chainId == OP_SEPOLIA_TESTNET_CHAIN_ID || chainId == OP_DEVNET_L2_CHAIN_ID
                 || chainId == BASE_MAINNET_CHAIN_ID || chainId == BASE_SEPOLIA_TESTNET_CHAIN_ID
                 || chainId == REDSTONE_MAINNET_CHAIN_ID || chainId == REDSTONE_GARNET_TESTNET_CHAIN_ID
+                || chainId == B3_MAINNET_CHAIN_ID || chainId == B3_TESTNET_CHAIN_ID
         ) {
             return IOPGasPriceOracle(OP_GAS_PRICE_ORACLE_ADDR).getL1Fee(msg.data);
         }
@@ -57,8 +62,9 @@ library ChainHelper {
         uint256 chainId = block.chainid;
         if (
             chainId == OP_MAINNET_CHAIN_ID || chainId == OP_SEPOLIA_TESTNET_CHAIN_ID || chainId == OP_DEVNET_L2_CHAIN_ID
-                || chainId == BASE_MAINNET_CHAIN_ID || chainId == BASE_SEPOLIA_TESTNET_CHAIN_ID 
+                || chainId == BASE_MAINNET_CHAIN_ID || chainId == BASE_SEPOLIA_TESTNET_CHAIN_ID
                 || chainId == REDSTONE_MAINNET_CHAIN_ID || chainId == REDSTONE_GARNET_TESTNET_CHAIN_ID
+                || chainId == B3_MAINNET_CHAIN_ID || chainId == B3_TESTNET_CHAIN_ID
         ) {
             try IOPGasPriceOracle(OP_GAS_PRICE_ORACLE_ADDR).isEcotone() returns (bool isEcotone) {
                 if (isEcotone) {
@@ -85,6 +91,7 @@ library ChainHelper {
             chainId == OP_MAINNET_CHAIN_ID || chainId == OP_SEPOLIA_TESTNET_CHAIN_ID || chainId == OP_DEVNET_L2_CHAIN_ID
                 || chainId == BASE_MAINNET_CHAIN_ID || chainId == BASE_SEPOLIA_TESTNET_CHAIN_ID
                 || chainId == REDSTONE_MAINNET_CHAIN_ID || chainId == REDSTONE_GARNET_TESTNET_CHAIN_ID
+                || chainId == B3_MAINNET_CHAIN_ID || chainId == B3_TESTNET_CHAIN_ID
         ) {
             return BASIC_FULFILLMENT_L1_GAS_USED + groupSize * FULFILLMENT_GAS_PER_PARTICIPANT;
         }

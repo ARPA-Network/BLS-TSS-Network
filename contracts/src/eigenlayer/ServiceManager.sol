@@ -6,6 +6,7 @@ import {OwnableUpgradeable} from "openzeppelin-contracts-upgradeable/contracts/a
 import {ISignatureUtils, IAVSDirectory} from "../interfaces/IAVSDirectory.sol";
 import {IDelegationManager} from "../interfaces/IDelegationManager.sol";
 import {IServiceManager} from "../interfaces/IServiceManager.sol";
+import {IRewardsCoordinator} from "../interfaces/IRewardsCoordinator.sol";
 
 contract ServiceManager is UUPSUpgradeable, IServiceManager, OwnableUpgradeable {
     // *Constants*
@@ -22,6 +23,8 @@ contract ServiceManager is UUPSUpgradeable, IServiceManager, OwnableUpgradeable 
     uint256[] public strategyWeights;
     mapping(address => bool) public whitelist;
     bool public whitelistEnabled;
+
+    IRewardsCoordinator public rewardsCoordinator;
 
     /// @notice when applied to a function, only allows the RegistryCoordinator to call it
     modifier onlyNodeRegistry() {
@@ -95,6 +98,33 @@ contract ServiceManager is UUPSUpgradeable, IServiceManager, OwnableUpgradeable 
      */
     function setWhitelistEnabled(bool _whitelistEnabled) external onlyOwner {
         whitelistEnabled = _whitelistEnabled;
+    }
+
+    /**
+     * @notice Set the rewards coordinator
+     */
+    function setRewardsCoordinator(address _rewardsCoordinator) external onlyOwner {
+        rewardsCoordinator = IRewardsCoordinator(_rewardsCoordinator);
+    }
+
+    /**
+     * @notice Creates a new rewards submission to the EigenLayer RewardsCoordinator contract, to be split amongst the
+     *   set of stakers delegated to operators who are registered to this `avs`
+     */
+    function createAVSRewardsSubmission(IRewardsCoordinator.RewardsSubmission[] calldata rewardsSubmissions)
+        public
+        virtual
+        onlyOwner
+    {
+        for (uint256 i = 0; i < rewardsSubmissions.length; ++i) {
+            // transfer token to ServiceManager and approve RewardsCoordinator to transfer again
+            // in createAVSRewardsSubmission() call
+            rewardsSubmissions[i].token.transferFrom(msg.sender, address(this), rewardsSubmissions[i].amount);
+            uint256 allowance = rewardsSubmissions[i].token.allowance(address(this), address(rewardsCoordinator));
+            rewardsSubmissions[i].token.approve(address(rewardsCoordinator), rewardsSubmissions[i].amount + allowance);
+        }
+
+        rewardsCoordinator.createAVSRewardsSubmission(rewardsSubmissions);
     }
 
     /**

@@ -102,6 +102,11 @@ pub trait RelayedChain<
     S: SignatureScheme + ThresholdScheme<Public = PC::Point, Private = PC::Scalar>,
 >: Chain<PC, S>
 {
+    async fn init_schedule_listeners(
+        &self,
+        context: &(dyn ContextFetcher + Sync + Send),
+    ) -> SchedulerResult<()>;
+
     async fn init_block_listeners(
         &self,
         context: &(dyn ContextFetcher + Sync + Send),

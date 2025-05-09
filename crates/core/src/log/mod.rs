@@ -40,6 +40,8 @@ pub enum LogType {
     FulfillmentFinished,
     FulfillmentFailed,
     ListenerInterrupted,
+    ProviderReconnected,
+    ListenerRestarted,
 }
 
 #[derive(Serialize, Deserialize, Debug)]

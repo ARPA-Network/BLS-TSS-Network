@@ -3,25 +3,18 @@
 use sea_orm::entity::prelude::*;
 
 #[derive(Clone, Debug, PartialEq, DeriveEntityModel, Eq)]
-#[sea_orm(table_name = "randomness_task")]
+#[sea_orm(table_name = "b3_randomness_result")]
 pub struct Model {
     #[sea_orm(primary_key, auto_increment = false)]
     pub id: i32,
     #[sea_orm(column_type = "Binary(BlobSize::Blob(None))")]
     pub request_id: Vec<u8>,
-    pub subscription_id: i64,
     pub group_index: i32,
-    pub request_type: i32,
     #[sea_orm(column_type = "Binary(BlobSize::Blob(None))")]
-    pub params: Vec<u8>,
-    pub requester: String,
-    #[sea_orm(column_type = "Binary(BlobSize::Blob(None))")]
-    pub seed: Vec<u8>,
-    pub request_confirmations: i32,
-    pub callback_gas_limit: i32,
-    #[sea_orm(column_type = "Binary(BlobSize::Blob(None))")]
-    pub callback_max_gas_price: Vec<u8>,
-    pub assignment_block_height: i64,
+    pub message: Vec<u8>,
+    pub threshold: i32,
+    pub partial_signatures: String,
+    pub committed_times: i32,
     pub state: i32,
     pub create_at: String,
     pub update_at: String,

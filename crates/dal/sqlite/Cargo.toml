@@ -12,8 +12,8 @@ keywords.workspace = true
 exclude.workspace = true
 
 [dependencies]
-entity = { version = "0.2.0", path = "./entity" }
-migration = { version = "0.2.0", path = "./migration" }
+entity = { version = "0.3.0-alpha.1", path = "./entity" }
+migration = { version = "0.3.0-alpha.1", path = "./migration" }
 arpa-core.workspace = true
 arpa-dal.workspace = true
 threshold-bls.workspace = true

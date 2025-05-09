@@ -28,6 +28,10 @@ mod m20240318_000025_create_taiko_randomness_task_table;
 mod m20240318_000026_create_taiko_randomness_task_index;
 mod m20240318_000027_create_taiko_randomness_result_table;
 mod m20240318_000028_create_taiko_randomness_result_index;
+mod m20250506_000029_create_b3_randomness_task_table;
+mod m20250506_000030_create_b3_randomness_task_index;
+mod m20250506_000031_create_b3_randomness_result_table;
+mod m20250506_000032_create_b3_randomness_result_index;
 
 pub use m20220920_000001_create_node_info_table::NodeInfo;
 pub use m20220920_000002_create_group_info_table::GroupInfo;
@@ -45,6 +49,8 @@ pub use m20240312_000021_create_loot_randomness_task_table::LootRandomnessTask;
 pub use m20240312_000023_create_loot_randomness_result_table::LootRandomnessResult;
 pub use m20240318_000025_create_taiko_randomness_task_table::TaikoRandomnessTask;
 pub use m20240318_000027_create_taiko_randomness_result_table::TaikoRandomnessResult;
+pub use m20250506_000029_create_b3_randomness_task_table::B3RandomnessTask;
+pub use m20250506_000031_create_b3_randomness_result_table::B3RandomnessResult;
 pub struct Migrator;
 
 #[async_trait::async_trait]
@@ -79,6 +85,10 @@ impl MigratorTrait for Migrator {
             Box::new(m20240318_000026_create_taiko_randomness_task_index::Migration),
             Box::new(m20240318_000027_create_taiko_randomness_result_table::Migration),
             Box::new(m20240318_000028_create_taiko_randomness_result_index::Migration),
+            Box::new(m20250506_000029_create_b3_randomness_task_table::Migration),
+            Box::new(m20250506_000030_create_b3_randomness_task_index::Migration),
+            Box::new(m20250506_000031_create_b3_randomness_result_table::Migration),
+            Box::new(m20250506_000032_create_b3_randomness_result_index::Migration),
         ]
     }
 }

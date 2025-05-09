@@ -1,13 +1,22 @@
+use crate::listener::Listener;
+
 use super::{ComponentTaskType, FixedTaskScheduler, TaskScheduler};
-use arpa_core::{SchedulerError, SchedulerResult};
+use arpa_core::{ListenerDescriptor, SchedulerError, SchedulerResult};
 use async_trait::async_trait;
 use futures::Future;
 use std::collections::HashMap;
+use std::sync::Arc;
 use tokio::task::JoinHandle;
+
+#[derive(Debug)]
+pub struct TaskHandle {
+    listener: Option<Arc<dyn Listener + Send + Sync + 'static>>,
+    handle: JoinHandle<()>,
+}
 
 #[derive(Debug, Default)]
 pub struct SimpleFixedTaskScheduler {
-    fixed_tasks: HashMap<ComponentTaskType, JoinHandle<()>>,
+    fixed_tasks: HashMap<ComponentTaskType, TaskHandle>,
 }
 
 impl SimpleFixedTaskScheduler {
@@ -35,16 +44,20 @@ impl TaskScheduler for SimpleFixedTaskScheduler {
             log_mdc::extend(mdc);
             future.await;
         });
-        self.fixed_tasks.insert(task_type, handle);
+        let task_handle = TaskHandle {
+            listener: None,
+            handle,
+        };
+        self.fixed_tasks.insert(task_type, task_handle);
         Ok(())
     }
 }
 
 #[async_trait]
 impl FixedTaskScheduler for SimpleFixedTaskScheduler {
-    async fn join(mut self) {
-        for (_, fixed_task) in self.fixed_tasks.iter_mut() {
-            let _ = fixed_task.await;
+    async fn join(self) {
+        for (_, fixed_task) in self.fixed_tasks.into_iter() {
+            let _ = fixed_task.handle.await;
         }
     }
 
@@ -53,12 +66,41 @@ impl FixedTaskScheduler for SimpleFixedTaskScheduler {
             return Err(SchedulerError::TaskNotFound);
         }
         let handle = self.fixed_tasks.remove(task_type).unwrap();
-        handle.abort();
+        handle.handle.abort();
         Ok(())
     }
 
     fn get_tasks(&self) -> Vec<&ComponentTaskType> {
         self.fixed_tasks.keys().collect::<Vec<&ComponentTaskType>>()
+    }
+
+    fn restart_listener(&mut self, task_type: &ComponentTaskType) -> SchedulerResult<()> {
+        if !self.fixed_tasks.contains_key(task_type) {
+            return Err(SchedulerError::TaskNotFound);
+        }
+        let task_handle = self.fixed_tasks.get_mut(task_type).unwrap();
+        task_handle.handle.abort();
+
+        let listener = task_handle.listener.take().unwrap();
+        let listener_descriptor = ListenerDescriptor::default(arpa_core::ListenerType::Block);
+
+        let mut mdc = vec![];
+        log_mdc::iter(|k, v| mdc.push((k.to_owned(), v.to_owned())));
+
+        let handle = tokio::spawn(async move {
+            log_mdc::extend(mdc);
+            let _ = listener
+                .start(
+                    listener_descriptor.interval_millis,
+                    listener_descriptor.use_jitter,
+                    listener_descriptor.reset_descriptor,
+                    None,
+                )
+                .await;
+        });
+
+        task_handle.handle = handle;
+        Ok(())
     }
 }
 
