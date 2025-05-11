@@ -61,38 +61,38 @@ impl<PC: Curve + Sync + Send> Listener for ProviderReconnectionListener<PC> {
         let f_ts_guard = self.f_ts.read().await;
 
         // Restart the listener task again
-        for task in f_ts_guard.get_tasks() {
-            match task {
-                ComponentTaskType::Listener(chain_id, ListenerType::Block)
-                | ComponentTaskType::Listener(chain_id, ListenerType::PreGrouping)
-                | ComponentTaskType::Listener(chain_id, ListenerType::PostGrouping)
-                | ComponentTaskType::Listener(chain_id, ListenerType::PostCommitGrouping)
-                | ComponentTaskType::Listener(chain_id, ListenerType::NewRandomnessTask)
-                | ComponentTaskType::Listener(
-                    chain_id,
-                    ListenerType::ReadyToHandleRandomnessTask,
-                )
-                | ComponentTaskType::Listener(
-                    chain_id,
-                    ListenerType::RandomnessSignatureAggregation,
-                )
-                | ComponentTaskType::Listener(chain_id, ListenerType::ScheduleNodeActivation) => {
-                    if *chain_id == self.chain_id {
-                        let _ = self.f_ts.write().await.restart_listener(task);
+        // for task in f_ts_guard.get_tasks() {
+        //     match task {
+        //         ComponentTaskType::Listener(chain_id, ListenerType::Block)
+        //         | ComponentTaskType::Listener(chain_id, ListenerType::PreGrouping)
+        //         | ComponentTaskType::Listener(chain_id, ListenerType::PostGrouping)
+        //         | ComponentTaskType::Listener(chain_id, ListenerType::PostCommitGrouping)
+        //         | ComponentTaskType::Listener(chain_id, ListenerType::NewRandomnessTask)
+        //         | ComponentTaskType::Listener(
+        //             chain_id,
+        //             ListenerType::ReadyToHandleRandomnessTask,
+        //         )
+        //         | ComponentTaskType::Listener(
+        //             chain_id,
+        //             ListenerType::RandomnessSignatureAggregation,
+        //         )
+        //         | ComponentTaskType::Listener(chain_id, ListenerType::ScheduleNodeActivation) => {
+        //             if *chain_id == self.chain_id {
+        //                 let _ = self.f_ts.write().await.restart_listener(task);
 
-                        info!(
-                            "{}",
-                            build_general_payload(
-                                LogType::ListenerRestarted,
-                                &format!("Listener {} restarted.", task),
-                                Some(self.chain_id),
-                            )
-                        );
-                    }
-                }
-                _ => {}
-            }
-        }
+        //                 info!(
+        //                     "{}",
+        //                     build_general_payload(
+        //                         LogType::ListenerRestarted,
+        //                         &format!("Listener {} restarted.", task),
+        //                         Some(self.chain_id),
+        //                     )
+        //                 );
+        //             }
+        //         }
+        //         _ => {}
+        //     }
+        // }
 
         Ok(())
     }

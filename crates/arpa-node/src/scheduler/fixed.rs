@@ -4,6 +4,7 @@ use super::{ComponentTaskType, FixedTaskScheduler, TaskScheduler};
 use arpa_core::{ListenerDescriptor, SchedulerError, SchedulerResult};
 use async_trait::async_trait;
 use futures::Future;
+use log::info;
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::task::JoinHandle;
@@ -27,6 +28,7 @@ impl SimpleFixedTaskScheduler {
     }
 }
 
+#[async_trait]
 impl TaskScheduler for SimpleFixedTaskScheduler {
     fn add_task(
         &mut self,
@@ -50,6 +52,18 @@ impl TaskScheduler for SimpleFixedTaskScheduler {
         };
         self.fixed_tasks.insert(task_type, task_handle);
         Ok(())
+    }
+
+    async fn shutdown(&mut self) {
+        info!("stop fixed tasks...");
+        for (task_type, task_handle) in self.fixed_tasks.iter_mut() {
+            info!("stop task: {:?}", task_type);
+            task_handle.handle.abort();
+        }
+
+        // clear task list
+        self.fixed_tasks.clear();
+        info!("fixed tasks stopped");
     }
 }
 

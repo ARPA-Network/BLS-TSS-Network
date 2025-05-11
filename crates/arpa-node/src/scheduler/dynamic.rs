@@ -1,6 +1,8 @@
 use super::{ComponentTaskType, DynamicTaskScheduler, TaskScheduler};
 use arpa_core::SchedulerResult;
+use async_trait::async_trait;
 use futures::Future;
+use log::info;
 use tokio::{
     sync::{oneshot::channel, oneshot::Receiver},
     task::JoinHandle,
@@ -20,6 +22,7 @@ impl SimpleDynamicTaskScheduler {
     }
 }
 
+#[async_trait]
 impl TaskScheduler for SimpleDynamicTaskScheduler {
     fn add_task(
         &mut self,
@@ -40,6 +43,20 @@ impl TaskScheduler for SimpleDynamicTaskScheduler {
         self.dynamic_tasks.push((recv, None));
 
         Ok(())
+    }
+
+    async fn shutdown(&mut self) {
+        info!("stop dynamic tasks...");
+        // abort all running tasks
+        for (_, handle) in self.dynamic_tasks.iter_mut() {
+            if let Some(handle) = handle {
+                handle.abort();
+            }
+        }
+
+        // clear task list
+        self.dynamic_tasks.clear();
+        info!("dynamic tasks stopped");
     }
 }
 

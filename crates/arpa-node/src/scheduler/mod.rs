@@ -4,12 +4,15 @@ use arpa_core::{ComponentTaskType, SchedulerResult};
 use async_trait::async_trait;
 use futures::Future;
 
+#[async_trait]
 pub trait TaskScheduler {
     fn add_task(
         &mut self,
         task_type: ComponentTaskType,
         future: impl Future + Send + 'static,
     ) -> SchedulerResult<()>;
+
+    async fn shutdown(&mut self);
 }
 
 #[async_trait]

@@ -22,12 +22,13 @@ use arpa_core::{
 };
 use arpa_dal::cache::RandomnessResultCache;
 use async_trait::async_trait;
-use std::{collections::HashMap, fmt::Debug, sync::Arc};
+use log::info;
+use std::{collections::HashMap, fmt::Debug, sync::Arc, time::Duration};
 use threshold_bls::{
     group::Curve,
     sig::{SignatureScheme, ThresholdScheme},
 };
-use tokio::sync::RwLock;
+use tokio::sync::{Mutex, RwLock};
 
 #[derive(Debug)]
 pub struct GeneralContext<
@@ -171,7 +172,7 @@ where
 
         let ts = context.read().await.get_dynamic_task_handler();
 
-        Ok(ContextHandle { ts })
+        Ok(ContextHandle::new(f_ts, ts))
     }
 }
 
@@ -206,28 +207,75 @@ impl<
     }
 }
 pub struct ContextHandle {
+    fs: Arc<RwLock<SimpleFixedTaskScheduler>>,
     ts: Arc<RwLock<SimpleDynamicTaskScheduler>>,
+    exit_signal: Arc<Mutex<Option<tokio::sync::oneshot::Sender<()>>>>,
+}
+
+impl ContextHandle {
+    fn new(
+        fs: Arc<RwLock<SimpleFixedTaskScheduler>>,
+        ts: Arc<RwLock<SimpleDynamicTaskScheduler>>,
+    ) -> Self {
+        Self {
+            fs,
+            ts,
+            exit_signal: Arc::new(Mutex::new(None)),
+        }
+    }
 }
 
 #[async_trait]
 impl TaskWaiter for ContextHandle {
     async fn wait_task(&self) {
+        let (exit_tx, mut exit_rx) = tokio::sync::oneshot::channel();
+
+        *self.exit_signal.lock().await = Some(exit_tx);
+
         loop {
-            while !self.ts.read().await.dynamic_tasks.is_empty() {
-                let (task_recv, task_monitor) = self.ts.write().await.dynamic_tasks.pop().unwrap();
+            tokio::select! {
+                _ = async {
+                    while !self.ts.read().await.dynamic_tasks.is_empty() {
+                        let (task_recv, task_monitor) = self.ts.write().await.dynamic_tasks.pop().unwrap();
 
-                let _ = task_recv.await;
+                        let _ = task_recv.await;
 
-                if let Some(monitor) = task_monitor {
-                    monitor.abort();
+                        if let Some(monitor) = task_monitor {
+                            monitor.abort();
+                        }
+                    }
+
+                    tokio::time::sleep(Duration::from_millis(
+                        DEFAULT_DYNAMIC_TASK_CLEANER_INTERVAL_MILLIS,
+                    )).await;
+                } => {}
+
+                _ = &mut exit_rx => {
+                    info!("Task waiter received exit signal");
+                    break;
                 }
             }
-
-            tokio::time::sleep(std::time::Duration::from_millis(
-                DEFAULT_DYNAMIC_TASK_CLEANER_INTERVAL_MILLIS,
-            ))
-            .await;
         }
+    }
+
+    async fn shutdown(&mut self) {
+        info!("Shutting down all tasks...");
+
+        // first close dynamic tasks, because they may depend on fixed tasks
+        info!("Shutting down dynamic tasks...");
+        self.ts.write().await.shutdown().await;
+
+        // then close fixed tasks
+        info!("Shutting down fixed tasks...");
+        self.fs.write().await.shutdown().await;
+
+        // notify task waiter loop to exit
+        info!("Sending exit signal to task waiter...");
+        if let Some(exit_tx) = self.exit_signal.lock().await.take() {
+            let _ = exit_tx.send(());
+        }
+
+        info!("All tasks shutdown completed");
     }
 }
 
