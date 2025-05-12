@@ -67,6 +67,7 @@ pub struct Opt {
 fn init_logger(
     node_id: &str,
     l1_chain_id: usize,
+    log_level: &str,
     context_logging: bool,
     log_file_path: &str,
     rolling_file_size: u64,
@@ -113,6 +114,13 @@ fn init_logger(
         )
         .unwrap();
 
+    let log_level_filter = match log_level {
+        "debug" => LevelFilter::Debug,
+        "warn" => LevelFilter::Warn,
+        "error" => LevelFilter::Error,
+        _ => LevelFilter::Info,
+    };
+
     let log_config = LogConfig::builder()
         .appender(Appender::builder().build("stdout", Box::new(stdout)))
         .appender(Appender::builder().build("file", Box::new(rolling_file)))
@@ -121,14 +129,14 @@ fn init_logger(
                 .filter(Box::new(ThresholdFilter::new(LevelFilter::Error)))
                 .build("err_file", Box::new(rolling_err_file)),
         )
-        .logger(log4rs::config::Logger::builder().build("node_client", LevelFilter::Info))
-        .logger(log4rs::config::Logger::builder().build("arpa_node", LevelFilter::Info))
-        .logger(log4rs::config::Logger::builder().build("arpa_core", LevelFilter::Info))
-        .logger(log4rs::config::Logger::builder().build("arpa_contract_client", LevelFilter::Info))
-        .logger(log4rs::config::Logger::builder().build("arpa_sqlite_db", LevelFilter::Info))
-        .logger(log4rs::config::Logger::builder().build("arpa_dal", LevelFilter::Info))
-        .logger(log4rs::config::Logger::builder().build("dkg_core", LevelFilter::Info))
-        .logger(log4rs::config::Logger::builder().build("threshold_bls", LevelFilter::Info))
+        .logger(log4rs::config::Logger::builder().build("node_client", log_level_filter))
+        .logger(log4rs::config::Logger::builder().build("arpa_node", log_level_filter))
+        .logger(log4rs::config::Logger::builder().build("arpa_core", log_level_filter))
+        .logger(log4rs::config::Logger::builder().build("arpa_contract_client", log_level_filter))
+        .logger(log4rs::config::Logger::builder().build("arpa_sqlite_db", log_level_filter))
+        .logger(log4rs::config::Logger::builder().build("arpa_dal", log_level_filter))
+        .logger(log4rs::config::Logger::builder().build("dkg_core", log_level_filter))
+        .logger(log4rs::config::Logger::builder().build("threshold_bls", log_level_filter))
         .build(
             Root::builder()
                 .appender("err_file")
@@ -159,6 +167,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     init_logger(
         &address_to_string(id_address),
         l1_chain_id,
+        logger_descriptor.get_log_level(),
         logger_descriptor.get_context_logging(),
         logger_descriptor.get_log_file_path(),
         logger_descriptor.get_rolling_file_size(),

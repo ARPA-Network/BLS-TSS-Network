@@ -121,6 +121,7 @@ impl Default for ConfigHolder {
 }
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LoggerDescriptorHolder {
+    log_level: Option<String>,
     context_logging: bool,
     log_file_path: Option<String>,
     #[serde(deserialize_with = "deserialize_limit")]
@@ -129,6 +130,7 @@ pub struct LoggerDescriptorHolder {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LoggerDescriptor {
+    log_level: String,
     context_logging: bool,
     log_file_path: String,
     #[serde(deserialize_with = "deserialize_limit")]
@@ -138,6 +140,7 @@ pub struct LoggerDescriptor {
 impl Default for LoggerDescriptor {
     fn default() -> Self {
         Self {
+            log_level: "info".to_string(),
             context_logging: false,
             log_file_path: "log/".to_string(),
             rolling_file_size: DEFAULT_ROLLING_LOG_FILE_SIZE,
@@ -147,6 +150,10 @@ impl Default for LoggerDescriptor {
 
 impl LoggerDescriptor {
     pub fn from(logger_descriptor_holder: LoggerDescriptorHolder) -> Self {
+        let log_level = logger_descriptor_holder
+            .log_level
+            .map(|log_level| log_level.to_lowercase())
+            .unwrap_or("info".to_string());
         let context_logging = logger_descriptor_holder.context_logging;
         let log_file_path = if logger_descriptor_holder.log_file_path.is_none() {
             "log/".to_string()
@@ -156,10 +163,15 @@ impl LoggerDescriptor {
         let rolling_file_size = logger_descriptor_holder.rolling_file_size;
 
         Self {
+            log_level,
             context_logging,
             log_file_path,
             rolling_file_size,
         }
+    }
+
+    pub fn get_log_level(&self) -> &str {
+        &self.log_level
     }
 
     pub fn get_context_logging(&self) -> bool {
