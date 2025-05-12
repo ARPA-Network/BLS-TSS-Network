@@ -151,6 +151,8 @@ mod tests {
         let main_chain = GeneralMainChain::<G2Curve, G2Scheme>::new(
             "main chain".to_string(),
             false,
+            false,
+            true,
             main_chain_identity.clone(),
             node_cache.clone(),
             group_cache.clone(),

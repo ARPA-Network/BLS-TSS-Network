@@ -58,6 +58,8 @@ pub struct GeneralMainChain<
     id: usize,
     description: String,
     is_eigenlayer: bool,
+    is_consistent_asset_and_node_account: bool,
+    enable_node_auto_activation: bool,
     chain_identity: Arc<RwLock<ChainIdentityHandlerType<PC>>>,
     node_cache: Arc<RwLock<Box<dyn NodeInfoHandler<PC>>>>,
     group_cache: Arc<RwLock<Box<dyn GroupInfoHandler<PC>>>>,
@@ -85,6 +87,8 @@ impl<
     pub fn new(
         description: String,
         is_eigenlayer: bool,
+        is_consistent_asset_and_node_account: bool,
+        enable_node_auto_activation: bool,
         chain_identity: GeneralMainChainIdentity,
         node_cache: Arc<RwLock<Box<dyn NodeInfoHandler<PC>>>>,
         group_cache: Arc<RwLock<Box<dyn GroupInfoHandler<PC>>>>,
@@ -100,6 +104,8 @@ impl<
             id: chain_id,
             description,
             is_eigenlayer,
+            is_consistent_asset_and_node_account,
+            enable_node_auto_activation,
             chain_identity: Arc::new(RwLock::new(Box::new(chain_identity))),
             block_cache: Arc::new(RwLock::new(Box::new(InMemoryBlockInfoCache::new(
                 chain_id,
@@ -342,7 +348,9 @@ where
         &self,
         context: &(dyn ContextFetcher + Sync + Send),
     ) -> SchedulerResult<()> {
-        if !self.is_eigenlayer {
+        if self.enable_node_auto_activation
+            && (!self.is_eigenlayer || self.is_consistent_asset_and_node_account)
+        {
             self.init_listener(
                 context.get_event_queue(),
                 context.get_fixed_task_handler(),

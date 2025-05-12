@@ -8,7 +8,7 @@ use crate::{
 use arpa_contract_client::{error::ContractClientError, node_registry::NodeRegistryTransactions};
 use arpa_core::log::{build_general_payload, build_transaction_receipt_payload, LogType};
 use async_trait::async_trait;
-use ethers::types::U256;
+use ethers::{providers::Middleware, types::U256};
 use log::{debug, error, info};
 use std::{marker::PhantomData, sync::Arc};
 use threshold_bls::group::Curve;
@@ -43,7 +43,7 @@ impl<PC: Curve + std::fmt::Debug + Sync + Send + 'static> Subscriber
 
         let &NodeActivation {
             chain_id,
-            is_eigenlayer: _,
+            is_eigenlayer,
             node_registry_address,
         } = payload.as_any().downcast_ref::<NodeActivation>().unwrap();
 
@@ -53,10 +53,25 @@ impl<PC: Curve + std::fmt::Debug + Sync + Send + 'static> Subscriber
             .await
             .build_node_registry_client(node_registry_address);
 
-        match node_registry_client
-            .node_activate_by_consistent_native_staking()
-            .await
-        {
+        let receipt_result = if is_eigenlayer {
+            node_registry_client
+                .node_activate_as_eigenlayer_operator(
+                    &self
+                        .chain_identity
+                        .read()
+                        .await
+                        .get_client()
+                        .inner()
+                        .signer(),
+                )
+                .await
+        } else {
+            node_registry_client
+                .node_activate_by_consistent_native_staking()
+                .await
+        };
+
+        match receipt_result {
             Ok(receipt) => {
                 info!(
                     "{}",

@@ -278,7 +278,9 @@ Note: To protect secrets, several items can be set with literal `env` as placeho
 
 - is_eigenlayer: Config whether the node is registered as an eigenlayer operator, or a native staking operator. (example: false)
 
-- is_consistent_asset_and_node_account: Config whether the node's asset account is consistent with the node account. (example: false)
+- is_consistent_asset_and_node_account: This is only used for Eigenlayer operator. When it is true, the node can activate itself automatically when deactivated. (example: false)
+
+- enable_node_auto_activation: Config whether to enable node auto activation. It can be used for both Eigenlayer operator(when is_consistent_asset_and_node_account is true) and native staking operator. (example: false)
 
 - chain_id: Config chain id of main chain. (example: 31337)
 

@@ -12,6 +12,10 @@ provider_endpoint: "ws://127.0.0.1:8546"
 
 is_eigenlayer: false
 
+is_consistent_asset_and_node_account: true
+
+enable_node_auto_activation: true
+
 chain_id: 900
 
 controller_address: "0x5eb3Bc0a489C5A8288765d2336659EbCA68FCd00"

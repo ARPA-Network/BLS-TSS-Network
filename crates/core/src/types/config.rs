@@ -79,6 +79,7 @@ struct ConfigHolder {
     pub chain_id: usize,
     pub is_eigenlayer: Option<bool>,
     pub is_consistent_asset_and_node_account: Option<bool>,
+    pub enable_node_auto_activation: Option<bool>,
     pub controller_address: String,
     pub controller_relayer_address: String,
     pub adapter_address: String,
@@ -105,6 +106,7 @@ impl Default for ConfigHolder {
             chain_id: 0,
             is_eigenlayer: Some(false),
             is_consistent_asset_and_node_account: Some(false),
+            enable_node_auto_activation: Some(false),
             controller_address: PLACEHOLDER_ADDRESS.to_string(),
             controller_relayer_address: PLACEHOLDER_ADDRESS.to_string(),
             adapter_address: PLACEHOLDER_ADDRESS.to_string(),
@@ -488,6 +490,7 @@ pub struct Config {
     chain_id: usize,
     is_eigenlayer: bool,
     is_consistent_asset_and_node_account: bool,
+    enable_node_auto_activation: bool,
     controller_address: String,
     controller_relayer_address: String,
     adapter_address: String,
@@ -528,6 +531,10 @@ impl std::fmt::Debug for Config {
             .field(
                 "is_consistent_asset_and_node_account",
                 &self.is_consistent_asset_and_node_account,
+            )
+            .field(
+                "enable_node_auto_activation",
+                &self.enable_node_auto_activation,
             )
             .field("controller_address", &self.controller_address)
             .field(
@@ -600,6 +607,11 @@ impl From<ConfigHolder> for Config {
             } else {
                 config_holder.is_consistent_asset_and_node_account.unwrap()
             };
+        let enable_node_auto_activation = if config_holder.enable_node_auto_activation.is_none() {
+            false
+        } else {
+            config_holder.enable_node_auto_activation.unwrap()
+        };
         let controller_address = config_holder.controller_address.clone();
         let controller_relayer_address = config_holder.controller_relayer_address.clone();
         let adapter_address = config_holder.adapter_address.clone();
@@ -708,6 +720,7 @@ impl From<ConfigHolder> for Config {
             chain_id,
             is_eigenlayer,
             is_consistent_asset_and_node_account,
+            enable_node_auto_activation,
             controller_address,
             controller_relayer_address,
             adapter_address,
@@ -750,6 +763,10 @@ impl Config {
 
     pub fn is_consistent_asset_and_node_account(&self) -> bool {
         self.is_consistent_asset_and_node_account
+    }
+
+    pub fn enable_node_auto_activation(&self) -> bool {
+        self.enable_node_auto_activation
     }
 
     pub fn get_main_chain_id(&self) -> usize {

@@ -226,6 +226,8 @@ async fn start(
 
     let is_consistent_asset_and_node_account = config.is_consistent_asset_and_node_account();
 
+    let enable_node_auto_activation = config.enable_node_auto_activation();
+
     if let Some(parent) = data_path.parent() {
         fs::create_dir_all(parent)?;
     }
@@ -336,6 +338,8 @@ async fn start(
     let main_chain = GeneralMainChain::<G2Curve, G2Scheme>::new(
         "main chain".to_string(),
         is_eigenlayer,
+        is_consistent_asset_and_node_account,
+        enable_node_auto_activation,
         main_chain_identity.clone(),
         node_cache.clone(),
         group_cache.clone(),
