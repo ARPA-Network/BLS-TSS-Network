@@ -1,10 +1,10 @@
 use crate::listener::Listener;
 
 use super::{ComponentTaskType, FixedTaskScheduler, TaskScheduler};
-use arpa_core::{ListenerDescriptor, SchedulerError, SchedulerResult};
+use arpa_core::{SchedulerError, SchedulerResult};
 use async_trait::async_trait;
 use futures::Future;
-use log::info;
+use log::{error, info};
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::task::JoinHandle;
@@ -88,33 +88,68 @@ impl FixedTaskScheduler for SimpleFixedTaskScheduler {
         self.fixed_tasks.keys().collect::<Vec<&ComponentTaskType>>()
     }
 
-    fn restart_listener(&mut self, task_type: &ComponentTaskType) -> SchedulerResult<()> {
-        if !self.fixed_tasks.contains_key(task_type) {
-            return Err(SchedulerError::TaskNotFound);
-        }
-        let task_handle = self.fixed_tasks.get_mut(task_type).unwrap();
-        task_handle.handle.abort();
+    fn add_listener_task(
+        &mut self,
+        listener: impl Listener + Send + Sync + 'static,
+    ) -> SchedulerResult<()> {
+        let task_type = ComponentTaskType::Listener(
+            listener.listener_descriptor().chain_id,
+            listener.listener_descriptor().l_type,
+        );
 
-        let listener = task_handle.listener.take().unwrap();
-        let listener_descriptor = ListenerDescriptor::default(arpa_core::ListenerType::Block);
+        if self.fixed_tasks.contains_key(&task_type) {
+            return Err(SchedulerError::TaskAlreadyExisted);
+        }
 
         let mut mdc = vec![];
         log_mdc::iter(|k, v| mdc.push((k.to_owned(), v.to_owned())));
 
+        let listener = Arc::new(listener);
+
+        let listener_clone = listener.clone();
+
         let handle = tokio::spawn(async move {
             log_mdc::extend(mdc);
-            let _ = listener
-                .start(
-                    listener_descriptor.interval_millis,
-                    listener_descriptor.use_jitter,
-                    listener_descriptor.reset_descriptor,
-                    None,
-                )
-                .await;
+            if let Err(e) = listener_clone.start().await {
+                error!("listener start error: {:?}", e);
+            };
         });
-
-        task_handle.handle = handle;
+        let task_handle = TaskHandle {
+            listener: Some(listener),
+            handle,
+        };
+        self.fixed_tasks.insert(task_type, task_handle);
         Ok(())
+    }
+
+    fn restart_listener(&mut self, task_type: &ComponentTaskType) -> SchedulerResult<()> {
+        if !self.fixed_tasks.contains_key(task_type) {
+            return Err(SchedulerError::TaskNotFound);
+        }
+        match task_type {
+            ComponentTaskType::Listener(_, _) => {
+                let task_handle = self.fixed_tasks.get_mut(task_type).unwrap();
+                task_handle.handle.abort();
+
+                let listener = task_handle.listener.take().unwrap();
+
+                let listener_clone = listener.clone();
+
+                let mut mdc = vec![];
+                log_mdc::iter(|k, v| mdc.push((k.to_owned(), v.to_owned())));
+
+                let handle = tokio::spawn(async move {
+                    log_mdc::extend(mdc);
+                    let _ = listener_clone.start().await;
+                });
+
+                task_handle.handle = handle;
+                task_handle.listener = Some(listener);
+
+                Ok(())
+            }
+            _ => Err(SchedulerError::TaskNotFound),
+        }
     }
 }
 

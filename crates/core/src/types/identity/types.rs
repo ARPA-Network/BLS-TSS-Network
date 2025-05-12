@@ -10,8 +10,8 @@ use ethers_core::types::{Address, BlockNumber, U256};
 use ethers_middleware::{MiddlewareBuilder, NonceManagerMiddleware, SignerMiddleware};
 use ethers_providers::{Http, Middleware, Provider, ProviderError, Ws};
 use ethers_signers::{LocalWallet, Signer};
+use log::debug;
 use std::sync::Arc;
-
 pub type WsWalletSigner =
     NonceManagerMiddleware<SignerMiddleware<GasMiddleware<Arc<Provider<Ws>>>, LocalWallet>>;
 pub type HttpWalletSigner =
@@ -153,6 +153,8 @@ impl ChainProviderManager for GeneralMainChainIdentity {
     }
 
     async fn reset_provider(&mut self) -> Result<(), ProviderError> {
+        debug!("Resetting provider for chain {}", self.chain_id);
+
         let provider = Arc::new(
             Provider::<Ws>::connect_with_reconnects(
                 &self.provider_endpoint,
@@ -161,6 +163,8 @@ impl ChainProviderManager for GeneralMainChainIdentity {
             .await?
             .interval(self.get_provider().get_interval()),
         );
+
+        debug!("Provider reset for chain {}", self.chain_id);
 
         self.client = build_client(
             self.client.inner().signer().clone(),

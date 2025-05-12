@@ -6,7 +6,7 @@ use crate::{
     queue::{event_queue::EventQueue, EventPublisher},
 };
 use arpa_contract_client::adapter::AdapterViews;
-use arpa_core::RandomnessTask;
+use arpa_core::{ListenerDescriptor, RandomnessTask};
 use arpa_dal::{BLSTasksHandler, BlockInfoHandler, GroupInfoHandler};
 use async_trait::async_trait;
 use ethers::{providers::Middleware, types::Address};
@@ -16,7 +16,7 @@ use tokio::sync::RwLock;
 
 #[derive(Debug)]
 pub struct ReadyToHandleRandomnessTaskListener<PC: Curve> {
-    chain_id: usize,
+    listener_descriptor: ListenerDescriptor,
     id_address: Address,
     chain_identity: Arc<RwLock<ChainIdentityHandlerType<PC>>>,
     block_cache: Arc<RwLock<Box<dyn BlockInfoHandler>>>,
@@ -36,7 +36,7 @@ impl<PC: Curve> std::fmt::Display for ReadyToHandleRandomnessTaskListener<PC> {
 impl<PC: Curve> ReadyToHandleRandomnessTaskListener<PC> {
     #[allow(clippy::too_many_arguments)]
     pub fn new(
-        chain_id: usize,
+        listener_descriptor: ListenerDescriptor,
         id_address: Address,
         chain_identity: Arc<RwLock<ChainIdentityHandlerType<PC>>>,
         block_cache: Arc<RwLock<Box<dyn BlockInfoHandler>>>,
@@ -46,7 +46,7 @@ impl<PC: Curve> ReadyToHandleRandomnessTaskListener<PC> {
         randomness_task_exclusive_window: usize,
     ) -> Self {
         ReadyToHandleRandomnessTaskListener {
-            chain_id,
+            listener_descriptor,
             id_address,
             chain_identity,
             block_cache,
@@ -109,7 +109,7 @@ impl<PC: Curve + Sync + Send> Listener for ReadyToHandleRandomnessTaskListener<P
 
             if !tasks_to_process.is_empty() {
                 self.publish(ReadyToHandleRandomnessTask {
-                    chain_id: self.chain_id,
+                    chain_id: self.listener_descriptor.chain_id,
                     tasks: tasks_to_process,
                 })
                 .await;
@@ -130,7 +130,11 @@ impl<PC: Curve + Sync + Send> Listener for ReadyToHandleRandomnessTaskListener<P
         Ok(())
     }
 
-    async fn chain_id(&self) -> usize {
-        self.chain_id
+    fn chain_id(&self) -> usize {
+        self.listener_descriptor.chain_id
+    }
+
+    fn listener_descriptor(&self) -> ListenerDescriptor {
+        self.listener_descriptor
     }
 }

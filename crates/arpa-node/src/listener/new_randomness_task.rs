@@ -8,7 +8,7 @@ use crate::{
 use arpa_contract_client::adapter::AdapterLogs;
 use arpa_core::{
     log::{build_task_related_payload, LogType},
-    BLSTaskType, RandomnessTask, TaskType,
+    BLSTaskType, ListenerDescriptor, RandomnessTask, TaskType,
 };
 use arpa_dal::BLSTasksHandler;
 use async_trait::async_trait;
@@ -21,7 +21,7 @@ use tokio::sync::RwLock;
 
 #[derive(Debug)]
 pub struct NewRandomnessTaskListener<PC: Curve> {
-    chain_id: usize,
+    listener_descriptor: ListenerDescriptor,
     id_address: Address,
     chain_identity: Arc<RwLock<ChainIdentityHandlerType<PC>>>,
     randomness_tasks_cache: Arc<RwLock<Box<dyn BLSTasksHandler<RandomnessTask>>>>,
@@ -37,14 +37,14 @@ impl<PC: Curve> std::fmt::Display for NewRandomnessTaskListener<PC> {
 
 impl<PC: Curve> NewRandomnessTaskListener<PC> {
     pub fn new(
-        chain_id: usize,
+        listener_descriptor: ListenerDescriptor,
         id_address: Address,
         chain_identity: Arc<RwLock<ChainIdentityHandlerType<PC>>>,
         randomness_tasks_cache: Arc<RwLock<Box<dyn BLSTasksHandler<RandomnessTask>>>>,
         eq: Arc<RwLock<EventQueue>>,
     ) -> Self {
         NewRandomnessTaskListener {
-            chain_id,
+            listener_descriptor,
             id_address,
             chain_identity,
             randomness_tasks_cache,
@@ -69,7 +69,7 @@ impl<PC: Curve + Sync + Send> Listener for NewRandomnessTaskListener<PC> {
             .read()
             .await
             .build_adapter_client(self.id_address);
-        let chain_id = self.chain_id;
+        let chain_id = self.listener_descriptor.chain_id;
 
         client
             .subscribe_randomness_task(move |randomness_task| {
@@ -88,7 +88,7 @@ impl<PC: Curve + Sync + Send> Listener for NewRandomnessTaskListener<PC> {
                             build_task_related_payload(
                                 LogType::TaskReceived,
                                 "New randomness task received.",
-                                self.chain_id,
+                                chain_id,
                                 &randomness_task.request_id,
                                 TaskType::BLS(BLSTaskType::Randomness),
                                 json!(randomness_task),
@@ -127,7 +127,11 @@ impl<PC: Curve + Sync + Send> Listener for NewRandomnessTaskListener<PC> {
         Ok(())
     }
 
-    async fn chain_id(&self) -> usize {
-        self.chain_id
+    fn chain_id(&self) -> usize {
+        self.listener_descriptor.chain_id
+    }
+
+    fn listener_descriptor(&self) -> ListenerDescriptor {
+        self.listener_descriptor
     }
 }

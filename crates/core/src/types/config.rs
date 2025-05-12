@@ -262,6 +262,7 @@ struct ListenerDescriptorHolder {
 
 #[derive(Debug, Copy, Clone, Serialize, Deserialize)]
 pub struct ListenerDescriptor {
+    pub chain_id: usize,
     pub l_type: ListenerType,
     pub interval_millis: u64,
     pub use_jitter: bool,
@@ -270,6 +271,7 @@ pub struct ListenerDescriptor {
 
 impl ListenerDescriptor {
     fn from(
+        chain_id: usize,
         listener_descriptor_holder: ListenerDescriptorHolder,
         provider_reset_descriptor: FixedIntervalRetryDescriptor,
     ) -> Self {
@@ -281,6 +283,7 @@ impl ListenerDescriptor {
             .unwrap_or(provider_reset_descriptor);
 
         Self {
+            chain_id,
             l_type,
             interval_millis,
             use_jitter,
@@ -289,11 +292,13 @@ impl ListenerDescriptor {
     }
 
     fn build(
+        chain_id: usize,
         l_type: ListenerType,
         interval_millis: u64,
         reset_descriptor: FixedIntervalRetryDescriptor,
     ) -> Self {
         Self {
+            chain_id,
             l_type,
             interval_millis,
             use_jitter: DEFAULT_LISTENER_USE_JITTER,
@@ -301,8 +306,9 @@ impl ListenerDescriptor {
         }
     }
 
-    pub fn default(l_type: ListenerType) -> Self {
+    pub fn default(chain_id: usize, l_type: ListenerType) -> Self {
         Self {
+            chain_id,
             l_type,
             interval_millis: DEFAULT_LISTENER_INTERVAL_MILLIS,
             use_jitter: DEFAULT_LISTENER_USE_JITTER,
@@ -616,36 +622,43 @@ impl From<ConfigHolder> for Config {
         let listeners = if config_holder.listeners.is_none() {
             vec![
                 ListenerDescriptor::build(
+                    chain_id,
                     ListenerType::Block,
                     time_limits.listener_interval_millis,
                     time_limits.provider_reset_descriptor,
                 ),
                 ListenerDescriptor::build(
+                    chain_id,
                     ListenerType::PreGrouping,
                     time_limits.listener_interval_millis,
                     time_limits.provider_reset_descriptor,
                 ),
                 ListenerDescriptor::build(
+                    chain_id,
                     ListenerType::PostCommitGrouping,
                     time_limits.listener_interval_millis,
                     time_limits.provider_reset_descriptor,
                 ),
                 ListenerDescriptor::build(
+                    chain_id,
                     ListenerType::PostGrouping,
                     time_limits.listener_interval_millis,
                     time_limits.provider_reset_descriptor,
                 ),
                 ListenerDescriptor::build(
+                    chain_id,
                     ListenerType::NewRandomnessTask,
                     time_limits.listener_interval_millis,
                     time_limits.provider_reset_descriptor,
                 ),
                 ListenerDescriptor::build(
+                    chain_id,
                     ListenerType::ReadyToHandleRandomnessTask,
                     time_limits.listener_interval_millis,
                     time_limits.provider_reset_descriptor,
                 ),
                 ListenerDescriptor::build(
+                    chain_id,
                     ListenerType::RandomnessSignatureAggregation,
                     time_limits.listener_interval_millis,
                     time_limits.provider_reset_descriptor,
@@ -657,7 +670,11 @@ impl From<ConfigHolder> for Config {
                 .map(|l| {
                     l.iter()
                         .map(|l| {
-                            ListenerDescriptor::from(*l, time_limits.provider_reset_descriptor)
+                            ListenerDescriptor::from(
+                                chain_id,
+                                *l,
+                                time_limits.provider_reset_descriptor,
+                            )
                         })
                         .collect()
                 })
@@ -996,21 +1013,25 @@ impl From<RelayedChainHolder> for RelayedChain {
         let listeners = if relayed_chain_holder.listeners.is_none() {
             vec![
                 ListenerDescriptor::build(
+                    chain_id,
                     ListenerType::Block,
                     time_limits.listener_interval_millis,
                     time_limits.provider_reset_descriptor,
                 ),
                 ListenerDescriptor::build(
+                    chain_id,
                     ListenerType::NewRandomnessTask,
                     time_limits.listener_interval_millis,
                     time_limits.provider_reset_descriptor,
                 ),
                 ListenerDescriptor::build(
+                    chain_id,
                     ListenerType::ReadyToHandleRandomnessTask,
                     time_limits.listener_interval_millis,
                     time_limits.provider_reset_descriptor,
                 ),
                 ListenerDescriptor::build(
+                    chain_id,
                     ListenerType::RandomnessSignatureAggregation,
                     time_limits.listener_interval_millis,
                     time_limits.provider_reset_descriptor,
@@ -1022,7 +1043,11 @@ impl From<RelayedChainHolder> for RelayedChain {
                 .map(|l| {
                     l.iter()
                         .map(|l| {
-                            ListenerDescriptor::from(*l, time_limits.provider_reset_descriptor)
+                            ListenerDescriptor::from(
+                                chain_id,
+                                *l,
+                                time_limits.provider_reset_descriptor,
+                            )
                         })
                         .collect()
                 })

@@ -4,6 +4,7 @@ use crate::{
     event::ready_to_fulfill_randomness_task::ReadyToFulfillRandomnessTask,
     queue::{event_queue::EventQueue, EventPublisher},
 };
+use arpa_core::ListenerDescriptor;
 use arpa_dal::cache::RandomnessResultCache;
 use arpa_dal::{BlockInfoHandler, GroupInfoHandler, SignatureResultCacheHandler};
 use async_trait::async_trait;
@@ -14,7 +15,7 @@ use tokio::sync::RwLock;
 
 #[derive(Debug)]
 pub struct RandomnessSignatureAggregationListener<PC: Curve> {
-    chain_id: usize,
+    listener_descriptor: ListenerDescriptor,
     id_address: Address,
     block_cache: Arc<RwLock<Box<dyn BlockInfoHandler>>>,
     group_cache: Arc<RwLock<Box<dyn GroupInfoHandler<PC>>>>,
@@ -32,7 +33,7 @@ impl<PC: Curve> std::fmt::Display for RandomnessSignatureAggregationListener<PC>
 
 impl<PC: Curve> RandomnessSignatureAggregationListener<PC> {
     pub fn new(
-        chain_id: usize,
+        listener_descriptor: ListenerDescriptor,
         id_address: Address,
         block_cache: Arc<RwLock<Box<dyn BlockInfoHandler>>>,
         group_cache: Arc<RwLock<Box<dyn GroupInfoHandler<PC>>>>,
@@ -42,7 +43,7 @@ impl<PC: Curve> RandomnessSignatureAggregationListener<PC> {
         eq: Arc<RwLock<EventQueue>>,
     ) -> Self {
         RandomnessSignatureAggregationListener {
-            chain_id,
+            listener_descriptor,
             id_address,
             block_cache,
             group_cache,
@@ -79,7 +80,7 @@ impl<PC: Curve + Sync + Send> Listener for RandomnessSignatureAggregationListene
 
             if !ready_signatures.is_empty() {
                 self.publish(ReadyToFulfillRandomnessTask {
-                    chain_id: self.chain_id,
+                    chain_id: self.listener_descriptor.chain_id,
                     tasks: ready_signatures,
                 })
                 .await;
@@ -93,7 +94,11 @@ impl<PC: Curve + Sync + Send> Listener for RandomnessSignatureAggregationListene
         Ok(())
     }
 
-    async fn chain_id(&self) -> usize {
-        self.chain_id
+    fn chain_id(&self) -> usize {
+        self.listener_descriptor.chain_id
+    }
+
+    fn listener_descriptor(&self) -> ListenerDescriptor {
+        self.listener_descriptor
     }
 }

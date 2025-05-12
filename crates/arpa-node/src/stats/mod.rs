@@ -82,15 +82,11 @@ where
 mod tests {
     use super::*;
     use crate::context::chain::types::GeneralMainChain;
-    use crate::scheduler::TaskScheduler;
     use actix_web::{
         http::{self},
         test,
     };
-    use arpa_core::{
-        ComponentTaskType, Config, GeneralMainChainIdentity, ListenerType, RandomnessTask,
-        PLACEHOLDER_ADDRESS,
-    };
+    use arpa_core::{Config, GeneralMainChainIdentity, RandomnessTask, PLACEHOLDER_ADDRESS};
     use arpa_dal::{
         cache::{
             InMemoryBLSTasksQueue, InMemoryGroupInfoCache, InMemoryNodeInfoCache,
@@ -165,14 +161,6 @@ mod tests {
         );
 
         let context = GeneralContext::new(main_chain, config);
-
-        context
-            .get_fixed_task_handler()
-            .write()
-            .await
-            .add_task(ComponentTaskType::Listener(0, ListenerType::Block), async {
-            })
-            .unwrap();
 
         Arc::new(RwLock::new(context))
     }
