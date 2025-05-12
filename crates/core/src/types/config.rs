@@ -436,7 +436,6 @@ impl From<TimeLimitDescriptorHolder> for TimeLimitDescriptor {
         let provider_reconnection_interval_millis =
             match time_limit_descriptor_holder.provider_reconnection_interval_millis {
                 None => DEFAULT_PROVIDER_RECONNECTION_INTERVAL_MILLIS,
-                Some(0) => DEFAULT_PROVIDER_RECONNECTION_INTERVAL_MILLIS,
                 Some(v) => v,
             };
         let provider_reset_descriptor = time_limit_descriptor_holder.provider_reset_descriptor;

@@ -357,18 +357,20 @@ where
             .await?;
         }
 
-        self.init_listener(
-            context.get_event_queue(),
-            context.get_fixed_task_handler(),
-            ListenerDescriptor {
-                chain_id: self.id(),
-                l_type: ListenerType::ScheduleProviderReconnection,
-                interval_millis: self.time_limits.provider_reconnection_interval_millis,
-                use_jitter: true,
-                reset_descriptor: self.time_limits.provider_reset_descriptor,
-            },
-        )
-        .await?;
+        if self.time_limits.provider_reconnection_interval_millis > 0 {
+            self.init_listener(
+                context.get_event_queue(),
+                context.get_fixed_task_handler(),
+                ListenerDescriptor {
+                    chain_id: self.id(),
+                    l_type: ListenerType::ScheduleProviderReconnection,
+                    interval_millis: self.time_limits.provider_reconnection_interval_millis,
+                    use_jitter: true,
+                    reset_descriptor: self.time_limits.provider_reset_descriptor,
+                },
+            )
+            .await?;
+        }
 
         Ok(())
     }
@@ -760,18 +762,20 @@ where
         &self,
         context: &(dyn ContextFetcher + Sync + Send),
     ) -> SchedulerResult<()> {
-        self.init_listener(
-            context.get_event_queue(),
-            context.get_fixed_task_handler(),
-            ListenerDescriptor {
-                chain_id: self.id(),
-                l_type: ListenerType::ScheduleProviderReconnection,
-                interval_millis: self.time_limits.provider_reconnection_interval_millis,
-                use_jitter: true,
-                reset_descriptor: self.time_limits.provider_reset_descriptor,
-            },
-        )
-        .await?;
+        if self.time_limits.provider_reconnection_interval_millis > 0 {
+            self.init_listener(
+                context.get_event_queue(),
+                context.get_fixed_task_handler(),
+                ListenerDescriptor {
+                    chain_id: self.id(),
+                    l_type: ListenerType::ScheduleProviderReconnection,
+                    interval_millis: self.time_limits.provider_reconnection_interval_millis,
+                    use_jitter: true,
+                    reset_descriptor: self.time_limits.provider_reset_descriptor,
+                },
+            )
+            .await?;
+        }
 
         Ok(())
     }

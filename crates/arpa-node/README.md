@@ -300,13 +300,15 @@ Note: To protect secrets, several items can be set with literal `env` as placeho
 
     ```
     logger:
+      log_level: info
       context_logging: false
       log_file_path: log/running/
       rolling_file_size: 10 gb
     ```
 
+  - log_level(Optional): Set log level(debug, info, warn, error)(default: info).
   - context_logging: Set whether to log context of current node info and group info. Since the log size will get a significant boost with this setting enabled, it is recommended to set it to false in production.
-  - log_file_path: Set log file path. The `node-client` will create a `node.log` as well as a `node_err.log` under `log_file_path`, then log to them with info level and error level respectively.
+  - log_file_path(Optional): Set log file path. The `node-client` will create a `node.log` as well as a `node_err.log` under `log_file_path`, then log to them with info level and error level respectively.
   - rolling_file_size: Log file will be deleted when it reaches this size limit. The following units are supported (case insensitive):
     "b", "kb", "kib", "mb", "mib", "gb", "gib", "tb", "tib". The unit defaults to bytes if not specified.
 
@@ -342,6 +344,7 @@ Note: To protect secrets, several items can be set with literal `env` as placeho
       listener_interval_millis: 10000
       dkg_wait_for_phase_interval_millis: 10000
       provider_polling_interval_millis: 10000
+      provider_reconnection_interval_millis: 30000
       provider_reset_descriptor:
         interval_millis: 5000
         max_attempts: 17280
@@ -377,6 +380,12 @@ Note: To protect secrets, several items can be set with literal `env` as placeho
   - We use fixed interval to reset the provider when it can't be reconnected.
 
     - provider_reset_descriptor: (interval sequence by default: 5s, 10s, ..., 24h)
+
+  - We actively reconnect to the provider to avoid the situation that the provider is down.
+
+    - provider_reconnection_interval_millis(Optional): Milliseconds between two rounds of active reconnection attempts. (default: 30000)
+
+    - If this value is set to 0, the node will not actively reconnect to the provider. This is not recommended in production as unstable provider connection will lead to deactivation of the node.
 
   - We use exponential backoff to retry when a transaction or view call fails, or a rpc request to the committer fails. The interval will be an exponent of base multiplied by factor every time, and it will be reset when the interaction succeeds.
 
