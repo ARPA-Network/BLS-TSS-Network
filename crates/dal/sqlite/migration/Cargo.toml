@@ -16,7 +16,7 @@ name = "migration"
 path = "src/lib.rs"
 
 [dependencies]
-entity = { version = "0.3.0-alpha.1", path = "../entity" }
+entity = { version = "0.3.0-alpha.2", path = "../entity" }
 async-std = { version = "^1", features = ["attributes", "tokio1"] }
 libsqlite3-sys = { version = "^0.26.0", default-features = false, features = [
       "pkg-config",
