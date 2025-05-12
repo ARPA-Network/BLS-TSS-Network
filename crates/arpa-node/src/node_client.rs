@@ -333,6 +333,7 @@ async fn start(
             .get_time_limits()
             .contract_transaction_retry_descriptor,
         config.get_time_limits().contract_view_retry_descriptor,
+        config.get_max_priority_fee_per_gas(),
     );
 
     let main_chain = GeneralMainChain::<G2Curve, G2Scheme>::new(
@@ -388,6 +389,7 @@ async fn start(
             relayed_chain_config
                 .get_time_limits()
                 .contract_view_retry_descriptor,
+            relayed_chain_config.get_max_priority_fee_per_gas(),
         );
 
         let randomness_tasks_cache = Arc::new(RwLock::new(

@@ -205,6 +205,7 @@ async fn send(args: ArgMatches, context: &mut Context) -> anyhow::Result<Option<
                     .config
                     .contract_transaction_retry_descriptor(main_chain_id)?,
                 true,
+                context.config.max_priority_fee_per_gas(main_chain_id)?,
             )
             .await?;
 
@@ -274,6 +275,7 @@ async fn send(args: ArgMatches, context: &mut Context) -> anyhow::Result<Option<
                     .config
                     .contract_transaction_retry_descriptor(main_chain_id)?,
                 true,
+                context.config.max_priority_fee_per_gas(main_chain_id)?,
             )
             .await?;
 
@@ -318,6 +320,7 @@ async fn send(args: ArgMatches, context: &mut Context) -> anyhow::Result<Option<
                     .config
                     .contract_transaction_retry_descriptor(main_chain_id)?,
                 true,
+                context.config.max_priority_fee_per_gas(main_chain_id)?,
             )
             .await?;
 
@@ -342,6 +345,7 @@ async fn send(args: ArgMatches, context: &mut Context) -> anyhow::Result<Option<
                     .config
                     .contract_transaction_retry_descriptor(main_chain_id)?,
                 true,
+                context.config.max_priority_fee_per_gas(main_chain_id)?,
             )
             .await?;
 
@@ -366,6 +370,7 @@ async fn send(args: ArgMatches, context: &mut Context) -> anyhow::Result<Option<
                     .config
                     .contract_transaction_retry_descriptor(main_chain_id)?,
                 true,
+                context.config.max_priority_fee_per_gas(main_chain_id)?,
             )
             .await?;
 
@@ -390,6 +395,7 @@ async fn send(args: ArgMatches, context: &mut Context) -> anyhow::Result<Option<
                     .config
                     .contract_transaction_retry_descriptor(main_chain_id)?,
                 true,
+                context.config.max_priority_fee_per_gas(main_chain_id)?,
             )
             .await?;
 
@@ -414,6 +420,7 @@ async fn send(args: ArgMatches, context: &mut Context) -> anyhow::Result<Option<
                     .config
                     .contract_transaction_retry_descriptor(*chain_id)?,
                 true,
+                context.config.max_priority_fee_per_gas(*chain_id)?,
             )
             .await?;
 
@@ -441,6 +448,7 @@ async fn send(args: ArgMatches, context: &mut Context) -> anyhow::Result<Option<
                     .config
                     .contract_transaction_retry_descriptor(*chain_id)?,
                 true,
+                context.config.max_priority_fee_per_gas(*chain_id)?,
             )
             .await?;
 
@@ -469,6 +477,7 @@ async fn send(args: ArgMatches, context: &mut Context) -> anyhow::Result<Option<
                     .config
                     .contract_transaction_retry_descriptor(*chain_id)?,
                 true,
+                context.config.max_priority_fee_per_gas(*chain_id)?,
             )
             .await?;
 
@@ -496,6 +505,7 @@ async fn send(args: ArgMatches, context: &mut Context) -> anyhow::Result<Option<
                     .config
                     .contract_transaction_retry_descriptor(*chain_id)?,
                 true,
+                context.config.max_priority_fee_per_gas(*chain_id)?,
             )
             .await?;
 
@@ -523,6 +533,7 @@ async fn send(args: ArgMatches, context: &mut Context) -> anyhow::Result<Option<
                     .config
                     .contract_transaction_retry_descriptor(*chain_id)?,
                 true,
+                context.config.max_priority_fee_per_gas(*chain_id)?,
             )
             .await?;
 
@@ -550,6 +561,7 @@ async fn send(args: ArgMatches, context: &mut Context) -> anyhow::Result<Option<
                     .config
                     .contract_transaction_retry_descriptor(*chain_id)?,
                 true,
+                context.config.max_priority_fee_per_gas(*chain_id)?,
             )
             .await?;
 

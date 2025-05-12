@@ -47,6 +47,7 @@ pub struct GeneralMainChainIdentity {
     adapter_address: Address,
     contract_transaction_retry_descriptor: ExponentialBackoffRetryDescriptor,
     contract_view_retry_descriptor: ExponentialBackoffRetryDescriptor,
+    max_priority_fee_per_gas: Option<U256>,
 }
 
 impl GeneralMainChainIdentity {
@@ -61,6 +62,7 @@ impl GeneralMainChainIdentity {
         adapter_address: Address,
         contract_transaction_retry_descriptor: ExponentialBackoffRetryDescriptor,
         contract_view_retry_descriptor: ExponentialBackoffRetryDescriptor,
+        max_priority_fee_per_gas: Option<U256>,
     ) -> Self {
         let address = wallet.address();
 
@@ -76,6 +78,7 @@ impl GeneralMainChainIdentity {
             adapter_address,
             contract_transaction_retry_descriptor,
             contract_view_retry_descriptor,
+            max_priority_fee_per_gas,
         }
     }
 }
@@ -104,6 +107,10 @@ impl ChainIdentity for GeneralMainChainIdentity {
 
     fn get_contract_view_retry_descriptor(&self) -> ExponentialBackoffRetryDescriptor {
         self.contract_view_retry_descriptor
+    }
+
+    fn get_max_priority_fee_per_gas(&self) -> Option<U256> {
+        self.max_priority_fee_per_gas
     }
 
     async fn get_current_gas_price(&self) -> Result<U256, ProviderError> {
@@ -186,6 +193,7 @@ pub struct GeneralRelayedChainIdentity {
     adapter_address: Address,
     contract_transaction_retry_descriptor: ExponentialBackoffRetryDescriptor,
     contract_view_retry_descriptor: ExponentialBackoffRetryDescriptor,
+    max_priority_fee_per_gas: Option<U256>,
 }
 
 impl GeneralRelayedChainIdentity {
@@ -199,6 +207,7 @@ impl GeneralRelayedChainIdentity {
         adapter_address: Address,
         contract_transaction_retry_descriptor: ExponentialBackoffRetryDescriptor,
         contract_view_retry_descriptor: ExponentialBackoffRetryDescriptor,
+        max_priority_fee_per_gas: Option<U256>,
     ) -> Self {
         let address = wallet.address();
 
@@ -213,6 +222,7 @@ impl GeneralRelayedChainIdentity {
             adapter_address,
             contract_transaction_retry_descriptor,
             contract_view_retry_descriptor,
+            max_priority_fee_per_gas,
         }
     }
 }
@@ -241,6 +251,10 @@ impl ChainIdentity for GeneralRelayedChainIdentity {
 
     fn get_contract_view_retry_descriptor(&self) -> ExponentialBackoffRetryDescriptor {
         self.contract_view_retry_descriptor
+    }
+
+    fn get_max_priority_fee_per_gas(&self) -> Option<U256> {
+        self.max_priority_fee_per_gas
     }
 
     async fn get_current_gas_price(&self) -> Result<U256, ProviderError> {

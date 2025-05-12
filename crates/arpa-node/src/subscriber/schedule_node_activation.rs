@@ -56,8 +56,7 @@ impl<PC: Curve + std::fmt::Debug + Sync + Send + 'static> Subscriber
         let receipt_result = if is_eigenlayer {
             node_registry_client
                 .node_activate_as_eigenlayer_operator(
-                    &self
-                        .chain_identity
+                    self.chain_identity
                         .read()
                         .await
                         .get_client()

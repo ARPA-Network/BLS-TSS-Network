@@ -27,6 +27,7 @@ pub struct CoordinatorClient {
     client: Arc<WsWalletSigner>,
     contract_transaction_retry_descriptor: ExponentialBackoffRetryDescriptor,
     contract_view_retry_descriptor: ExponentialBackoffRetryDescriptor,
+    max_priority_fee_per_gas: Option<U256>,
 }
 
 impl CoordinatorClient {
@@ -36,6 +37,7 @@ impl CoordinatorClient {
         identity: &GeneralMainChainIdentity,
         contract_transaction_retry_descriptor: ExponentialBackoffRetryDescriptor,
         contract_view_retry_descriptor: ExponentialBackoffRetryDescriptor,
+        max_priority_fee_per_gas: Option<U256>,
     ) -> Self {
         CoordinatorClient {
             chain_id,
@@ -43,6 +45,7 @@ impl CoordinatorClient {
             client: identity.get_client(),
             contract_transaction_retry_descriptor,
             contract_view_retry_descriptor,
+            max_priority_fee_per_gas,
         }
     }
 }
@@ -57,6 +60,7 @@ impl<C: Curve + 'static> CoordinatorClientBuilder<C> for GeneralMainChainIdentit
             self,
             self.get_contract_transaction_retry_descriptor(),
             self.get_contract_view_retry_descriptor(),
+            self.get_max_priority_fee_per_gas(),
         )
     }
 }
@@ -101,6 +105,7 @@ impl CoordinatorTransactions for CoordinatorClient {
             call,
             self.contract_transaction_retry_descriptor,
             true,
+            self.max_priority_fee_per_gas,
         )
         .await
     }
@@ -360,6 +365,7 @@ pub mod coordinator_tests {
                 .get_time_limits()
                 .contract_transaction_retry_descriptor,
             config.get_time_limits().contract_view_retry_descriptor,
+            config.get_max_priority_fee_per_gas(),
         );
 
         let client = CoordinatorClient::new(
@@ -370,6 +376,7 @@ pub mod coordinator_tests {
                 .get_time_limits()
                 .contract_transaction_retry_descriptor,
             config.get_time_limits().contract_view_retry_descriptor,
+            config.get_max_priority_fee_per_gas(),
         );
 
         let mock_value = vec![1, 2, 3, 4];

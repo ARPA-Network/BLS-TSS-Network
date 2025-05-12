@@ -1,5 +1,6 @@
 use crate::{ConfigError, SchedulerError};
 use ethers_core::rand::{thread_rng, Rng};
+use ethers_core::types::U256;
 use ethers_core::{k256::ecdsa::SigningKey, types::Address};
 use ethers_signers::{coins_bip39::English, LocalWallet, MnemonicBuilder, Wallet};
 use serde::de;
@@ -91,6 +92,7 @@ struct ConfigHolder {
     pub listeners: Option<Vec<ListenerDescriptorHolder>>,
     pub logger: Option<LoggerDescriptorHolder>,
     pub time_limits: Option<TimeLimitDescriptorHolder>,
+    pub max_priority_fee_per_gas: Option<String>,
     pub relayed_chains: Vec<RelayedChainHolder>,
 }
 
@@ -117,6 +119,7 @@ impl Default for ConfigHolder {
             listeners: Default::default(),
             logger: Default::default(),
             time_limits: Default::default(),
+            max_priority_fee_per_gas: None,
             relayed_chains: vec![],
         }
     }
@@ -499,6 +502,7 @@ pub struct Config {
     // Data file for persistence
     data_path: String,
     account: Account,
+    max_priority_fee_per_gas: Option<U256>,
     listeners: Vec<ListenerDescriptor>,
     logger: LoggerDescriptor,
     time_limits: TimeLimitDescriptor,
@@ -549,6 +553,7 @@ impl std::fmt::Debug for Config {
             .field("arpa_contract_address", &self.arpa_contract_address)
             .field("data_path", &self.data_path)
             .field("account", &"ignored")
+            .field("max_priority_fee_per_gas", &self.max_priority_fee_per_gas)
             .field("listeners", &self.listeners)
             .field("logger", &self.logger)
             .field("time_limits", &self.time_limits)
@@ -642,6 +647,9 @@ impl From<ConfigHolder> for Config {
         } else {
             config_holder.time_limits.unwrap().into()
         };
+        let max_priority_fee_per_gas = config_holder
+            .max_priority_fee_per_gas
+            .map(|s| U256::from_dec_str(&s).unwrap());
         let listeners = if config_holder.listeners.is_none() {
             vec![
                 ListenerDescriptor::build(
@@ -728,6 +736,7 @@ impl From<ConfigHolder> for Config {
             arpa_contract_address,
             data_path,
             account,
+            max_priority_fee_per_gas,
             listeners,
             logger,
             time_limits,
@@ -823,6 +832,22 @@ impl Config {
 
     pub fn get_account(&self) -> &Account {
         &self.account
+    }
+
+    pub fn get_max_priority_fee_per_gas(&self) -> Option<U256> {
+        self.max_priority_fee_per_gas
+    }
+
+    pub fn find_max_priority_fee_per_gas(&self, chain_id: usize) -> anyhow::Result<Option<U256>> {
+        if chain_id == self.chain_id {
+            Ok(self.max_priority_fee_per_gas)
+        } else {
+            self.relayed_chains
+                .iter()
+                .find(|c| c.chain_id == chain_id)
+                .map(|c| c.max_priority_fee_per_gas)
+                .ok_or_else(|| ConfigError::InvalidChainId(chain_id).into())
+        }
     }
 
     pub fn find_provider_endpoint(&self, chain_id: usize) -> anyhow::Result<String> {
@@ -965,6 +990,7 @@ struct RelayedChainHolder {
     pub adapter_address: String,
     pub adapter_deployed_block_height: Option<u64>,
     pub arpa_contract_address: Option<String>,
+    pub max_priority_fee_per_gas: Option<String>,
     pub listeners: Option<Vec<ListenerDescriptorHolder>>,
     pub time_limits: Option<TimeLimitDescriptorHolder>,
 }
@@ -978,6 +1004,7 @@ pub struct RelayedChain {
     adapter_address: String,
     adapter_deployed_block_height: u64,
     arpa_contract_address: String,
+    max_priority_fee_per_gas: Option<U256>,
     listeners: Vec<ListenerDescriptor>,
     time_limits: TimeLimitDescriptor,
 }
@@ -995,6 +1022,7 @@ impl std::fmt::Debug for RelayedChain {
                 &self.adapter_deployed_block_height,
             )
             .field("arpa_contract_address", &self.arpa_contract_address)
+            .field("max_priority_fee_per_gas", &self.max_priority_fee_per_gas)
             .field("listeners", &self.listeners)
             .field("time_limits", &self.time_limits)
             .finish()
@@ -1031,6 +1059,10 @@ impl From<RelayedChainHolder> for RelayedChain {
         } else {
             relayed_chain_holder.arpa_contract_address.unwrap()
         };
+
+        let max_priority_fee_per_gas = relayed_chain_holder
+            .max_priority_fee_per_gas
+            .map(|s| U256::from_dec_str(&s).unwrap());
 
         let time_limits = if relayed_chain_holder.time_limits.is_none() {
             TimeLimitDescriptor::default()
@@ -1090,6 +1122,7 @@ impl From<RelayedChainHolder> for RelayedChain {
             adapter_address,
             adapter_deployed_block_height,
             arpa_contract_address,
+            max_priority_fee_per_gas,
             listeners,
             time_limits,
         }
@@ -1123,6 +1156,10 @@ impl RelayedChain {
 
     pub fn get_arpa_contract_address(&self) -> &str {
         &self.arpa_contract_address
+    }
+
+    pub fn get_max_priority_fee_per_gas(&self) -> Option<U256> {
+        self.max_priority_fee_per_gas
     }
 
     pub fn get_listeners(&self) -> &Vec<ListenerDescriptor> {

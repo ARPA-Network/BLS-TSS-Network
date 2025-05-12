@@ -8,7 +8,7 @@ use arpa_core::{
 use ethers::core::k256::ecdsa::SigningKey;
 use ethers::signers::WalletError;
 use ethers::signers::{coins_bip39::English, LocalWallet, MnemonicBuilder, Wallet};
-use ethers::types::Address;
+use ethers::types::{Address, U256};
 use serde::{Deserialize, Serialize};
 use std::env::{self, VarError};
 use std::{fs::read_to_string, path::PathBuf};
@@ -25,6 +25,7 @@ pub struct Config {
     account: Account,
     contract_transaction_retry_descriptor: ExponentialBackoffRetryDescriptor,
     contract_view_retry_descriptor: ExponentialBackoffRetryDescriptor,
+    max_priority_fee_per_gas: Option<String>,
     relayed_chains: Vec<RelayedChain>,
 }
 
@@ -50,6 +51,7 @@ impl Default for Config {
                 max_attempts: DEFAULT_CONTRACT_VIEW_RETRY_MAX_ATTEMPTS,
                 use_jitter: DEFAULT_CONTRACT_VIEW_RETRY_USE_JITTER,
             },
+            max_priority_fee_per_gas: None,
             relayed_chains: vec![],
         }
     }
@@ -65,6 +67,7 @@ pub struct RelayedChain {
     account: Account,
     contract_transaction_retry_descriptor: ExponentialBackoffRetryDescriptor,
     contract_view_retry_descriptor: ExponentialBackoffRetryDescriptor,
+    max_priority_fee_per_gas: Option<String>,
 }
 
 impl Config {
@@ -177,6 +180,25 @@ impl Config {
                 .iter()
                 .find(|c| c.chain_id == chain_id)
                 .map(|c| c.contract_view_retry_descriptor)
+                .ok_or_else(|| ConfigError::InvalidChainId(chain_id).into())
+        }
+    }
+
+    pub fn max_priority_fee_per_gas(&self, chain_id: u32) -> anyhow::Result<Option<U256>> {
+        if chain_id == self.chain_id {
+            Ok(self
+                .max_priority_fee_per_gas
+                .as_ref()
+                .map(|s| U256::from_dec_str(s).unwrap()))
+        } else {
+            self.relayed_chains
+                .iter()
+                .find(|c| c.chain_id == chain_id)
+                .map(|c| {
+                    c.max_priority_fee_per_gas
+                        .as_ref()
+                        .map(|s| U256::from_dec_str(s).unwrap())
+                })
                 .ok_or_else(|| ConfigError::InvalidChainId(chain_id).into())
         }
     }

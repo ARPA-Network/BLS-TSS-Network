@@ -81,12 +81,21 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::context::chain::types::GeneralMainChain;
+    use crate::{
+        context::{
+            chain::{types::GeneralMainChain, Chain},
+            Context,
+        },
+        listener::block::BlockListener,
+    };
     use actix_web::{
         http::{self},
         test,
     };
-    use arpa_core::{Config, GeneralMainChainIdentity, RandomnessTask, PLACEHOLDER_ADDRESS};
+    use arpa_core::{
+        Config, GeneralMainChainIdentity, ListenerDescriptor, ListenerType, RandomnessTask,
+        PLACEHOLDER_ADDRESS,
+    };
     use arpa_dal::{
         cache::{
             InMemoryBLSTasksQueue, InMemoryGroupInfoCache, InMemoryNodeInfoCache,
@@ -136,8 +145,10 @@ mod tests {
         let contract_view_retry_descriptor =
             config.get_time_limits().contract_view_retry_descriptor;
 
+        let chain_id = config.get_main_chain_id();
+
         let main_chain_identity = GeneralMainChainIdentity::new(
-            config.get_main_chain_id(),
+            chain_id,
             fake_wallet,
             provider,
             avnil.ws_endpoint(),
@@ -146,6 +157,7 @@ mod tests {
             Address::random(),
             contract_transaction_retry_descriptor,
             contract_view_retry_descriptor,
+            config.get_max_priority_fee_per_gas(),
         );
 
         let main_chain = GeneralMainChain::<G2Curve, G2Scheme>::new(
@@ -163,6 +175,21 @@ mod tests {
         );
 
         let context = GeneralContext::new(main_chain, config);
+
+        let block_listener_descriptor = ListenerDescriptor::default(chain_id, ListenerType::Block);
+
+        let block_listener = BlockListener::new(
+            block_listener_descriptor,
+            context.get_main_chain().get_chain_identity(),
+            context.get_event_queue(),
+        );
+
+        context
+            .get_fixed_task_handler()
+            .write()
+            .await
+            .add_listener_task(block_listener)
+            .unwrap();
 
         Arc::new(RwLock::new(context))
     }

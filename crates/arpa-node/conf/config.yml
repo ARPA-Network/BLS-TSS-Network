@@ -30,8 +30,10 @@ arpa_address: "0xa4F59C4Caf15641F32f5756E37d93912E7F96203"
 
 data_path: "./data0.sqlite"
 
+max_priority_fee_per_gas: 1000000000
+
 logger:
-  log_level: debug
+  log_level: info
   context_logging: false
   log_file_path: log/0/
   rolling_file_size: 10 gb
@@ -109,6 +111,7 @@ relayed_chains:
     adapter_address: "0x5FC8d32690cc91D4c39d9d3abcBD16989F875707"
     adapter_deployed_block_height: 14224644
     arpa_address: "0xA129BEA1a5d9E37Eb2C505c8D302231A28B0A82b"
+    max_priority_fee_per_gas: 1000000000
     listeners:
       - l_type: Block
         interval_millis: 0

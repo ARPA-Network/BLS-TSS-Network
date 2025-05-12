@@ -296,6 +296,8 @@ Note: To protect secrets, several items can be set with literal `env` as placeho
 
 - data_path(Optional): Config DB file for persistence. (example: "data.sqlite")
 
+- max_priority_fee_per_gas(Optional): Config max priority fee per gas for transaction. This is for special cases like eth_gasPrice won't reflect the real gas price of the chain. For the chain does not support EIP-1559, it's the same as gas_price. (example: 1000000000)
+
 - logger(Optional): Config logger settings.
 
   - example(default):
@@ -436,7 +438,7 @@ Note: To protect secrets, several items can be set with literal `env` as placeho
 
     - The polling of RandomnessSignatureAggregation is triggered by the node itself, so the interval_millis can be set relatively small.
 
-- relayed_chains: Config chain_id, description, contract addresses, endpoint, time_limits and listeners for all relayed chains we support.
+- relayed_chains: Config chain_id, description, contract addresses, endpoint, max_priority_fee_per_gas, time_limits and listeners for all relayed chains we support.
 
   - example:
 
@@ -449,6 +451,7 @@ Note: To protect secrets, several items can be set with literal `env` as placeho
     adapter_address: "0x5FC8d32690cc91D4c39d9d3abcBD16989F875707"
     adapter_deployed_block_height: 14224644
     arpa_address: "0xA129BEA1a5d9E37Eb2C505c8D302231A28B0A82b"
+    max_priority_fee_per_gas: 1000000000
     listeners:
       - l_type: Block
         interval_millis: 0

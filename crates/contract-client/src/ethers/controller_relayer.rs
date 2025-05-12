@@ -17,6 +17,7 @@ pub struct ControllerRelayerClient {
     controller_relayer_address: Address,
     client: Arc<WsWalletSigner>,
     contract_transaction_retry_descriptor: ExponentialBackoffRetryDescriptor,
+    max_priority_fee_per_gas: Option<U256>,
 }
 
 impl ControllerRelayerClient {
@@ -25,12 +26,14 @@ impl ControllerRelayerClient {
         controller_relayer_address: Address,
         identity: &GeneralMainChainIdentity,
         contract_transaction_retry_descriptor: ExponentialBackoffRetryDescriptor,
+        max_priority_fee_per_gas: Option<U256>,
     ) -> Self {
         ControllerRelayerClient {
             chain_id,
             controller_relayer_address,
             client: identity.get_client(),
             contract_transaction_retry_descriptor,
+            max_priority_fee_per_gas,
         }
     }
 }
@@ -44,6 +47,7 @@ impl ControllerRelayerClientBuilder for GeneralMainChainIdentity {
             self.get_controller_relayer_address(),
             self,
             self.get_contract_transaction_retry_descriptor(),
+            self.get_max_priority_fee_per_gas(),
         )
     }
 }
@@ -90,6 +94,7 @@ impl ControllerRelayerTransactions for ControllerRelayerClient {
             call,
             self.contract_transaction_retry_descriptor,
             false,
+            self.max_priority_fee_per_gas,
         )
         .await
     }

@@ -112,6 +112,7 @@ pub mod tests {
             Address::random(),
             contract_transaction_retry_descriptor,
             contract_view_retry_descriptor,
+            None,
         );
 
         let chain_identity: Arc<RwLock<ChainIdentityHandlerType<G2Curve>>> =
