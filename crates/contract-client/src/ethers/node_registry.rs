@@ -23,6 +23,7 @@ pub struct NodeRegistryClient {
     client: Arc<WsWalletSigner>,
     contract_transaction_retry_descriptor: ExponentialBackoffRetryDescriptor,
     contract_view_retry_descriptor: ExponentialBackoffRetryDescriptor,
+    max_priority_fee_per_gas: Option<U256>,
 }
 
 impl NodeRegistryClient {
@@ -32,6 +33,7 @@ impl NodeRegistryClient {
         identity: &GeneralMainChainIdentity,
         contract_transaction_retry_descriptor: ExponentialBackoffRetryDescriptor,
         contract_view_retry_descriptor: ExponentialBackoffRetryDescriptor,
+        max_priority_fee_per_gas: Option<U256>,
     ) -> Self {
         NodeRegistryClient {
             chain_id,
@@ -40,6 +42,7 @@ impl NodeRegistryClient {
             client: identity.get_client(),
             contract_transaction_retry_descriptor,
             contract_view_retry_descriptor,
+            max_priority_fee_per_gas,
         }
     }
 
@@ -94,6 +97,7 @@ impl NodeRegistryClientBuilder for GeneralMainChainIdentity {
             self,
             self.get_contract_transaction_retry_descriptor(),
             self.get_contract_view_retry_descriptor(),
+            self.get_max_priority_fee_per_gas(),
         )
     }
 }
@@ -152,6 +156,7 @@ impl NodeRegistryTransactions for NodeRegistryClient {
             call,
             self.contract_transaction_retry_descriptor,
             true,
+            self.max_priority_fee_per_gas,
         )
         .await
     }
@@ -181,6 +186,7 @@ impl NodeRegistryTransactions for NodeRegistryClient {
             call,
             self.contract_transaction_retry_descriptor,
             true,
+            self.max_priority_fee_per_gas,
         )
         .await
     }
@@ -205,6 +211,7 @@ impl NodeRegistryTransactions for NodeRegistryClient {
             call,
             self.contract_transaction_retry_descriptor,
             true,
+            self.max_priority_fee_per_gas,
         )
         .await
     }
@@ -228,6 +235,7 @@ impl NodeRegistryTransactions for NodeRegistryClient {
             call,
             self.contract_transaction_retry_descriptor,
             true,
+            self.max_priority_fee_per_gas,
         )
         .await
     }

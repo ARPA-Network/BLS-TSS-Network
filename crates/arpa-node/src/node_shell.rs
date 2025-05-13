@@ -230,6 +230,7 @@ async fn send<PC: Curve>(
                     .get_time_limits()
                     .contract_transaction_retry_descriptor,
                 true,
+                context.config.get_max_priority_fee_per_gas(),
             )
             .await?;
 
@@ -316,6 +317,7 @@ async fn send<PC: Curve>(
                     .get_time_limits()
                     .contract_transaction_retry_descriptor,
                 true,
+                context.config.get_max_priority_fee_per_gas(),
             )
             .await?;
 
@@ -361,6 +363,7 @@ async fn send<PC: Curve>(
                     .get_time_limits()
                     .contract_transaction_retry_descriptor,
                 true,
+                context.config.get_max_priority_fee_per_gas(),
             )
             .await?;
 
@@ -386,6 +389,7 @@ async fn send<PC: Curve>(
                     .get_time_limits()
                     .contract_transaction_retry_descriptor,
                 true,
+                context.config.get_max_priority_fee_per_gas(),
             )
             .await?;
 
@@ -520,6 +524,9 @@ async fn send<PC: Curve>(
                     .get_time_limits()
                     .contract_transaction_retry_descriptor,
                 true,
+                context
+                    .config
+                    .find_max_priority_fee_per_gas(main_chain_id)?,
             )
             .await?;
 
@@ -564,6 +571,7 @@ async fn send<PC: Curve>(
                     .get_time_limits()
                     .contract_transaction_retry_descriptor,
                 true,
+                context.config.get_max_priority_fee_per_gas(),
             )
             .await?;
 
@@ -604,6 +612,7 @@ async fn send<PC: Curve>(
                         .get_time_limits()
                         .contract_transaction_retry_descriptor,
                     true,
+                    context.config.get_max_priority_fee_per_gas(),
                 )
                 .await?;
 
@@ -627,6 +636,7 @@ async fn send<PC: Curve>(
                         .config
                         .contract_transaction_retry_descriptor(*chain_id)?,
                     true,
+                    context.config.find_max_priority_fee_per_gas(*chain_id)?,
                 )
                 .await?;
 
@@ -1583,6 +1593,7 @@ async fn main() -> anyhow::Result<()> {
             .get_time_limits()
             .contract_transaction_retry_descriptor,
         config.get_time_limits().contract_view_retry_descriptor,
+        config.get_max_priority_fee_per_gas(),
     );
 
     let boxed_main_chain_identity: ChainIdentityHandlerType<G2Curve> =
@@ -1619,6 +1630,7 @@ async fn main() -> anyhow::Result<()> {
             relayed_chain
                 .get_time_limits()
                 .contract_view_retry_descriptor,
+            relayed_chain.get_max_priority_fee_per_gas(),
         );
 
         let boxed_relayed_chain_identity: ChainIdentityHandlerType<G2Curve> =

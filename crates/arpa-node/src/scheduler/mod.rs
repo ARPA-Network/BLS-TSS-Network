@@ -4,12 +4,17 @@ use arpa_core::{ComponentTaskType, SchedulerResult};
 use async_trait::async_trait;
 use futures::Future;
 
+use crate::listener::Listener;
+
+#[async_trait]
 pub trait TaskScheduler {
     fn add_task(
         &mut self,
         task_type: ComponentTaskType,
         future: impl Future + Send + 'static,
     ) -> SchedulerResult<()>;
+
+    async fn shutdown(&mut self);
 }
 
 #[async_trait]
@@ -19,6 +24,11 @@ pub trait FixedTaskScheduler: TaskScheduler {
     async fn abort(&mut self, task_type: &ComponentTaskType) -> SchedulerResult<()>;
 
     fn get_tasks(&self) -> Vec<&ComponentTaskType>;
+
+    fn add_listener_task(
+        &mut self,
+        listener: impl Listener + Send + Sync + 'static,
+    ) -> SchedulerResult<()>;
 
     fn restart_listener(&mut self, task_type: &ComponentTaskType) -> SchedulerResult<()>;
 }

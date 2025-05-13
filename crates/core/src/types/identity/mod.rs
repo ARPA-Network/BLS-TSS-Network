@@ -24,6 +24,8 @@ pub trait ChainIdentity {
 
     fn get_contract_view_retry_descriptor(&self) -> ExponentialBackoffRetryDescriptor;
 
+    fn get_max_priority_fee_per_gas(&self) -> Option<U256>;
+
     async fn get_current_gas_price(&self) -> Result<U256, ProviderError>;
 
     async fn get_block_timestamp(

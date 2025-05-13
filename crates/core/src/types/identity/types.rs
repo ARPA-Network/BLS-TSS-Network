@@ -10,8 +10,8 @@ use ethers_core::types::{Address, BlockNumber, U256};
 use ethers_middleware::{MiddlewareBuilder, NonceManagerMiddleware, SignerMiddleware};
 use ethers_providers::{Http, Middleware, Provider, ProviderError, Ws};
 use ethers_signers::{LocalWallet, Signer};
+use log::debug;
 use std::sync::Arc;
-
 pub type WsWalletSigner =
     NonceManagerMiddleware<SignerMiddleware<GasMiddleware<Arc<Provider<Ws>>>, LocalWallet>>;
 pub type HttpWalletSigner =
@@ -47,6 +47,7 @@ pub struct GeneralMainChainIdentity {
     adapter_address: Address,
     contract_transaction_retry_descriptor: ExponentialBackoffRetryDescriptor,
     contract_view_retry_descriptor: ExponentialBackoffRetryDescriptor,
+    max_priority_fee_per_gas: Option<U256>,
 }
 
 impl GeneralMainChainIdentity {
@@ -61,6 +62,7 @@ impl GeneralMainChainIdentity {
         adapter_address: Address,
         contract_transaction_retry_descriptor: ExponentialBackoffRetryDescriptor,
         contract_view_retry_descriptor: ExponentialBackoffRetryDescriptor,
+        max_priority_fee_per_gas: Option<U256>,
     ) -> Self {
         let address = wallet.address();
 
@@ -76,6 +78,7 @@ impl GeneralMainChainIdentity {
             adapter_address,
             contract_transaction_retry_descriptor,
             contract_view_retry_descriptor,
+            max_priority_fee_per_gas,
         }
     }
 }
@@ -104,6 +107,10 @@ impl ChainIdentity for GeneralMainChainIdentity {
 
     fn get_contract_view_retry_descriptor(&self) -> ExponentialBackoffRetryDescriptor {
         self.contract_view_retry_descriptor
+    }
+
+    fn get_max_priority_fee_per_gas(&self) -> Option<U256> {
+        self.max_priority_fee_per_gas
     }
 
     async fn get_current_gas_price(&self) -> Result<U256, ProviderError> {
@@ -153,6 +160,8 @@ impl ChainProviderManager for GeneralMainChainIdentity {
     }
 
     async fn reset_provider(&mut self) -> Result<(), ProviderError> {
+        debug!("Resetting provider for chain {}", self.chain_id);
+
         let provider = Arc::new(
             Provider::<Ws>::connect_with_reconnects(
                 &self.provider_endpoint,
@@ -161,6 +170,8 @@ impl ChainProviderManager for GeneralMainChainIdentity {
             .await?
             .interval(self.get_provider().get_interval()),
         );
+
+        debug!("Provider reset for chain {}", self.chain_id);
 
         self.client = build_client(
             self.client.inner().signer().clone(),
@@ -182,6 +193,7 @@ pub struct GeneralRelayedChainIdentity {
     adapter_address: Address,
     contract_transaction_retry_descriptor: ExponentialBackoffRetryDescriptor,
     contract_view_retry_descriptor: ExponentialBackoffRetryDescriptor,
+    max_priority_fee_per_gas: Option<U256>,
 }
 
 impl GeneralRelayedChainIdentity {
@@ -195,6 +207,7 @@ impl GeneralRelayedChainIdentity {
         adapter_address: Address,
         contract_transaction_retry_descriptor: ExponentialBackoffRetryDescriptor,
         contract_view_retry_descriptor: ExponentialBackoffRetryDescriptor,
+        max_priority_fee_per_gas: Option<U256>,
     ) -> Self {
         let address = wallet.address();
 
@@ -209,6 +222,7 @@ impl GeneralRelayedChainIdentity {
             adapter_address,
             contract_transaction_retry_descriptor,
             contract_view_retry_descriptor,
+            max_priority_fee_per_gas,
         }
     }
 }
@@ -237,6 +251,10 @@ impl ChainIdentity for GeneralRelayedChainIdentity {
 
     fn get_contract_view_retry_descriptor(&self) -> ExponentialBackoffRetryDescriptor {
         self.contract_view_retry_descriptor
+    }
+
+    fn get_max_priority_fee_per_gas(&self) -> Option<U256> {
+        self.max_priority_fee_per_gas
     }
 
     async fn get_current_gas_price(&self) -> Result<U256, ProviderError> {

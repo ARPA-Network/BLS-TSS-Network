@@ -6,14 +6,16 @@ use crate::{
     queue::{event_queue::EventQueue, EventPublisher},
 };
 use arpa_contract_client::provider::BlockFetcher;
+use arpa_core::ListenerDescriptor;
 use async_trait::async_trait;
+use log::debug;
 use std::{marker::PhantomData, sync::Arc};
 use threshold_bls::group::Curve;
 use tokio::sync::RwLock;
 
 #[derive(Debug)]
 pub struct BlockListener<PC: Curve> {
-    chain_id: usize,
+    listener_descriptor: ListenerDescriptor,
     chain_identity: Arc<RwLock<ChainIdentityHandlerType<PC>>>,
     eq: Arc<RwLock<EventQueue>>,
     pc: PhantomData<PC>,
@@ -27,12 +29,12 @@ impl<PC: Curve> std::fmt::Display for BlockListener<PC> {
 
 impl<PC: Curve> BlockListener<PC> {
     pub fn new(
-        chain_id: usize,
+        listener_descriptor: ListenerDescriptor,
         chain_identity: Arc<RwLock<ChainIdentityHandlerType<PC>>>,
         eq: Arc<RwLock<EventQueue>>,
     ) -> Self {
         BlockListener {
-            chain_id,
+            listener_descriptor,
             chain_identity,
             eq,
             pc: PhantomData,
@@ -50,14 +52,15 @@ impl<PC: Curve + Sync + Send> EventPublisher<NewBlock> for BlockListener<PC> {
 #[async_trait]
 impl<PC: Curve + Sync + Send> Listener for BlockListener<PC> {
     async fn listen(&self) -> NodeResult<()> {
-        let chain_id = self.chain_id;
+        let chain_id = self.listener_descriptor.chain_id;
         let eq = self.eq.clone();
 
-        self.chain_identity
-            .read()
-            .await
-            .get_provider()
+        let provider = self.chain_identity.read().await.get_provider().clone();
+
+        provider
             .subscribe_new_block_height(move |block_height: usize| {
+                debug!("New block height: {} for chain {}", block_height, chain_id);
+
                 let eq = eq.clone();
                 async move {
                     eq.read()
@@ -82,7 +85,11 @@ impl<PC: Curve + Sync + Send> Listener for BlockListener<PC> {
         Ok(())
     }
 
-    async fn chain_id(&self) -> usize {
-        self.chain_id
+    fn chain_id(&self) -> usize {
+        self.listener_descriptor.chain_id
+    }
+
+    fn listener_descriptor(&self) -> ListenerDescriptor {
+        self.listener_descriptor
     }
 }

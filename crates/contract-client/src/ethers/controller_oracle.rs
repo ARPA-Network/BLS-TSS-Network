@@ -23,6 +23,7 @@ pub struct ControllerOracleClient {
     client: Arc<WsWalletSigner>,
     contract_transaction_retry_descriptor: ExponentialBackoffRetryDescriptor,
     contract_view_retry_descriptor: ExponentialBackoffRetryDescriptor,
+    max_priority_fee_per_gas: Option<U256>,
 }
 
 impl ControllerOracleClient {
@@ -32,6 +33,7 @@ impl ControllerOracleClient {
         identity: &GeneralRelayedChainIdentity,
         contract_transaction_retry_descriptor: ExponentialBackoffRetryDescriptor,
         contract_view_retry_descriptor: ExponentialBackoffRetryDescriptor,
+        max_priority_fee_per_gas: Option<U256>,
     ) -> Self {
         ControllerOracleClient {
             chain_id,
@@ -39,6 +41,7 @@ impl ControllerOracleClient {
             client: identity.get_client(),
             contract_transaction_retry_descriptor,
             contract_view_retry_descriptor,
+            max_priority_fee_per_gas,
         }
     }
 }
@@ -61,6 +64,7 @@ impl<C: Curve> ControllerOracleClientBuilder<C> for GeneralRelayedChainIdentity 
             self,
             self.get_contract_transaction_retry_descriptor(),
             self.get_contract_view_retry_descriptor(),
+            self.get_max_priority_fee_per_gas(),
         )
     }
 }
@@ -98,6 +102,7 @@ impl ControllerOracleTransactions for ControllerOracleClient {
             call,
             self.contract_transaction_retry_descriptor,
             true,
+            self.max_priority_fee_per_gas,
         )
         .await
     }

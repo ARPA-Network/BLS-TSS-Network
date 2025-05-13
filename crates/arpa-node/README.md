@@ -278,7 +278,9 @@ Note: To protect secrets, several items can be set with literal `env` as placeho
 
 - is_eigenlayer: Config whether the node is registered as an eigenlayer operator, or a native staking operator. (example: false)
 
-- is_consistent_asset_and_node_account: Config whether the node's asset account is consistent with the node account. (example: false)
+- is_consistent_asset_and_node_account: This is only used for Eigenlayer operator. When it is true, the node can activate itself automatically when deactivated. (example: false)
+
+- enable_node_auto_activation: Config whether to enable node auto activation. It can be used for both Eigenlayer operator(when is_consistent_asset_and_node_account is true) and native staking operator. (example: false)
 
 - chain_id: Config chain id of main chain. (example: 31337)
 
@@ -294,19 +296,23 @@ Note: To protect secrets, several items can be set with literal `env` as placeho
 
 - data_path(Optional): Config DB file for persistence. (example: "data.sqlite")
 
+- max_priority_fee_per_gas(Optional): Config max priority fee per gas for transaction. This is for special cases like eth_gasPrice won't reflect the real gas price of the chain. For the chain does not support EIP-1559, it's the same as gas_price. (example: 1000000000)
+
 - logger(Optional): Config logger settings.
 
   - example(default):
 
     ```
     logger:
+      log_level: info
       context_logging: false
       log_file_path: log/running/
       rolling_file_size: 10 gb
     ```
 
+  - log_level(Optional): Set log level(debug, info, warn, error)(default: info).
   - context_logging: Set whether to log context of current node info and group info. Since the log size will get a significant boost with this setting enabled, it is recommended to set it to false in production.
-  - log_file_path: Set log file path. The `node-client` will create a `node.log` as well as a `node_err.log` under `log_file_path`, then log to them with info level and error level respectively.
+  - log_file_path(Optional): Set log file path. The `node-client` will create a `node.log` as well as a `node_err.log` under `log_file_path`, then log to them with info level and error level respectively.
   - rolling_file_size: Log file will be deleted when it reaches this size limit. The following units are supported (case insensitive):
     "b", "kb", "kib", "mb", "mib", "gb", "gib", "tb", "tib". The unit defaults to bytes if not specified.
 
@@ -342,6 +348,7 @@ Note: To protect secrets, several items can be set with literal `env` as placeho
       listener_interval_millis: 10000
       dkg_wait_for_phase_interval_millis: 10000
       provider_polling_interval_millis: 10000
+      provider_reconnection_interval_millis: 30000
       provider_reset_descriptor:
         interval_millis: 5000
         max_attempts: 17280
@@ -377,6 +384,12 @@ Note: To protect secrets, several items can be set with literal `env` as placeho
   - We use fixed interval to reset the provider when it can't be reconnected.
 
     - provider_reset_descriptor: (interval sequence by default: 5s, 10s, ..., 24h)
+
+  - We actively reconnect to the provider to avoid the situation that the provider is down.
+
+    - provider_reconnection_interval_millis(Optional): Milliseconds between two rounds of active reconnection attempts. (default: 30000)
+
+    - If this value is set to 0, the node will not actively reconnect to the provider. This is not recommended in production as unstable provider connection will lead to deactivation of the node.
 
   - We use exponential backoff to retry when a transaction or view call fails, or a rpc request to the committer fails. The interval will be an exponent of base multiplied by factor every time, and it will be reset when the interaction succeeds.
 
@@ -425,7 +438,7 @@ Note: To protect secrets, several items can be set with literal `env` as placeho
 
     - The polling of RandomnessSignatureAggregation is triggered by the node itself, so the interval_millis can be set relatively small.
 
-- relayed_chains: Config chain_id, description, contract addresses, endpoint, time_limits and listeners for all relayed chains we support.
+- relayed_chains: Config chain_id, description, contract addresses, endpoint, max_priority_fee_per_gas, time_limits and listeners for all relayed chains we support.
 
   - example:
 
@@ -438,6 +451,7 @@ Note: To protect secrets, several items can be set with literal `env` as placeho
     adapter_address: "0x5FC8d32690cc91D4c39d9d3abcBD16989F875707"
     adapter_deployed_block_height: 14224644
     arpa_address: "0xA129BEA1a5d9E37Eb2C505c8D302231A28B0A82b"
+    max_priority_fee_per_gas: 1000000000
     listeners:
       - l_type: Block
         interval_millis: 0

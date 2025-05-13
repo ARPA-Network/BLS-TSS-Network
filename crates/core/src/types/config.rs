@@ -1,5 +1,6 @@
 use crate::{ConfigError, SchedulerError};
 use ethers_core::rand::{thread_rng, Rng};
+use ethers_core::types::U256;
 use ethers_core::{k256::ecdsa::SigningKey, types::Address};
 use ethers_signers::{coins_bip39::English, LocalWallet, MnemonicBuilder, Wallet};
 use serde::de;
@@ -79,6 +80,7 @@ struct ConfigHolder {
     pub chain_id: usize,
     pub is_eigenlayer: Option<bool>,
     pub is_consistent_asset_and_node_account: Option<bool>,
+    pub enable_node_auto_activation: Option<bool>,
     pub controller_address: String,
     pub controller_relayer_address: String,
     pub adapter_address: String,
@@ -90,6 +92,7 @@ struct ConfigHolder {
     pub listeners: Option<Vec<ListenerDescriptorHolder>>,
     pub logger: Option<LoggerDescriptorHolder>,
     pub time_limits: Option<TimeLimitDescriptorHolder>,
+    pub max_priority_fee_per_gas: Option<String>,
     pub relayed_chains: Vec<RelayedChainHolder>,
 }
 
@@ -105,6 +108,7 @@ impl Default for ConfigHolder {
             chain_id: 0,
             is_eigenlayer: Some(false),
             is_consistent_asset_and_node_account: Some(false),
+            enable_node_auto_activation: Some(false),
             controller_address: PLACEHOLDER_ADDRESS.to_string(),
             controller_relayer_address: PLACEHOLDER_ADDRESS.to_string(),
             adapter_address: PLACEHOLDER_ADDRESS.to_string(),
@@ -115,12 +119,14 @@ impl Default for ConfigHolder {
             listeners: Default::default(),
             logger: Default::default(),
             time_limits: Default::default(),
+            max_priority_fee_per_gas: None,
             relayed_chains: vec![],
         }
     }
 }
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LoggerDescriptorHolder {
+    log_level: Option<String>,
     context_logging: bool,
     log_file_path: Option<String>,
     #[serde(deserialize_with = "deserialize_limit")]
@@ -129,6 +135,7 @@ pub struct LoggerDescriptorHolder {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LoggerDescriptor {
+    log_level: String,
     context_logging: bool,
     log_file_path: String,
     #[serde(deserialize_with = "deserialize_limit")]
@@ -138,6 +145,7 @@ pub struct LoggerDescriptor {
 impl Default for LoggerDescriptor {
     fn default() -> Self {
         Self {
+            log_level: "info".to_string(),
             context_logging: false,
             log_file_path: "log/".to_string(),
             rolling_file_size: DEFAULT_ROLLING_LOG_FILE_SIZE,
@@ -147,6 +155,10 @@ impl Default for LoggerDescriptor {
 
 impl LoggerDescriptor {
     pub fn from(logger_descriptor_holder: LoggerDescriptorHolder) -> Self {
+        let log_level = logger_descriptor_holder
+            .log_level
+            .map(|log_level| log_level.to_lowercase())
+            .unwrap_or("info".to_string());
         let context_logging = logger_descriptor_holder.context_logging;
         let log_file_path = if logger_descriptor_holder.log_file_path.is_none() {
             "log/".to_string()
@@ -156,10 +168,15 @@ impl LoggerDescriptor {
         let rolling_file_size = logger_descriptor_holder.rolling_file_size;
 
         Self {
+            log_level,
             context_logging,
             log_file_path,
             rolling_file_size,
         }
+    }
+
+    pub fn get_log_level(&self) -> &str {
+        &self.log_level
     }
 
     pub fn get_context_logging(&self) -> bool {
@@ -262,6 +279,7 @@ struct ListenerDescriptorHolder {
 
 #[derive(Debug, Copy, Clone, Serialize, Deserialize)]
 pub struct ListenerDescriptor {
+    pub chain_id: usize,
     pub l_type: ListenerType,
     pub interval_millis: u64,
     pub use_jitter: bool,
@@ -270,6 +288,7 @@ pub struct ListenerDescriptor {
 
 impl ListenerDescriptor {
     fn from(
+        chain_id: usize,
         listener_descriptor_holder: ListenerDescriptorHolder,
         provider_reset_descriptor: FixedIntervalRetryDescriptor,
     ) -> Self {
@@ -281,6 +300,7 @@ impl ListenerDescriptor {
             .unwrap_or(provider_reset_descriptor);
 
         Self {
+            chain_id,
             l_type,
             interval_millis,
             use_jitter,
@@ -289,11 +309,13 @@ impl ListenerDescriptor {
     }
 
     fn build(
+        chain_id: usize,
         l_type: ListenerType,
         interval_millis: u64,
         reset_descriptor: FixedIntervalRetryDescriptor,
     ) -> Self {
         Self {
+            chain_id,
             l_type,
             interval_millis,
             use_jitter: DEFAULT_LISTENER_USE_JITTER,
@@ -301,8 +323,9 @@ impl ListenerDescriptor {
         }
     }
 
-    pub fn default(l_type: ListenerType) -> Self {
+    pub fn default(chain_id: usize, l_type: ListenerType) -> Self {
         Self {
+            chain_id,
             l_type,
             interval_millis: DEFAULT_LISTENER_INTERVAL_MILLIS,
             use_jitter: DEFAULT_LISTENER_USE_JITTER,
@@ -418,7 +441,6 @@ impl From<TimeLimitDescriptorHolder> for TimeLimitDescriptor {
         let provider_reconnection_interval_millis =
             match time_limit_descriptor_holder.provider_reconnection_interval_millis {
                 None => DEFAULT_PROVIDER_RECONNECTION_INTERVAL_MILLIS,
-                Some(0) => DEFAULT_PROVIDER_RECONNECTION_INTERVAL_MILLIS,
                 Some(v) => v,
             };
         let provider_reset_descriptor = time_limit_descriptor_holder.provider_reset_descriptor;
@@ -471,6 +493,7 @@ pub struct Config {
     chain_id: usize,
     is_eigenlayer: bool,
     is_consistent_asset_and_node_account: bool,
+    enable_node_auto_activation: bool,
     controller_address: String,
     controller_relayer_address: String,
     adapter_address: String,
@@ -479,6 +502,7 @@ pub struct Config {
     // Data file for persistence
     data_path: String,
     account: Account,
+    max_priority_fee_per_gas: Option<U256>,
     listeners: Vec<ListenerDescriptor>,
     logger: LoggerDescriptor,
     time_limits: TimeLimitDescriptor,
@@ -512,6 +536,10 @@ impl std::fmt::Debug for Config {
                 "is_consistent_asset_and_node_account",
                 &self.is_consistent_asset_and_node_account,
             )
+            .field(
+                "enable_node_auto_activation",
+                &self.enable_node_auto_activation,
+            )
             .field("controller_address", &self.controller_address)
             .field(
                 "controller_relayer_address",
@@ -525,6 +553,7 @@ impl std::fmt::Debug for Config {
             .field("arpa_contract_address", &self.arpa_contract_address)
             .field("data_path", &self.data_path)
             .field("account", &"ignored")
+            .field("max_priority_fee_per_gas", &self.max_priority_fee_per_gas)
             .field("listeners", &self.listeners)
             .field("logger", &self.logger)
             .field("time_limits", &self.time_limits)
@@ -583,6 +612,11 @@ impl From<ConfigHolder> for Config {
             } else {
                 config_holder.is_consistent_asset_and_node_account.unwrap()
             };
+        let enable_node_auto_activation = if config_holder.enable_node_auto_activation.is_none() {
+            false
+        } else {
+            config_holder.enable_node_auto_activation.unwrap()
+        };
         let controller_address = config_holder.controller_address.clone();
         let controller_relayer_address = config_holder.controller_relayer_address.clone();
         let adapter_address = config_holder.adapter_address.clone();
@@ -613,39 +647,49 @@ impl From<ConfigHolder> for Config {
         } else {
             config_holder.time_limits.unwrap().into()
         };
+        let max_priority_fee_per_gas = config_holder
+            .max_priority_fee_per_gas
+            .map(|s| U256::from_dec_str(&s).unwrap());
         let listeners = if config_holder.listeners.is_none() {
             vec![
                 ListenerDescriptor::build(
+                    chain_id,
                     ListenerType::Block,
                     time_limits.listener_interval_millis,
                     time_limits.provider_reset_descriptor,
                 ),
                 ListenerDescriptor::build(
+                    chain_id,
                     ListenerType::PreGrouping,
                     time_limits.listener_interval_millis,
                     time_limits.provider_reset_descriptor,
                 ),
                 ListenerDescriptor::build(
+                    chain_id,
                     ListenerType::PostCommitGrouping,
                     time_limits.listener_interval_millis,
                     time_limits.provider_reset_descriptor,
                 ),
                 ListenerDescriptor::build(
+                    chain_id,
                     ListenerType::PostGrouping,
                     time_limits.listener_interval_millis,
                     time_limits.provider_reset_descriptor,
                 ),
                 ListenerDescriptor::build(
+                    chain_id,
                     ListenerType::NewRandomnessTask,
                     time_limits.listener_interval_millis,
                     time_limits.provider_reset_descriptor,
                 ),
                 ListenerDescriptor::build(
+                    chain_id,
                     ListenerType::ReadyToHandleRandomnessTask,
                     time_limits.listener_interval_millis,
                     time_limits.provider_reset_descriptor,
                 ),
                 ListenerDescriptor::build(
+                    chain_id,
                     ListenerType::RandomnessSignatureAggregation,
                     time_limits.listener_interval_millis,
                     time_limits.provider_reset_descriptor,
@@ -657,7 +701,11 @@ impl From<ConfigHolder> for Config {
                 .map(|l| {
                     l.iter()
                         .map(|l| {
-                            ListenerDescriptor::from(*l, time_limits.provider_reset_descriptor)
+                            ListenerDescriptor::from(
+                                chain_id,
+                                *l,
+                                time_limits.provider_reset_descriptor,
+                            )
                         })
                         .collect()
                 })
@@ -680,6 +728,7 @@ impl From<ConfigHolder> for Config {
             chain_id,
             is_eigenlayer,
             is_consistent_asset_and_node_account,
+            enable_node_auto_activation,
             controller_address,
             controller_relayer_address,
             adapter_address,
@@ -687,6 +736,7 @@ impl From<ConfigHolder> for Config {
             arpa_contract_address,
             data_path,
             account,
+            max_priority_fee_per_gas,
             listeners,
             logger,
             time_limits,
@@ -722,6 +772,10 @@ impl Config {
 
     pub fn is_consistent_asset_and_node_account(&self) -> bool {
         self.is_consistent_asset_and_node_account
+    }
+
+    pub fn enable_node_auto_activation(&self) -> bool {
+        self.enable_node_auto_activation
     }
 
     pub fn get_main_chain_id(&self) -> usize {
@@ -778,6 +832,22 @@ impl Config {
 
     pub fn get_account(&self) -> &Account {
         &self.account
+    }
+
+    pub fn get_max_priority_fee_per_gas(&self) -> Option<U256> {
+        self.max_priority_fee_per_gas
+    }
+
+    pub fn find_max_priority_fee_per_gas(&self, chain_id: usize) -> anyhow::Result<Option<U256>> {
+        if chain_id == self.chain_id {
+            Ok(self.max_priority_fee_per_gas)
+        } else {
+            self.relayed_chains
+                .iter()
+                .find(|c| c.chain_id == chain_id)
+                .map(|c| c.max_priority_fee_per_gas)
+                .ok_or_else(|| ConfigError::InvalidChainId(chain_id).into())
+        }
     }
 
     pub fn find_provider_endpoint(&self, chain_id: usize) -> anyhow::Result<String> {
@@ -920,6 +990,7 @@ struct RelayedChainHolder {
     pub adapter_address: String,
     pub adapter_deployed_block_height: Option<u64>,
     pub arpa_contract_address: Option<String>,
+    pub max_priority_fee_per_gas: Option<String>,
     pub listeners: Option<Vec<ListenerDescriptorHolder>>,
     pub time_limits: Option<TimeLimitDescriptorHolder>,
 }
@@ -933,6 +1004,7 @@ pub struct RelayedChain {
     adapter_address: String,
     adapter_deployed_block_height: u64,
     arpa_contract_address: String,
+    max_priority_fee_per_gas: Option<U256>,
     listeners: Vec<ListenerDescriptor>,
     time_limits: TimeLimitDescriptor,
 }
@@ -950,6 +1022,7 @@ impl std::fmt::Debug for RelayedChain {
                 &self.adapter_deployed_block_height,
             )
             .field("arpa_contract_address", &self.arpa_contract_address)
+            .field("max_priority_fee_per_gas", &self.max_priority_fee_per_gas)
             .field("listeners", &self.listeners)
             .field("time_limits", &self.time_limits)
             .finish()
@@ -987,6 +1060,10 @@ impl From<RelayedChainHolder> for RelayedChain {
             relayed_chain_holder.arpa_contract_address.unwrap()
         };
 
+        let max_priority_fee_per_gas = relayed_chain_holder
+            .max_priority_fee_per_gas
+            .map(|s| U256::from_dec_str(&s).unwrap());
+
         let time_limits = if relayed_chain_holder.time_limits.is_none() {
             TimeLimitDescriptor::default()
         } else {
@@ -996,21 +1073,25 @@ impl From<RelayedChainHolder> for RelayedChain {
         let listeners = if relayed_chain_holder.listeners.is_none() {
             vec![
                 ListenerDescriptor::build(
+                    chain_id,
                     ListenerType::Block,
                     time_limits.listener_interval_millis,
                     time_limits.provider_reset_descriptor,
                 ),
                 ListenerDescriptor::build(
+                    chain_id,
                     ListenerType::NewRandomnessTask,
                     time_limits.listener_interval_millis,
                     time_limits.provider_reset_descriptor,
                 ),
                 ListenerDescriptor::build(
+                    chain_id,
                     ListenerType::ReadyToHandleRandomnessTask,
                     time_limits.listener_interval_millis,
                     time_limits.provider_reset_descriptor,
                 ),
                 ListenerDescriptor::build(
+                    chain_id,
                     ListenerType::RandomnessSignatureAggregation,
                     time_limits.listener_interval_millis,
                     time_limits.provider_reset_descriptor,
@@ -1022,7 +1103,11 @@ impl From<RelayedChainHolder> for RelayedChain {
                 .map(|l| {
                     l.iter()
                         .map(|l| {
-                            ListenerDescriptor::from(*l, time_limits.provider_reset_descriptor)
+                            ListenerDescriptor::from(
+                                chain_id,
+                                *l,
+                                time_limits.provider_reset_descriptor,
+                            )
                         })
                         .collect()
                 })
@@ -1037,6 +1122,7 @@ impl From<RelayedChainHolder> for RelayedChain {
             adapter_address,
             adapter_deployed_block_height,
             arpa_contract_address,
+            max_priority_fee_per_gas,
             listeners,
             time_limits,
         }
@@ -1070,6 +1156,10 @@ impl RelayedChain {
 
     pub fn get_arpa_contract_address(&self) -> &str {
         &self.arpa_contract_address
+    }
+
+    pub fn get_max_priority_fee_per_gas(&self) -> Option<U256> {
+        self.max_priority_fee_per_gas
     }
 
     pub fn get_listeners(&self) -> &Vec<ListenerDescriptor> {
