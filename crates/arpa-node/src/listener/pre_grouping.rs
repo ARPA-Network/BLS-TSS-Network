@@ -8,7 +8,7 @@ use crate::{
 use arpa_contract_client::controller::ControllerLogs;
 use arpa_core::{
     log::{build_task_related_payload, LogType},
-    TaskType,
+    ListenerDescriptor, TaskType,
 };
 use arpa_dal::GroupInfoHandler;
 use async_trait::async_trait;
@@ -21,6 +21,7 @@ use tokio::sync::RwLock;
 
 #[derive(Debug)]
 pub struct PreGroupingListener<PC: Curve> {
+    listener_descriptor: ListenerDescriptor,
     chain_identity: Arc<RwLock<ChainIdentityHandlerType<PC>>>,
     group_cache: Arc<RwLock<Box<dyn GroupInfoHandler<PC>>>>,
     eq: Arc<RwLock<EventQueue>>,
@@ -35,11 +36,13 @@ impl<PC: Curve> std::fmt::Display for PreGroupingListener<PC> {
 
 impl<PC: Curve> PreGroupingListener<PC> {
     pub fn new(
+        listener_descriptor: ListenerDescriptor,
         chain_identity: Arc<RwLock<ChainIdentityHandlerType<PC>>>,
         group_cache: Arc<RwLock<Box<dyn GroupInfoHandler<PC>>>>,
         eq: Arc<RwLock<EventQueue>>,
     ) -> Self {
         PreGroupingListener {
+            listener_descriptor,
             chain_identity,
             group_cache,
             eq,
@@ -67,7 +70,7 @@ impl<PC: Curve + Sync + Send> Listener for PreGroupingListener<PC> {
                 let eq = self.eq.clone();
 
                 async move {
-                    let chain_id = self.chain_id().await;
+                    let chain_id = self.listener_descriptor.chain_id;
 
                     if let Some((node_index, _)) = dkg_task
                         .members
@@ -124,8 +127,12 @@ impl<PC: Curve + Sync + Send> Listener for PreGroupingListener<PC> {
         Ok(())
     }
 
-    async fn chain_id(&self) -> usize {
-        self.chain_identity.read().await.get_chain_id()
+    fn chain_id(&self) -> usize {
+        self.listener_descriptor.chain_id
+    }
+
+    fn listener_descriptor(&self) -> ListenerDescriptor {
+        self.listener_descriptor
     }
 }
 

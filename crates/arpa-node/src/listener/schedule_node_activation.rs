@@ -6,6 +6,7 @@ use crate::{
     queue::{event_queue::EventQueue, EventPublisher},
 };
 use arpa_contract_client::{controller::ControllerViews, node_registry::NodeRegistryViews};
+use arpa_core::ListenerDescriptor;
 use async_trait::async_trait;
 use ethers::{providers::Middleware, types::Address};
 use std::{marker::PhantomData, sync::Arc};
@@ -14,7 +15,7 @@ use tokio::sync::RwLock;
 
 #[derive(Debug)]
 pub struct NodeActivationListener<PC: Curve> {
-    chain_id: usize,
+    listener_descriptor: ListenerDescriptor,
     is_eigenlayer: bool,
     chain_identity: Arc<RwLock<ChainIdentityHandlerType<PC>>>,
     node_registry_address: Option<Address>,
@@ -30,13 +31,13 @@ impl<PC: Curve> std::fmt::Display for NodeActivationListener<PC> {
 
 impl<PC: Curve> NodeActivationListener<PC> {
     pub fn new(
-        chain_id: usize,
+        listener_descriptor: ListenerDescriptor,
         is_eigenlayer: bool,
         chain_identity: Arc<RwLock<ChainIdentityHandlerType<PC>>>,
         eq: Arc<RwLock<EventQueue>>,
     ) -> Self {
         NodeActivationListener {
-            chain_id,
+            listener_descriptor,
             is_eigenlayer,
             chain_identity,
             node_registry_address: None,
@@ -83,7 +84,7 @@ impl<PC: Curve + Sync + Send> Listener for NodeActivationListener<PC> {
 
         if node.id_address == self_address && !node.state {
             self.publish(NodeActivation {
-                chain_id: self.chain_id,
+                chain_id: self.listener_descriptor.chain_id,
                 is_eigenlayer: self.is_eigenlayer,
                 node_registry_address,
             })
@@ -104,8 +105,12 @@ impl<PC: Curve + Sync + Send> Listener for NodeActivationListener<PC> {
         Ok(())
     }
 
-    async fn chain_id(&self) -> usize {
-        self.chain_id
+    fn chain_id(&self) -> usize {
+        self.listener_descriptor.chain_id
+    }
+
+    fn listener_descriptor(&self) -> ListenerDescriptor {
+        self.listener_descriptor
     }
 }
 

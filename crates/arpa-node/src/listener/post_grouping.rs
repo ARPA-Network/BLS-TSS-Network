@@ -6,7 +6,7 @@ use crate::{
     queue::{event_queue::EventQueue, EventPublisher},
 };
 use arpa_contract_client::controller::ControllerViews;
-use arpa_core::DKGStatus;
+use arpa_core::{DKGStatus, ListenerDescriptor};
 use arpa_dal::{BlockInfoHandler, GroupInfoHandler};
 use async_trait::async_trait;
 use log::info;
@@ -16,6 +16,7 @@ use tokio::sync::RwLock;
 
 #[derive(Debug)]
 pub struct PostGroupingListener<PC: Curve> {
+    listener_descriptor: ListenerDescriptor,
     chain_identity: Arc<RwLock<ChainIdentityHandlerType<PC>>>,
     block_cache: Arc<RwLock<Box<dyn BlockInfoHandler>>>,
     group_cache: Arc<RwLock<Box<dyn GroupInfoHandler<PC>>>>,
@@ -32,6 +33,7 @@ impl<PC: Curve> std::fmt::Display for PostGroupingListener<PC> {
 
 impl<PC: Curve> PostGroupingListener<PC> {
     pub fn new(
+        listener_descriptor: ListenerDescriptor,
         chain_identity: Arc<RwLock<ChainIdentityHandlerType<PC>>>,
         block_cache: Arc<RwLock<Box<dyn BlockInfoHandler>>>,
         group_cache: Arc<RwLock<Box<dyn GroupInfoHandler<PC>>>>,
@@ -39,6 +41,7 @@ impl<PC: Curve> PostGroupingListener<PC> {
         dkg_timeout_duration: usize,
     ) -> Self {
         PostGroupingListener {
+            listener_descriptor,
             chain_identity,
             block_cache,
             group_cache,
@@ -105,8 +108,12 @@ impl<PC: Curve + Sync + Send + 'static> Listener for PostGroupingListener<PC> {
         Ok(())
     }
 
-    async fn chain_id(&self) -> usize {
-        self.block_cache.read().await.get_chain_id()
+    fn chain_id(&self) -> usize {
+        self.listener_descriptor.chain_id
+    }
+
+    fn listener_descriptor(&self) -> ListenerDescriptor {
+        self.listener_descriptor
     }
 }
 

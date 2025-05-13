@@ -27,6 +27,7 @@ pub struct AdapterClient {
     client: Arc<WsWalletSigner>,
     contract_transaction_retry_descriptor: ExponentialBackoffRetryDescriptor,
     contract_view_retry_descriptor: ExponentialBackoffRetryDescriptor,
+    max_priority_fee_per_gas: Option<U256>,
 }
 
 impl AdapterClient {
@@ -37,6 +38,7 @@ impl AdapterClient {
         client: Arc<WsWalletSigner>,
         contract_transaction_retry_descriptor: ExponentialBackoffRetryDescriptor,
         contract_view_retry_descriptor: ExponentialBackoffRetryDescriptor,
+        max_priority_fee_per_gas: Option<U256>,
     ) -> Self {
         AdapterClient {
             chain_id,
@@ -45,6 +47,7 @@ impl AdapterClient {
             client,
             contract_transaction_retry_descriptor,
             contract_view_retry_descriptor,
+            max_priority_fee_per_gas,
         }
     }
 }
@@ -60,6 +63,7 @@ impl AdapterClientBuilder for GeneralMainChainIdentity {
             self.get_client(),
             self.get_contract_transaction_retry_descriptor(),
             self.get_contract_view_retry_descriptor(),
+            self.get_max_priority_fee_per_gas(),
         )
     }
 }
@@ -75,6 +79,7 @@ impl AdapterClientBuilder for GeneralRelayedChainIdentity {
             self.get_client(),
             self.get_contract_transaction_retry_descriptor(),
             self.get_contract_view_retry_descriptor(),
+            self.get_max_priority_fee_per_gas(),
         )
     }
 }
@@ -164,6 +169,7 @@ impl AdapterTransactions for AdapterClient {
             ),
             self.contract_transaction_retry_descriptor,
             false,
+            self.max_priority_fee_per_gas,
         )
         .await
     }

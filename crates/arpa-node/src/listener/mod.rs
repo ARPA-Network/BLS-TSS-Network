@@ -7,31 +7,25 @@ pub mod randomness_signature_aggregation;
 pub mod ready_to_handle_randomness_task;
 pub mod schedule_node_activation;
 pub mod schedule_provider_reconnection;
+use crate::error::NodeResult;
+use arpa_core::jitter;
+use arpa_core::log::{build_general_payload, LogType};
+use arpa_core::ListenerDescriptor;
+use async_trait::async_trait;
+use log::{debug, error};
 use std::fmt::Debug;
 use std::fmt::Display;
 use std::time::Duration;
-
-use crate::error::NodeResult;
-use arpa_core::jitter;
-use arpa_core::{
-    log::{build_general_payload, LogType},
-    FixedIntervalRetryDescriptor,
-};
-use async_trait::async_trait;
-use log::error;
 use tokio::time::sleep;
 use tokio_retry::{strategy::FixedInterval, Retry};
 
 #[async_trait]
 pub trait Listener: Debug + Display {
-    async fn start(
-        &self,
-        interval_millis: u64,
-        use_jitter: bool,
-        reset_descriptor: FixedIntervalRetryDescriptor,
-        jitter_fn: Option<Box<dyn Fn(Duration) -> Duration + Send + Sync>>,
-    ) -> NodeResult<()> {
-        let jitter_fn = if let Some(jitter_fn) = jitter_fn {
+    async fn start(&self) -> NodeResult<()> {
+        let interval_millis = self.listener_descriptor().interval_millis;
+        let use_jitter = self.listener_descriptor().use_jitter;
+        let reset_descriptor = self.listener_descriptor().reset_descriptor;
+        let jitter_fn = if let Some(jitter_fn) = self.jitter_fn() {
             jitter_fn
         } else {
             Box::new(jitter)
@@ -52,7 +46,7 @@ pub trait Listener: Debug + Display {
                     build_general_payload(
                         LogType::ListenerInterrupted,
                         &format!("{} is interrupted. Retry... Error: {:?}.", self, err),
-                        Some(self.chain_id().await)
+                        Some(self.chain_id())
                     )
                 );
 
@@ -71,6 +65,12 @@ pub trait Listener: Debug + Display {
                 })
                 .await?;
             }
+            debug!(
+                "{} chain {} is sleeping for {:?}.",
+                self,
+                self.chain_id(),
+                next_polling_strategy.next().unwrap()
+            );
             sleep(next_polling_strategy.next().unwrap()).await;
         }
     }
@@ -85,7 +85,13 @@ pub trait Listener: Debug + Display {
         Ok(())
     }
 
-    async fn chain_id(&self) -> usize;
+    fn chain_id(&self) -> usize;
+
+    fn listener_descriptor(&self) -> ListenerDescriptor;
+
+    fn jitter_fn(&self) -> Option<Box<dyn Fn(Duration) -> Duration + Send + Sync>> {
+        None
+    }
 }
 
 #[cfg(test)]

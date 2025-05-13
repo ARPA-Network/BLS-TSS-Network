@@ -46,6 +46,7 @@ use threshold_bls::schemes::bn254::G2Curve;
 use threshold_bls::schemes::bn254::G2Scheme;
 use threshold_bls::serialize::point_to_hex;
 use threshold_bls::sig::Scheme;
+use tokio::sync::broadcast;
 use tokio::sync::RwLock;
 
 const VERSION: &str = env!("CARGO_PKG_VERSION");
@@ -66,6 +67,7 @@ pub struct Opt {
 fn init_logger(
     node_id: &str,
     l1_chain_id: usize,
+    log_level: &str,
     context_logging: bool,
     log_file_path: &str,
     rolling_file_size: u64,
@@ -112,6 +114,13 @@ fn init_logger(
         )
         .unwrap();
 
+    let log_level_filter = match log_level {
+        "debug" => LevelFilter::Debug,
+        "warn" => LevelFilter::Warn,
+        "error" => LevelFilter::Error,
+        _ => LevelFilter::Info,
+    };
+
     let log_config = LogConfig::builder()
         .appender(Appender::builder().build("stdout", Box::new(stdout)))
         .appender(Appender::builder().build("file", Box::new(rolling_file)))
@@ -120,14 +129,14 @@ fn init_logger(
                 .filter(Box::new(ThresholdFilter::new(LevelFilter::Error)))
                 .build("err_file", Box::new(rolling_err_file)),
         )
-        .logger(log4rs::config::Logger::builder().build("node_client", LevelFilter::Info))
-        .logger(log4rs::config::Logger::builder().build("arpa_node", LevelFilter::Info))
-        .logger(log4rs::config::Logger::builder().build("arpa_core", LevelFilter::Info))
-        .logger(log4rs::config::Logger::builder().build("arpa_contract_client", LevelFilter::Info))
-        .logger(log4rs::config::Logger::builder().build("arpa_sqlite_db", LevelFilter::Info))
-        .logger(log4rs::config::Logger::builder().build("arpa_dal", LevelFilter::Info))
-        .logger(log4rs::config::Logger::builder().build("dkg_core", LevelFilter::Info))
-        .logger(log4rs::config::Logger::builder().build("threshold_bls", LevelFilter::Info))
+        .logger(log4rs::config::Logger::builder().build("node_client", log_level_filter))
+        .logger(log4rs::config::Logger::builder().build("arpa_node", log_level_filter))
+        .logger(log4rs::config::Logger::builder().build("arpa_core", log_level_filter))
+        .logger(log4rs::config::Logger::builder().build("arpa_contract_client", log_level_filter))
+        .logger(log4rs::config::Logger::builder().build("arpa_sqlite_db", log_level_filter))
+        .logger(log4rs::config::Logger::builder().build("arpa_dal", log_level_filter))
+        .logger(log4rs::config::Logger::builder().build("dkg_core", log_level_filter))
+        .logger(log4rs::config::Logger::builder().build("threshold_bls", log_level_filter))
         .build(
             Root::builder()
                 .appender("err_file")
@@ -158,6 +167,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     init_logger(
         &address_to_string(id_address),
         l1_chain_id,
+        logger_descriptor.get_log_level(),
         logger_descriptor.get_context_logging(),
         logger_descriptor.get_log_file_path(),
         logger_descriptor.get_rolling_file_size(),
@@ -173,9 +183,28 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         return Ok(());
     }
 
-    if let Err(e) = start(config, wallet).await {
+    // create a shutdown notification channel
+    let (shutdown_tx, shutdown_rx) = broadcast::channel::<()>(1);
+
+    // handle Ctrl+C signal
+    let shutdown_tx_clone = shutdown_tx.clone();
+    tokio::spawn(async move {
+        match tokio::signal::ctrl_c().await {
+            Ok(()) => {
+                info!("received Ctrl+C signal, stopping gracefully...");
+                let _ = shutdown_tx_clone.send(());
+            }
+            Err(err) => {
+                error!("failed to listen to Ctrl+C event: {}", err);
+            }
+        }
+    });
+
+    if let Err(e) = start(config, wallet, shutdown_rx).await {
         error!("{:?}", e);
     };
+
+    info!("node exit normally");
 
     Ok(())
 }
@@ -183,6 +212,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 async fn start(
     config: Config,
     wallet: Wallet<SigningKey>,
+    mut shutdown_rx: tokio::sync::broadcast::Receiver<()>,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let id_address = wallet.address();
 
@@ -195,6 +225,8 @@ async fn start(
     let is_eigenlayer = config.is_eigenlayer();
 
     let is_consistent_asset_and_node_account = config.is_consistent_asset_and_node_account();
+
+    let enable_node_auto_activation = config.enable_node_auto_activation();
 
     if let Some(parent) = data_path.parent() {
         fs::create_dir_all(parent)?;
@@ -301,11 +333,14 @@ async fn start(
             .get_time_limits()
             .contract_transaction_retry_descriptor,
         config.get_time_limits().contract_view_retry_descriptor,
+        config.get_max_priority_fee_per_gas(),
     );
 
     let main_chain = GeneralMainChain::<G2Curve, G2Scheme>::new(
         "main chain".to_string(),
         is_eigenlayer,
+        is_consistent_asset_and_node_account,
+        enable_node_auto_activation,
         main_chain_identity.clone(),
         node_cache.clone(),
         group_cache.clone(),
@@ -354,6 +389,7 @@ async fn start(
             relayed_chain_config
                 .get_time_limits()
                 .contract_view_retry_descriptor,
+            relayed_chain_config.get_max_priority_fee_per_gas(),
         );
 
         let randomness_tasks_cache = Arc::new(RwLock::new(
@@ -398,7 +434,7 @@ async fn start(
     }
 
     // deploy the node context and start the node
-    let handle = context.deploy().await?;
+    let mut handle = context.deploy().await?;
 
     // register node to the NodeRegistry contract if it is a new run and a native staking node
     if is_new_run && !is_eigenlayer && is_consistent_asset_and_node_account {
@@ -447,7 +483,20 @@ async fn start(
         }
     }
 
-    handle.wait_task().await;
+    // wait for tasks to finish or shutdown signal
+    tokio::select! {
+        _ = handle.wait_task() => {
+            info!("All tasks finished, node exiting normally");
+        }
+        _ = shutdown_rx.recv() => {
+            info!("Received shutdown signal, stopping all tasks...");
+            // 通知 context 关闭所有任务
+            handle.shutdown().await;
+            // 等待一段时间让任务优雅关闭
+            tokio::time::sleep(Duration::from_secs(2)).await;
+            info!("All tasks stopped");
+        }
+    }
 
     Ok(())
 }

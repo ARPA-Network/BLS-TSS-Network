@@ -53,7 +53,7 @@ pub mod tests {
         queue::event_queue::EventQueue,
         subscriber::{block::BlockSubscriber, Subscriber},
     };
-    use arpa_core::{Config, GeneralMainChainIdentity};
+    use arpa_core::{Config, GeneralMainChainIdentity, ListenerDescriptor, ListenerType};
     use arpa_dal::{cache::InMemoryBlockInfoCache, BlockInfoHandler};
     use ethers::{
         providers::{Provider, Ws},
@@ -112,12 +112,17 @@ pub mod tests {
             Address::random(),
             contract_transaction_retry_descriptor,
             contract_view_retry_descriptor,
+            None,
         );
 
         let chain_identity: Arc<RwLock<ChainIdentityHandlerType<G2Curve>>> =
             Arc::new(RwLock::new(Box::new(chain_identity)));
 
-        let p = BlockListener::new(chain_id, chain_identity, eq);
+        let p = BlockListener::new(
+            ListenerDescriptor::default(chain_id, ListenerType::Block),
+            chain_identity,
+            eq,
+        );
 
         p.publish(NewBlock {
             chain_id,

@@ -28,6 +28,7 @@ pub struct ControllerClient {
     client: Arc<WsWalletSigner>,
     contract_transaction_retry_descriptor: ExponentialBackoffRetryDescriptor,
     contract_view_retry_descriptor: ExponentialBackoffRetryDescriptor,
+    max_priority_fee_per_gas: Option<U256>,
 }
 
 impl ControllerClient {
@@ -37,6 +38,7 @@ impl ControllerClient {
         identity: &GeneralMainChainIdentity,
         contract_transaction_retry_descriptor: ExponentialBackoffRetryDescriptor,
         contract_view_retry_descriptor: ExponentialBackoffRetryDescriptor,
+        max_priority_fee_per_gas: Option<U256>,
     ) -> Self {
         ControllerClient {
             chain_id,
@@ -44,6 +46,7 @@ impl ControllerClient {
             client: identity.get_client(),
             contract_transaction_retry_descriptor,
             contract_view_retry_descriptor,
+            max_priority_fee_per_gas,
         }
     }
 }
@@ -58,6 +61,7 @@ impl<C: Curve> ControllerClientBuilder<C> for GeneralMainChainIdentity {
             self,
             self.get_contract_transaction_retry_descriptor(),
             self.get_contract_view_retry_descriptor(),
+            self.get_max_priority_fee_per_gas(),
         )
     }
 }
@@ -115,6 +119,7 @@ impl ControllerTransactions for ControllerClient {
             call,
             self.contract_transaction_retry_descriptor,
             true,
+            self.max_priority_fee_per_gas,
         )
         .await
     }
@@ -136,6 +141,7 @@ impl ControllerTransactions for ControllerClient {
             call,
             self.contract_transaction_retry_descriptor,
             false,
+            self.max_priority_fee_per_gas,
         )
         .await
     }

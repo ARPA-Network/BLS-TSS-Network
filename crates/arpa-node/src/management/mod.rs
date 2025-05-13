@@ -198,7 +198,7 @@ where
                 .init_listener(
                     self.get_event_queue(),
                     self.get_fixed_task_handler(),
-                    ListenerDescriptor::default(task_type),
+                    ListenerDescriptor::default(chain_id, task_type),
                 )
                 .await
         } else {
@@ -210,7 +210,7 @@ where
                 .init_listener(
                     self.get_event_queue(),
                     self.get_fixed_task_handler(),
-                    ListenerDescriptor::default(task_type),
+                    ListenerDescriptor::default(chain_id, task_type),
                 )
                 .await
         }

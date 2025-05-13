@@ -11,7 +11,7 @@ use crate::{
         schedule_provider_reconnection::ProviderReconnectionListener, Listener,
     },
     queue::event_queue::EventQueue,
-    scheduler::{fixed::SimpleFixedTaskScheduler, TaskScheduler},
+    scheduler::{fixed::SimpleFixedTaskScheduler, FixedTaskScheduler},
     subscriber::{
         block::BlockSubscriber, in_grouping::InGroupingSubscriber,
         post_grouping::PostGroupingSubscriber,
@@ -22,9 +22,9 @@ use crate::{
     },
 };
 use arpa_core::{
-    jitter_fluctuate, ChainIdentity, ComponentTaskType, GeneralMainChainIdentity,
-    GeneralRelayedChainIdentity, ListenerDescriptor, ListenerType, RandomnessTask, SchedulerError,
-    SchedulerResult, TimeLimitDescriptor, DEFAULT_NODE_ACTIVATION_INTERVAL_MILLIS,
+    ChainIdentity, GeneralMainChainIdentity, GeneralRelayedChainIdentity, ListenerDescriptor,
+    ListenerType, RandomnessTask, SchedulerError, SchedulerResult, TimeLimitDescriptor,
+    DEFAULT_NODE_ACTIVATION_INTERVAL_MILLIS,
 };
 use arpa_dal::cache::{InMemoryBlockInfoCache, RandomnessResultCache};
 use arpa_dal::{
@@ -32,8 +32,7 @@ use arpa_dal::{
     SignatureResultCacheHandler,
 };
 use async_trait::async_trait;
-use log::error;
-use std::{marker::PhantomData, sync::Arc, time::Duration};
+use std::{marker::PhantomData, sync::Arc};
 use threshold_bls::{
     group::Curve,
     sig::{SignatureScheme, ThresholdScheme},
@@ -41,40 +40,14 @@ use threshold_bls::{
 use tokio::sync::RwLock;
 
 async fn add_listener_task(
-    chain_id: usize,
     mut listener: impl Listener + Send + Sync + 'static,
-    listener_descriptor: ListenerDescriptor,
     fs: Arc<RwLock<SimpleFixedTaskScheduler>>,
 ) -> SchedulerResult<()> {
     if let Err(e) = listener.initialize().await {
         return Err(SchedulerError::ListenerInitializationError(e.to_string()));
     };
 
-    let jitter_fn: Option<Box<dyn Fn(Duration) -> Duration + Send + Sync>> =
-        if listener_descriptor.l_type == ListenerType::ScheduleProviderReconnection {
-            Some(Box::new(move |duration: Duration| {
-                jitter_fluctuate(duration, 0.2)
-            }))
-        } else {
-            None
-        };
-
-    fs.write().await.add_task(
-        ComponentTaskType::Listener(chain_id, listener_descriptor.l_type),
-        async move {
-            if let Err(e) = listener
-                .start(
-                    listener_descriptor.interval_millis,
-                    listener_descriptor.use_jitter,
-                    listener_descriptor.reset_descriptor,
-                    jitter_fn,
-                )
-                .await
-            {
-                error!("{:?}", e);
-            };
-        },
-    )
+    fs.write().await.add_listener_task(listener)
 }
 
 #[derive(Debug)]
@@ -85,6 +58,8 @@ pub struct GeneralMainChain<
     id: usize,
     description: String,
     is_eigenlayer: bool,
+    is_consistent_asset_and_node_account: bool,
+    enable_node_auto_activation: bool,
     chain_identity: Arc<RwLock<ChainIdentityHandlerType<PC>>>,
     node_cache: Arc<RwLock<Box<dyn NodeInfoHandler<PC>>>>,
     group_cache: Arc<RwLock<Box<dyn GroupInfoHandler<PC>>>>,
@@ -112,6 +87,8 @@ impl<
     pub fn new(
         description: String,
         is_eigenlayer: bool,
+        is_consistent_asset_and_node_account: bool,
+        enable_node_auto_activation: bool,
         chain_identity: GeneralMainChainIdentity,
         node_cache: Arc<RwLock<Box<dyn NodeInfoHandler<PC>>>>,
         group_cache: Arc<RwLock<Box<dyn GroupInfoHandler<PC>>>>,
@@ -127,6 +104,8 @@ impl<
             id: chain_id,
             description,
             is_eigenlayer,
+            is_consistent_asset_and_node_account,
+            enable_node_auto_activation,
             chain_identity: Arc::new(RwLock::new(Box::new(chain_identity))),
             block_cache: Arc::new(RwLock::new(Box::new(InMemoryBlockInfoCache::new(
                 chain_id,
@@ -213,45 +192,51 @@ where
         match listener.l_type {
             ListenerType::ScheduleNodeActivation => {
                 let p_node_activation = NodeActivationListener::new(
-                    self.id(),
+                    listener,
                     self.is_eigenlayer,
                     self.get_chain_identity(),
                     eq,
                 );
 
-                add_listener_task(self.id(), p_node_activation, listener, fs).await
+                add_listener_task(p_node_activation, fs).await
             }
             ListenerType::ScheduleProviderReconnection => {
                 let p_provider_reconnection = ProviderReconnectionListener::new(
-                    self.id(),
+                    listener,
                     self.get_chain_identity(),
                     fs.clone(),
                 );
 
-                add_listener_task(self.id(), p_provider_reconnection, listener, fs).await
+                add_listener_task(p_provider_reconnection, fs).await
             }
             ListenerType::Block => {
-                let p_block = BlockListener::new(self.id(), self.get_chain_identity(), eq);
+                let p_block = BlockListener::new(listener, self.get_chain_identity(), eq);
 
-                add_listener_task(self.id(), p_block, listener, fs).await
+                add_listener_task(p_block, fs).await
             }
             ListenerType::PreGrouping => {
-                let p_pre_grouping =
-                    PreGroupingListener::new(self.get_chain_identity(), self.get_group_cache(), eq);
-
-                add_listener_task(self.id(), p_pre_grouping, listener, fs).await
-            }
-            ListenerType::PostCommitGrouping => {
-                let p_post_commit_grouping = PostCommitGroupingListener::new(
+                let p_pre_grouping = PreGroupingListener::new(
+                    listener,
                     self.get_chain_identity(),
                     self.get_group_cache(),
                     eq,
                 );
 
-                add_listener_task(self.id(), p_post_commit_grouping, listener, fs).await
+                add_listener_task(p_pre_grouping, fs).await
+            }
+            ListenerType::PostCommitGrouping => {
+                let p_post_commit_grouping = PostCommitGroupingListener::new(
+                    listener,
+                    self.get_chain_identity(),
+                    self.get_group_cache(),
+                    eq,
+                );
+
+                add_listener_task(p_post_commit_grouping, fs).await
             }
             ListenerType::PostGrouping => {
                 let p_post_grouping = PostGroupingListener::new(
+                    listener,
                     self.get_chain_identity(),
                     self.get_block_cache(),
                     self.get_group_cache(),
@@ -259,26 +244,26 @@ where
                     self.time_limits.dkg_timeout_duration,
                 );
 
-                add_listener_task(self.id(), p_post_grouping, listener, fs).await
+                add_listener_task(p_post_grouping, fs).await
             }
             ListenerType::NewRandomnessTask => {
                 let id_address = self.get_node_cache().read().await.get_id_address().unwrap();
 
                 let p_new_randomness_task = NewRandomnessTaskListener::new(
-                    self.id(),
+                    listener,
                     id_address,
                     self.get_chain_identity(),
                     self.get_randomness_tasks_cache(),
                     eq,
                 );
 
-                add_listener_task(self.id(), p_new_randomness_task, listener, fs).await
+                add_listener_task(p_new_randomness_task, fs).await
             }
             ListenerType::ReadyToHandleRandomnessTask => {
                 let id_address = self.get_node_cache().read().await.get_id_address().unwrap();
 
                 let p_ready_to_handle_randomness_task = ReadyToHandleRandomnessTaskListener::new(
-                    self.id(),
+                    listener,
                     id_address,
                     self.get_chain_identity(),
                     self.get_block_cache(),
@@ -288,14 +273,14 @@ where
                     self.time_limits.randomness_task_exclusive_window,
                 );
 
-                add_listener_task(self.id(), p_ready_to_handle_randomness_task, listener, fs).await
+                add_listener_task(p_ready_to_handle_randomness_task, fs).await
             }
             ListenerType::RandomnessSignatureAggregation => {
                 let id_address = self.get_node_cache().read().await.get_id_address().unwrap();
 
                 let p_randomness_signature_aggregation =
                     RandomnessSignatureAggregationListener::new(
-                        self.id(),
+                        listener,
                         id_address,
                         self.get_block_cache(),
                         self.get_group_cache(),
@@ -303,7 +288,7 @@ where
                         eq,
                     );
 
-                add_listener_task(self.id(), p_randomness_signature_aggregation, listener, fs).await
+                add_listener_task(p_randomness_signature_aggregation, fs).await
             }
         }
     }
@@ -363,11 +348,14 @@ where
         &self,
         context: &(dyn ContextFetcher + Sync + Send),
     ) -> SchedulerResult<()> {
-        if !self.is_eigenlayer {
+        if self.enable_node_auto_activation
+            && (!self.is_eigenlayer || self.is_consistent_asset_and_node_account)
+        {
             self.init_listener(
                 context.get_event_queue(),
                 context.get_fixed_task_handler(),
                 ListenerDescriptor {
+                    chain_id: self.id(),
                     l_type: ListenerType::ScheduleNodeActivation,
                     interval_millis: DEFAULT_NODE_ACTIVATION_INTERVAL_MILLIS,
                     use_jitter: false,
@@ -377,17 +365,20 @@ where
             .await?;
         }
 
-        self.init_listener(
-            context.get_event_queue(),
-            context.get_fixed_task_handler(),
-            ListenerDescriptor {
-                l_type: ListenerType::ScheduleProviderReconnection,
-                interval_millis: self.time_limits.provider_reconnection_interval_millis,
-                use_jitter: true,
-                reset_descriptor: self.time_limits.provider_reset_descriptor,
-            },
-        )
-        .await?;
+        if self.time_limits.provider_reconnection_interval_millis > 0 {
+            self.init_listener(
+                context.get_event_queue(),
+                context.get_fixed_task_handler(),
+                ListenerDescriptor {
+                    chain_id: self.id(),
+                    l_type: ListenerType::ScheduleProviderReconnection,
+                    interval_millis: self.time_limits.provider_reconnection_interval_millis,
+                    use_jitter: true,
+                    reset_descriptor: self.time_limits.provider_reset_descriptor,
+                },
+            )
+            .await?;
+        }
 
         Ok(())
     }
@@ -665,36 +656,36 @@ where
         match listener.l_type {
             ListenerType::ScheduleProviderReconnection => {
                 let p_provider_reconnection = ProviderReconnectionListener::new(
-                    self.id(),
+                    listener,
                     self.get_chain_identity(),
                     fs.clone(),
                 );
 
-                add_listener_task(self.id, p_provider_reconnection, listener, fs).await
+                add_listener_task(p_provider_reconnection, fs).await
             }
             ListenerType::Block => {
-                let p_block = BlockListener::new(self.id(), self.get_chain_identity(), eq);
+                let p_block = BlockListener::new(listener, self.get_chain_identity(), eq);
 
-                add_listener_task(self.id, p_block, listener, fs).await
+                add_listener_task(p_block, fs).await
             }
             ListenerType::NewRandomnessTask => {
                 let id_address = self.get_node_cache().read().await.get_id_address().unwrap();
 
                 let p_new_randomness_task = NewRandomnessTaskListener::new(
-                    self.id(),
+                    listener,
                     id_address,
                     self.get_chain_identity(),
                     self.get_randomness_tasks_cache(),
                     eq,
                 );
 
-                add_listener_task(self.id, p_new_randomness_task, listener, fs).await
+                add_listener_task(p_new_randomness_task, fs).await
             }
             ListenerType::ReadyToHandleRandomnessTask => {
                 let id_address = self.get_node_cache().read().await.get_id_address().unwrap();
 
                 let p_ready_to_handle_randomness_task = ReadyToHandleRandomnessTaskListener::new(
-                    self.id(),
+                    listener,
                     id_address,
                     self.get_chain_identity(),
                     self.get_block_cache(),
@@ -704,14 +695,14 @@ where
                     self.time_limits.randomness_task_exclusive_window,
                 );
 
-                add_listener_task(self.id, p_ready_to_handle_randomness_task, listener, fs).await
+                add_listener_task(p_ready_to_handle_randomness_task, fs).await
             }
             ListenerType::RandomnessSignatureAggregation => {
                 let id_address = self.get_node_cache().read().await.get_id_address().unwrap();
 
                 let p_randomness_signature_aggregation =
                     RandomnessSignatureAggregationListener::new(
-                        self.id(),
+                        listener,
                         id_address,
                         self.get_block_cache(),
                         self.get_group_cache(),
@@ -719,11 +710,11 @@ where
                         eq,
                     );
 
-                add_listener_task(self.id, p_randomness_signature_aggregation, listener, fs).await
+                add_listener_task(p_randomness_signature_aggregation, fs).await
             }
             _ => {
                 return Err(SchedulerError::UnsupportedListenerType(
-                    self.id(),
+                    self.id,
                     listener.l_type.to_string(),
                 ))
             }
@@ -779,17 +770,20 @@ where
         &self,
         context: &(dyn ContextFetcher + Sync + Send),
     ) -> SchedulerResult<()> {
-        self.init_listener(
-            context.get_event_queue(),
-            context.get_fixed_task_handler(),
-            ListenerDescriptor {
-                l_type: ListenerType::ScheduleProviderReconnection,
-                interval_millis: self.time_limits.provider_reconnection_interval_millis,
-                use_jitter: true,
-                reset_descriptor: self.time_limits.provider_reset_descriptor,
-            },
-        )
-        .await?;
+        if self.time_limits.provider_reconnection_interval_millis > 0 {
+            self.init_listener(
+                context.get_event_queue(),
+                context.get_fixed_task_handler(),
+                ListenerDescriptor {
+                    chain_id: self.id(),
+                    l_type: ListenerType::ScheduleProviderReconnection,
+                    interval_millis: self.time_limits.provider_reconnection_interval_millis,
+                    use_jitter: true,
+                    reset_descriptor: self.time_limits.provider_reset_descriptor,
+                },
+            )
+            .await?;
+        }
 
         Ok(())
     }

@@ -3,7 +3,7 @@ use ::ethers::abi::Detokenize;
 use ::ethers::prelude::builders::ContractCall;
 use ::ethers::prelude::ContractError;
 use ::ethers::providers::{Middleware, ProviderError};
-use ::ethers::types::{BlockNumber, TransactionReceipt, U64};
+use ::ethers::types::{BlockNumber, TransactionReceipt, U256, U64};
 use arpa_core::{
     eip1559_gas_price_estimator, fallback_eip1559_gas_price_estimator, jitter, supports_eip1559,
     ExponentialBackoffRetryDescriptor,
@@ -35,6 +35,7 @@ pub trait TransactionCaller {
         mut call: ContractCall<M, D>,
         contract_transaction_retry_descriptor: ExponentialBackoffRetryDescriptor,
         retry_on_transaction_fail: bool,
+        max_priority_fee_per_gas: Option<U256>,
     ) -> ContractClientResult<TransactionReceipt>
     where
         ContractClientError: From<ContractError<M>>,
@@ -54,6 +55,9 @@ pub trait TransactionCaller {
         // transform the trx to legacy if the chain does not support EIP-1559
         if !supports_eip1559(chain_id) {
             call = call.legacy();
+            if let Some(max_priority_fee_per_gas) = max_priority_fee_per_gas {
+                call = call.gas_price(max_priority_fee_per_gas);
+            }
         }
         // set gas price for EIP-1559 trxs
         else if let Some(tx) = call.tx.as_eip1559_mut() {
@@ -89,8 +93,18 @@ pub trait TransactionCaller {
                     )
                 }
             };
-            tx.max_fee_per_gas = Some(max_fee);
-            tx.max_priority_fee_per_gas = Some(max_priority_fee);
+            if let Some(max_priority_fee_per_gas) = max_priority_fee_per_gas {
+                tx.max_priority_fee_per_gas = Some(max_priority_fee_per_gas);
+                if max_priority_fee_per_gas > max_priority_fee {
+                    tx.max_fee_per_gas =
+                        Some(max_fee - max_priority_fee + max_priority_fee_per_gas);
+                } else {
+                    tx.max_fee_per_gas = Some(max_fee);
+                }
+            } else {
+                tx.max_fee_per_gas = Some(max_fee);
+                tx.max_priority_fee_per_gas = Some(max_priority_fee);
+            }
         }
 
         let transaction_receipt = RetryIf::spawn(

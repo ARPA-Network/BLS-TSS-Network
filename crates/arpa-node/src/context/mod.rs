@@ -97,6 +97,8 @@ pub trait Context<
 #[async_trait]
 pub trait TaskWaiter {
     async fn wait_task(&self);
+
+    async fn shutdown(&mut self);
 }
 
 pub trait ContextFetcher {
