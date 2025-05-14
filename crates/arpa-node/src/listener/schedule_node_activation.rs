@@ -124,7 +124,7 @@ mod tests {
     use crate::queue::EventSubscriber;
     use crate::event::types::Topic;
     use crate::subscriber::{DebuggableEvent, DebuggableSubscriber, Subscriber};
-    use arpa_core::{Config, GeneralMainChainIdentity};
+    use arpa_core::{Config, FixedIntervalRetryDescriptor, GeneralMainChainIdentity, ListenerType};
     use ethers::{
         providers::{Provider, Ws, Http},
         types::{Address, Bytes},
@@ -307,6 +307,7 @@ mod tests {
             node_registry_address,
             config.get_time_limits().contract_transaction_retry_descriptor,
             config.get_time_limits().contract_view_retry_descriptor,
+            None,
         );
         println!("Chain identity created");
         
@@ -323,8 +324,19 @@ mod tests {
         };
         
         let is_eigenlayer = false;
-        let mut listener = NodeActivationListener::<G2Curve>::new(
+        let listener_descriptor = ListenerDescriptor {
             chain_id,
+            l_type: ListenerType::ScheduleNodeActivation,
+            interval_millis: 1000, 
+            use_jitter: true,      
+            reset_descriptor: FixedIntervalRetryDescriptor {
+                interval_millis: 5000, 
+                max_attempts: 3,       
+                use_jitter: true,      
+            },
+        };
+        let mut listener = NodeActivationListener::<G2Curve>::new(
+            listener_descriptor,
             is_eigenlayer,
             chain_identity_arc.clone(),
             event_queue.clone(),
@@ -397,7 +409,7 @@ mod tests {
         assert!(interruption_result.is_ok(), "Handle interruption failed");
         
         println!("Testing chain_id method");
-        assert_eq!(listener.chain_id().await, chain_id);
+        assert_eq!(listener.chain_id(), chain_id);
         
         let display_string = format!("{}", listener);
         assert_eq!(display_string, "NodeActivationListener");

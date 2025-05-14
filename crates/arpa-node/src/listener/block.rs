@@ -104,7 +104,7 @@ mod tests {
     use crate::event::types::Topic;
     use crate::subscriber::{DebuggableEvent, DebuggableSubscriber, Subscriber};
     use arpa_core::{
-        Config, GeneralMainChainIdentity
+        Config, FixedIntervalRetryDescriptor, GeneralMainChainIdentity, ListenerType
     };
     use ethers::{
         providers::{Provider, Ws, Http, Middleware},
@@ -222,6 +222,7 @@ mod tests {
             Address::random(),
             config.get_time_limits().contract_transaction_retry_descriptor,
             config.get_time_limits().contract_view_retry_descriptor,
+            None,
         );
         println!("Chain identity created");
         
@@ -236,9 +237,21 @@ mod tests {
             println!("Setting up test subscriber");
             mock_subscribe_to_events(&mut *eq_write, "test_subscriber", chain_id).await
         };
+
+        let listener_descriptor = ListenerDescriptor {
+            chain_id,
+            l_type: ListenerType::Block,
+            interval_millis: 1000, 
+            use_jitter: true,      
+            reset_descriptor: FixedIntervalRetryDescriptor {
+                interval_millis: 5000, 
+                max_attempts: 3,       
+                use_jitter: true,      
+            },
+        };
         
         let block_listener = BlockListener::<G2Curve>::new(
-            chain_id,
+            listener_descriptor.clone(),
             chain_identity_arc.clone(),
             event_queue.clone(),
         );
@@ -326,7 +339,7 @@ mod tests {
         sleep(Duration::from_millis(500)).await;
         
         let interrupt_listener = BlockListener::<G2Curve>::new(
-            chain_id,
+            listener_descriptor.clone(),
             chain_identity_arc.clone(),
             event_queue.clone(),
         );
@@ -336,7 +349,7 @@ mod tests {
         assert!(interruption_result.is_ok(), "Handle interruption failed");
         
         println!("Testing chain_id method");
-        assert_eq!(interrupt_listener.chain_id().await, chain_id);
+        assert_eq!(interrupt_listener.chain_id(), chain_id);
         
         let display_string = format!("{}", interrupt_listener);
         assert_eq!(display_string, "BlockListener");

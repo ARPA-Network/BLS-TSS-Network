@@ -149,7 +149,7 @@ mod tests {
     use crate::event::types::Topic;
     use crate::subscriber::{DebuggableEvent, DebuggableSubscriber, Subscriber};
     use arpa_core::{
-        Config, GeneralMainChainIdentity, RandomnessRequestType, RandomnessTask
+        Config, FixedIntervalRetryDescriptor, GeneralMainChainIdentity, ListenerType, RandomnessRequestType, RandomnessTask
     };
     use arpa_dal::BLSTasksHandler;
     use ethers::{
@@ -297,6 +297,7 @@ mod tests {
             Address::random(),
             config.get_time_limits().contract_transaction_retry_descriptor,
             config.get_time_limits().contract_view_retry_descriptor,
+            None,
         );
         println!("Chain identity created with adapter address: {}", adapter_address);
         
@@ -315,9 +316,19 @@ mod tests {
             println!("Setting up test subscriber");
             mock_subscribe_to_events(&mut *eq_write, "test_subscriber", chain_id).await
         };
-        
-        let mut listener = NewRandomnessTaskListener::<G2Curve>::new(
+        let listener_descriptor = ListenerDescriptor {
             chain_id,
+            l_type: ListenerType::NewRandomnessTask,
+            interval_millis: 1000, 
+            use_jitter: true,      
+            reset_descriptor: FixedIntervalRetryDescriptor {
+                interval_millis: 5000, 
+                max_attempts: 3,       
+                use_jitter: true,      
+            },
+        };
+        let mut listener = NewRandomnessTaskListener::<G2Curve>::new(
+            listener_descriptor.clone(),
             id_address,
             chain_identity_arc.clone(),
             randomness_tasks_cache.clone(),
@@ -443,7 +454,7 @@ mod tests {
         
         println!("Testing handle_interruption method");
         let interruption_result = NewRandomnessTaskListener::<G2Curve>::new(
-            chain_id,
+            listener_descriptor.clone(),
             id_address,
             chain_identity_arc.clone(),
             randomness_tasks_cache.clone(),
@@ -453,13 +464,13 @@ mod tests {
         
         println!("Testing chain_id method");
         let test_listener = NewRandomnessTaskListener::<G2Curve>::new(
-            chain_id,
+            listener_descriptor.clone(),
             id_address,
             chain_identity_arc.clone(),
             randomness_tasks_cache.clone(),
             event_queue.clone(),
         );
-        assert_eq!(test_listener.chain_id().await, chain_id);
+        assert_eq!(test_listener.chain_id(), chain_id);
         
         let display_string = format!("{}", test_listener);
         assert_eq!(display_string, "NewRandomnessTaskListener");

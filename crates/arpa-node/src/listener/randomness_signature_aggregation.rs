@@ -117,8 +117,7 @@ mod tests {
     use crate::event::types::Topic;
     use crate::subscriber::{DebuggableEvent, DebuggableSubscriber, Subscriber};
     use arpa_core::{
-        ComponentTaskType, Config, GeneralMainChainIdentity, ListenerType, RandomnessTask,
-        PLACEHOLDER_ADDRESS, DKGStatus,RandomnessRequestType
+        ComponentTaskType, Config, DKGStatus, FixedIntervalRetryDescriptor, GeneralMainChainIdentity, ListenerType, RandomnessRequestType, RandomnessTask, PLACEHOLDER_ADDRESS
     };
     use arpa_dal::{
         cache::{
@@ -328,11 +327,14 @@ mod tests {
             Address::random(),
             contract_transaction_retry_descriptor,
             contract_view_retry_descriptor,
+            None,
         );
 
         let main_chain = GeneralMainChain::<G2Curve, G2Scheme>::new(
             "main chain".to_string(),
             false,
+            false,
+            true,
             main_chain_identity.clone(),
             node_cache.clone(),
             group_cache.clone(),
@@ -373,9 +375,19 @@ mod tests {
         let group_cache = context_lock.get_main_chain().get_group_cache();
         let randomness_signature_cache = context_lock.get_main_chain().get_randomness_result_cache();
         let event_queue = context_lock.get_event_queue();
-
-        let listener = RandomnessSignatureAggregationListener::<G2Curve>::new(
+        let listener_descriptor = ListenerDescriptor {
             chain_id,
+            l_type: ListenerType::RandomnessSignatureAggregation,
+            interval_millis: 1000, 
+            use_jitter: true,      
+            reset_descriptor: FixedIntervalRetryDescriptor {
+                interval_millis: 5000, 
+                max_attempts: 3,       
+                use_jitter: true,      
+            },
+        };
+        let listener = RandomnessSignatureAggregationListener::<G2Curve>::new(
+            listener_descriptor.clone(),
             id_address,
             block_cache.clone(),
             group_cache.clone(),
@@ -429,7 +441,7 @@ mod tests {
 
         let new_event_queue = Arc::new(RwLock::new(EventQueue::new()));
         let listener_for_non_committer = RandomnessSignatureAggregationListener::<G2Curve>::new(
-            chain_id,
+            listener_descriptor.clone(),
             id_address,
             block_cache.clone(),
             group_cache.clone(),

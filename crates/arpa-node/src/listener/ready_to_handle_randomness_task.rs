@@ -150,7 +150,7 @@ mod tests {
     use crate::event::types::Topic;
     use crate::subscriber::{DebuggableEvent, DebuggableSubscriber, Subscriber};
     use arpa_core::{
-        Config, GeneralMainChainIdentity, RandomnessRequestType
+        Config, FixedIntervalRetryDescriptor, GeneralMainChainIdentity, ListenerType, RandomnessRequestType
     };
     use arpa_dal::cache::{InMemoryBLSTasksQueue, InMemoryBlockInfoCache, InMemoryGroupInfoCache};
     use ethers::{
@@ -332,6 +332,7 @@ mod tests {
             adapter_address,    
             config.get_time_limits().contract_transaction_retry_descriptor,
             config.get_time_limits().contract_view_retry_descriptor,
+            None,
         );
         println!("Chain identity created");
         
@@ -421,8 +422,19 @@ mod tests {
         }
         
         let exclusive_window = 10;
-        let listener = ReadyToHandleRandomnessTaskListener::<G2Curve>::new(
+        let listener_descriptor = ListenerDescriptor {
             chain_id,
+            l_type: ListenerType::ReadyToHandleRandomnessTask,
+            interval_millis: 1000, 
+            use_jitter: true,      
+            reset_descriptor: FixedIntervalRetryDescriptor {
+                interval_millis: 5000, 
+                max_attempts: 3,       
+                use_jitter: true,      
+            },
+        };
+        let listener = ReadyToHandleRandomnessTaskListener::<G2Curve>::new(
+            listener_descriptor,
             id_address,
             chain_identity_arc.clone(),
             block_cache.clone(),
@@ -516,7 +528,7 @@ mod tests {
         assert!(interruption_result.is_ok(), "Handle interruption failed");
         
         println!("Testing chain_id method");
-        assert_eq!(listener.chain_id().await, chain_id);
+        assert_eq!(listener.chain_id(), chain_id);
         
         let display_string = format!("{}", listener);
         assert_eq!(display_string, "ReadyToHandleRandomnessTaskListener");

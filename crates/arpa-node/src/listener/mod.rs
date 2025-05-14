@@ -102,8 +102,6 @@ pub mod tests {
     use std::time::Duration;
     use tokio::sync::Mutex;
     use tokio::time::sleep;
-    
-    use arpa_core::FixedIntervalRetryDescriptor;
     use log::LevelFilter;
 
     struct TestLogCollector {
@@ -127,6 +125,7 @@ pub mod tests {
         fn flush(&self) {}
     }
 
+    #[derive(Debug)]
     struct TestListener {
         listen_counter: Arc<AtomicUsize>,
         handle_interruption_counter: Arc<AtomicUsize>,
@@ -173,7 +172,21 @@ pub mod tests {
             Ok(())
         }
 
-        async fn chain_id(&self) -> usize {
+        fn listener_descriptor(&self) -> arpa_core::ListenerDescriptor {
+            arpa_core::ListenerDescriptor {
+                chain_id: self.chain_id,
+                l_type: arpa_core::ListenerType::Block,
+                interval_millis: 150, 
+                use_jitter: true,     
+                reset_descriptor: arpa_core::FixedIntervalRetryDescriptor {
+                    interval_millis: 150, 
+                    max_attempts: 3,       
+                    use_jitter: true,      
+                },
+            }
+        }
+    
+        fn chain_id(&self) -> usize {
             self.chain_id
         }
     }
@@ -201,15 +214,7 @@ pub mod tests {
         let (listener, listen_counter, _, _, _) = setup_test_listener();
         
         let listener_handle = tokio::spawn(async move {
-            listener.start(
-                100,
-                false,
-                FixedIntervalRetryDescriptor {
-                    interval_millis: 50,
-                    max_attempts: 3,
-                    use_jitter: false,
-                },
-            ).await
+            listener.start().await
         });
         
         sleep(Duration::from_millis(550)).await;
@@ -228,15 +233,7 @@ pub mod tests {
         should_fail.store(true, Ordering::SeqCst);
         
         let listener_handle = tokio::spawn(async move {
-            listener.start(
-                100,
-                false,
-                FixedIntervalRetryDescriptor {
-                    interval_millis: 50,
-                    max_attempts: 3,
-                    use_jitter: false,
-                },
-            ).await
+            listener.start().await
         });
         
         sleep(Duration::from_millis(400)).await;
@@ -319,27 +316,11 @@ pub mod tests {
         listener2.initialize().await.unwrap();
         
         let handle1 = tokio::spawn(async move {
-            listener1.start(
-                100,
-                false,
-                FixedIntervalRetryDescriptor {
-                    interval_millis: 50,
-                    max_attempts: 3,
-                    use_jitter: false,
-                },
-            ).await
+            listener1.start().await
         });
         
         let handle2 = tokio::spawn(async move {
-            listener2.start(
-                150,
-                false,
-                FixedIntervalRetryDescriptor {
-                    interval_millis: 50,
-                    max_attempts: 3,
-                    use_jitter: false,
-                },
-            ).await
+            listener2.start().await
         });
         
         sleep(Duration::from_millis(500)).await;
@@ -365,15 +346,7 @@ pub mod tests {
         should_fail.store(true, Ordering::SeqCst);
         
         let listener_handle = tokio::spawn(async move {
-            listener.start(
-                100,
-                false,
-                FixedIntervalRetryDescriptor {
-                    interval_millis: 50,
-                    max_attempts: 1,
-                    use_jitter: false,
-                },
-            ).await
+            listener.start().await
         });
         
         sleep(Duration::from_millis(300)).await;

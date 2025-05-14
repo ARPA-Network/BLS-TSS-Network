@@ -149,7 +149,7 @@ mod tests {
     use crate::event::types::Topic;
     use crate::subscriber::{DebuggableEvent, DebuggableSubscriber, Subscriber};
     use arpa_core::{
-        GeneralMainChainIdentity, Config, DKGTask
+        Config, DKGTask, FixedIntervalRetryDescriptor, GeneralMainChainIdentity, ListenerType
     };
     use arpa_dal::{
         cache::InMemoryGroupInfoCache,
@@ -212,7 +212,19 @@ mod tests {
         
         Ok(controller_address)
     }
-
+    fn create_listener_descriptor(chain_id: usize) -> ListenerDescriptor {
+        ListenerDescriptor {
+            chain_id,
+            l_type: ListenerType::PreGrouping,
+            interval_millis: 1000,
+            use_jitter: true,
+            reset_descriptor: FixedIntervalRetryDescriptor {
+                interval_millis: 5000,
+                max_attempts: 3,
+                use_jitter: true,
+            },
+        }
+    }
     async fn mock_subscribe_to_events(
         eq: &mut EventQueue,
         subscriber_name: &str,
@@ -297,6 +309,7 @@ mod tests {
             node_registry_address,
             config.get_time_limits().contract_transaction_retry_descriptor,
             config.get_time_limits().contract_view_retry_descriptor,
+            None,
         );
         
         let group_cache: Arc<RwLock<Box<dyn GroupInfoHandler<G2Curve>>>> = Arc::new(RwLock::new(
@@ -306,8 +319,9 @@ mod tests {
         let event_queue = Arc::new(RwLock::new(EventQueue::new()));
         let chain_identity_arc: Arc<RwLock<ChainIdentityHandlerType<G2Curve>>> = 
             Arc::new(RwLock::new(Box::new(chain_identity) as ChainIdentityHandlerType<G2Curve>));
-        
+        let listener_descriptor = create_listener_descriptor(chain_id);
         let listener = PreGroupingListener::<G2Curve>::new(
+            listener_descriptor.clone(),
             chain_identity_arc.clone(),
             group_cache.clone(),
             event_queue.clone(),
@@ -397,6 +411,7 @@ mod tests {
             node_registry_address,
             config.get_time_limits().contract_transaction_retry_descriptor,
             config.get_time_limits().contract_view_retry_descriptor,
+            None,
         );
         println!("Chain identity created");
         
@@ -416,8 +431,9 @@ mod tests {
             println!("Setting up test subscriber");
             mock_subscribe_to_events(&mut *eq_write, "test_subscriber").await
         };
-        
+        let listener_descriptor = create_listener_descriptor(chain_id);
         let listener = PreGroupingListener::<G2Curve>::new(
+            listener_descriptor.clone(),
             chain_identity_arc.clone(),
             group_cache.clone(),
             event_queue.clone(),
@@ -527,6 +543,7 @@ mod tests {
             node_registry_address,
             config.get_time_limits().contract_transaction_retry_descriptor,
             config.get_time_limits().contract_view_retry_descriptor,
+            None,
         );
         
         let group_cache: Arc<RwLock<Box<dyn GroupInfoHandler<G2Curve>>>> = Arc::new(RwLock::new(
@@ -542,8 +559,9 @@ mod tests {
             let mut eq_write = event_queue.write().await;
             mock_subscribe_to_events(&mut *eq_write, "test_subscriber").await
         };
-        
+        let listener_descriptor = create_listener_descriptor(chain_id);
         let listener = PreGroupingListener::<G2Curve>::new(
+            listener_descriptor.clone(),
             chain_identity_arc.clone(),
             group_cache.clone(),
             event_queue.clone(),
@@ -629,6 +647,7 @@ mod tests {
             node_registry_address,
             config.get_time_limits().contract_transaction_retry_descriptor,
             config.get_time_limits().contract_view_retry_descriptor,
+            None,
         );
         
         let group_cache: Arc<RwLock<Box<dyn GroupInfoHandler<G2Curve>>>> = Arc::new(RwLock::new(
@@ -662,8 +681,9 @@ mod tests {
             let mut eq_write = event_queue.write().await;
             mock_subscribe_to_events(&mut *eq_write, "test_subscriber").await
         };
-        
+        let listener_descriptor = create_listener_descriptor(chain_id);
         let listener = PreGroupingListener::<G2Curve>::new(
+            listener_descriptor.clone(),
             chain_identity_arc.clone(),
             group_cache.clone(),
             event_queue.clone(),

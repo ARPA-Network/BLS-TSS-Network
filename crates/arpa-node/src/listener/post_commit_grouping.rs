@@ -116,7 +116,7 @@ mod tests {
     use crate::event::types::Topic;
     use crate::subscriber::{DebuggableEvent, DebuggableSubscriber, Subscriber};
     use arpa_core::{
-        GeneralMainChainIdentity, Config, DKGStatus, Group, Member
+        Config, DKGStatus, FixedIntervalRetryDescriptor, GeneralMainChainIdentity, Group, ListenerType, Member
     };
     use arpa_dal::{
         cache::InMemoryGroupInfoCache,
@@ -273,6 +273,7 @@ mod tests {
             node_registry_address,
             config.get_time_limits().contract_transaction_retry_descriptor,
             config.get_time_limits().contract_view_retry_descriptor,
+            None,
         );
         
         let controller = MockController::new(controller_address, client.clone());
@@ -340,7 +341,19 @@ mod tests {
         let chain_identity_arc: Arc<RwLock<ChainIdentityHandlerType<G2Curve>>> = 
             Arc::new(RwLock::new(Box::new(chain_identity) as ChainIdentityHandlerType<G2Curve>));
         
+        let listener_descriptor = ListenerDescriptor {
+                chain_id,
+                l_type: ListenerType::PostCommitGrouping,
+                interval_millis: 1000, 
+                use_jitter: true,      
+                reset_descriptor: FixedIntervalRetryDescriptor {
+                    interval_millis: 5000, 
+                    max_attempts: 3,       
+                    use_jitter: true,      
+                },
+            };
         let listener = PostCommitGroupingListener::<G2Curve>::new(
+            listener_descriptor.clone(),
             chain_identity_arc.clone(),
             group_cache.clone(),
             event_queue.clone(),
@@ -417,6 +430,7 @@ mod tests {
         
         let new_event_queue = Arc::new(RwLock::new(EventQueue::new()));
         let listener_for_not_ready = PostCommitGroupingListener::<G2Curve>::new(
+            listener_descriptor.clone(),
             chain_identity_arc.clone(),
             group_cache.clone(),
             new_event_queue.clone(),
@@ -452,6 +466,7 @@ mod tests {
         
         let new_event_queue2 = Arc::new(RwLock::new(EventQueue::new()));
         let listener_for_inactive_group = PostCommitGroupingListener::<G2Curve>::new(
+            listener_descriptor.clone(),
             chain_identity_arc.clone(),
             group_cache.clone(),
             new_event_queue2.clone(),
@@ -470,7 +485,7 @@ mod tests {
         let interruption_result = listener.handle_interruption().await;
         assert!(interruption_result.is_ok(), "Handle interruption failed");
         
-        assert_eq!(listener.chain_id().await, chain_id);
+        assert_eq!(listener.chain_id(), chain_id);
         
         let display_string = format!("{}", listener);
         assert_eq!(display_string, "PostCommitGroupingListener");
