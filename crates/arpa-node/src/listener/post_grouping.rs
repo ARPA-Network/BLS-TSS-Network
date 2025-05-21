@@ -132,7 +132,7 @@ mod tests {
         utils::Anvil,
     };
     use ethers::signers::{LocalWallet, Signer};
-    use ethers_middleware::SignerMiddleware;
+    use ethers::middleware::SignerMiddleware;
     use ethers::contract::{ContractFactory, abigen};
     use std::time::Duration;
     use tokio::time::timeout;

@@ -143,7 +143,7 @@ impl<PC: Curve + Sync + Send> Listener for ReadyToHandleRandomnessTaskListener<P
 mod tests {
     use super::*;
     use ethers::signers::{LocalWallet, Signer};
-    use ethers_middleware::SignerMiddleware;
+    use ethers::middleware::SignerMiddleware;
     use ethers::contract::{ContractFactory, abigen};
     use threshold_bls::schemes::bn254::G2Curve;
     use crate::queue::EventSubscriber;

@@ -141,7 +141,7 @@ mod tests {
     use super::*;
     use arpa_dal::cache::InMemoryBLSTasksQueue;
     use ethers::signers::{LocalWallet, Signer};
-    use ethers_middleware::SignerMiddleware;
+    use ethers::middleware::SignerMiddleware;
     use ethers::contract::{ContractFactory, abigen};
     use ethers::types::{U256, Bytes, BlockNumber};
     use threshold_bls::schemes::bn254::G2Curve;
@@ -359,8 +359,18 @@ mod tests {
         let current_block_number = current_block.number.unwrap().as_u64();
         println!("Current block number: {}", current_block_number);
         
-        println!("Emitting RandomnessRequest event from mock adapter...");
+        println!("Starting listener.listen()...");
+        let listen_handle = tokio::spawn(async move {
+            let result = listener.listen().await;
+            if result.is_err() {
+                println!("Listener.listen() failed: {:?}", result);
+            }
+            result
+        });
         
+        tokio::time::sleep(Duration::from_millis(1000)).await;
+        
+        println!("Emitting RandomnessRequest event from mock adapter...");
         let mock_adapter = MockAdapter::new(adapter_address, client.clone());
         
         let tx_request = mock_adapter.emit_randomness_request(
@@ -384,18 +394,6 @@ mod tests {
         
         let receipt = tx.await?;
         println!("Transaction mined in block: {}", receipt.unwrap().block_number.unwrap());
-        
-        println!("Starting listener.listen()...");
-        
-        let listen_handle = tokio::spawn(async move {
-            let result = listener.listen().await;
-            if result.is_err() {
-                println!("Listener.listen() failed: {:?}", result);
-            }
-            result
-        });
-        
-        tokio::time::sleep(Duration::from_millis(500)).await;
         
         println!("Waiting for event to be received...");
         let received_event = timeout(Duration::from_secs(10), event_receiver.recv()).await

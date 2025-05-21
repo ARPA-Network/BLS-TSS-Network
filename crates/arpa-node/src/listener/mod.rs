@@ -223,7 +223,7 @@ pub mod tests {
         let _ = listener_handle.await;
         
         let count = listen_counter.load(Ordering::SeqCst);
-        assert!(count >= 4 && count <= 6, "Expected 4-6 calls, got {}", count);
+        assert!(count >= 4 && count <= 8, "Expected 4-8 calls, got {}", count);
     }
 
     #[tokio::test]

@@ -140,10 +140,9 @@ impl<PC: Curve + Sync + Send> Listener for PreGroupingListener<PC> {
 mod tests {
     use super::*;
     use ethers::signers::{LocalWallet, Signer};
-    use ethers_middleware::SignerMiddleware;
-    use ethers::contract::{ContractFactory, abigen};
-    use ethers_contract::EthEvent;
-    use ethers_core::types::{U256, Bytes};
+    use ethers::middleware::SignerMiddleware;
+    use ethers::contract::{ContractFactory, abigen, EthEvent};
+    use ethers::core::types::{U256, Bytes};
     use threshold_bls::schemes::bn254::G2Curve;
     use crate::queue::EventSubscriber;
     use crate::event::types::Topic;
