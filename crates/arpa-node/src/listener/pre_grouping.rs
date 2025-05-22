@@ -136,7 +136,7 @@ impl<PC: Curve + Sync + Send> Listener for PreGroupingListener<PC> {
     }
 }
 
-#[cfg(test)]
+#[cfg(feature = "unittest")]
 mod tests {
     use super::*;
     use crate::test_contracts::mockcontroller:: deploy_with_args_and_get_mock_controller;

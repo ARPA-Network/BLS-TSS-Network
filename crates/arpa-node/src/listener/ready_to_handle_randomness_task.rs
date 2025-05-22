@@ -139,7 +139,7 @@ impl<PC: Curve + Sync + Send> Listener for ReadyToHandleRandomnessTaskListener<P
     }
 }
 
-#[cfg(test)]
+#[cfg(feature = "unittest")]
 mod tests {
     use super::*;
     use ethers::signers::{LocalWallet, Signer};

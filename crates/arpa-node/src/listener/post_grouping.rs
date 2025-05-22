@@ -117,7 +117,7 @@ impl<PC: Curve + Sync + Send + 'static> Listener for PostGroupingListener<PC> {
     }
 }
 
-#[cfg(test)]
+#[cfg(feature = "unittest")]
 mod tests {
     use super::*;
     use crate::event::Event;

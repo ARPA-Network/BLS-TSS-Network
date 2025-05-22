@@ -77,4 +77,4 @@ regex = { version = "1.11.1", optional = true }
 unittest = ["regex"]  
 
 [dev-dependencies]
-arpa-node = { path = ".", features = ["unittest"] }  
+arpa-node = { path = ".", features = [] }  

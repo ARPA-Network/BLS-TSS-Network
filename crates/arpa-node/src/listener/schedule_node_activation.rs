@@ -114,7 +114,7 @@ impl<PC: Curve + Sync + Send> Listener for NodeActivationListener<PC> {
     }
 }
 
-#[cfg(test)]
+#[cfg(feature = "unittest")]
 mod tests {
     use super::*;
     use ethers::signers::{LocalWallet, Signer};

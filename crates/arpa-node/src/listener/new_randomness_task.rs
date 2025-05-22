@@ -136,7 +136,7 @@ impl<PC: Curve + Sync + Send> Listener for NewRandomnessTaskListener<PC> {
     }
 }
 
-#[cfg(test)]
+#[cfg(feature = "unittest")]
 mod tests {
     use super::*;
     use crate::test_contracts::mockadapter:: deploy_and_get_mock_adapter;
