@@ -139,11 +139,11 @@ impl<PC: Curve + Sync + Send> Listener for NewRandomnessTaskListener<PC> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::test_contracts::mockadapter:: deploy_and_get_mock_adapter;
     use arpa_dal::cache::InMemoryBLSTasksQueue;
     use ethers::signers::{LocalWallet, Signer};
     use ethers::middleware::SignerMiddleware;
-    use ethers::contract::{ContractFactory, abigen};
-    use ethers::types::{U256, Bytes, BlockNumber};
+    use ethers::types::{U256, BlockNumber};
     use threshold_bls::schemes::bn254::G2Curve;
     use crate::queue::EventSubscriber;
     use crate::event::types::Topic;
@@ -161,35 +161,6 @@ mod tests {
     use tokio::time::timeout;
     use anyhow::anyhow;
     use std::sync::Arc;
-
-    abigen!(
-        MockAdapter,
-        r#"[
-            event RandomnessRequest(bytes32 indexed requestId, uint64 indexed subId, uint32 indexed groupIndex, uint8 requestType, bytes params, address sender, uint256 seed, uint16 requestConfirmations, uint32 callbackGasLimit, uint256 callbackMaxGasPrice, uint256 estimatedPayment)
-            function emitRandomnessRequest(bytes32 requestId, uint64 subId, uint32 groupIndex, uint8 requestType, bytes calldata params, address sender, uint256 seed, uint16 requestConfirmations, uint32 callbackGasLimit, uint256 callbackMaxGasPrice, uint256 estimatedPayment) external
-        ]"#,
-    );
-
-    async fn deploy_mock_adapter(
-        client: Arc<SignerMiddleware<Provider<Http>, LocalWallet>>,
-    ) -> Result<Address, Box<dyn std::error::Error>> {
-        println!("Deploying mock adapter contract...");
-
-        const ADAPTER_ABI: &str = r#"[{"anonymous":false,"inputs":[{"indexed":true,"internalType":"bytes32","name":"requestId","type":"bytes32"},{"indexed":true,"internalType":"uint64","name":"subId","type":"uint64"},{"indexed":true,"internalType":"uint32","name":"groupIndex","type":"uint32"},{"indexed":false,"internalType":"enum IRequestTypeBase.RequestType","name":"requestType","type":"uint8"},{"indexed":false,"internalType":"bytes","name":"params","type":"bytes"},{"indexed":false,"internalType":"address","name":"sender","type":"address"},{"indexed":false,"internalType":"uint256","name":"seed","type":"uint256"},{"indexed":false,"internalType":"uint16","name":"requestConfirmations","type":"uint16"},{"indexed":false,"internalType":"uint32","name":"callbackGasLimit","type":"uint32"},{"indexed":false,"internalType":"uint256","name":"callbackMaxGasPrice","type":"uint256"},{"indexed":false,"internalType":"uint256","name":"estimatedPayment","type":"uint256"}],"name":"RandomnessRequest","type":"event"},{"inputs":[{"internalType":"bytes32","name":"requestId","type":"bytes32"},{"internalType":"uint64","name":"subId","type":"uint64"},{"internalType":"uint32","name":"groupIndex","type":"uint32"},{"internalType":"enum IRequestTypeBase.RequestType","name":"requestType","type":"uint8"},{"internalType":"bytes","name":"params","type":"bytes"},{"internalType":"address","name":"sender","type":"address"},{"internalType":"uint256","name":"seed","type":"uint256"},{"internalType":"uint16","name":"requestConfirmations","type":"uint16"},{"internalType":"uint32","name":"callbackGasLimit","type":"uint32"},{"internalType":"uint256","name":"callbackMaxGasPrice","type":"uint256"},{"internalType":"uint256","name":"estimatedPayment","type":"uint256"}],"name":"emitRandomnessRequest","outputs":[],"stateMutability":"nonpayable","type":"function"}]"#;
-        const ADAPTER_BYTECODE: &str = "6080604052348015600e575f5ffd5b506102ec8061001c5f395ff3fe608060405234801561000f575f5ffd5b5060043610610029575f3560e01c8063b3af18b41461002d575b5f5ffd5b61004061003b36600461013c565b610042565b005b8963ffffffff168b67ffffffffffffffff168d7fd26299589dd9197a8dc30a0fa17b0fe7dd432bc3441aa5f5631ea1e14c1af7448c8c8c8c8c8c8c8c8c60405161009499989796959493929190610218565b60405180910390a4505050505050505050505050565b803563ffffffff811681146100bd575f5ffd5b919050565b8035600381106100bd575f5ffd5b5f5f83601f8401126100e0575f5ffd5b50813567ffffffffffffffff8111156100f7575f5ffd5b60208301915083602082850101111561010e575f5ffd5b9250929050565b80356001600160a01b03811681146100bd575f5ffd5b803561ffff811681146100bd575f5ffd5b5f5f5f5f5f5f5f5f5f5f5f5f6101608d8f031215610158575f5ffd5b8c359b5060208d013567ffffffffffffffff81168114610176575f5ffd5b9a5061018460408e016100aa565b995061019260608e016100c2565b985067ffffffffffffffff60808e013511156101ac575f5ffd5b6101bc8e60808f01358f016100d0565b90985096506101cd60a08e01610115565b955060c08d013594506101e260e08e0161012b565b93506101f16101008e016100aa565b9b9e9a9d50989b979a96999598509396929591949193505061012082013591610140013590565b5f60038b1061023557634e487b7160e01b5f52602160045260245ffd5b8a8252610100602083015288610100830152888a6101208401375f6101208a84010152610120601f19601f8b0116830101905061027d60408301896001600160a01b03169052565b866060830152610293608083018761ffff169052565b63ffffffff851660a083015260c082019390935260e0015297965050505050505056fea264697066735822122063806527f6653c276674a3868b2937ce83f46748f5756c48bed55f7ce02f2f2c64736f6c634300081b0033";
-
-        let adapter_factory = ContractFactory::new(
-            serde_json::from_str(ADAPTER_ABI).expect("Invalid ADAPTER_ABI"),
-            ADAPTER_BYTECODE.parse::<Bytes>().expect("Invalid ADAPTER_BYTECODE"),
-            client.clone(),
-        );
-        
-        let adapter_contract_deployed = adapter_factory.deploy(())?.send().await?;
-        let adapter_address = adapter_contract_deployed.address();
-        println!("Mock Adapter contract deployed at: {}", adapter_address);
-
-        Ok(adapter_address)
-    }
 
     async fn mock_subscribe_to_events(
         eq: &mut EventQueue,
@@ -278,9 +249,11 @@ mod tests {
             wallet.clone().with_chain_id(anvil.chain_id()),
         ));
         
-        let adapter_address = deploy_mock_adapter(client.clone()).await
-            .map_err(|e| anyhow!("Failed to deploy mock adapter: {}", e))?;
-        
+        let mock_adapter = deploy_and_get_mock_adapter(client.clone()).await
+        .map_err(|e| anyhow!("Failed to deploy mock adapter: {}", e))?;
+    
+        let adapter_address = mock_adapter.address();
+            
         println!("Mock Adapter deployed at: {}", adapter_address);
         
         let controller_address = Address::random();
@@ -371,7 +344,6 @@ mod tests {
         tokio::time::sleep(Duration::from_millis(1000)).await;
         
         println!("Emitting RandomnessRequest event from mock adapter...");
-        let mock_adapter = MockAdapter::new(adapter_address, client.clone());
         
         let tx_request = mock_adapter.emit_randomness_request(
             request_id_bytes32,

@@ -119,12 +119,18 @@ mod tests {
     use super::*;
     use ethers::signers::{LocalWallet, Signer};
     use ethers::middleware::SignerMiddleware;
-    use ethers::contract::{ContractFactory, abigen};
     use threshold_bls::schemes::bn254::G2Curve;
     use crate::queue::EventSubscriber;
     use crate::event::types::Topic;
     use crate::subscriber::{DebuggableEvent, DebuggableSubscriber, Subscriber};
-    use arpa_core::{Config, FixedIntervalRetryDescriptor, GeneralMainChainIdentity, ListenerType};
+    use crate::test_contracts::mockcontroller:: deploy_with_args_and_get_mock_controller;
+    use crate::test_contracts::mocknoderegistry::{
+        MockNodeRegistry, deploy_and_get_mock_node_registry
+    };
+    
+    use arpa_core::{
+        Config, FixedIntervalRetryDescriptor, GeneralMainChainIdentity, ListenerType
+    };
     use ethers::{
         providers::{Provider, Ws, Http},
         types::{Address, Bytes},
@@ -135,65 +141,43 @@ mod tests {
     use anyhow::anyhow;
     use std::sync::Arc;
 
-    abigen!(
-        MockController,
-        r#"[
-            function getControllerConfig() external view returns (address nodeRegistryAddress,address adapterContractAddress, uint256 disqualifiedNodePenaltyAmount, uint256 defaultNumberOfCommitters,uint256 defaultDkgPhaseDuration, uint256 groupMaxCapacity,uint256 idealNumberOfGroups, uint256 dkgPostProcessReward)
-        ]"#,
-    );
-
-    abigen!(
-        MockNodeRegistry,
-        r#"[
-            function getNode(address idAddress) external view returns (tuple(address idAddress, bytes dkgPublicKey, bool isEigenlayerNode, bool state, uint256 pendingUntilBlock))
-            function setNodeState(address idAddress, bool state) external
-            function registerNode(address idAddress, bytes memory dkgPublicKey, bool isEigenlayerNode) external
-        ]"#,
-    );
-
-    async fn deploy_mock_contracts(
+    async fn setup_mock_contracts(
         client: Arc<SignerMiddleware<Provider<Http>, LocalWallet>>,
         node_address: Address,
         is_node_active: bool
     ) -> Result<(Address, Address), Box<dyn std::error::Error>> {
         println!("Deploying mock contracts...");
 
-        const NODE_REGISTRY_ABI: &str = r#"[{"inputs":[{"internalType":"address","name":"nodeAddress","type":"address"}],"name":"getNode","outputs":[{"components":[{"internalType":"address","name":"idAddress","type":"address"},{"internalType":"bytes","name":"dkgPublicKey","type":"bytes"},{"internalType":"bool","name":"isEigenlayerNode","type":"bool"},{"internalType":"bool","name":"state","type":"bool"},{"internalType":"uint256","name":"pendingUntilBlock","type":"uint256"}],"internalType":"struct INodeRegistry.Node","name":"","type":"tuple"}],"stateMutability":"view","type":"function"},{"inputs":[{"internalType":"address","name":"","type":"address"}],"name":"nodes","outputs":[{"internalType":"address","name":"idAddress","type":"address"},{"internalType":"bytes","name":"dkgPublicKey","type":"bytes"},{"internalType":"bool","name":"isEigenlayerNode","type":"bool"},{"internalType":"bool","name":"state","type":"bool"},{"internalType":"uint256","name":"pendingUntilBlock","type":"uint256"}],"stateMutability":"view","type":"function"},{"inputs":[{"internalType":"address","name":"idAddress","type":"address"},{"internalType":"bytes","name":"dkgPublicKey","type":"bytes"},{"internalType":"bool","name":"isEigenlayerNode","type":"bool"}],"name":"registerNode","outputs":[],"stateMutability":"nonpayable","type":"function"},{"inputs":[{"internalType":"address","name":"idAddress","type":"address"},{"internalType":"bool","name":"state","type":"bool"}],"name":"setNodeState","outputs":[],"stateMutability":"nonpayable","type":"function"}]"#;
-        const NODE_REGISTRY_BYTECODE: &str = "6080604052348015600e575f5ffd5b506107178061001c5f395ff3fe608060405234801561000f575f5ffd5b506004361061004a575f3560e01c8063189a5a171461004e578063933ff7b51461007b5780639d20904814610090578063f56f705f146100b0575b5f5ffd5b61006161005c366004610392565b6100f1565b6040516100729594939291906103e0565b60405180910390f35b61008e610089366004610443565b6101b6565b005b6100a361009e366004610392565b610261565b6040516100729190610516565b61008e6100be366004610571565b6001600160a01b039091165f90815260208190526040902060020180549115156101000261ff0019909216919091179055565b5f60208190529081526040902080546001820180546001600160a01b03909216929161011c906105a2565b80601f0160208091040260200160405190810160405280929190818152602001828054610148906105a2565b80156101935780601f1061016a57610100808354040283529160200191610193565b820191905f5260205f20905b81548152906001019060200180831161017657829003601f168201915b505050506002830154600390930154919260ff8082169361010090920416915085565b6040805160a0810182526001600160a01b038581168083526020808401878152861515858701525f606086018190526080860181905292835290829052939020825181546001600160a01b0319169216919091178155915190919060018201906102209082610626565b506040820151600282018054606085015115156101000261ff00199315159390931661ffff1990911617919091179055608090910151600390910155505050565b6040805160a080820183525f80835260606020808501829052848601839052908401829052608084018290526001600160a01b0386811683528282529185902085519384019095528454909116825260018401805493949293918401916102c7906105a2565b80601f01602080910402602001604051908101604052809291908181526020018280546102f3906105a2565b801561033e5780601f106103155761010080835404028352916020019161033e565b820191905f5260205f20905b81548152906001019060200180831161032157829003601f168201915b5050509183525050600282015460ff80821615156020840152610100909104161515604082015260039091015460609091015292915050565b80356001600160a01b038116811461038d575f5ffd5b919050565b5f602082840312156103a2575f5ffd5b6103ab82610377565b9392505050565b5f81518084528060208401602086015e5f602082860101526020601f19601f83011685010191505092915050565b6001600160a01b038616815260a0602082018190525f90610403908301876103b2565b941515604083015250911515606083015260809091015292915050565b634e487b7160e01b5f52604160045260245ffd5b8035801515811461038d575f5ffd5b5f5f5f60608486031215610455575f5ffd5b61045e84610377565b9250602084013567ffffffffffffffff811115610479575f5ffd5b8401601f81018613610489575f5ffd5b803567ffffffffffffffff8111156104a3576104a3610420565b604051601f8201601f19908116603f0116810167ffffffffffffffff811182821017156104d2576104d2610420565b6040528181528282016020018810156104e9575f5ffd5b816020840160208301375f6020838301015280945050505061050d60408501610434565b90509250925092565b602080825282516001600160a01b03168282015282015160a060408301525f9061054360c08401826103b2565b9050604084015115156060840152606084015115156080840152608084015160a08401528091505092915050565b5f5f60408385031215610582575f5ffd5b61058b83610377565b915061059960208401610434565b90509250929050565b600181811c908216806105b657607f821691505b6020821081036105d457634e487b7160e01b5f52602260045260245ffd5b50919050565b601f82111561062157805f5260205f20601f840160051c810160208510156105ff5750805b601f840160051c820191505b8181101561061e575f815560010161060b565b50505b505050565b815167ffffffffffffffff81111561064057610640610420565b6106548161064e84546105a2565b846105da565b6020601f821160018114610686575f831561066f5750848201515b5f19600385901b1c1916600184901b17845561061e565b5f84815260208120601f198516915b828110156106b55787850151825560209485019460019092019101610695565b50848210156106d257868401515f19600387901b60f8161c191681555b50505050600190811b0190555056fea2646970667358221220fb71010de0b2c73e60fab5dfe9230f2e003333956bcf1c2394d35a91cb89ebd064736f6c634300081b0033";
-
-        const CONTROLLER_ABI: &str = r#"[{"inputs":[{"internalType":"address","name":"_nodeRegistryAddress","type":"address"}],"stateMutability":"nonpayable","type":"constructor"},{"inputs":[],"name":"adapterAddress","outputs":[{"internalType":"address","name":"","type":"address"}],"stateMutability":"view","type":"function"},{"inputs":[],"name":"getControllerConfig","outputs":[{"internalType":"address","name":"nodeRegistryContractAddress","type":"address"},{"internalType":"address","name":"adapterContractAddress","type":"address"},{"internalType":"uint256","name":"disqualifiedNodePenaltyAmount","type":"uint256"},{"internalType":"uint256","name":"defaultNumberOfCommitters","type":"uint256"},{"internalType":"uint256","name":"defaultDkgPhaseDuration","type":"uint256"},{"internalType":"uint256","name":"groupMaxCapacity","type":"uint256"},{"internalType":"uint256","name":"idealNumberOfGroups","type":"uint256"},{"internalType":"uint256","name":"dkgPostProcessReward","type":"uint256"}],"stateMutability":"view","type":"function"},{"inputs":[],"name":"nodeRegistryAddress","outputs":[{"internalType":"address","name":"","type":"address"}],"stateMutability":"view","type":"function"}]"#;
-        const CONTROLLER_BYTECODE: &str = "6080604052348015600e575f5ffd5b50604051610192380380610192833981016040819052602b916055565b5f80546001600160a01b039092166001600160a01b03199283161790556001805490911690556080565b5f602082840312156064575f5ffd5b81516001600160a01b03811681146079575f5ffd5b9392505050565b6101058061008d5f395ff3fe6080604052348015600e575f5ffd5b5060043610603a575f3560e01c806366c9aba614603e578063d11b8e6814606d578063fec10aa91460be575b5f5ffd5b6001546050906001600160a01b031681565b6040516001600160a01b0390911681526020015b60405180910390f35b5f54600154604080516001600160a01b0393841681529290911660208301526103e89082015260056060820152606460808201819052600a60a0830152600360c083015260e0820152610100016064565b5f546050906001600160a01b03168156fea2646970667358221220d976986fa9df26b68453eb9d7bfd8ec83f87ee1fb8b9b555235bd54082edf5e264736f6c634300081b0033";
-
-        let node_registry_factory = ContractFactory::new(
-            serde_json::from_str(NODE_REGISTRY_ABI).expect("Invalid NODE_REGISTRY_ABI"),
-            NODE_REGISTRY_BYTECODE.parse::<Bytes>().expect("Invalid NODE_REGISTRY_BYTECODE"),
-            client.clone(),
-        );
-        
-        let node_registry_contract_deployed = node_registry_factory.deploy(())?.send().await?;
-        let node_registry_address = node_registry_contract_deployed.address();
+        let node_registry = deploy_and_get_mock_node_registry(client.clone()).await?;
+        let node_registry_address = node_registry.address();
         println!("Node Registry contract deployed at: {}", node_registry_address);
 
-        let controller_factory = ContractFactory::new(
-            serde_json::from_str(CONTROLLER_ABI).expect("Invalid CONTROLLER_ABI"),
-            CONTROLLER_BYTECODE.parse::<Bytes>().expect("Invalid CONTROLLER_BYTECODE"),
+        let controller = deploy_with_args_and_get_mock_controller(
             client.clone(),
-        );
-        
-        let controller_contract_deployed = controller_factory.deploy(node_registry_address)?.send().await?;
-        let controller_address = controller_contract_deployed.address();
+            node_registry_address
+        ).await?;
+        let controller_address = controller.address();
         println!("Controller contract deployed at: {}", controller_address);
 
-        let node_registry = MockNodeRegistry::new(node_registry_address, client.clone());
+        let tx = node_registry.register_node(
+            node_address, 
+            Bytes::from(vec![1, 2, 3]), 
+            false
+        );
         
-        node_registry.register_node(node_address, Bytes::from(vec![1, 2, 3]), false).send().await?.await?;
-        println!("Node registered: {}", node_address);
+        let receipt = tx.send().await?
+            .await?;
+        println!("Node registered: {} in block {}", 
+            node_address, receipt.unwrap().block_number.unwrap());
 
         if is_node_active {
-            node_registry.set_node_state(node_address, true).send().await?.await?;
-            println!("Node state set to active");
+            let tx = node_registry.set_node_state(node_address, true);
+            let receipt = tx.send().await?
+                .await?;
+            println!("Node state set to active in block {}", 
+                receipt.unwrap().block_number.unwrap());
         } else {
-            println!("Node state set to inactive");
+            println!("Node state kept as inactive");
         }
 
         Ok((controller_address, node_registry_address))
@@ -286,10 +270,10 @@ mod tests {
             wallet.clone().with_chain_id(anvil.chain_id()),
         ));
         
-        let (controller_address, node_registry_address) = deploy_mock_contracts(
+        let (controller_address, node_registry_address) = setup_mock_contracts(
             client.clone(), 
             id_address,
-            false,
+            false, 
         ).await.map_err(|e| anyhow!("Failed to deploy mock contracts: {}", e))?;
         
         println!("Controller deployed at: {}", controller_address);
@@ -303,7 +287,7 @@ mod tests {
             ws_provider.clone(),
             anvil.ws_endpoint(),
             controller_address,
-            Address::random(),
+            Address::random(), 
             node_registry_address,
             config.get_time_limits().contract_transaction_retry_descriptor,
             config.get_time_limits().contract_view_retry_descriptor,
@@ -335,6 +319,7 @@ mod tests {
                 use_jitter: true,      
             },
         };
+        
         let mut listener = NodeActivationListener::<G2Curve>::new(
             listener_descriptor,
             is_eigenlayer,
@@ -404,6 +389,37 @@ mod tests {
             return Err(anyhow!("Received unexpected event type from listen method").into());
         }
         
+        println!("\nSetting node to active state...");
+        let node_registry = MockNodeRegistry::new(node_registry_address, client.clone());
+        let tx = node_registry.set_node_state(id_address, true);
+        let pending_tx = tx.send().await
+            .map_err(|e| anyhow!("Failed to send transaction: {}", e))?;
+
+        let receipt = pending_tx.await
+            .map_err(|e| anyhow!("Transaction failed: {}", e))?;
+        println!("Node state set to active in block {}", receipt.unwrap().block_number.unwrap());
+        
+        let new_event_queue = Arc::new(RwLock::new(EventQueue::new()));
+        let mut event_receiver = {
+            let mut eq_write = new_event_queue.write().await;
+            println!("Setting up new test subscriber");
+            mock_subscribe_to_events(&mut *eq_write, "test_subscriber_2").await
+        };
+        
+        let mut listener_for_active_node = NodeActivationListener::<G2Curve>::new(
+            listener_descriptor,
+            is_eigenlayer,
+            chain_identity_arc.clone(),
+            new_event_queue.clone(),
+        );
+        listener_for_active_node.initialize().await?;
+        
+        println!("Testing listen method with active node - should NOT generate an event");
+        listener_for_active_node.listen().await?;
+        
+        let timeout_result = timeout(Duration::from_millis(500), event_receiver.recv()).await;
+        assert!(timeout_result.is_err(), "Unexpectedly received an event when node is active");
+        
         println!("Testing handle_interruption method");
         let interruption_result = listener.handle_interruption().await;
         assert!(interruption_result.is_ok(), "Handle interruption failed");
@@ -415,6 +431,111 @@ mod tests {
         assert_eq!(display_string, "NodeActivationListener");
         
         println!("Test completed successfully");
+        Ok(())
+    }
+    
+    #[tokio::test]
+    async fn test_node_activation_listener_with_eigenlayer() -> NodeResult<()> {
+        println!("Starting test_node_activation_listener_with_eigenlayer");
+        
+        let anvil = Anvil::new().spawn();
+        let http_provider = Provider::<Http>::try_from(anvil.endpoint()).unwrap();
+        let ws_provider = Arc::new(Provider::<Ws>::connect(anvil.ws_endpoint()).await?);
+        
+        let wallet: LocalWallet = anvil.keys()[0].clone().into();
+        let id_address = wallet.address();
+        let chain_id = anvil.chain_id() as usize;
+        
+        let client = Arc::new(SignerMiddleware::new(
+            http_provider,
+            wallet.clone().with_chain_id(anvil.chain_id()),
+        ));
+        
+        let node_registry = deploy_and_get_mock_node_registry(client.clone()).await.map_err(|e| anyhow!("Failed to deploy mock node registry: {}", e))?;
+        let node_registry_address = node_registry.address();
+        
+        let controller = deploy_with_args_and_get_mock_controller(
+            client.clone(),
+            node_registry_address
+        ).await.map_err(|e| anyhow!("Failed to deploy mock controller: {}", e))?;
+        let controller_address = controller.address();
+        
+        let tx = node_registry.register_node(
+            id_address, 
+            Bytes::from(vec![1, 2, 3]), 
+            true 
+        );
+        let pending_tx = tx.send().await
+            .map_err(|e| anyhow!("Failed to send transaction: {}", e))?;
+
+        pending_tx.await
+            .map_err(|e| anyhow!("Transaction failed: {}", e))?;
+
+        let tx = node_registry.set_node_state(id_address, false);
+        let pending_tx = tx.send().await
+            .map_err(|e| anyhow!("Failed to send transaction: {}", e))?;
+
+        pending_tx.await
+            .map_err(|e| anyhow!("Transaction failed: {}", e))?;
+        
+        let config = Config::default();
+        let chain_identity = GeneralMainChainIdentity::new(
+            chain_id,
+            wallet.clone(),
+            ws_provider.clone(),
+            anvil.ws_endpoint(),
+            controller_address,
+            Address::random(),
+            node_registry_address,
+            config.get_time_limits().contract_transaction_retry_descriptor,
+            config.get_time_limits().contract_view_retry_descriptor,
+            None,
+        );
+        
+        let event_queue = Arc::new(RwLock::new(EventQueue::new()));
+        let chain_identity_arc: Arc<RwLock<ChainIdentityHandlerType<G2Curve>>> = 
+            Arc::new(RwLock::new(Box::new(chain_identity) as ChainIdentityHandlerType<G2Curve>));
+        
+        let mut event_receiver = {
+            let mut eq_write = event_queue.write().await;
+            mock_subscribe_to_events(&mut *eq_write, "test_subscriber").await
+        };
+        
+        let is_eigenlayer = true;
+        let listener_descriptor = ListenerDescriptor {
+            chain_id,
+            l_type: ListenerType::ScheduleNodeActivation,
+            interval_millis: 1000, 
+            use_jitter: true,      
+            reset_descriptor: FixedIntervalRetryDescriptor {
+                interval_millis: 5000, 
+                max_attempts: 3,       
+                use_jitter: true,      
+            },
+        };
+        
+        let mut listener = NodeActivationListener::<G2Curve>::new(
+            listener_descriptor,
+            is_eigenlayer,
+            chain_identity_arc.clone(),
+            event_queue.clone(),
+        );
+        
+        listener.initialize().await?;
+        listener.listen().await?;
+        
+        let received_event = timeout(Duration::from_secs(5), event_receiver.recv()).await.map_err(|e| anyhow!("Failed to receive event: {}", e))?
+            .ok_or_else(|| anyhow!("Event channel closed"))?;
+            
+        if let Some(event) = received_event.downcast_ref::<NodeActivation>() {
+            assert_eq!(event.chain_id, chain_id);
+            assert_eq!(event.is_eigenlayer, true, "is_eigenlayer flag should be true");
+            assert_eq!(event.node_registry_address, node_registry_address);
+            println!("Successfully received NodeActivation event with is_eigenlayer=true");
+        } else {
+            return Err(anyhow!("Received unexpected event type").into());
+        }
+        
         Ok(())
     }
 }

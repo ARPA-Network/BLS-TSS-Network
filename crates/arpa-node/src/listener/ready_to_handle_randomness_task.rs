@@ -144,18 +144,19 @@ mod tests {
     use super::*;
     use ethers::signers::{LocalWallet, Signer};
     use ethers::middleware::SignerMiddleware;
-    use ethers::contract::{ContractFactory, abigen};
     use threshold_bls::schemes::bn254::G2Curve;
     use crate::queue::EventSubscriber;
     use crate::event::types::Topic;
     use crate::subscriber::{DebuggableEvent, DebuggableSubscriber, Subscriber};
+    use crate::test_contracts::mockadapter::deploy_with_args_and_get_mock_adapter;
+    
     use arpa_core::{
         Config, FixedIntervalRetryDescriptor, GeneralMainChainIdentity, ListenerType, RandomnessRequestType
     };
     use arpa_dal::cache::{InMemoryBLSTasksQueue, InMemoryBlockInfoCache, InMemoryGroupInfoCache};
     use ethers::{
         providers::{Provider, Ws, Http},
-        types::{Address, U256, Bytes},
+        types::{Address, U256},
         utils::Anvil,
     };
     use std::time::Duration;
@@ -163,61 +164,78 @@ mod tests {
     use anyhow::anyhow;
     use std::sync::Arc;
 
-    abigen!(
-        MockAdapter,
-        r#"[
-            function getPendingRequestCommitment(bytes32 requestId) external view returns (bytes32)
-            function setRequestCommitment(bytes32 requestId, bytes32 commitment) external
-        ]"#,
-    );
-
-    async fn deploy_mock_adapter(
+    async fn setup_mock_adapter(
         client: Arc<SignerMiddleware<Provider<Http>, LocalWallet>>,
         pending_request_ids: Vec<[u8; 32]>,
     ) -> Result<Address, Box<dyn std::error::Error>> {
         println!("Deploying mock adapter contract...");
-    
-        const ADAPTER_ABI: &str = r#"[{"inputs":[{"internalType":"bytes32","name":"","type":"bytes32"}],"name":"_requestCommitments","outputs":[{"internalType":"bytes32","name":"","type":"bytes32"}],"stateMutability":"view","type":"function"},{"inputs":[{"internalType":"bytes32","name":"requestId","type":"bytes32"}],"name":"getPendingRequestCommitment","outputs":[{"internalType":"bytes32","name":"","type":"bytes32"}],"stateMutability":"view","type":"function"},{"inputs":[{"internalType":"bytes32","name":"requestId","type":"bytes32"},{"internalType":"bytes32","name":"commitment","type":"bytes32"}],"name":"setRequestCommitment","outputs":[],"stateMutability":"nonpayable","type":"function"}]"#;
-        const ADAPTER_BYTECODE: &str = "6080604052348015600e575f5ffd5b506101118061001c5f395ff3fe6080604052348015600e575f5ffd5b5060043610603a575f3560e01c80631565034c14603e5780635619490314606c57806368c50d52146088575b5f5ffd5b605a604936600460a6565b5f9081526020819052604090205490565b60405190815260200160405180910390f35b605a607736600460a6565b5f6020819052908152604090205481565b60a4609336600460bc565b5f9182526020829052604090912055565b005b5f6020828403121560b5575f5ffd5b5035919050565b5f5f6040838503121560cc575f5ffd5b5050803592602090910135915056fea2646970667358221220209b5a4c78813894f8864999fc9ec2b21ee36dc388a76beb182591847f1c6fd664736f6c634300081b0033";
-    
-        let adapter_factory = ContractFactory::new(
-            serde_json::from_str(ADAPTER_ABI).expect("Invalid ADAPTER_ABI"),
-            ADAPTER_BYTECODE.parse::<Bytes>().expect("Invalid ADAPTER_BYTECODE"),
-            client.clone(),
-        );
         
-        let adapter_contract_deployed = adapter_factory.deploy(())?.send().await?;
-        let adapter_address = adapter_contract_deployed.address();
+        let adapter = deploy_with_args_and_get_mock_adapter(
+            client.clone(),
+            ()
+        ).await?;
+        
+        let adapter_address = adapter.address();
         println!("Adapter contract deployed at: {}", adapter_address);
         
-        abigen!(
-            MockAdapter,
-            r#"[
-                function getPendingRequestCommitment(bytes32 requestId) external view returns (bytes32)
-                function setRequestCommitment(bytes32 requestId, bytes32 commitment) external
-            ]"#,
-        );
-        
-        let adapter = MockAdapter::new(adapter_address, client.clone());
-        
         println!("Setting up pending requests in adapter contract...");
+
+        let non_zero_commitment = [1u8; 32]; 
+        
         for &request_id in pending_request_ids.iter() {
-            let request_commitment = [1u8; 32]; 
-            adapter.set_request_commitment(request_id.into(), request_commitment.into())
-                .send().await?;
-            println!("  Set request ID {:?} as pending", request_id);
+            {
+                let tx = adapter.set_request_commitment(request_id.into(), non_zero_commitment.into());
+                let receipt = tx.send().await?
+                    .await?;
+                    
+                println!("  Set request ID {:?} as pending in block {}", 
+                    request_id, receipt.unwrap().block_number.unwrap());
+            }
+            
+            {
+                let result = adapter.get_pending_request_commitment(request_id.into()).call().await?;
+                let result_as_u256 = U256::from(result);
+                if result_as_u256.is_zero() {
+                    println!("WARNING: Commitment for request ID {:?} is zero!", request_id);
+                } else {
+                    println!("Verified commitment for request ID {:?} is non-zero", request_id);
+                }
+            }
         }
+        
+        let non_pending_request_id = [4u8; 32];
+        let zero_commitment = [0u8; 32];
+        {
+            let tx = adapter.set_request_commitment(non_pending_request_id.into(), zero_commitment.into());
+            let receipt = tx.send().await?
+                .await?;
+                
+            println!("Set request ID {:?} with zero commitment in block {}", 
+                non_pending_request_id, receipt.unwrap().block_number.unwrap());
+        }
+    
         let test_request_id = [5u8; 32];
         let test_commitment = [2u8; 32];
-        adapter.set_request_commitment(test_request_id.into(), test_commitment.into())
-            .send().await?;
-        println!("Set test request ID for verification");
-
-        let result = adapter.get_pending_request_commitment(test_request_id.into()).call().await?;
-        println!("Verification call result: {:?}", result);
-
+        
+        {
+            let tx = adapter.set_request_commitment(test_request_id.into(), test_commitment.into());
+            let receipt = tx.send().await?
+                .await?;
+                
+            println!("Set test request ID for verification in block {}", 
+                receipt.unwrap().block_number.unwrap());
+        }
+    
+        {
+            let result = adapter.get_pending_request_commitment(test_request_id.into()).call().await?;
+            println!("Verification call result: {:?}", result);
+            let result_as_u256 = U256::from(result);
+            println!("As U256: {}, Is non-zero: {}", result_as_u256, !result_as_u256.is_zero());
+        }
+    
         Ok(adapter_address)
     }
+    
     async fn mock_subscribe_to_events(
         eq: &mut EventQueue,
         subscriber_name: &str,
@@ -311,7 +329,7 @@ mod tests {
 
         let pending_request_ids = vec![request_id1, request_id3];
         
-        let adapter_address = deploy_mock_adapter(
+        let adapter_address = setup_mock_adapter(
             client.clone(), 
             pending_request_ids,
         ).await.map_err(|e| anyhow!("Failed to deploy mock adapter contract: {}", e))?;
@@ -329,7 +347,7 @@ mod tests {
             anvil.ws_endpoint(),
             controller_address,
             Address::random(),  
-            adapter_address,    
+            adapter_address,                
             config.get_time_limits().contract_transaction_retry_descriptor,
             config.get_time_limits().contract_view_retry_descriptor,
             None,

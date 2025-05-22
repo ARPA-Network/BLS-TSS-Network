@@ -12,3 +12,5 @@ pub mod rpc_stub;
 pub mod scheduler;
 pub mod stats;
 pub mod subscriber;
+#[cfg(feature = "unittest")]
+pub mod test_contracts;

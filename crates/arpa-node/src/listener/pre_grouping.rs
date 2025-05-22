@@ -139,10 +139,10 @@ impl<PC: Curve + Sync + Send> Listener for PreGroupingListener<PC> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::test_contracts::mockcontroller:: deploy_with_args_and_get_mock_controller;
     use ethers::signers::{LocalWallet, Signer};
     use ethers::middleware::SignerMiddleware;
-    use ethers::contract::{ContractFactory, abigen, EthEvent};
-    use ethers::core::types::{U256, Bytes};
+    use ethers::types::{U256, Address};
     use threshold_bls::schemes::bn254::G2Curve;
     use crate::queue::EventSubscriber;
     use crate::event::types::Topic;
@@ -156,7 +156,6 @@ mod tests {
     };
     use ethers::{
         providers::{Provider, Ws, Http},
-        types::Address,
         utils::Anvil,
     };
     use std::time::Duration;
@@ -164,53 +163,6 @@ mod tests {
     use anyhow::anyhow;
     use std::sync::Arc;
 
-    #[derive(Clone, Debug, EthEvent)]
-    #[ethevent(
-        name = "DkgTask",
-        abi = "DkgTask(uint256,uint256,uint256,uint256,uint256,address[],uint256,address)"
-    )]
-    struct DkgTaskFilter {
-        #[ethevent(indexed)]
-        global_epoch: U256,
-        #[ethevent(indexed)]
-        group_index: U256,
-        #[ethevent(indexed)]
-        group_epoch: U256,
-        size: U256,
-        threshold: U256,
-        members: Vec<Address>,
-        assignment_block_height: U256,
-        coordinator_address: Address,
-    }
-
-    abigen!(
-        MockController,
-        r#"[
-            event DkgTask(uint256 indexed globalEpoch, uint256 indexed groupIndex, uint256 indexed groupEpoch, uint256 size, uint256 threshold, address[] members, uint256 assignmentBlockHeight, address coordinatorAddress)
-            function emitDkgTaskEvent(uint256 globalEpoch, uint256 groupIndex, uint256 groupEpoch, uint256 size, uint256 threshold, address[] memory members, uint256 assignmentBlockHeight, address coordinatorAddress) external
-        ]"#,
-    );
-
-    async fn deploy_mock_controller(
-        client: Arc<SignerMiddleware<Provider<Http>, LocalWallet>>,
-    ) -> Result<Address, Box<dyn std::error::Error>> {
-        println!("Deploying mock controller contract...");
-
-        const CONTROLLER_ABI: &str = r#"[{"anonymous":false,"inputs":[{"indexed":true,"internalType":"uint256","name":"globalEpoch","type":"uint256"},{"indexed":true,"internalType":"uint256","name":"groupIndex","type":"uint256"},{"indexed":true,"internalType":"uint256","name":"groupEpoch","type":"uint256"},{"indexed":false,"internalType":"uint256","name":"size","type":"uint256"},{"indexed":false,"internalType":"uint256","name":"threshold","type":"uint256"},{"indexed":false,"internalType":"address[]","name":"members","type":"address[]"},{"indexed":false,"internalType":"uint256","name":"assignmentBlockHeight","type":"uint256"},{"indexed":false,"internalType":"address","name":"coordinatorAddress","type":"address"}],"name":"DkgTask","type":"event"},{"inputs":[{"internalType":"uint256","name":"globalEpoch","type":"uint256"},{"internalType":"uint256","name":"groupIndex","type":"uint256"},{"internalType":"uint256","name":"groupEpoch","type":"uint256"},{"internalType":"uint256","name":"size","type":"uint256"},{"internalType":"uint256","name":"threshold","type":"uint256"},{"internalType":"address[]","name":"members","type":"address[]"},{"internalType":"uint256","name":"assignmentBlockHeight","type":"uint256"},{"internalType":"address","name":"coordinatorAddress","type":"address"}],"name":"emitDkgTaskEvent","outputs":[],"stateMutability":"nonpayable","type":"function"}]"#;
-        const CONTROLLER_BYTECODE: &str = "6080604052348015600e575f5ffd5b5061027b8061001c5f395ff3fe608060405234801561000f575f5ffd5b5060043610610029575f3560e01c80630fc68a0c1461002d575b5f5ffd5b61004061003b3660046100bd565b610042565b005b8587897fbbd25d64683f157b2e3544d3d6430e14102db1e49592cf4dcaf827e2ded517ee888888888860405161007c9594939291906101d0565b60405180910390a45050505050505050565b634e487b7160e01b5f52604160045260245ffd5b80356001600160a01b03811681146100b8575f5ffd5b919050565b5f5f5f5f5f5f5f5f610100898b0312156100d5575f5ffd5b883597506020890135965060408901359550606089013594506080890135935060a089013567ffffffffffffffff81111561010e575f5ffd5b8901601f81018b1361011e575f5ffd5b803567ffffffffffffffff8111156101385761013861008e565b8060051b604051601f19603f830116810181811067ffffffffffffffff821117156101655761016561008e565b60405291825260208184018101929081018e841115610182575f5ffd5b6020850194505b838510156101a85761019a856100a2565b815260209485019401610189565b50955050505060c089013591506101c160e08a016100a2565b90509295985092959890939650565b5f60a0820187835286602084015260a0604084015280865180835260c0850191506020880192505f5b818110156102205783516001600160a01b03168352602093840193909201916001016101f9565b5050606084019590955250506001600160a01b0391909116608090910152939250505056fea2646970667358221220ebfcdf26441c60454de8d2aa6420871f15970228f3a1fa2e65e23d478f21eac064736f6c634300081b0033";
-        
-        let controller_factory = ContractFactory::new(
-            serde_json::from_str(CONTROLLER_ABI).expect("Invalid CONTROLLER_ABI"),
-            CONTROLLER_BYTECODE.parse::<Bytes>().expect("Invalid CONTROLLER_BYTECODE"),
-            client.clone(),
-        );
-        
-        let controller_contract_deployed = controller_factory.deploy(())?.send().await?;
-        let controller_address = controller_contract_deployed.address();
-        println!("Controller contract deployed at: {}", controller_address);
-        
-        Ok(controller_address)
-    }
     fn create_listener_descriptor(chain_id: usize) -> ListenerDescriptor {
         ListenerDescriptor {
             chain_id,
@@ -224,6 +176,7 @@ mod tests {
             },
         }
     }
+    
     async fn mock_subscribe_to_events(
         eq: &mut EventQueue,
         subscriber_name: &str,
@@ -388,16 +341,15 @@ mod tests {
             http_provider,
             wallet.clone().with_chain_id(anvil.chain_id()),
         ));
+        let node_registry_address = Address::random();
+        let controller = deploy_with_args_and_get_mock_controller(client.clone(), node_registry_address)
+            .await
+            .map_err(|e| anyhow!("Failed to deploy mock controller contract: {}", e))?;
         
-        let controller_address = deploy_mock_controller(
-            client.clone(), 
-        ).await.map_err(|e| anyhow!("Failed to deploy mock controller contract: {}", e))?;
-        
+        let controller_address = controller.address();
         println!("Controller contract deployed at: {}", controller_address);
         
         let adapter_address = Address::random();
-        let node_registry_address = Address::random();
-        
         let config = Config::default();
         
         let chain_identity = GeneralMainChainIdentity::new(
@@ -449,7 +401,6 @@ mod tests {
         tokio::time::sleep(Duration::from_millis(500)).await;
         
         println!("Emitting DkgTask event from contract...");
-        let mock_controller = MockController::new(controller_address, client.clone());
         
         let members = vec![id_address, Address::random(), Address::random()];
         let global_epoch = U256::from(1);
@@ -460,21 +411,25 @@ mod tests {
         let assignment_block_height = U256::from(100);
         let coordinator_address = Address::random();
         
-        mock_controller.emit_dkg_task_event(
-            global_epoch,
-            group_index,
-            group_epoch,
-            size,
-            threshold,
-            members.clone(),
-            assignment_block_height,
-            coordinator_address
-        )
-        .send()
-        .await
-        .map_err(|e| anyhow!("Failed to send transaction: {}", e))?
-        .await
-        .map_err(|e| anyhow!("Transaction failed: {}", e))?;
+
+        {
+            let tx = controller.emit_dkg_task_event(
+                global_epoch,
+                group_index,
+                group_epoch,
+                size,
+                threshold,
+                members.clone(),
+                assignment_block_height,
+                coordinator_address
+            );
+            
+            let pending_tx = tx.send().await
+                .map_err(|e| anyhow!("Failed to send transaction: {}", e))?;
+                
+            pending_tx.await
+                .map_err(|e| anyhow!("Transaction failed: {}", e))?;
+        }
         
         println!("DkgTask event emitted, waiting for listener to process...");
         
@@ -522,13 +477,13 @@ mod tests {
             http_provider,
             wallet.clone().with_chain_id(anvil.chain_id()),
         ));
-        
-        let controller_address = deploy_mock_controller(
-            client.clone(), 
-        ).await.map_err(|e| anyhow!("Failed to deploy mock controller contract: {}", e))?;
-        
-        let adapter_address = Address::random();
         let node_registry_address = Address::random();
+        let controller = deploy_with_args_and_get_mock_controller(client.clone(), node_registry_address)
+            .await
+            .map_err(|e| anyhow!("Failed to deploy mock controller contract: {}", e))?;
+            
+        let controller_address = controller.address();        
+        let adapter_address = Address::random();       
         
         let config = Config::default();
         
@@ -574,8 +529,6 @@ mod tests {
         
         tokio::time::sleep(Duration::from_millis(500)).await;
         
-        let mock_controller = MockController::new(controller_address, client.clone());
-        
         let members = vec![Address::random(), Address::random(), Address::random()];
         let global_epoch = U256::from(1);
         let group_index = U256::from(2);
@@ -585,21 +538,24 @@ mod tests {
         let assignment_block_height = U256::from(100);
         let coordinator_address = Address::random();
         
-        mock_controller.emit_dkg_task_event(
-            global_epoch,
-            group_index,
-            group_epoch,
-            size,
-            threshold,
-            members.clone(),
-            assignment_block_height,
-            coordinator_address
-        )
-        .send()
-        .await
-        .map_err(|e| anyhow!("Failed to send transaction: {}", e))?
-        .await
-        .map_err(|e| anyhow!("Transaction failed: {}", e))?;
+        {
+            let tx = controller.emit_dkg_task_event(
+                global_epoch,
+                group_index,
+                group_epoch,
+                size,
+                threshold,
+                members.clone(),
+                assignment_block_height,
+                coordinator_address
+            );
+            
+            let pending_tx = tx.send().await
+                .map_err(|e| anyhow!("Failed to send transaction: {}", e))?;
+                
+            pending_tx.await
+                .map_err(|e| anyhow!("Transaction failed: {}", e))?;
+        }
         
         let timeout_result = timeout(Duration::from_millis(500), event_receiver.recv()).await;
         assert!(timeout_result.is_err(), "Unexpectedly received an event when not a member");
@@ -626,14 +582,14 @@ mod tests {
             http_provider,
             wallet.clone().with_chain_id(anvil.chain_id()),
         ));
-        
-        let controller_address = deploy_mock_controller(
-            client.clone(), 
-        ).await.map_err(|e| anyhow!("Failed to deploy mock controller contract: {}", e))?;
+        let node_registry_address = Address::random();
+        let controller = deploy_with_args_and_get_mock_controller(client.clone(), node_registry_address)
+            .await
+            .map_err(|e| anyhow!("Failed to deploy mock controller contract: {}", e))?;
+            
+        let controller_address = controller.address();
         
         let adapter_address = Address::random();
-        let node_registry_address = Address::random();
-        
         let config = Config::default();
         
         let chain_identity = GeneralMainChainIdentity::new(
@@ -696,8 +652,6 @@ mod tests {
         
         tokio::time::sleep(Duration::from_millis(500)).await;
         
-        let mock_controller = MockController::new(controller_address, client.clone());
-        
         let members = vec![id_address, Address::random(), Address::random()];
         let global_epoch = U256::from(1);
         let group_index = U256::from(2);
@@ -707,21 +661,24 @@ mod tests {
         let assignment_block_height = U256::from(100);
         let coordinator_address = Address::random();
         
-        mock_controller.emit_dkg_task_event(
-            global_epoch,
-            group_index,
-            group_epoch,
-            size,
-            threshold,
-            members.clone(),
-            assignment_block_height,
-            coordinator_address
-        )
-        .send()
-        .await
-        .map_err(|e| anyhow!("Failed to send transaction: {}", e))?
-        .await
-        .map_err(|e| anyhow!("Transaction failed: {}", e))?;
+        {
+            let tx = controller.emit_dkg_task_event(
+                global_epoch,
+                group_index,
+                group_epoch,
+                size,
+                threshold,
+                members.clone(),
+                assignment_block_height,
+                coordinator_address
+            );
+            
+            let pending_tx = tx.send().await
+                .map_err(|e| anyhow!("Failed to send transaction: {}", e))?;
+                
+            pending_tx.await
+                .map_err(|e| anyhow!("Transaction failed: {}", e))?;
+        }
         
         let timeout_result = timeout(Duration::from_millis(500), event_receiver.recv()).await;
         assert!(timeout_result.is_err(), "Unexpectedly received an event for same task");
