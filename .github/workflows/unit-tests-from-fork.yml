@@ -27,7 +27,7 @@ jobs:
       - name: Install Anvil
         uses: foundry-rs/foundry-toolchain@v1
         with:
-          version: nightly-81896c5ca7075124b083ce97699cb1687910a757
+          version: nightly-7bef9caccfe62761225be66e84bea2810e656c96
       - name: Install Solc
         run: |
           curl -fsSL https://github.com/ethereum/solidity/releases/download/v0.8.27/solc-static-linux -o /usr/local/bin/solc
