@@ -138,9 +138,10 @@ mod tests {
     
     type NodeContext<PC, S> = Arc<RwLock<GeneralContext<PC, S>>>;
 
-    async fn mock_set_as_committer<PC: Curve + Send + Sync>(
+    async fn setup_dkg_task<PC: Curve + Send + Sync>(
         group_cache: &mut Box<dyn GroupInfoHandler<PC>>,
         address: Address,
+        committers: Vec<Address>,
     ) {
         let task = arpa_core::DKGTask {
             group_index: 1,
@@ -153,31 +154,22 @@ mod tests {
         };
         
         group_cache.save_task_info(0, task).await.unwrap();
-        
         group_cache.update_dkg_status(1, 1, DKGStatus::CommitSuccess).await.unwrap();
-        
-        group_cache.save_committers(1, 1, vec![address]).await.unwrap();
+        group_cache.save_committers(1, 1, committers).await.unwrap();
+    }
+
+    async fn mock_set_as_committer<PC: Curve + Send + Sync>(
+        group_cache: &mut Box<dyn GroupInfoHandler<PC>>,
+        address: Address,
+    ) {
+        setup_dkg_task(group_cache, address, vec![address]).await;
     }
 
     async fn mock_set_as_non_committer<PC: Curve + Send + Sync>(
         group_cache: &mut Box<dyn GroupInfoHandler<PC>>,
         address: Address,
     ) {
-        let task = arpa_core::DKGTask {
-            group_index: 1,
-            epoch: 1,
-            size: 3,
-            threshold: 2,
-            assignment_block_height: 100,
-            members: vec![address, Address::random(), Address::random()],
-            coordinator_address: Address::random()
-        };
-        
-        group_cache.save_task_info(0, task).await.unwrap();
-        
-        group_cache.update_dkg_status(1, 1, DKGStatus::CommitSuccess).await.unwrap();
-        
-        group_cache.save_committers(1, 1, vec![Address::random()]).await.unwrap();
+        setup_dkg_task(group_cache, address, vec![Address::random()]).await;
     }
 
     async fn mock_set_block_height(
@@ -357,24 +349,23 @@ mod tests {
         Arc::new(RwLock::new(context))
     }
 
-
-    #[tokio::test]
-    async fn test_randomness_signature_aggregation_listener() -> NodeResult<()> {
-        let context = build_context().await;
-        let context_lock = context.read().await;
-        
-        let chain_id = context_lock
+    async fn create_listener(
+        context: &GeneralContext<G2Curve, G2Scheme>,
+        event_queue: Option<Arc<RwLock<EventQueue>>>,
+    ) -> RandomnessSignatureAggregationListener<G2Curve> {
+        let chain_id = context
             .get_main_chain()
             .get_chain_identity()
             .read()
             .await
             .get_chain_id();
         
-        let id_address = context_lock.get_main_chain().get_chain_identity().read().await.get_id_address();
-        let block_cache = context_lock.get_main_chain().get_block_cache();
-        let group_cache = context_lock.get_main_chain().get_group_cache();
-        let randomness_signature_cache = context_lock.get_main_chain().get_randomness_result_cache();
-        let event_queue = context_lock.get_event_queue();
+        let id_address = context.get_main_chain().get_chain_identity().read().await.get_id_address();
+        let block_cache = context.get_main_chain().get_block_cache();
+        let group_cache = context.get_main_chain().get_group_cache();
+        let randomness_signature_cache = context.get_main_chain().get_randomness_result_cache();
+        let eq = event_queue.unwrap_or_else(|| context.get_event_queue());
+
         let listener_descriptor = ListenerDescriptor {
             chain_id,
             l_type: ListenerType::RandomnessSignatureAggregation,
@@ -386,28 +377,45 @@ mod tests {
                 use_jitter: true,      
             },
         };
-        let listener = RandomnessSignatureAggregationListener::<G2Curve>::new(
-            listener_descriptor.clone(),
-            id_address,
-            block_cache.clone(),
-            group_cache.clone(),
-            randomness_signature_cache.clone(),
-            event_queue.clone(),
-        );
 
+        RandomnessSignatureAggregationListener::<G2Curve>::new(
+            listener_descriptor,
+            id_address,
+            block_cache,
+            group_cache,
+            randomness_signature_cache,
+            eq,
+        )
+    }
+
+    async fn setup_test_data(
+        context: &GeneralContext<G2Curve, G2Scheme>,
+        id_address: Address,
+        is_committer: bool,
+        current_block_height: u64,
+    ) {
         {
+            let main_chain = context.get_main_chain();
+            let group_cache = main_chain.get_group_cache();
             let mut group_cache_write = group_cache.write().await;
-            mock_set_as_committer(&mut group_cache_write, id_address).await;
+            if is_committer {
+                mock_set_as_committer(&mut group_cache_write, id_address).await;
+            } else {
+                mock_set_as_non_committer(&mut group_cache_write, id_address).await;
+            }
         }
 
-        let current_block_height = 1000u64;
         {
+            let main_chain = context.get_main_chain();
+            let block_cache = main_chain.get_block_cache();
             let mut block_cache_write = block_cache.write().await;
             mock_set_block_height(&mut block_cache_write, current_block_height).await;
         }
 
-        {
-            let mut signature_cache_write = randomness_signature_cache.write().await;
+        if is_committer {
+            let main_chain = context.get_main_chain();
+            let randomness_result_cache = main_chain.get_randomness_result_cache();
+            let mut signature_cache_write = randomness_result_cache.write().await;
             
             let ready_task = create_test_randomness_task(1, current_block_height - 10).await;
             let not_ready_task = create_test_randomness_task(2, current_block_height + 100).await;
@@ -415,8 +423,29 @@ mod tests {
             mock_add_signature_result::<G2Curve>(&mut signature_cache_write, ready_task).await;
             mock_add_signature_result::<G2Curve>(&mut signature_cache_write, not_ready_task).await;
         }
+    }
+
+    #[tokio::test]
+    async fn test_randomness_signature_aggregation_listener() -> NodeResult<()> {
+        let context = build_context().await;
+        let context_lock = context.read().await;
+        
+        let id_address = context_lock.get_main_chain().get_chain_identity().read().await.get_id_address();
+        let chain_id = context_lock
+            .get_main_chain()
+            .get_chain_identity()
+            .read()
+            .await
+            .get_chain_id();
+        
+        let current_block_height = 1000u64;
+
+        setup_test_data(&context_lock, id_address, true, current_block_height).await;
+
+        let listener = create_listener(&context_lock, None).await;
 
         let mut event_receiver = {
+            let event_queue = context_lock.get_event_queue();
             let mut eq_write = event_queue.write().await;
             mock_subscribe_to_events(&mut *eq_write, "test_subscriber").await
         };
@@ -434,20 +463,11 @@ mod tests {
             return Err(anyhow::anyhow!("Received unexpected event type").into());
         }
 
-        {
-            let mut group_cache_write = group_cache.write().await;
-            mock_set_as_non_committer(&mut group_cache_write, id_address).await;
-        }
-
         let new_event_queue = Arc::new(RwLock::new(EventQueue::new()));
-        let listener_for_non_committer = RandomnessSignatureAggregationListener::<G2Curve>::new(
-            listener_descriptor.clone(),
-            id_address,
-            block_cache.clone(),
-            group_cache.clone(),
-            randomness_signature_cache.clone(),
-            new_event_queue.clone(),
-        );
+        
+        setup_test_data(&context_lock, id_address, false, current_block_height).await;
+        
+        let listener_for_non_committer = create_listener(&context_lock, Some(new_event_queue.clone())).await;
 
         let mut event_receiver = {
             let mut eq_write = new_event_queue.write().await;

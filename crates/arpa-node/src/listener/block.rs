@@ -243,6 +243,52 @@ mod tests {
         )
     }
 
+    async fn verify_new_block_event(
+        mut event_receiver: tokio::sync::mpsc::Receiver<Box<dyn std::any::Any + Send>>,
+        expected_chain_id: usize,
+        expected_block_height: Option<usize>,
+        timeout_duration: Duration,
+    ) -> NodeResult<NewBlock> {
+        let received_event = timeout(timeout_duration, event_receiver.recv()).await
+            .map_err(|_| anyhow!("Timeout: No event received"))?
+            .ok_or_else(|| anyhow!("Error: Event channel closed"))?;
+        
+        if let Some(event) = received_event.downcast_ref::<NewBlock>() {
+            assert_eq!(event.chain_id, expected_chain_id);
+            if let Some(expected_height) = expected_block_height {
+                assert_eq!(event.block_height, expected_height);
+            } else {
+                assert!(event.block_height > 0, "Block height should be positive");
+            }
+            Ok(NewBlock {
+                chain_id: event.chain_id,
+                block_height: event.block_height,
+            })
+        } else {
+            Err(anyhow!("Received unexpected event type").into())
+        }
+    }
+
+    fn create_block_listener(
+        listener_descriptor: ListenerDescriptor,
+        chain_identity_arc: Arc<RwLock<ChainIdentityHandlerType<G2Curve>>>,
+        event_queue: Arc<RwLock<EventQueue>>,
+    ) -> BlockListener<G2Curve> {
+        BlockListener::<G2Curve>::new(
+            listener_descriptor,
+            chain_identity_arc,
+            event_queue,
+        )
+    }
+
+    async fn setup_event_subscriber(
+        event_queue: &Arc<RwLock<EventQueue>>,
+        chain_id: usize,
+    ) -> tokio::sync::mpsc::Receiver<Box<dyn std::any::Any + Send>> {
+        let mut eq_write = event_queue.write().await;
+        mock_subscriber(&mut *eq_write, "test_subscriber", chain_id).await
+    }
+
     #[tokio::test]
     async fn test_event_publishing() -> NodeResult<()> {
         let (
@@ -255,12 +301,9 @@ mod tests {
             _anvil,
         ) = setup_test_environment().await;
         
-        let mut event_receiver = {
-            let mut eq_write = event_queue.write().await;
-            mock_subscriber(&mut *eq_write, "test_subscriber", chain_id).await
-        };
+        let event_receiver = setup_event_subscriber(&event_queue, chain_id).await;
         
-        let block_listener = BlockListener::<G2Curve>::new(
+        let block_listener = create_block_listener(
             listener_descriptor,
             chain_identity_arc,
             event_queue,
@@ -272,17 +315,14 @@ mod tests {
             block_height: test_block_height,
         }).await;
         
-        let received_event = timeout(Duration::from_secs(5), event_receiver.recv()).await
-            .map_err(|_| anyhow!("Timeout: No event received"))?
-            .ok_or_else(|| anyhow!("Error: Event channel closed"))?;
+        verify_new_block_event(
+            event_receiver,
+            chain_id,
+            Some(test_block_height),
+            Duration::from_secs(5),
+        ).await?;
         
-        if let Some(event) = received_event.downcast_ref::<NewBlock>() {
-            assert_eq!(event.chain_id, chain_id);
-            assert_eq!(event.block_height, test_block_height);
-            Ok(())
-        } else {
-            Err(anyhow!("Received unexpected event type").into())
-        }
+        Ok(())
     }
 
     #[tokio::test]
@@ -297,12 +337,9 @@ mod tests {
             _anvil,
         ) = setup_test_environment().await;
         
-        let mut event_receiver = {
-            let mut eq_write = event_queue.write().await;
-            mock_subscriber(&mut *eq_write, "test_subscriber", chain_id).await
-        };
+        let event_receiver = setup_event_subscriber(&event_queue, chain_id).await;
         
-        let block_listener = BlockListener::<G2Curve>::new(
+        let block_listener = create_block_listener(
             listener_descriptor,
             chain_identity_arc,
             event_queue,
@@ -318,23 +355,17 @@ mod tests {
         
         client.send_transaction(tx, None).await.unwrap().await.unwrap();
         
-        let chain_event_result = timeout(Duration::from_secs(5), event_receiver.recv()).await;
+        let result = verify_new_block_event(
+            event_receiver,
+            chain_id,
+            None, 
+            Duration::from_secs(5),
+        ).await;
         
         listener_task.abort();
         
-        match chain_event_result {
-            Ok(Some(received_chain_event)) => {
-                if let Some(event) = received_chain_event.downcast_ref::<NewBlock>() {
-                    assert_eq!(event.chain_id, chain_id);
-                    assert!(event.block_height > 0, "Block height should be positive");
-                    Ok(())
-                } else {
-                    Err(anyhow!("Received unexpected event type from chain").into())
-                }
-            },
-            Ok(None) => Err(anyhow!("Event channel closed unexpectedly").into()),
-            Err(_) => Err(anyhow!("Timeout waiting for chain event").into()),
-        }
+        result?;
+        Ok(())
     }
 
     #[tokio::test]
@@ -349,7 +380,7 @@ mod tests {
             _anvil,
         ) = setup_test_environment().await;
         
-        let block_listener = BlockListener::<G2Curve>::new(
+        let block_listener = create_block_listener(
             listener_descriptor,
             chain_identity_arc,
             event_queue,
@@ -373,7 +404,7 @@ mod tests {
             _anvil,
         ) = setup_test_environment().await;
         
-        let block_listener = BlockListener::<G2Curve>::new(
+        let block_listener = create_block_listener(
             listener_descriptor.clone(),
             chain_identity_arc,
             event_queue,

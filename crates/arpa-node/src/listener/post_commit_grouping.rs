@@ -111,13 +111,13 @@ mod tests {
     use crate::queue::EventSubscriber;
     use crate::event::types::Topic;
     use crate::subscriber::{DebuggableEvent, DebuggableSubscriber, Subscriber};
-    use crate::test_contracts::mockcontroller:: deploy_with_args_and_get_mock_controller;
+    use crate::test_contracts::mockcontroller::{ deploy_with_args_and_get_mock_controller, MockController};
     
     use ethers::signers::{LocalWallet, Signer};
     use ethers::middleware::SignerMiddleware;
     use ethers::types::{Address, U256};
     use ethers::providers::{Provider, Ws, Http};
-    use ethers::utils::Anvil;
+    use ethers::utils::{Anvil, AnvilInstance};
     
     use threshold_bls::schemes::bn254::G2Curve;
     
@@ -207,19 +207,20 @@ mod tests {
         
         receiver
     }
-    
-    #[tokio::test]
-    async fn test_post_commit_grouping_listener() -> NodeResult<()> {
+
+    async fn setup_test_environment() -> NodeResult<(
+        AnvilInstance,
+        Address,
+        usize,
+        MockController<SignerMiddleware<Provider<Http>, LocalWallet>>,
+    )> {
         let anvil = Anvil::new().spawn();
         
         let http_provider = Provider::<Http>::try_from(anvil.endpoint())
             .map_err(|e| anyhow!("Failed to create HTTP provider: {}", e))?;
         
-        let ws_provider = Arc::new(Provider::<Ws>::connect(anvil.ws_endpoint()).await?);
-        
         let wallet: LocalWallet = anvil.keys()[0].clone().into();
         let id_address = wallet.address();
-        
         let chain_id = anvil.chain_id() as usize;
         
         let client = Arc::new(SignerMiddleware::new(
@@ -230,39 +231,45 @@ mod tests {
         let node_registry_address = Address::random();
         
         let controller = deploy_with_args_and_get_mock_controller(
-            client.clone(),
+            client,
             node_registry_address,
         ).await.map_err(|e| anyhow!("Failed to deploy mock controller: {}", e))?;
         
-        let controller_address = controller.address();
-        println!("MockController deployed at: {}", controller_address);
-        
+        Ok((anvil, id_address, chain_id, controller))
+    }
+
+    fn setup_chain_identity(
+        chain_id: usize,
+        wallet: LocalWallet,
+        ws_provider: Arc<Provider<Ws>>,
+        ws_endpoint: String,
+        controller_address: Address,
+    ) -> GeneralMainChainIdentity {
         let config = Config::default();
         
-        let chain_identity = GeneralMainChainIdentity::new(
+        GeneralMainChainIdentity::new(
             chain_id,
             wallet.clone(),
             ws_provider.clone(),
-            anvil.ws_endpoint(),
+            ws_endpoint,
             controller_address,
             Address::random(),
-            node_registry_address,
+            Address::random(),
             config.get_time_limits().contract_transaction_retry_descriptor,
             config.get_time_limits().contract_view_retry_descriptor,
             None,
-        );
-        
-        let group_index = 1;
-        let epoch = 1;
-        let size = 3;
-        let threshold = 2;
-        let group_state = true;
-        
-        let mut member_addresses = Vec::new();
-        member_addresses.push(id_address);
-        member_addresses.push(Address::random());
-        member_addresses.push(Address::random());
-        
+        )
+    }
+
+    async fn setup_contract_group(
+        controller: &MockController<SignerMiddleware<Provider<Http>, LocalWallet>>,
+        group_index: usize,
+        epoch: usize,
+        size: usize,
+        threshold: usize,
+        group_state: bool,
+        member_addresses: Vec<Address>,
+    ) -> NodeResult<()> {
         let empty_public_key: [U256; 4] = [U256::zero(), U256::zero(), U256::zero(), U256::zero()];
         
         let contract_call = controller.set_group(
@@ -282,24 +289,38 @@ mod tests {
             .map_err(|e| anyhow!("Transaction failed: {}", e))?;
         
         println!("Group set in block: {:?}", receipt);
+        Ok(())
+    }
+
+    async fn setup_committers(
+        controller: &MockController<SignerMiddleware<Provider<Http>, LocalWallet>>,
+        group_index: usize,
+        committer_addresses: Vec<Address>,
+    ) -> NodeResult<()> {
+        let tx = controller.set_committers(
+            group_index.into(),
+            committer_addresses.clone(),
+        );
         
-        let mut committer_addresses = Vec::new();
-        committer_addresses.push(id_address);
-        
-        {
-            let tx = controller.set_committers(
-                group_index.into(),
-                committer_addresses.clone(),
-            );
+        let receipt = tx.send().await
+            .map_err(|e| anyhow!("Failed to send transaction: {}", e))?
+            .await
+            .map_err(|e| anyhow!("Transaction failed: {}", e))?;
             
-            let receipt = tx.send().await
-                .map_err(|e| anyhow!("Failed to send transaction: {}", e))?
-                .await
-                .map_err(|e| anyhow!("Transaction failed: {}", e))?;
-                
-            println!("Committers set in block: {}", receipt.unwrap().block_number.unwrap());
-        }
-        
+        println!("Committers set in block: {}", receipt.unwrap().block_number.unwrap());
+        Ok(())
+    }
+
+    async fn setup_group_cache(
+        id_address: Address,
+        chain_id: usize,
+        group_index: usize,
+        epoch: usize,
+        size: usize,
+        threshold: usize,
+        member_addresses: Vec<Address>,
+        dkg_status: DKGStatus,
+    ) -> NodeResult<Arc<RwLock<Box<dyn GroupInfoHandler<G2Curve>>>>> {
         let group_cache: Arc<RwLock<Box<dyn GroupInfoHandler<G2Curve>>>> = Arc::new(RwLock::new(
             Box::new(InMemoryGroupInfoCache::<G2Curve>::new(id_address)),
         ));
@@ -317,33 +338,152 @@ mod tests {
             };
             
             group_cache_write.save_task_info(chain_id, dkg_task).await?;
-            group_cache_write.update_dkg_status(group_index, epoch, DKGStatus::CommitSuccess).await?;
-            assert_eq!(group_cache_write.get_index().unwrap(), group_index);
-            assert_eq!(group_cache_write.get_dkg_start_block_height().unwrap(), 100);
+            group_cache_write.update_dkg_status(group_index, epoch, dkg_status).await?;
+        }
+        
+        Ok(group_cache)
+    }
+
+    fn create_listener(
+        chain_id: usize,
+        chain_identity_arc: Arc<RwLock<ChainIdentityHandlerType<G2Curve>>>,
+        group_cache: Arc<RwLock<Box<dyn GroupInfoHandler<G2Curve>>>>,
+        event_queue: Arc<RwLock<EventQueue>>,
+    ) -> PostCommitGroupingListener<G2Curve> {
+        let listener_descriptor = ListenerDescriptor {
+            chain_id,
+            l_type: ListenerType::PostCommitGrouping,
+            interval_millis: 1000, 
+            use_jitter: true,      
+            reset_descriptor: FixedIntervalRetryDescriptor {
+                interval_millis: 5000, 
+                max_attempts: 3,       
+                use_jitter: true,      
+            },
+        };
+        
+        PostCommitGroupingListener::<G2Curve>::new(
+            listener_descriptor,
+            chain_identity_arc,
+            group_cache,
+            event_queue,
+        )
+    }
+
+    fn assert_dkg_success_event(
+        event: &DKGSuccess<G2Curve>,
+        expected_chain_id: usize,
+        expected_id_address: Address,
+        expected_group_index: usize,
+        expected_epoch: usize,
+        expected_size: usize,
+        expected_threshold: usize,
+        expected_state: bool,
+    ) {
+        assert_eq!(event.chain_id, expected_chain_id);
+        assert_eq!(event.id_address, expected_id_address);
+        assert_eq!(event.group.index, expected_group_index);
+        assert_eq!(event.group.epoch, expected_epoch);
+        assert_eq!(event.group.size, expected_size);
+        assert_eq!(event.group.threshold, expected_threshold);
+        assert_eq!(event.group.state, expected_state);
+    }
+
+    async fn wait_and_verify_event(
+        event_receiver: &mut tokio::sync::mpsc::Receiver<Box<dyn std::any::Any + Send>>,
+        expected_chain_id: usize,
+        expected_id_address: Address,
+        expected_group_index: usize,
+        expected_epoch: usize,
+        expected_size: usize,
+        expected_threshold: usize,
+        expected_state: bool,
+    ) -> NodeResult<()> {
+        let received_event = timeout(Duration::from_secs(5), event_receiver.recv()).await
+            .map_err(|_| anyhow!("Timeout: No event received"))?
+            .ok_or_else(|| anyhow!("Error: Event channel closed"))?;
+        
+        if let Some(success_event) = received_event.downcast_ref::<DKGSuccess<G2Curve>>() {
+            assert_dkg_success_event(
+                success_event,
+                expected_chain_id,
+                expected_id_address,
+                expected_group_index,
+                expected_epoch,
+                expected_size,
+                expected_threshold,
+                expected_state,
+            );
+        } else {
+            return Err(anyhow!("Received unexpected event type").into());
+        }
+        
+        Ok(())
+    }
+
+    async fn assert_no_event_received(
+        event_receiver: &mut tokio::sync::mpsc::Receiver<Box<dyn std::any::Any + Send>>,
+        timeout_millis: u64,
+        error_message: &str,
+    ) {
+        let timeout_result = timeout(Duration::from_millis(timeout_millis), event_receiver.recv()).await;
+        assert!(timeout_result.is_err(), "{}", error_message);
+    }
+    
+    #[tokio::test]
+    async fn test_post_commit_grouping_listener() -> NodeResult<()> {
+        let (anvil, id_address, chain_id, controller) = setup_test_environment().await?;
+        let controller_address = controller.address();
+        println!("MockController deployed at: {}", controller_address);
+        
+        let ws_provider = Arc::new(Provider::<Ws>::connect(anvil.ws_endpoint()).await?);
+        let wallet: LocalWallet = anvil.keys()[0].clone().into();
+        let chain_identity = setup_chain_identity(
+            chain_id,
+            wallet.clone(),
+            ws_provider.clone(),
+            anvil.ws_endpoint(),
+            controller_address,
+        );
+        
+        let group_index = 1;
+        let epoch = 1;
+        let size = 3;
+        let threshold = 2;
+        let group_state = true;
+        
+        let mut member_addresses = Vec::new();
+        member_addresses.push(id_address);
+        member_addresses.push(Address::random());
+        member_addresses.push(Address::random());
+        
+        let committer_addresses = vec![id_address];
+        
+        setup_contract_group(&controller, group_index, epoch, size, threshold, group_state, member_addresses.clone()).await?;
+        setup_committers(&controller, group_index, committer_addresses.clone()).await?;
+        
+        let group_cache = setup_group_cache(
+            id_address,
+            chain_id,
+            group_index,
+            epoch,
+            size,
+            threshold,
+            member_addresses.clone(),
+            DKGStatus::CommitSuccess,
+        ).await?;
+        
+        {
+            let group_cache_read = group_cache.read().await;
+            assert_eq!(group_cache_read.get_index().unwrap(), group_index);
+            assert_eq!(group_cache_read.get_dkg_start_block_height().unwrap(), 100);
         }
         
         let event_queue = Arc::new(RwLock::new(EventQueue::new()));
         let chain_identity_arc: Arc<RwLock<ChainIdentityHandlerType<G2Curve>>> = 
             Arc::new(RwLock::new(Box::new(chain_identity) as ChainIdentityHandlerType<G2Curve>));
         
-        let listener_descriptor = ListenerDescriptor {
-                chain_id,
-                l_type: ListenerType::PostCommitGrouping,
-                interval_millis: 1000, 
-                use_jitter: true,      
-                reset_descriptor: FixedIntervalRetryDescriptor {
-                    interval_millis: 5000, 
-                    max_attempts: 3,       
-                    use_jitter: true,      
-                },
-            };
-            
-        let listener = PostCommitGroupingListener::<G2Curve>::new(
-            listener_descriptor.clone(),
-            chain_identity_arc.clone(),
-            group_cache.clone(),
-            event_queue.clone(),
-        );
+        let listener = create_listener(chain_id, chain_identity_arc.clone(), group_cache.clone(), event_queue.clone());
         
         let mut event_receiver = {
             let mut eq_write = event_queue.write().await;
@@ -377,38 +517,30 @@ mod tests {
             group: test_group.clone(),
         }).await;
         
-        let received_event = timeout(Duration::from_secs(5), event_receiver.recv()).await
-            .map_err(|_| anyhow!("Timeout: No event received"))?
-            .ok_or_else(|| anyhow!("Error: Event channel closed"))?;
-        
-        if let Some(success_event) = received_event.downcast_ref::<DKGSuccess<G2Curve>>() {
-            assert_eq!(success_event.chain_id, chain_id);
-            assert_eq!(success_event.id_address, id_address);
-            assert_eq!(success_event.group.index, group_index);
-            assert_eq!(success_event.group.state, group_state);
-        } else {
-            return Err(anyhow!("Received unexpected event type").into());
-        }
-        
+        wait_and_verify_event(
+            &mut event_receiver,
+            chain_id,
+            id_address,
+            group_index,
+            epoch,
+            size,
+            threshold,
+            group_state,
+        ).await?;
         
         let listen_result = listener.listen().await;
         assert!(listen_result.is_ok(), "Listen method should not fail");
         
-        let listen_triggered_event = timeout(Duration::from_secs(5), event_receiver.recv()).await
-            .map_err(|_| anyhow!("Timeout: No listen-triggered event received"))?
-            .ok_or_else(|| anyhow!("Error: Event channel closed"))?;
-            
-        if let Some(success_event) = listen_triggered_event.downcast_ref::<DKGSuccess<G2Curve>>() {
-            assert_eq!(success_event.chain_id, chain_id);
-            assert_eq!(success_event.id_address, id_address);
-            assert_eq!(success_event.group.index, group_index);
-            assert_eq!(success_event.group.epoch, epoch);
-            assert_eq!(success_event.group.size, size);
-            assert_eq!(success_event.group.threshold, threshold);
-            assert_eq!(success_event.group.state, group_state);
-        } else {
-            return Err(anyhow!("Received unexpected event type from listen method").into());
-        }
+        wait_and_verify_event(
+            &mut event_receiver,
+            chain_id,
+            id_address,
+            group_index,
+            epoch,
+            size,
+            threshold,
+            group_state,
+        ).await?;
         
         {
             let mut group_cache_write = group_cache.write().await;
@@ -416,64 +548,43 @@ mod tests {
         }
         
         let new_event_queue = Arc::new(RwLock::new(EventQueue::new()));
-        let listener_for_not_ready = PostCommitGroupingListener::<G2Curve>::new(
-            listener_descriptor.clone(),
-            chain_identity_arc.clone(),
-            group_cache.clone(),
-            new_event_queue.clone(),
-        );
+        let listener_for_not_ready = create_listener(chain_id, chain_identity_arc.clone(), group_cache.clone(), new_event_queue.clone());
         
-        let mut event_receiver = {
+        let mut event_receiver_not_ready = {
             let mut eq_write = new_event_queue.write().await;
             mock_subscribe_to_events::<G2Curve>(&mut *eq_write, "test_subscriber").await
         };
         
         listener_for_not_ready.listen().await?;
         
-        let timeout_result = timeout(Duration::from_millis(500), event_receiver.recv()).await;
-        assert!(timeout_result.is_err(), "Unexpectedly received an event when DKG status is not CommitSuccess");
+        assert_no_event_received(
+            &mut event_receiver_not_ready,
+            500,
+            "Unexpectedly received an event when DKG status is not CommitSuccess"
+        ).await;
         
         {
             let mut group_cache_write = group_cache.write().await;
             group_cache_write.update_dkg_status(group_index, epoch, DKGStatus::CommitSuccess).await?;
         }
         
-        {
-            let tx = controller.set_group(
-                group_index.into(),
-                epoch.into(),
-                size.into(),
-                threshold.into(),
-                false,  
-                empty_public_key,
-                member_addresses.clone(),
-            );            
-            
-            let receipt = tx.send().await
-                .map_err(|e| anyhow!("Failed to send transaction: {}", e))?
-                .await
-                .map_err(|e| anyhow!("Transaction failed: {}", e))?;
-                
-            println!("Transaction confirmed in block: {}", receipt.unwrap().block_number.unwrap());
-        }
+        setup_contract_group(&controller, group_index, epoch, size, threshold, false, member_addresses.clone()).await?;
         
         let new_event_queue2 = Arc::new(RwLock::new(EventQueue::new()));
-        let listener_for_inactive_group = PostCommitGroupingListener::<G2Curve>::new(
-            listener_descriptor.clone(),
-            chain_identity_arc.clone(),
-            group_cache.clone(),
-            new_event_queue2.clone(),
-        );
+        let listener_for_inactive_group = create_listener(chain_id, chain_identity_arc.clone(), group_cache.clone(), new_event_queue2.clone());
         
-        let mut event_receiver = {
+        let mut event_receiver_inactive = {
             let mut eq_write = new_event_queue2.write().await;
             mock_subscribe_to_events::<G2Curve>(&mut *eq_write, "test_subscriber").await
         };
         
         listener_for_inactive_group.listen().await?;
         
-        let timeout_result = timeout(Duration::from_millis(500), event_receiver.recv()).await;
-        assert!(timeout_result.is_err(), "Unexpectedly received an event when group state is false");
+        assert_no_event_received(
+            &mut event_receiver_inactive,
+            500,
+            "Unexpectedly received an event when group state is false"
+        ).await;
         
         let interruption_result = listener.handle_interruption().await;
         assert!(interruption_result.is_ok(), "Handle interruption failed");

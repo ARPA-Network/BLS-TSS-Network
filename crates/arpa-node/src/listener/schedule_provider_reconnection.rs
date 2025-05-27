@@ -168,7 +168,7 @@ mod tests {
         providers::{Provider, Ws},
         signers::{LocalWallet, Signer},
         types::Address,
-        utils::Anvil,
+        utils::{Anvil, AnvilInstance},
     };
     use std::{sync::Arc, time::Duration};
     use threshold_bls::schemes::bn254::G2Curve;
@@ -206,9 +206,31 @@ mod tests {
             self.descriptor.clone()
         }
     }
-    #[tokio::test]
-    async fn test_provider_reconnection_listener() -> NodeResult<()> {
-        println!("Starting test_provider_reconnection_listener");
+
+    fn create_mock_listener(chain_id: usize, l_type: ListenerType, message: &str) -> MockListener {
+        MockListener {
+            descriptor: ListenerDescriptor {
+                chain_id,
+                l_type,
+                interval_millis: 1000,
+                use_jitter: true,
+                reset_descriptor: FixedIntervalRetryDescriptor {
+                    interval_millis: 5000,
+                    max_attempts: 3,
+                    use_jitter: true,
+                },
+            },
+            message: message.to_string(),
+        }
+    }
+
+    async fn setup_test_environment() -> NodeResult<(
+        AnvilInstance,
+        usize,
+        Arc<RwLock<ChainIdentityHandlerType<G2Curve>>>,
+        Arc<RwLock<SimpleFixedTaskScheduler>>,
+    )> {
+        println!("Starting test setup");
         
         let anvil = Anvil::new().spawn();
         println!("Anvil instance started at {}", anvil.endpoint());
@@ -223,7 +245,6 @@ mod tests {
         
         let adapter_address = Address::random();
         let controller_address = Address::random();
-        
         let config = Config::default();
         
         let chain_identity = GeneralMainChainIdentity::new(
@@ -247,68 +268,50 @@ mod tests {
         let fixed_task_scheduler = SimpleFixedTaskScheduler::new();
         let f_ts = Arc::new(RwLock::new(fixed_task_scheduler));
         println!("Fixed task scheduler created");
+
+        Ok((anvil, chain_id, chain_identity_arc, f_ts))
+    }
+
+    async fn add_test_tasks(
+        f_ts: &Arc<RwLock<SimpleFixedTaskScheduler>>,
+        chain_id: usize,
+    ) -> NodeResult<()> {
+        let mut scheduler = f_ts.write().await;
         
-        {
-            let mut scheduler = f_ts.write().await;
-            
-            scheduler.add_listener_task(
-                MockListener {
-                    descriptor: ListenerDescriptor {
-                        chain_id,
-                        l_type: ListenerType::Block,
-                        interval_millis: 1000,
-                        use_jitter: true,
-                        reset_descriptor: FixedIntervalRetryDescriptor {
-                            interval_millis: 5000,
-                            max_attempts: 3,
-                            use_jitter: true,
-                        },
-                    },
-                    message: "Block listener".to_string(),
-                }
-            )?;
-            
-            scheduler.add_listener_task(
-                MockListener {
-                    descriptor: ListenerDescriptor {
-                        chain_id,
-                        l_type: ListenerType::NewRandomnessTask,
-                        interval_millis: 1000,
-                        use_jitter: true,
-                        reset_descriptor: FixedIntervalRetryDescriptor {
-                            interval_millis: 5000,
-                            max_attempts: 3,
-                            use_jitter: true,
-                        },
-                    },
-                    message: "NewRandomnessTask listener".to_string(),
-                }
-            )?;
-            
-            scheduler.add_listener_task(
-                MockListener {
-                    descriptor: ListenerDescriptor {
-                        chain_id: chain_id + 1,
-                        l_type: ListenerType::Block,
-                        interval_millis: 1000,
-                        use_jitter: true,
-                        reset_descriptor: FixedIntervalRetryDescriptor {
-                            interval_millis: 5000,
-                            max_attempts: 3,
-                            use_jitter: true,
-                        },
-                    },
-                    message: "Other chain Block listener".to_string(),
-                }
-            )?;
-            
-            scheduler.add_task(
-                ComponentTaskType::Subscriber(chain_id, SubscriberType::Block),
-                async {
-                    println!("Subscriber task would run here");
-                },
-            )?;
-        }
+        scheduler.add_listener_task(
+            create_mock_listener(chain_id, ListenerType::Block, "Block listener")
+        )?;
+        
+        scheduler.add_listener_task(
+            create_mock_listener(chain_id, ListenerType::NewRandomnessTask, "NewRandomnessTask listener")
+        )?;
+        
+        scheduler.add_listener_task(
+            create_mock_listener(chain_id + 1, ListenerType::Block, "Other chain Block listener")
+        )?;
+        
+        scheduler.add_task(
+            ComponentTaskType::Subscriber(chain_id, SubscriberType::Block),
+            async {
+                println!("Subscriber task would run here");
+            },
+        )?;
+
+        Ok(())
+    }
+
+    fn assert_listener_descriptor_equals(actual: &ListenerDescriptor, expected: &ListenerDescriptor) {
+        assert_eq!(actual.chain_id, expected.chain_id);
+        assert_eq!(actual.l_type, expected.l_type);
+        assert_eq!(actual.interval_millis, expected.interval_millis);
+        assert_eq!(actual.use_jitter, expected.use_jitter);
+    }
+
+    #[tokio::test]
+    async fn test_provider_reconnection_listener() -> NodeResult<()> {
+        let (_anvil, chain_id, chain_identity_arc, f_ts) = setup_test_environment().await?;
+        
+        add_test_tasks(&f_ts, chain_id).await?;
         println!("Test tasks added to scheduler");
         
         let listener_descriptor = ListenerDescriptor {
@@ -379,10 +382,7 @@ mod tests {
         
         assert_eq!(listener.chain_id(), chain_id);
         let returned_descriptor = listener.listener_descriptor();
-        assert_eq!(returned_descriptor.chain_id, listener_descriptor.chain_id);
-        assert_eq!(returned_descriptor.l_type, listener_descriptor.l_type);
-        assert_eq!(returned_descriptor.interval_millis, listener_descriptor.interval_millis);
-        assert_eq!(returned_descriptor.use_jitter, listener_descriptor.use_jitter);
+        assert_listener_descriptor_equals(&returned_descriptor, &listener_descriptor);
         
         if let Some(jitter_fn) = listener.jitter_fn() {
             let original_duration = Duration::from_millis(1000);

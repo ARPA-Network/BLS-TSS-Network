@@ -191,7 +191,13 @@ pub mod tests {
         }
     }
 
-    fn setup_test_listener() -> (TestListener, Arc<AtomicUsize>, Arc<AtomicUsize>, Arc<AtomicBool>, Arc<AtomicBool>) {
+    fn create_test_listener(chain_id: usize) -> (
+        TestListener, 
+        Arc<AtomicUsize>, 
+        Arc<AtomicUsize>, 
+        Arc<AtomicBool>, 
+        Arc<AtomicBool>
+    ) {
         let listen_counter = Arc::new(AtomicUsize::new(0));
         let handle_interruption_counter = Arc::new(AtomicUsize::new(0));
         let should_fail = Arc::new(AtomicBool::new(false));
@@ -202,25 +208,33 @@ pub mod tests {
             handle_interruption_counter: handle_interruption_counter.clone(),
             should_fail: should_fail.clone(),
             interruption_should_fail: interruption_should_fail.clone(),
-            chain_id: 1,
+            chain_id,
             initialized: Arc::new(AtomicBool::new(false)),
         };
         
         (listener, listen_counter, handle_interruption_counter, should_fail, interruption_should_fail)
     }
 
-    #[tokio::test]
-    async fn test_normal_operation() {
-        let (listener, listen_counter, _, _, _) = setup_test_listener();
-        
+    async fn run_listener_for_duration(listener: TestListener, duration_millis: u64) {
         let listener_handle = tokio::spawn(async move {
             listener.start().await
         });
         
-        sleep(Duration::from_millis(550)).await;
+        sleep(Duration::from_millis(duration_millis)).await;
         
         listener_handle.abort();
         let _ = listener_handle.await;
+    }
+
+    fn setup_test_listener() -> (TestListener, Arc<AtomicUsize>, Arc<AtomicUsize>, Arc<AtomicBool>, Arc<AtomicBool>) {
+        create_test_listener(1)
+    }
+
+    #[tokio::test]
+    async fn test_normal_operation() {
+        let (listener, listen_counter, _, _, _) = setup_test_listener();
+        
+        run_listener_for_duration(listener, 550).await;
         
         let count = listen_counter.load(Ordering::SeqCst);
         assert!(count >= 4 && count <= 8, "Expected 4-8 calls, got {}", count);
@@ -232,14 +246,7 @@ pub mod tests {
         
         should_fail.store(true, Ordering::SeqCst);
         
-        let listener_handle = tokio::spawn(async move {
-            listener.start().await
-        });
-        
-        sleep(Duration::from_millis(400)).await;
-        
-        listener_handle.abort();
-        let _ = listener_handle.await;
+        run_listener_for_duration(listener, 400).await;
         
         let interruption_count = handle_interruption_counter.load(Ordering::SeqCst);
         assert!(interruption_count > 0, "handle_interruption should be called at least once");
@@ -302,16 +309,8 @@ pub mod tests {
 
     #[tokio::test]
     async fn test_concurrent_listeners() {
-        let (listener1, listen_counter1, _, _, _) = setup_test_listener();
-        let mut listener2 = TestListener {
-            listen_counter: Arc::new(AtomicUsize::new(0)),
-            handle_interruption_counter: Arc::new(AtomicUsize::new(0)),
-            should_fail: Arc::new(AtomicBool::new(false)),
-            interruption_should_fail: Arc::new(AtomicBool::new(false)),
-            chain_id: 2,
-            initialized: Arc::new(AtomicBool::new(false)),
-        };
-        let listen_counter2 = listener2.listen_counter.clone();
+        let (listener1, listen_counter1, _, _, _) = create_test_listener(1);
+        let (mut listener2, listen_counter2, _, _, _) = create_test_listener(2);
         
         listener2.initialize().await.unwrap();
         
@@ -345,14 +344,7 @@ pub mod tests {
         
         should_fail.store(true, Ordering::SeqCst);
         
-        let listener_handle = tokio::spawn(async move {
-            listener.start().await
-        });
-        
-        sleep(Duration::from_millis(300)).await;
-        
-        listener_handle.abort();
-        let _ = listener_handle.await;
+        run_listener_for_duration(listener, 300).await;
         
         let logged_messages = logs.lock().await;
         let has_interruption_log = logged_messages.iter().any(|log| 

@@ -124,7 +124,7 @@ mod tests {
     use crate::event::types::Topic;
     use crate::queue::EventSubscriber;
     use crate::subscriber::{DebuggableEvent, DebuggableSubscriber, Subscriber};
-    use crate::test_contracts::mockcontroller:: deploy_with_args_and_get_mock_controller;
+    use crate::test_contracts::mockcontroller::deploy_with_args_and_get_mock_controller;
     
     use ethers::signers::{LocalWallet, Signer};
     use ethers::middleware::SignerMiddleware;
@@ -204,7 +204,60 @@ mod tests {
         
         receiver
     }
-    
+
+    async fn create_test_caches(
+        chain_id: usize,
+        id_address: Address,
+    ) -> (
+        Arc<RwLock<Box<dyn BlockInfoHandler>>>,
+        Arc<RwLock<Box<dyn GroupInfoHandler<G2Curve>>>>,
+    ) {
+        let block_cache: Arc<RwLock<Box<dyn BlockInfoHandler>>> = Arc::new(RwLock::new(
+            Box::new(InMemoryBlockInfoCache::new(chain_id, 15)),
+        ));
+        
+        let group_cache: Arc<RwLock<Box<dyn GroupInfoHandler<G2Curve>>>> = Arc::new(RwLock::new(
+            Box::new(InMemoryGroupInfoCache::<G2Curve>::new(id_address)),
+        ));
+        
+        (block_cache, group_cache)
+    }
+
+    async fn setup_dkg_task(
+        group_cache: &Arc<RwLock<Box<dyn GroupInfoHandler<G2Curve>>>>,
+        id_address: Address,
+        dkg_status: DKGStatus,
+    ) -> NodeResult<()> {
+        let mut group_cache_write = group_cache.write().await;
+        let dkg_task = arpa_core::DKGTask {
+            group_index: 1,
+            epoch: 1,
+            size: 3,
+            threshold: 2,
+            assignment_block_height: 50,
+            members: vec![id_address, Address::random(), Address::random()],
+            coordinator_address: Address::random()
+        };
+        
+        group_cache_write.save_task_info(0, dkg_task).await?;
+        group_cache_write.update_dkg_status(1, 1, dkg_status).await?;
+        Ok(())
+    }
+
+    fn create_listener_descriptor(chain_id: usize) -> ListenerDescriptor {
+        ListenerDescriptor {
+            chain_id,
+            l_type: ListenerType::PostGrouping,
+            interval_millis: 1000,
+            use_jitter: true,
+            reset_descriptor: FixedIntervalRetryDescriptor {
+                interval_millis: 5000,
+                max_attempts: 3,
+                use_jitter: true,
+            },
+        }
+    }
+
     async fn create_mock_chain_identity<PC: Curve + Sync + Send + 'static>(
         controller_address: Option<Address>
     ) -> NodeResult<Arc<RwLock<ChainIdentityHandlerType<PC>>>> {
@@ -238,7 +291,101 @@ mod tests {
         
         Ok(chain_identity_arc)
     }
-    
+
+    async fn create_test_listener_with_chain_identity(
+        chain_id: usize,
+        id_address: Address,
+        block_height: usize,
+        dkg_status: DKGStatus,
+        dkg_timeout_duration: usize,
+        chain_identity: Arc<RwLock<ChainIdentityHandlerType<G2Curve>>>,
+    ) -> NodeResult<(
+        PostGroupingListener<G2Curve>,
+        tokio::sync::mpsc::Receiver<Box<dyn std::any::Any + Send>>,
+    )> {
+        let (block_cache, group_cache) = create_test_caches(chain_id, id_address).await;
+        let event_queue = Arc::new(RwLock::new(EventQueue::new()));
+        
+        setup_dkg_task(&group_cache, id_address, dkg_status).await?;
+        
+        {
+            let mut block_cache_write = block_cache.write().await;
+            block_cache_write.set_block_height(block_height);
+        }
+        
+        let listener_descriptor = create_listener_descriptor(chain_id);
+        
+        let listener = PostGroupingListener::<G2Curve>::new(
+            listener_descriptor,
+            chain_identity,
+            block_cache,
+            group_cache,
+            event_queue.clone(),
+            dkg_timeout_duration,
+        );
+        
+        let event_receiver = {
+            let mut eq_write = event_queue.write().await;
+            mock_subscribe_to_events(&mut *eq_write, "test_subscriber").await
+        };
+        
+        Ok((listener, event_receiver))
+    }
+
+    async fn create_test_listener(
+        chain_id: usize,
+        id_address: Address,
+        block_height: usize,
+        dkg_status: DKGStatus,
+        dkg_timeout_duration: usize,
+        controller_address: Option<Address>,
+    ) -> NodeResult<(
+        PostGroupingListener<G2Curve>,
+        tokio::sync::mpsc::Receiver<Box<dyn std::any::Any + Send>>,
+    )> {
+        let chain_identity = create_mock_chain_identity::<G2Curve>(controller_address).await?;
+        
+        create_test_listener_with_chain_identity(
+            chain_id,
+            id_address,
+            block_height,
+            dkg_status,
+            dkg_timeout_duration,
+            chain_identity,
+        ).await
+    }
+
+    async fn setup_contract_group(
+        controller: &crate::test_contracts::mockcontroller::MockController<SignerMiddleware<Provider<Http>, LocalWallet>>,
+        id_address: Address,
+    ) -> NodeResult<()> {
+        let group_index = 1usize;
+        let epoch = 1usize;
+        let size = 3usize;
+        let threshold = 2usize;
+        let empty_public_key = [U256::zero(), U256::zero(), U256::zero(), U256::zero()];
+        let member_addresses = vec![id_address, Address::random(), Address::random()];
+        
+        let tx_request = controller.set_group(
+            group_index.into(),
+            epoch.into(),
+            size.into(),
+            threshold.into(),
+            false,
+            empty_public_key,
+            member_addresses.clone(),
+        );
+        
+        let pending_tx = tx_request.send().await
+            .map_err(|e| anyhow!("Failed to send setGroup transaction: {}", e))?;
+            
+        pending_tx.await
+            .map_err(|e| anyhow!("setGroup transaction failed: {}", e))?;
+            
+        println!("Group setup complete");
+        Ok(())
+    }
+
     #[tokio::test]
     async fn test_post_grouping_listener_timeout() -> NodeResult<()> {
         let chain_id = 1;
@@ -249,17 +396,11 @@ mod tests {
         
         let http_provider = Provider::<Http>::try_from(anvil.endpoint())
             .expect("Failed to create HTTP provider");
-        
-        let ws_provider = Provider::<Ws>::connect(anvil.ws_endpoint()).await
-            .map_err(|e| anyhow!("Failed to connect to WS provider: {}", e))?;
-        
         let wallet: LocalWallet = anvil.keys()[0].clone().into();
         let wallet = wallet.with_chain_id(chain_id as u64);
-        
         let client = Arc::new(SignerMiddleware::new(http_provider.clone(), wallet.clone()));
         
-        let node_registry_address = Address::random(); 
-        
+        let node_registry_address = Address::random();
         let controller = deploy_with_args_and_get_mock_controller(
             client.clone(),
             node_registry_address,
@@ -268,73 +409,20 @@ mod tests {
         let controller_address = controller.address();
         println!("MockController deployed at: {}", controller_address);
         
-        let block_cache: Arc<RwLock<Box<dyn BlockInfoHandler>>> = Arc::new(RwLock::new(
-            Box::new(InMemoryBlockInfoCache::new(chain_id, 15)),
-        ));
+        setup_contract_group(&controller, id_address).await?;
         
-        let group_cache: Arc<RwLock<Box<dyn GroupInfoHandler<G2Curve>>>> = Arc::new(RwLock::new(
-            Box::new(InMemoryGroupInfoCache::<G2Curve>::new(id_address)),
-        ));
-        
-        let event_queue = Arc::new(RwLock::new(EventQueue::new()));
-        
-        {
-            let mut group_cache_write = group_cache.write().await;
-            let dkg_task = arpa_core::DKGTask {
-                group_index: 1,
-                epoch: 1,
-                size: 3,
-                threshold: 2,
-                assignment_block_height: 50,
-                members: vec![id_address, Address::random(), Address::random()],
-                coordinator_address: Address::random()
-            };
-            
-            group_cache_write.save_task_info(0, dkg_task).await?;
-            group_cache_write.update_dkg_status(1, 1, DKGStatus::InPhase).await?;
-        }
-        
-        {
-            let mut block_cache_write = block_cache.write().await;
-            block_cache_write.set_block_height(200);
-        }
-        
-        let group_index = 1u64;
-        let epoch = 1u64;
-        let size = 3u64;
-        let threshold = 2u64;
-        let empty_public_key = [U256::zero(), U256::zero(), U256::zero(), U256::zero()];
-        let member_addresses = vec![id_address, Address::random(), Address::random()];
-        
-        {
-            let tx_request = controller.set_group(
-                group_index.into(),
-                epoch.into(),
-                size.into(),
-                threshold.into(),
-                false,
-                empty_public_key,
-                member_addresses.clone(),
-            );
-            
-            let pending_tx = tx_request.send().await
-                .map_err(|e| anyhow!("Failed to send setGroup transaction: {}", e))?;
-                
-            pending_tx.await
-                .map_err(|e| anyhow!("setGroup transaction failed: {}", e))?;
-                
-            println!("Group setup complete");
-        }
+        let ws_provider = Arc::new(Provider::<Ws>::connect(anvil.ws_endpoint()).await
+            .map_err(|e| anyhow!("Failed to connect to WS provider: {}", e))?);
         
         let config = Config::default();
         let chain_identity = GeneralMainChainIdentity::new(
             chain_id,
             wallet.clone(),
-            Arc::new(ws_provider),
+            ws_provider,
             anvil.ws_endpoint(),
             controller_address,
-            Address::random(), 
-            Address::random(), 
+            Address::random(),
+            Address::random(),
             config.get_time_limits().contract_transaction_retry_descriptor,
             config.get_time_limits().contract_view_retry_descriptor,
             None,
@@ -343,31 +431,14 @@ mod tests {
         let chain_identity_arc: Arc<RwLock<ChainIdentityHandlerType<G2Curve>>> = 
             Arc::new(RwLock::new(Box::new(chain_identity) as ChainIdentityHandlerType<G2Curve>));
         
-        let listener_descriptor = ListenerDescriptor {
+        let (listener, mut event_receiver) = create_test_listener_with_chain_identity(
             chain_id,
-            l_type: ListenerType::PostGrouping,
-            interval_millis: 1000,
-            use_jitter: true,
-            reset_descriptor: FixedIntervalRetryDescriptor {
-                interval_millis: 5000,
-                max_attempts: 3,
-                use_jitter: true,
-            },
-        };
-        
-        let listener = PostGroupingListener::<G2Curve>::new(
-            listener_descriptor.clone(),
-            chain_identity_arc,
-            block_cache.clone(),
-            group_cache.clone(),
-            event_queue.clone(),
+            id_address,
+            200, // block_height that triggers timeout (50 + 100 = 150 < 200)
+            DKGStatus::InPhase,
             dkg_timeout_duration,
-        );
-        
-        let mut event_receiver = {
-            let mut eq_write = event_queue.write().await;
-            mock_subscribe_to_events(&mut *eq_write, "test_subscriber").await
-        };
+            chain_identity_arc,
+        ).await?;
         
         listener.listen().await?;
         
@@ -391,68 +462,14 @@ mod tests {
         let id_address = Address::random();
         let dkg_timeout_duration = 100;
         
-        let block_cache: Arc<RwLock<Box<dyn BlockInfoHandler>>> = Arc::new(RwLock::new(
-            Box::new(InMemoryBlockInfoCache::new(chain_id, 15)),
-        ));
-        
-        let group_cache: Arc<RwLock<Box<dyn GroupInfoHandler<G2Curve>>>> = Arc::new(RwLock::new(
-            Box::new(InMemoryGroupInfoCache::<G2Curve>::new(id_address)),
-        ));
-        
-        let event_queue = Arc::new(RwLock::new(EventQueue::new()));
-        
-        {
-            let mut group_cache_write = group_cache.write().await;
-            let dkg_task = arpa_core::DKGTask {
-                group_index: 1,
-                epoch: 1,
-                size: 3,
-                threshold: 2,
-                assignment_block_height: 50,
-                members: vec![id_address, Address::random(), Address::random()],
-                coordinator_address: Address::random()
-            };
-            
-            group_cache_write.save_task_info(0, dkg_task).await?;
-            group_cache_write.update_dkg_status(1, 1, DKGStatus::InPhase).await?;
-            assert_eq!(group_cache_write.get_index().unwrap(), 1);
-            assert_eq!(group_cache_write.get_epoch().unwrap(), 1);
-            assert_eq!(group_cache_write.get_dkg_start_block_height().unwrap(), 50);
-        }
-        
-        {
-            let mut block_cache_write = block_cache.write().await;
-            block_cache_write.set_block_height(100);
-            assert_eq!(block_cache_write.get_block_height(), 100);
-        }
-        
-        let listener_descriptor = ListenerDescriptor {
+        let (listener, mut event_receiver) = create_test_listener(
             chain_id,
-            l_type: ListenerType::PostGrouping,
-            interval_millis: 1000, 
-            use_jitter: true,      
-            reset_descriptor: FixedIntervalRetryDescriptor {
-                interval_millis: 5000, 
-                max_attempts: 3,       
-                use_jitter: true,      
-            },
-        };
-        
-        let chain_identity = create_mock_chain_identity::<G2Curve>(None).await?;
-        
-        let listener = PostGroupingListener::<G2Curve>::new(
-            listener_descriptor.clone(),
-            chain_identity,
-            block_cache.clone(),
-            group_cache.clone(),
-            event_queue.clone(),
+            id_address,
+            100, // block_height that doesn't trigger timeout (50 + 100 = 150 > 100)
+            DKGStatus::InPhase,
             dkg_timeout_duration,
-        );
-        
-        let mut event_receiver = {
-            let mut eq_write = event_queue.write().await;
-            mock_subscribe_to_events(&mut *eq_write, "test_subscriber").await
-        };
+            None,
+        ).await?;
         
         listener.listen().await?;
         
@@ -468,68 +485,14 @@ mod tests {
         let id_address = Address::random();
         let dkg_timeout_duration = 100;
         
-        let block_cache: Arc<RwLock<Box<dyn BlockInfoHandler>>> = Arc::new(RwLock::new(
-            Box::new(InMemoryBlockInfoCache::new(chain_id, 15)),
-        ));
-        
-        let group_cache: Arc<RwLock<Box<dyn GroupInfoHandler<G2Curve>>>> = Arc::new(RwLock::new(
-            Box::new(InMemoryGroupInfoCache::<G2Curve>::new(id_address)),
-        ));
-        
-        let event_queue = Arc::new(RwLock::new(EventQueue::new()));
-        
-        {
-            let mut group_cache_write = group_cache.write().await;
-            let dkg_task = arpa_core::DKGTask {
-                group_index: 1,
-                epoch: 1,
-                size: 3,
-                threshold: 2,
-                assignment_block_height: 50,
-                members: vec![id_address, Address::random(), Address::random()],
-                coordinator_address: Address::random()
-            };
-            
-            group_cache_write.save_task_info(0, dkg_task).await?;
-            group_cache_write.update_dkg_status(1, 1, DKGStatus::None).await?;
-            
-            assert_eq!(group_cache_write.get_index().unwrap(), 1);
-            assert_eq!(group_cache_write.get_epoch().unwrap(), 1);
-            assert_eq!(group_cache_write.get_dkg_status().unwrap(), DKGStatus::None);
-        }
-        
-        {
-            let mut block_cache_write = block_cache.write().await;
-            block_cache_write.set_block_height(200);
-        }
-        
-        let listener_descriptor = ListenerDescriptor {
+        let (listener, mut event_receiver) = create_test_listener(
             chain_id,
-            l_type: ListenerType::PostGrouping,
-            interval_millis: 1000, 
-            use_jitter: true,      
-            reset_descriptor: FixedIntervalRetryDescriptor {
-                interval_millis: 5000, 
-                max_attempts: 3,       
-                use_jitter: true,      
-            },
-        };
-        
-        let chain_identity = create_mock_chain_identity::<G2Curve>(None).await?;
-        
-        let listener = PostGroupingListener::<G2Curve>::new(
-            listener_descriptor.clone(),
-            chain_identity,
-            block_cache.clone(),
-            group_cache.clone(),
-            event_queue.clone(),
+            id_address,
+            200, // Even with timeout block height, shouldn't trigger due to status
+            DKGStatus::None,
             dkg_timeout_duration,
-        );
-        
-        let mut event_receiver = {
-            let mut eq_write = event_queue.write().await;
-            mock_subscribe_to_events(&mut *eq_write, "test_subscriber").await
-        };
+            None,
+        ).await?;
         
         listener.listen().await?;
         

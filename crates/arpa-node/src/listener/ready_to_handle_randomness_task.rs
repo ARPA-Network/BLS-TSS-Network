@@ -145,10 +145,11 @@ mod tests {
     use ethers::signers::{LocalWallet, Signer};
     use ethers::middleware::SignerMiddleware;
     use threshold_bls::schemes::bn254::G2Curve;
+    use crate::error::NodeError;
     use crate::queue::EventSubscriber;
     use crate::event::types::Topic;
     use crate::subscriber::{DebuggableEvent, DebuggableSubscriber, Subscriber};
-    use crate::test_contracts::mockadapter::deploy_with_args_and_get_mock_adapter;
+    use crate::test_contracts::mockadapter::{deploy_with_args_and_get_mock_adapter, MockAdapter};
     
     use arpa_core::{
         Config, FixedIntervalRetryDescriptor, GeneralMainChainIdentity, ListenerType, RandomnessRequestType
@@ -164,79 +165,87 @@ mod tests {
     use anyhow::anyhow;
     use std::sync::Arc;
 
+    async fn setup_contract_with_commitment(
+        adapter: &MockAdapter<SignerMiddleware<Provider<Http>, LocalWallet>>,
+        request_id: [u8; 32],
+        commitment: [u8; 32],
+        description: &str,
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        let tx = adapter.set_request_commitment(request_id.into(), commitment.into());
+        let receipt = tx.send().await?.await?;
+        println!("  {} in block {}", description, receipt.unwrap().block_number.unwrap());
+        Ok(())
+    }
+
+    async fn verify_contract_commitment(
+        adapter: &MockAdapter<SignerMiddleware<Provider<Http>, LocalWallet>>,
+        request_id: [u8; 32],
+        expected_non_zero: bool,
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        let result = adapter.get_pending_request_commitment(request_id.into()).call().await?;
+        let result_as_u256 = U256::from(result);
+        let is_non_zero = !result_as_u256.is_zero();
+        
+        if expected_non_zero {
+            println!("Verified commitment for request ID {:?} is non-zero", request_id);
+        } else if !is_non_zero {
+            println!("WARNING: Commitment for request ID {:?} is zero!", request_id);
+        }
+        
+        Ok(())
+    }
+
     async fn setup_mock_adapter(
         client: Arc<SignerMiddleware<Provider<Http>, LocalWallet>>,
         pending_request_ids: Vec<[u8; 32]>,
     ) -> Result<Address, Box<dyn std::error::Error>> {
         println!("Deploying mock adapter contract...");
         
-        let adapter = deploy_with_args_and_get_mock_adapter(
-            client.clone(),
-            ()
-        ).await?;
-        
+        let adapter = deploy_with_args_and_get_mock_adapter(client.clone(), ()).await?;
         let adapter_address = adapter.address();
         println!("Adapter contract deployed at: {}", adapter_address);
         
         println!("Setting up pending requests in adapter contract...");
-
-        let non_zero_commitment = [1u8; 32]; 
+        let non_zero_commitment = [1u8; 32];
         
         for &request_id in pending_request_ids.iter() {
-            {
-                let tx = adapter.set_request_commitment(request_id.into(), non_zero_commitment.into());
-                let receipt = tx.send().await?
-                    .await?;
-                    
-                println!("  Set request ID {:?} as pending in block {}", 
-                    request_id, receipt.unwrap().block_number.unwrap());
-            }
+            setup_contract_with_commitment(
+                &adapter, 
+                request_id, 
+                non_zero_commitment, 
+                &format!("Set request ID {:?} as pending", request_id)
+            ).await?;
             
-            {
-                let result = adapter.get_pending_request_commitment(request_id.into()).call().await?;
-                let result_as_u256 = U256::from(result);
-                if result_as_u256.is_zero() {
-                    println!("WARNING: Commitment for request ID {:?} is zero!", request_id);
-                } else {
-                    println!("Verified commitment for request ID {:?} is non-zero", request_id);
-                }
-            }
+            verify_contract_commitment(&adapter, request_id, true).await?;
         }
         
         let non_pending_request_id = [4u8; 32];
         let zero_commitment = [0u8; 32];
-        {
-            let tx = adapter.set_request_commitment(non_pending_request_id.into(), zero_commitment.into());
-            let receipt = tx.send().await?
-                .await?;
-                
-            println!("Set request ID {:?} with zero commitment in block {}", 
-                non_pending_request_id, receipt.unwrap().block_number.unwrap());
-        }
+        setup_contract_with_commitment(
+            &adapter, 
+            non_pending_request_id, 
+            zero_commitment, 
+            &format!("Set request ID {:?} with zero commitment", non_pending_request_id)
+        ).await?;
     
         let test_request_id = [5u8; 32];
         let test_commitment = [2u8; 32];
-        
-        {
-            let tx = adapter.set_request_commitment(test_request_id.into(), test_commitment.into());
-            let receipt = tx.send().await?
-                .await?;
-                
-            println!("Set test request ID for verification in block {}", 
-                receipt.unwrap().block_number.unwrap());
-        }
+        setup_contract_with_commitment(
+            &adapter, 
+            test_request_id, 
+            test_commitment, 
+            "Set test request ID for verification"
+        ).await?;
     
-        {
-            let result = adapter.get_pending_request_commitment(test_request_id.into()).call().await?;
-            println!("Verification call result: {:?}", result);
-            let result_as_u256 = U256::from(result);
-            println!("As U256: {}, Is non-zero: {}", result_as_u256, !result_as_u256.is_zero());
-        }
+        let result = adapter.get_pending_request_commitment(test_request_id.into()).call().await?;
+        println!("Verification call result: {:?}", result);
+        let result_as_u256 = U256::from(result);
+        println!("As U256: {}, Is non-zero: {}", result_as_u256, !result_as_u256.is_zero());
     
         Ok(adapter_address)
     }
     
-    async fn mock_subscribe_to_events(
+    async fn create_test_subscriber(
         eq: &mut EventQueue,
         subscriber_name: &str,
         chain_id: usize,
@@ -297,6 +306,118 @@ mod tests {
         
         receiver
     }
+
+    fn create_randomness_task(request_id: [u8; 32], subscription_id: u64, params: Vec<u8>, seed: u64) -> RandomnessTask {
+        RandomnessTask {
+            request_id: request_id.to_vec(),
+            subscription_id,
+            group_index: 1,
+            request_type: RandomnessRequestType::Randomness,
+            params,
+            requester: Address::random(),
+            seed: U256::from(seed),
+            request_confirmations: 5,
+            callback_gas_limit: 100000,
+            callback_max_gas_price: U256::from(10000000000u64),
+            assignment_block_height: 90,
+        }
+    }
+
+    async fn setup_test_caches(
+        id_address: Address,
+    ) -> (
+        Arc<RwLock<Box<dyn BlockInfoHandler>>>,
+        Arc<RwLock<Box<dyn GroupInfoHandler<G2Curve>>>>,
+        Arc<RwLock<Box<dyn BLSTasksHandler<RandomnessTask>>>>
+    ) {
+        let block_cache: Arc<RwLock<Box<dyn BlockInfoHandler>>> =
+            Arc::new(RwLock::new(Box::new(InMemoryBlockInfoCache::new(100, 12))));
+        
+        let group_cache: Arc<RwLock<Box<dyn GroupInfoHandler<G2Curve>>>> =
+            Arc::new(RwLock::new(Box::new(InMemoryGroupInfoCache::<G2Curve>::new(id_address))));
+        
+        let randomness_tasks_cache: Arc<RwLock<Box<dyn BLSTasksHandler<RandomnessTask>>>> =
+            Arc::new(RwLock::new(Box::new(InMemoryBLSTasksQueue::new())));
+
+        {
+            let mut group_cache_write = group_cache.write().await;
+            let dkg_task = arpa_core::DKGTask {
+                group_index: 1,
+                epoch: 1,
+                size: 3,
+                threshold: 2,
+                assignment_block_height: 90,
+                members: vec![id_address],
+                coordinator_address: Address::random()
+            };
+            group_cache_write.save_task_info(0, dkg_task).await.unwrap();
+            group_cache_write.save_committers(1, 1, vec![id_address]).await.unwrap();
+            group_cache_write.update_dkg_status(1, 1, arpa_core::DKGStatus::CommitSuccess).await.unwrap();
+            println!("Group cache configured with successful DKG state");
+        }
+        
+        {
+            let mut block_cache_write = block_cache.write().await;
+            block_cache_write.set_block_height(100);
+            println!("Block cache updated with height 100");
+        }
+
+        (block_cache, group_cache, randomness_tasks_cache)
+    }
+
+    async fn wait_for_event(
+        event_receiver: &mut tokio::sync::mpsc::Receiver<Box<dyn std::any::Any + Send>>,
+        timeout_secs: u64,
+        description: &str,
+    ) -> Result<ReadyToHandleRandomnessTask, NodeError> {
+        println!("Waiting for {} event...", description);
+        let received_event = timeout(Duration::from_secs(timeout_secs), event_receiver.recv()).await
+            .map_err(|_| {
+                println!("Timeout: No {} event received after {} seconds", description, timeout_secs);
+                anyhow!("Timeout: No {} event received", description)
+            })?
+            .ok_or_else(|| {
+                println!("Error: Event channel closed");
+                anyhow!("Error: Event channel closed")
+            })?;
+        
+        println!("{} event received!", description);
+        
+        if let Some(event) = received_event.downcast_ref::<ReadyToHandleRandomnessTask>() {
+            println!("Received ReadyToHandleRandomnessTask event with {} tasks", event.tasks.len());
+            Ok(ReadyToHandleRandomnessTask {
+                chain_id: event.chain_id,
+                tasks: event.tasks.clone(),
+            })
+        } else {
+            println!("Received unexpected event type");
+            Err(anyhow!("Received unexpected event type").into())
+        }
+    }
+
+    async fn verify_event_content(
+        event: &ReadyToHandleRandomnessTask,
+        expected_chain_id: usize,
+        expected_task_count: Option<usize>,
+        expected_request_ids: Option<Vec<Vec<u8>>>,
+        test_name: &str,
+    ) -> NodeResult<()> {
+        assert_eq!(event.chain_id, expected_chain_id);
+        
+        if let Some(count) = expected_task_count {
+            assert_eq!(event.tasks.len(), count);
+        }
+        
+        if let Some(request_ids) = expected_request_ids {
+            for expected_id in request_ids {
+                let found = event.tasks.iter().any(|task| task.request_id == expected_id);
+                assert!(found, "Expected request ID not found in tasks");
+            }
+        }
+        
+        println!("{} test PASSED!", test_name);
+        Ok(())
+    }
     
     #[tokio::test]
     async fn test_ready_to_handle_randomness_task_listener() -> NodeResult<()> {
@@ -329,15 +450,12 @@ mod tests {
 
         let pending_request_ids = vec![request_id1, request_id3];
         
-        let adapter_address = setup_mock_adapter(
-            client.clone(), 
-            pending_request_ids,
-        ).await.map_err(|e| anyhow!("Failed to deploy mock adapter contract: {}", e))?;
+        let adapter_address = setup_mock_adapter(client.clone(), pending_request_ids).await
+            .map_err(|e| anyhow!("Failed to deploy mock adapter contract: {}", e))?;
         
         println!("Adapter contract deployed at: {}", adapter_address);
         
         let controller_address = Address::random(); 
-        
         let config = Config::default();
         
         let chain_identity = GeneralMainChainIdentity::new(
@@ -354,15 +472,7 @@ mod tests {
         );
         println!("Chain identity created");
         
-        let block_cache: Arc<RwLock<Box<dyn BlockInfoHandler>>> =
-            Arc::new(RwLock::new(Box::new(InMemoryBlockInfoCache::new(100, 12))));
-        
-        let group_cache: Arc<RwLock<Box<dyn GroupInfoHandler<G2Curve>>>> =
-            Arc::new(RwLock::new(Box::new(InMemoryGroupInfoCache::<G2Curve>::new(id_address))));
-        
-        let randomness_tasks_cache: Arc<RwLock<Box<dyn BLSTasksHandler<RandomnessTask>>>> =
-            Arc::new(RwLock::new(Box::new(InMemoryBLSTasksQueue::new())));
-        
+        let (block_cache, group_cache, randomness_tasks_cache) = setup_test_caches(id_address).await;
         println!("Caches created");
         
         let event_queue = Arc::new(RwLock::new(EventQueue::new()));
@@ -374,65 +484,14 @@ mod tests {
         let mut event_receiver = {
             let mut eq_write = event_queue.write().await;
             println!("Setting up test subscriber");
-            mock_subscribe_to_events(&mut *eq_write, "test_subscriber", chain_id).await
+            create_test_subscriber(&mut *eq_write, "test_subscriber", chain_id).await
         };
-        
-        {
-            let mut group_cache_write = group_cache.write().await;
-            let dkg_task = arpa_core::DKGTask {
-                group_index: 1,
-                epoch: 1,
-                size: 3,
-                threshold: 2,
-                assignment_block_height: 90,
-                members: vec![id_address],
-                coordinator_address: Address::random()
-            };
-            group_cache_write.save_task_info(0, dkg_task).await?;
-    
-            group_cache_write.save_committers(1, 1, vec![id_address]).await?;
-            
-            group_cache_write.update_dkg_status(1, 1, arpa_core::DKGStatus::CommitSuccess).await?;
-            
-            println!("Group cache configured with successful DKG state");
-        }
-        
-        {
-            let mut block_cache_write = block_cache.write().await;
-            block_cache_write.set_block_height(100);
-            println!("Block cache updated with height 100");
-        }
         
         {
             let mut tasks_cache_write = randomness_tasks_cache.write().await;
             
-            let task1 = RandomnessTask {
-                request_id: request_id1.to_vec(),
-                subscription_id: 1,
-                group_index: 1,
-                request_type: RandomnessRequestType::Randomness,
-                params: vec![0u8, 1u8, 2u8],
-                requester: Address::random(),
-                seed: U256::from(123456),
-                request_confirmations: 5,
-                callback_gas_limit: 100000,
-                callback_max_gas_price: U256::from(10000000000u64),
-                assignment_block_height: 90,
-            };
-            
-            let task3 = RandomnessTask {
-                request_id: request_id3.to_vec(),
-                subscription_id: 3,
-                group_index: 1,
-                request_type: RandomnessRequestType::Randomness,
-                params: vec![6u8, 7u8, 8u8],
-                requester: Address::random(),
-                seed: U256::from(789012),
-                request_confirmations: 5,
-                callback_gas_limit: 100000,
-                callback_max_gas_price: U256::from(10000000000u64),
-                assignment_block_height: 90,
-            };
+            let task1 = create_randomness_task(request_id1, 1, vec![0u8, 1u8, 2u8], 123456);
+            let task3 = create_randomness_task(request_id3, 3, vec![6u8, 7u8, 8u8], 789012);
             
             tasks_cache_write.add(task1).await?;
             tasks_cache_write.add(task3).await?;
@@ -451,6 +510,7 @@ mod tests {
                 use_jitter: true,      
             },
         };
+        
         let listener = ReadyToHandleRandomnessTaskListener::<G2Curve>::new(
             listener_descriptor,
             id_address,
@@ -463,83 +523,44 @@ mod tests {
         );
         println!("Listener created");
         
+        // TEST PART 1: Direct publishing
         println!("\nTEST PART 1: Testing direct publishing through listener");
-        let test_task = RandomnessTask {
-            request_id: request_id2.to_vec(),
-            subscription_id: 2,
-            group_index: 1,
-            request_type: RandomnessRequestType::Randomness,
-            params: vec![3u8, 4u8, 5u8],
-            requester: Address::random(),
-            seed: U256::from(654321),
-            request_confirmations: 3,
-            callback_gas_limit: 200000,
-            callback_max_gas_price: U256::from(20000000000u64),
-            assignment_block_height: 95,
-        };
+        let test_task = create_randomness_task(request_id2, 2, vec![3u8, 4u8, 5u8], 654321);
         
         listener.publish(ReadyToHandleRandomnessTask {
             chain_id,
             tasks: vec![test_task.clone()],
         }).await;
         
-        println!("Waiting for published event...");
-        let received_event = timeout(Duration::from_secs(5), event_receiver.recv()).await
-            .map_err(|_| {
-                println!("Timeout: No event received after 5 seconds");
-                anyhow!("Timeout: No event received")
-            })?
-            .ok_or_else(|| {
-                println!("Error: Event channel closed");
-                anyhow!("Error: Event channel closed")
-            })?;
+        let direct_event = wait_for_event(&mut event_receiver, 5, "published").await?;
+        verify_event_content(
+            &direct_event,
+            chain_id,
+            Some(1),
+            Some(vec![test_task.request_id]),
+            "Direct publishing"
+        ).await?;
         
-        println!("Event received!");
-        
-        if let Some(event) = received_event.downcast_ref::<ReadyToHandleRandomnessTask>() {
-            println!("Received ReadyToHandleRandomnessTask event with {} tasks", event.tasks.len());
-            assert_eq!(event.chain_id, chain_id);
-            assert_eq!(event.tasks.len(), 1);
-            assert_eq!(event.tasks[0].request_id, test_task.request_id);
-            assert_eq!(event.tasks[0].subscription_id, test_task.subscription_id);
-            println!("Direct publishing test PASSED!");
-        } else {
-            println!("Received unexpected event type");
-            return Err(anyhow!("Received unexpected event type").into());
-        }
-        
+        // TEST PART 2: Listen method
         println!("\nTEST PART 2: Testing listen method with actual adapter contract");
         let listen_result = listener.listen().await;
         assert!(listen_result.is_ok(), "Listen method should not fail");
         
-        println!("Waiting for listen-triggered event...");
-        let listen_triggered_event = timeout(Duration::from_secs(5), event_receiver.recv()).await
-            .map_err(|_| {
-                println!("Timeout: No listen-triggered event received after 5 seconds");
-                anyhow!("Timeout: No listen-triggered event received")
-            })?
-            .ok_or_else(|| {
-                println!("Error: Event channel closed");
-                anyhow!("Error: Event channel closed")
-            })?;
+        let listen_event = wait_for_event(&mut event_receiver, 5, "listen-triggered").await?;
+        verify_event_content(
+            &listen_event,
+            chain_id,
+            None,
+            None,
+            "Listen method"
+        ).await?;
         
-        if let Some(event) = listen_triggered_event.downcast_ref::<ReadyToHandleRandomnessTask>() {
-            println!("Received ReadyToHandleRandomnessTask event from listen method with {} tasks", event.tasks.len());
-            assert_eq!(event.chain_id, chain_id);
-            assert!(event.tasks.len() > 0, "Should have at least one task");
-            
-            let found_task1 = event.tasks.iter().any(|task| task.request_id == request_id1.to_vec());
-            let found_task3 = event.tasks.iter().any(|task| task.request_id == request_id3.to_vec());
-            
-            println!("Found task1: {}, Found task3: {}", found_task1, found_task3);
-            assert!(found_task1 || found_task3, "Tasks should include at least one of the expected tasks");
-            
-            println!("Listen method test PASSED!");
-        } else {
-            println!("Received unexpected event type from listen method");
-            return Err(anyhow!("Received unexpected event type from listen method").into());
-        }
+        let found_task1 = listen_event.tasks.iter().any(|task| task.request_id == request_id1.to_vec());
+        let found_task3 = listen_event.tasks.iter().any(|task| task.request_id == request_id3.to_vec());
+        println!("Found task1: {}, Found task3: {}", found_task1, found_task3);
+        assert!(found_task1 || found_task3, "Tasks should include at least one of the expected tasks");
         
+        // TEST PART 3: Additional methods
         println!("\nTEST PART 3: Testing additional methods");
         println!("Testing handle_interruption method");
         let interruption_result = listener.handle_interruption().await;
