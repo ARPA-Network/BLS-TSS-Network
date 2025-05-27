@@ -139,29 +139,26 @@ impl<PC: Curve + Sync + Send> Listener for PreGroupingListener<PC> {
 #[cfg(feature = "unittest")]
 mod tests {
     use super::*;
-    use crate::test_contracts::mockcontroller::deploy_with_args_and_get_mock_controller;
-    use ethers::signers::{LocalWallet, Signer};
-    use ethers::middleware::SignerMiddleware;
-    use ethers::types::{U256, Address};
-    use threshold_bls::schemes::bn254::G2Curve;
-    use crate::queue::EventSubscriber;
     use crate::event::types::Topic;
+    use crate::queue::EventSubscriber;
     use crate::subscriber::{DebuggableEvent, DebuggableSubscriber, Subscriber};
-    use arpa_core::{
-        Config, DKGTask, FixedIntervalRetryDescriptor, GeneralMainChainIdentity, ListenerType
-    };
-    use arpa_dal::{
-        cache::InMemoryGroupInfoCache,
-        GroupInfoHandler
-    };
-    use ethers::{
-        providers::{Provider, Ws, Http},
-        utils::{Anvil,AnvilInstance}
-    };
-    use std::time::Duration;
-    use tokio::time::timeout;
+    use crate::test_contracts::mockcontroller::deploy_with_args_and_get_mock_controller;
     use anyhow::anyhow;
+    use arpa_core::{
+        Config, DKGTask, FixedIntervalRetryDescriptor, GeneralMainChainIdentity, ListenerType,
+    };
+    use arpa_dal::{cache::InMemoryGroupInfoCache, GroupInfoHandler};
+    use ethers::middleware::SignerMiddleware;
+    use ethers::signers::{LocalWallet, Signer};
+    use ethers::types::{Address, U256};
+    use ethers::{
+        providers::{Http, Provider, Ws},
+        utils::{Anvil, AnvilInstance},
+    };
     use std::sync::Arc;
+    use std::time::Duration;
+    use threshold_bls::schemes::bn254::G2Curve;
+    use tokio::time::timeout;
 
     struct TestEnvironment {
         anvil: AnvilInstance,
@@ -194,10 +191,16 @@ mod tests {
             }
         }
 
-        async fn deploy_controller(&self) -> NodeResult<crate::test_contracts::mockcontroller::MockController<SignerMiddleware<Provider<Http>, LocalWallet>>> {
+        async fn deploy_controller(
+            &self,
+        ) -> NodeResult<
+            crate::test_contracts::mockcontroller::MockController<
+                SignerMiddleware<Provider<Http>, LocalWallet>,
+            >,
+        > {
             let http_provider = Provider::<Http>::try_from(self.anvil.endpoint())
                 .map_err(|e| anyhow!("Failed to create HTTP provider: {}", e))?;
-            
+
             let client = Arc::new(SignerMiddleware::new(
                 http_provider,
                 self.wallet.clone().with_chain_id(self.anvil.chain_id()),
@@ -209,7 +212,11 @@ mod tests {
         }
 
         async fn create_chain_identity(&self) -> GeneralMainChainIdentity {
-            let ws_provider = Arc::new(Provider::<Ws>::connect(self.anvil.ws_endpoint()).await.unwrap());
+            let ws_provider = Arc::new(
+                Provider::<Ws>::connect(self.anvil.ws_endpoint())
+                    .await
+                    .unwrap(),
+            );
             let config = Config::default();
 
             GeneralMainChainIdentity::new(
@@ -220,7 +227,9 @@ mod tests {
                 self.controller_address,
                 self.adapter_address,
                 self.node_registry_address,
-                config.get_time_limits().contract_transaction_retry_descriptor,
+                config
+                    .get_time_limits()
+                    .contract_transaction_retry_descriptor,
                 config.get_time_limits().contract_view_retry_descriptor,
                 None,
             )
@@ -236,13 +245,15 @@ mod tests {
     impl ListenerComponents {
         async fn new(env: &TestEnvironment) -> Self {
             let chain_identity = env.create_chain_identity().await;
-            let group_cache: Arc<RwLock<Box<dyn GroupInfoHandler<G2Curve>>>> = Arc::new(RwLock::new(
-                Box::new(InMemoryGroupInfoCache::<G2Curve>::new(env.id_address)),
-            ));
+            let group_cache: Arc<RwLock<Box<dyn GroupInfoHandler<G2Curve>>>> =
+                Arc::new(RwLock::new(Box::new(
+                    InMemoryGroupInfoCache::<G2Curve>::new(env.id_address),
+                )));
             let event_queue = Arc::new(RwLock::new(EventQueue::new()));
-            let chain_identity_arc: Arc<RwLock<ChainIdentityHandlerType<G2Curve>>> = 
-                Arc::new(RwLock::new(Box::new(chain_identity) as ChainIdentityHandlerType<G2Curve>));
-            
+            let chain_identity_arc: Arc<RwLock<ChainIdentityHandlerType<G2Curve>>> = Arc::new(
+                RwLock::new(Box::new(chain_identity) as ChainIdentityHandlerType<G2Curve>),
+            );
+
             let listener_descriptor = create_listener_descriptor(env.chain_id);
             let listener = PreGroupingListener::<G2Curve>::new(
                 listener_descriptor,
@@ -304,24 +315,24 @@ mod tests {
             },
         }
     }
-    
+
     async fn setup_event_subscriber(
         eq: &mut EventQueue,
         subscriber_name: &str,
     ) -> tokio::sync::mpsc::Receiver<Box<dyn std::any::Any + Send>> {
         let (sender, receiver) = tokio::sync::mpsc::channel(100);
-        
+
         struct TestSubscriber {
             name: String,
             sender: tokio::sync::mpsc::Sender<Box<dyn std::any::Any + Send>>,
         }
-        
+
         impl std::fmt::Debug for TestSubscriber {
             fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
                 write!(f, "TestSubscriber({})", self.name)
             }
         }
-        
+
         #[async_trait]
         impl Subscriber for TestSubscriber {
             async fn notify(&self, _topic: Topic, payload: &dyn DebuggableEvent) -> NodeResult<()> {
@@ -333,18 +344,19 @@ mod tests {
                     };
                     let boxed = Box::new(cloned_event) as Box<dyn std::any::Any + Send>;
                     self.sender.send(boxed).await.map_err(|e| {
-                        let err: crate::error::NodeError = anyhow!("Failed to send event: {}", e).into();
+                        let err: crate::error::NodeError =
+                            anyhow!("Failed to send event: {}", e).into();
                         err
                     })?;
                 }
                 Ok(())
             }
-            
+
             async fn subscribe(self) {}
         }
-        
+
         impl DebuggableSubscriber for TestSubscriber {}
-        
+
         let subscriber = TestSubscriber {
             name: subscriber_name.to_string(),
             sender,
@@ -355,7 +367,9 @@ mod tests {
     }
 
     async fn emit_dkg_event(
-        controller: &crate::test_contracts::mockcontroller::MockController<SignerMiddleware<Provider<Http>, LocalWallet>>,
+        controller: &crate::test_contracts::mockcontroller::MockController<
+            SignerMiddleware<Provider<Http>, LocalWallet>,
+        >,
         params: &DkgTaskParams,
     ) -> NodeResult<()> {
         let tx = controller.emit_dkg_task_event(
@@ -366,28 +380,31 @@ mod tests {
             params.threshold,
             params.members.clone(),
             params.assignment_block_height,
-            params.coordinator_address
+            params.coordinator_address,
         );
-        
-        let pending_tx = tx.send().await
+
+        let pending_tx = tx
+            .send()
+            .await
             .map_err(|e| anyhow!("Failed to send transaction: {}", e))?;
-            
-        pending_tx.await
+
+        pending_tx
+            .await
             .map_err(|e| anyhow!("Transaction failed: {}", e))?;
-        
+
         Ok(())
     }
-    
+
     #[tokio::test]
     async fn test_pre_grouping_listener() -> NodeResult<()> {
         let env = TestEnvironment::new();
         let components = ListenerComponents::new(&env).await;
-        
+
         let mut event_receiver = {
             let mut eq_write = components.event_queue.write().await;
             setup_event_subscriber(&mut *eq_write, "test_subscriber").await
         };
-        
+
         let dkg_task = DKGTask {
             group_index: 1,
             epoch: 1,
@@ -395,19 +412,23 @@ mod tests {
             threshold: 2,
             assignment_block_height: 100,
             members: vec![env.id_address, Address::random(), Address::random()],
-            coordinator_address: Address::random()
+            coordinator_address: Address::random(),
         };
-        
-        components.listener.publish(NewDKGTask {
-            chain_id: env.chain_id,
-            dkg_task: dkg_task.clone(),
-            self_index: 0,
-        }).await;
-        
-        let received_event = timeout(Duration::from_secs(1), event_receiver.recv()).await
+
+        components
+            .listener
+            .publish(NewDKGTask {
+                chain_id: env.chain_id,
+                dkg_task: dkg_task.clone(),
+                self_index: 0,
+            })
+            .await;
+
+        let received_event = timeout(Duration::from_secs(1), event_receiver.recv())
+            .await
             .map_err(|_| anyhow!("Timeout: No event received"))?
             .ok_or_else(|| anyhow!("Error: Event channel closed"))?;
-        
+
         if let Some(task_event) = received_event.downcast_ref::<NewDKGTask>() {
             assert_eq!(task_event.chain_id, env.chain_id);
             assert_eq!(task_event.dkg_task.group_index, 1);
@@ -417,7 +438,7 @@ mod tests {
         } else {
             return Err(anyhow!("Received unexpected event type").into());
         }
-        
+
         Ok(())
     }
 
@@ -426,75 +447,85 @@ mod tests {
         let env = TestEnvironment::new();
         let controller = env.deploy_controller().await?;
         let components = ListenerComponents::new(&env).await;
-        
+
         let mut event_receiver = {
             let mut eq_write = components.event_queue.write().await;
             setup_event_subscriber(&mut *eq_write, "test_subscriber").await
         };
-        
+
         tokio::spawn(async move {
             if let Err(e) = components.listener.listen().await {
                 println!("Listener error: {:?}", e);
             }
         });
-        
+
         tokio::time::sleep(Duration::from_millis(500)).await;
-        
+
         let params = DkgTaskParams::new(env.id_address, true);
         emit_dkg_event(&controller, &params).await?;
-        
-        let received_event = timeout(Duration::from_secs(5), event_receiver.recv()).await
+
+        let received_event = timeout(Duration::from_secs(5), event_receiver.recv())
+            .await
             .map_err(|_| anyhow!("Timeout: No event received after emitting DkgTask"))?
             .ok_or_else(|| anyhow!("Error: Event channel closed"))?;
-        
+
         if let Some(task_event) = received_event.downcast_ref::<NewDKGTask>() {
             assert_eq!(task_event.chain_id, env.chain_id);
-            assert_eq!(task_event.dkg_task.group_index, params.group_index.as_usize());
+            assert_eq!(
+                task_event.dkg_task.group_index,
+                params.group_index.as_usize()
+            );
             assert_eq!(task_event.dkg_task.epoch, params.group_epoch.as_usize());
             assert_eq!(task_event.dkg_task.members, params.members);
-            assert_eq!(task_event.dkg_task.coordinator_address, params.coordinator_address);
+            assert_eq!(
+                task_event.dkg_task.coordinator_address,
+                params.coordinator_address
+            );
             assert_eq!(task_event.self_index, 0);
         } else {
             return Err(anyhow!("Received unexpected event type").into());
         }
-        
+
         Ok(())
     }
-    
+
     #[tokio::test]
     async fn test_pre_grouping_listener_listen_not_member() -> NodeResult<()> {
         let env = TestEnvironment::new();
         let controller = env.deploy_controller().await?;
         let components = ListenerComponents::new(&env).await;
-        
+
         let mut event_receiver = {
             let mut eq_write = components.event_queue.write().await;
             setup_event_subscriber(&mut *eq_write, "test_subscriber").await
         };
-        
+
         tokio::spawn(async move {
             if let Err(e) = components.listener.listen().await {
                 println!("Listener error: {:?}", e);
             }
         });
-        
+
         tokio::time::sleep(Duration::from_millis(500)).await;
-        
-        let params = DkgTaskParams::new(env.id_address, false); 
+
+        let params = DkgTaskParams::new(env.id_address, false);
         emit_dkg_event(&controller, &params).await?;
-        
+
         let timeout_result = timeout(Duration::from_millis(500), event_receiver.recv()).await;
-        assert!(timeout_result.is_err(), "Unexpectedly received an event when not a member");
-        
+        assert!(
+            timeout_result.is_err(),
+            "Unexpectedly received an event when not a member"
+        );
+
         Ok(())
     }
-    
+
     #[tokio::test]
     async fn test_pre_grouping_listener_listen_same_task() -> NodeResult<()> {
         let env = TestEnvironment::new();
         let controller = env.deploy_controller().await?;
         let components = ListenerComponents::new(&env).await;
-        
+
         {
             let mut group_cache_write = components.group_cache.write().await;
             let dkg_task = DKGTask {
@@ -504,34 +535,37 @@ mod tests {
                 threshold: 2,
                 assignment_block_height: 50,
                 members: vec![env.id_address, Address::random(), Address::random()],
-                coordinator_address: Address::random()
+                coordinator_address: Address::random(),
             };
-            
+
             group_cache_write.save_task_info(0, dkg_task).await?;
-            
+
             assert_eq!(group_cache_write.get_index().unwrap(), 2);
             assert_eq!(group_cache_write.get_epoch().unwrap(), 1);
         }
-        
+
         let mut event_receiver = {
             let mut eq_write = components.event_queue.write().await;
             setup_event_subscriber(&mut *eq_write, "test_subscriber").await
         };
-        
+
         tokio::spawn(async move {
             if let Err(e) = components.listener.listen().await {
                 println!("Listener error: {:?}", e);
             }
         });
-        
+
         tokio::time::sleep(Duration::from_millis(500)).await;
-        
+
         let params = DkgTaskParams::new(env.id_address, true);
         emit_dkg_event(&controller, &params).await?;
-        
+
         let timeout_result = timeout(Duration::from_millis(500), event_receiver.recv()).await;
-        assert!(timeout_result.is_err(), "Unexpectedly received an event for same task");
-        
+        assert!(
+            timeout_result.is_err(),
+            "Unexpectedly received an event for same task"
+        );
+
         Ok(())
     }
 }

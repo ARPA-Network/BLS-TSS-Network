@@ -1,7 +1,7 @@
 use std::fs;
+use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::process::Command;
-use std::io::Write;
 
 const RPC_STUB_DIR: &str = "./src/rpc_stub";
 const PROTO_DIR: &str = "proto";
@@ -41,15 +41,13 @@ fn cargo_warning(msg: &str) {
 
 #[cfg(feature = "unittest")]
 fn execute_solc_command(args: &[&str]) -> Result<std::process::Output, Box<dyn std::error::Error>> {
-    let output = Command::new("solc")
-        .args(args)
-        .output()?;
-    
+    let output = Command::new("solc").args(args).output()?;
+
     if !output.status.success() {
         let error = String::from_utf8_lossy(&output.stderr);
         return Err(format!("solc command failed: {}", error).into());
     }
-    
+
     Ok(output)
 }
 
@@ -61,31 +59,42 @@ fn write_file_content(path: &Path, content: &str) -> Result<(), Box<dyn std::err
 }
 
 #[cfg(feature = "unittest")]
-fn find_contract_abi(contracts: &serde_json::Map<String, serde_json::Value>, interface_name: &str) -> Option<(String, String)> {
+fn find_contract_abi(
+    contracts: &serde_json::Map<String, serde_json::Value>,
+    interface_name: &str,
+) -> Option<(String, String)> {
     for (key, value) in contracts {
         if let Some(contract_name) = key.split(':').last() {
             if contract_name == interface_name {
                 let abi = value["abi"].to_string();
                 let bytecode = value["bin"].as_str().unwrap_or("").to_string();
-                cargo_warning(&format!("Found exact match for {}: {} (ABI length: {})", 
-                                     interface_name, key, abi.len()));
+                cargo_warning(&format!(
+                    "Found exact match for {}: {} (ABI length: {})",
+                    interface_name,
+                    key,
+                    abi.len()
+                ));
                 return Some((abi, bytecode));
             }
         }
     }
-    
+
     for (key, value) in contracts {
         if let Some(contract_name) = key.split(':').last() {
             if contract_name.contains(interface_name) {
                 let abi = value["abi"].to_string();
                 let bytecode = value["bin"].as_str().unwrap_or("").to_string();
-                cargo_warning(&format!("Found partial match for {}: {} (ABI length: {})", 
-                                     interface_name, key, abi.len()));
+                cargo_warning(&format!(
+                    "Found partial match for {}: {} (ABI length: {})",
+                    interface_name,
+                    key,
+                    abi.len()
+                ));
                 return Some((abi, bytecode));
             }
         }
     }
-    
+
     None
 }
 
@@ -152,12 +161,17 @@ pub async fn deploy_with_args_and_get_{snake_name}<M: Middleware + 'static, T: e
 }
 
 #[cfg(feature = "unittest")]
-fn generate_contract_module(interface_name: &str, source_name: &str, abi: &str, bytecode: &str) -> String {
+fn generate_contract_module(
+    interface_name: &str,
+    source_name: &str,
+    abi: &str,
+    bytecode: &str,
+) -> String {
     let upper_name = interface_name.to_uppercase();
     let snake_name = convert_to_snake_case(interface_name);
-    
+
     let deploy_functions = generate_deploy_functions(interface_name, &snake_name, &upper_name);
-    
+
     format!(
         r####"// Auto-generated bindings for {interface_name} (from {source_name}.sol)
 use ethers::prelude::*;
@@ -188,54 +202,51 @@ abigen!(
 fn compile_test_contracts() -> Result<(), Box<dyn std::error::Error>> {
     let contract_dir = PathBuf::from(CONTRACT_DIR);
     let output_dir = PathBuf::from(OUTPUT_DIR);
-    
+
     if !contract_dir.exists() {
         cargo_warning("Test contract directory not found, skipping contract compilation");
         return Ok(());
     }
-    
+
     fs::create_dir_all(&output_dir)?;
-    
+
     check_solc_version()?;
-    
+
     let contract_files = collect_contract_files(&contract_dir)?;
-    
+
     if contract_files.is_empty() {
         cargo_warning("No Solidity contracts found in the test directory");
         return Ok(());
     }
-    
-    cargo_warning(&format!("Found {} Solidity contracts", contract_files.len()));
-    
+
+    cargo_warning(&format!(
+        "Found {} Solidity contracts",
+        contract_files.len()
+    ));
+
     let mut mod_file_content = String::from("// Auto-generated test contract modules\n\n");
-    
+
     for contract_path in contract_files {
         let contract_name = contract_path
             .file_stem()
             .unwrap()
             .to_string_lossy()
             .to_string();
-        
+
         cargo_warning(&format!("Compiling contract: {}", contract_name));
-        
+
         let (json_data, _) = compile_solidity_contract(&contract_path)?;
         let contract_interfaces = extract_contract_interfaces(&contract_path)?;
-        
+
         for interface_name in contract_interfaces {
             cargo_warning(&format!("Generating bindings for: {}", interface_name));
-            
-            generate_rust_module(
-                &output_dir,
-                &interface_name,
-                &contract_name,
-                &json_data,
-                ""
-            )?;
-            
+
+            generate_rust_module(&output_dir, &interface_name, &contract_name, &json_data, "")?;
+
             mod_file_content.push_str(&format!("pub mod {};\n", interface_name.to_lowercase()));
         }
     }
-    
+
     write_file_content(&output_dir.join("mod.rs"), &mod_file_content)?;
     cargo_warning("Test contracts compiled successfully");
     Ok(())
@@ -247,11 +258,11 @@ fn check_solc_version() -> Result<(), Box<dyn std::error::Error>> {
         .arg("--version")
         .output()
         .map_err(|_| "solc not found in PATH. Please install the Solidity compiler.")?;
-    
+
     if !output.status.success() {
         return Err("Failed to get solc version".into());
     }
-    
+
     let version_output = String::from_utf8_lossy(&output.stdout);
     cargo_warning(&format!("Found solc: {}", version_output.trim()));
     Ok(())
@@ -260,31 +271,34 @@ fn check_solc_version() -> Result<(), Box<dyn std::error::Error>> {
 #[cfg(feature = "unittest")]
 fn collect_contract_files(contract_dir: &Path) -> Result<Vec<PathBuf>, Box<dyn std::error::Error>> {
     let mut contract_files = Vec::new();
-    
+
     for entry in fs::read_dir(contract_dir)? {
         let entry = entry?;
         let path = entry.path();
-        if path.is_file() && path.extension().map_or(false, |ext| ext == SOLIDITY_EXTENSION) {
+        if path.is_file()
+            && path
+                .extension()
+                .map_or(false, |ext| ext == SOLIDITY_EXTENSION)
+        {
             contract_files.push(path);
         }
     }
-    
+
     Ok(contract_files)
 }
 
 #[cfg(feature = "unittest")]
-fn extract_contract_interfaces(contract_path: &Path) -> Result<Vec<String>, Box<dyn std::error::Error>> {
-    let output = execute_solc_command(&[
-        "--combined-json",
-        "abi",
-        &contract_path.to_string_lossy()
-    ])?;
-    
+fn extract_contract_interfaces(
+    contract_path: &Path,
+) -> Result<Vec<String>, Box<dyn std::error::Error>> {
+    let output =
+        execute_solc_command(&["--combined-json", "abi", &contract_path.to_string_lossy()])?;
+
     let json_output = String::from_utf8_lossy(&output.stdout);
     let parsed: serde_json::Value = serde_json::from_str(&json_output)?;
-    
+
     let mut interfaces = Vec::new();
-    
+
     if let Some(contracts) = parsed["contracts"].as_object() {
         for key in contracts.keys() {
             if let Some(contract_name) = key.split(':').last() {
@@ -294,34 +308,46 @@ fn extract_contract_interfaces(contract_path: &Path) -> Result<Vec<String>, Box<
             }
         }
     }
-    
+
     if interfaces.is_empty() {
-        interfaces.push(contract_path.file_stem().unwrap().to_string_lossy().to_string());
+        interfaces.push(
+            contract_path
+                .file_stem()
+                .unwrap()
+                .to_string_lossy()
+                .to_string(),
+        );
     }
-    
-    cargo_warning(&format!("Extracted interfaces from {}: {:?}", contract_path.display(), interfaces));
-    
+
+    cargo_warning(&format!(
+        "Extracted interfaces from {}: {:?}",
+        contract_path.display(),
+        interfaces
+    ));
+
     Ok(interfaces)
 }
 
 #[cfg(feature = "unittest")]
-fn compile_solidity_contract(contract_path: &Path) -> Result<(serde_json::Value, String), Box<dyn std::error::Error>> {
+fn compile_solidity_contract(
+    contract_path: &Path,
+) -> Result<(serde_json::Value, String), Box<dyn std::error::Error>> {
     cargo_warning(&format!("Running solc on {}", contract_path.display()));
-    
+
     let output = execute_solc_command(&[
         "--combined-json",
         "abi,bin",
         "--optimize",
-        &contract_path.to_string_lossy()
+        &contract_path.to_string_lossy(),
     ])?;
-    
+
     let json_output = String::from_utf8_lossy(&output.stdout);
     let parsed: serde_json::Value = serde_json::from_str(&json_output)?;
-    
+
     if !parsed["contracts"].is_object() || parsed["contracts"].as_object().unwrap().is_empty() {
         return Err("No contracts found in solc output".into());
     }
-    
+
     Ok((parsed, String::new()))
 }
 
@@ -335,19 +361,23 @@ fn generate_rust_module(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let module_name = interface_name.to_lowercase();
     let file_path = output_dir.join(format!("{}.rs", module_name));
-    
+
     let (abi, bytecode) = if let Some(contracts) = json_data["contracts"].as_object() {
         find_contract_abi(contracts, interface_name)
             .unwrap_or_else(|| ("[]".to_string(), String::new()))
     } else {
         ("[]".to_string(), String::new())
     };
-    
-    cargo_warning(&format!("Using ABI with length {} for {}", abi.len(), interface_name));
-    
+
+    cargo_warning(&format!(
+        "Using ABI with length {} for {}",
+        abi.len(),
+        interface_name
+    ));
+
     let rust_code = generate_contract_module(interface_name, source_name, &abi, &bytecode);
     write_file_content(&file_path, &rust_code)?;
-    
+
     Ok(())
 }
 

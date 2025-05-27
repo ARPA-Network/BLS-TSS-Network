@@ -27,7 +27,6 @@ path = "src/node_config_checker.rs"
 [build-dependencies]
 prost-build = "0.12"
 tonic-build = "0.11"
-regex = { version = "1.11.1", optional = true }
 serde_json = "1.0"
 
 [dependencies]
@@ -71,10 +70,10 @@ actix-web = "4"
 check-latest = { version = "1.0.2", default-features = false, features = [
     "async",
 ] }
-regex = { version = "1.11.1", optional = true }
 
 [features]
-unittest = ["regex"]  
+unittest = []  
 
 [dev-dependencies]
 arpa-node = { path = ".", features = [] }  
+regex = "1.11.1" 

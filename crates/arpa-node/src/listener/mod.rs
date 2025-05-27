@@ -97,12 +97,12 @@ pub trait Listener: Debug + Display {
 #[cfg(test)]
 pub mod tests {
     use super::*;
+    use log::LevelFilter;
     use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
     use std::sync::Arc;
     use std::time::Duration;
     use tokio::sync::Mutex;
     use tokio::time::sleep;
-    use log::LevelFilter;
 
     struct TestLogCollector {
         logs: Arc<Mutex<Vec<String>>>,
@@ -154,21 +154,22 @@ pub mod tests {
 
         async fn listen(&self) -> NodeResult<()> {
             self.listen_counter.fetch_add(1, Ordering::SeqCst);
-            
+
             if self.should_fail.load(Ordering::SeqCst) {
                 return Err(anyhow::anyhow!("Simulated listen failure").into());
             }
-            
+
             Ok(())
         }
 
         async fn handle_interruption(&self) -> NodeResult<()> {
-            self.handle_interruption_counter.fetch_add(1, Ordering::SeqCst);
-            
+            self.handle_interruption_counter
+                .fetch_add(1, Ordering::SeqCst);
+
             if self.interruption_should_fail.load(Ordering::SeqCst) {
                 return Err(anyhow::anyhow!("Simulated interruption handler failure").into());
             }
-            
+
             Ok(())
         }
 
@@ -176,33 +177,35 @@ pub mod tests {
             arpa_core::ListenerDescriptor {
                 chain_id: self.chain_id,
                 l_type: arpa_core::ListenerType::Block,
-                interval_millis: 150, 
-                use_jitter: true,     
+                interval_millis: 150,
+                use_jitter: true,
                 reset_descriptor: arpa_core::FixedIntervalRetryDescriptor {
-                    interval_millis: 150, 
-                    max_attempts: 3,       
-                    use_jitter: true,      
+                    interval_millis: 150,
+                    max_attempts: 3,
+                    use_jitter: true,
                 },
             }
         }
-    
+
         fn chain_id(&self) -> usize {
             self.chain_id
         }
     }
 
-    fn create_test_listener(chain_id: usize) -> (
-        TestListener, 
-        Arc<AtomicUsize>, 
-        Arc<AtomicUsize>, 
-        Arc<AtomicBool>, 
-        Arc<AtomicBool>
+    fn create_test_listener(
+        chain_id: usize,
+    ) -> (
+        TestListener,
+        Arc<AtomicUsize>,
+        Arc<AtomicUsize>,
+        Arc<AtomicBool>,
+        Arc<AtomicBool>,
     ) {
         let listen_counter = Arc::new(AtomicUsize::new(0));
         let handle_interruption_counter = Arc::new(AtomicUsize::new(0));
         let should_fail = Arc::new(AtomicBool::new(false));
         let interruption_should_fail = Arc::new(AtomicBool::new(false));
-        
+
         let listener = TestListener {
             listen_counter: listen_counter.clone(),
             handle_interruption_counter: handle_interruption_counter.clone(),
@@ -211,45 +214,62 @@ pub mod tests {
             chain_id,
             initialized: Arc::new(AtomicBool::new(false)),
         };
-        
-        (listener, listen_counter, handle_interruption_counter, should_fail, interruption_should_fail)
+
+        (
+            listener,
+            listen_counter,
+            handle_interruption_counter,
+            should_fail,
+            interruption_should_fail,
+        )
     }
 
     async fn run_listener_for_duration(listener: TestListener, duration_millis: u64) {
-        let listener_handle = tokio::spawn(async move {
-            listener.start().await
-        });
-        
+        let listener_handle = tokio::spawn(async move { listener.start().await });
+
         sleep(Duration::from_millis(duration_millis)).await;
-        
+
         listener_handle.abort();
         let _ = listener_handle.await;
     }
 
-    fn setup_test_listener() -> (TestListener, Arc<AtomicUsize>, Arc<AtomicUsize>, Arc<AtomicBool>, Arc<AtomicBool>) {
+    fn setup_test_listener() -> (
+        TestListener,
+        Arc<AtomicUsize>,
+        Arc<AtomicUsize>,
+        Arc<AtomicBool>,
+        Arc<AtomicBool>,
+    ) {
         create_test_listener(1)
     }
 
     #[tokio::test]
     async fn test_normal_operation() {
         let (listener, listen_counter, _, _, _) = setup_test_listener();
-        
+
         run_listener_for_duration(listener, 550).await;
-        
+
         let count = listen_counter.load(Ordering::SeqCst);
-        assert!(count >= 4 && count <= 8, "Expected 4-8 calls, got {}", count);
+        assert!(
+            count >= 4 && count <= 8,
+            "Expected 4-8 calls, got {}",
+            count
+        );
     }
 
     #[tokio::test]
     async fn test_retry_mechanism() {
         let (listener, _, handle_interruption_counter, should_fail, _) = setup_test_listener();
-        
+
         should_fail.store(true, Ordering::SeqCst);
-        
+
         run_listener_for_duration(listener, 400).await;
-        
+
         let interruption_count = handle_interruption_counter.load(Ordering::SeqCst);
-        assert!(interruption_count > 0, "handle_interruption should be called at least once");
+        assert!(
+            interruption_count > 0,
+            "handle_interruption should be called at least once"
+        );
     }
 
     #[tokio::test]
@@ -259,7 +279,7 @@ pub mod tests {
         for _ in 0..10 {
             intervals_with_jitter.push(strategy.next().unwrap());
         }
-        
+
         let mut all_same = true;
         for i in 1..intervals_with_jitter.len() {
             if intervals_with_jitter[i] != intervals_with_jitter[0] {
@@ -267,14 +287,17 @@ pub mod tests {
                 break;
             }
         }
-        assert!(!all_same, "Intervals with jitter should not all be the same");
-        
+        assert!(
+            !all_same,
+            "Intervals with jitter should not all be the same"
+        );
+
         let mut intervals_without_jitter = Vec::new();
         let mut strategy = FixedInterval::from_millis(100);
         for _ in 0..10 {
             intervals_without_jitter.push(strategy.next().unwrap());
         }
-        
+
         for interval in &intervals_without_jitter {
             assert_eq!(*interval, Duration::from_millis(100));
         }
@@ -283,10 +306,10 @@ pub mod tests {
     #[tokio::test]
     async fn test_initialization() {
         let (mut listener, _, _, _, _) = setup_test_listener();
-        
+
         let result = listener.initialize().await;
         assert!(result.is_ok(), "First initialization should succeed");
-        
+
         let result = listener.initialize().await;
         assert!(result.is_err(), "Second initialization should fail");
     }
@@ -294,41 +317,40 @@ pub mod tests {
     #[tokio::test]
     async fn test_interruption_handling() {
         let (listener, _, _, should_fail, interruption_should_fail) = setup_test_listener();
-        
+
         should_fail.store(true, Ordering::SeqCst);
         interruption_should_fail.store(false, Ordering::SeqCst);
-        
+
         let result = listener.handle_interruption().await;
         assert!(result.is_ok(), "Interruption handling should succeed");
-        
+
         interruption_should_fail.store(true, Ordering::SeqCst);
-        
+
         let result = listener.handle_interruption().await;
-        assert!(result.is_err(), "Interruption handling should fail when configured to do so");
+        assert!(
+            result.is_err(),
+            "Interruption handling should fail when configured to do so"
+        );
     }
 
     #[tokio::test]
     async fn test_concurrent_listeners() {
         let (listener1, listen_counter1, _, _, _) = create_test_listener(1);
         let (mut listener2, listen_counter2, _, _, _) = create_test_listener(2);
-        
+
         listener2.initialize().await.unwrap();
-        
-        let handle1 = tokio::spawn(async move {
-            listener1.start().await
-        });
-        
-        let handle2 = tokio::spawn(async move {
-            listener2.start().await
-        });
-        
+
+        let handle1 = tokio::spawn(async move { listener1.start().await });
+
+        let handle2 = tokio::spawn(async move { listener2.start().await });
+
         sleep(Duration::from_millis(500)).await;
-        
+
         handle1.abort();
         handle2.abort();
         let _ = handle1.await;
         let _ = handle2.await;
-        
+
         assert!(listen_counter1.load(Ordering::SeqCst) > 0);
         assert!(listen_counter2.load(Ordering::SeqCst) > 0);
     }
@@ -339,18 +361,18 @@ pub mod tests {
         let collector = TestLogCollector { logs: logs.clone() };
         log::set_boxed_logger(Box::new(collector)).unwrap();
         log::set_max_level(LevelFilter::Error);
-        
+
         let (listener, _, _, should_fail, _) = setup_test_listener();
-        
+
         should_fail.store(true, Ordering::SeqCst);
-        
+
         run_listener_for_duration(listener, 300).await;
-        
+
         let logged_messages = logs.lock().await;
-        let has_interruption_log = logged_messages.iter().any(|log| 
-            log.contains("ListenerInterrupted") && log.contains("TestListener-1")
-        );
-        
+        let has_interruption_log = logged_messages
+            .iter()
+            .any(|log| log.contains("ListenerInterrupted") && log.contains("TestListener-1"));
+
         assert!(has_interruption_log, "Should log an interruption message");
     }
 

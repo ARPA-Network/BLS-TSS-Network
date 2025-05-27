@@ -156,13 +156,13 @@ impl<PC: Curve + Sync + Send> Listener for ProviderReconnectionListener<PC> {
     }
 }
 
-
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::{context::ChainIdentityHandlerType, scheduler::TaskScheduler};
     use arpa_core::{
-        Config, FixedIntervalRetryDescriptor, GeneralMainChainIdentity, ListenerType, SubscriberType,
+        Config, FixedIntervalRetryDescriptor, GeneralMainChainIdentity, ListenerType,
+        SubscriberType,
     };
     use ethers::{
         providers::{Provider, Ws},
@@ -231,22 +231,26 @@ mod tests {
         Arc<RwLock<SimpleFixedTaskScheduler>>,
     )> {
         println!("Starting test setup");
-        
+
         let anvil = Anvil::new().spawn();
         println!("Anvil instance started at {}", anvil.endpoint());
-        
+
         let ws_provider = Arc::new(Provider::<Ws>::connect(anvil.ws_endpoint()).await?);
         println!("Connected to Anvil WebSocket at {}", anvil.ws_endpoint());
-        
+
         let wallet: LocalWallet = anvil.keys()[0].clone().into();
         let wallet_with_chain_id = wallet.clone().with_chain_id(anvil.chain_id());
         let chain_id = anvil.chain_id() as usize;
-        println!("Using wallet address: {}, Chain ID: {}", wallet.clone().address(), chain_id);
-        
+        println!(
+            "Using wallet address: {}, Chain ID: {}",
+            wallet.clone().address(),
+            chain_id
+        );
+
         let adapter_address = Address::random();
         let controller_address = Address::random();
         let config = Config::default();
-        
+
         let chain_identity = GeneralMainChainIdentity::new(
             chain_id,
             wallet_with_chain_id.clone(),
@@ -255,16 +259,19 @@ mod tests {
             controller_address,
             adapter_address,
             Address::random(),
-            config.get_time_limits().contract_transaction_retry_descriptor,
+            config
+                .get_time_limits()
+                .contract_transaction_retry_descriptor,
             config.get_time_limits().contract_view_retry_descriptor,
             None,
         );
-        
-        let chain_identity_arc: Arc<RwLock<ChainIdentityHandlerType<G2Curve>>> = 
-            Arc::new(RwLock::new(Box::new(chain_identity) as ChainIdentityHandlerType<G2Curve>));
-        
+
+        let chain_identity_arc: Arc<RwLock<ChainIdentityHandlerType<G2Curve>>> = Arc::new(
+            RwLock::new(Box::new(chain_identity) as ChainIdentityHandlerType<G2Curve>),
+        );
+
         println!("Chain identity created");
-        
+
         let fixed_task_scheduler = SimpleFixedTaskScheduler::new();
         let f_ts = Arc::new(RwLock::new(fixed_task_scheduler));
         println!("Fixed task scheduler created");
@@ -277,19 +284,25 @@ mod tests {
         chain_id: usize,
     ) -> NodeResult<()> {
         let mut scheduler = f_ts.write().await;
-        
-        scheduler.add_listener_task(
-            create_mock_listener(chain_id, ListenerType::Block, "Block listener")
-        )?;
-        
-        scheduler.add_listener_task(
-            create_mock_listener(chain_id, ListenerType::NewRandomnessTask, "NewRandomnessTask listener")
-        )?;
-        
-        scheduler.add_listener_task(
-            create_mock_listener(chain_id + 1, ListenerType::Block, "Other chain Block listener")
-        )?;
-        
+
+        scheduler.add_listener_task(create_mock_listener(
+            chain_id,
+            ListenerType::Block,
+            "Block listener",
+        ))?;
+
+        scheduler.add_listener_task(create_mock_listener(
+            chain_id,
+            ListenerType::NewRandomnessTask,
+            "NewRandomnessTask listener",
+        ))?;
+
+        scheduler.add_listener_task(create_mock_listener(
+            chain_id + 1,
+            ListenerType::Block,
+            "Other chain Block listener",
+        ))?;
+
         scheduler.add_task(
             ComponentTaskType::Subscriber(chain_id, SubscriberType::Block),
             async {
@@ -300,7 +313,10 @@ mod tests {
         Ok(())
     }
 
-    fn assert_listener_descriptor_equals(actual: &ListenerDescriptor, expected: &ListenerDescriptor) {
+    fn assert_listener_descriptor_equals(
+        actual: &ListenerDescriptor,
+        expected: &ListenerDescriptor,
+    ) {
         assert_eq!(actual.chain_id, expected.chain_id);
         assert_eq!(actual.l_type, expected.l_type);
         assert_eq!(actual.interval_millis, expected.interval_millis);
@@ -310,10 +326,10 @@ mod tests {
     #[tokio::test]
     async fn test_provider_reconnection_listener() -> NodeResult<()> {
         let (_anvil, chain_id, chain_identity_arc, f_ts) = setup_test_environment().await?;
-        
+
         add_test_tasks(&f_ts, chain_id).await?;
         println!("Test tasks added to scheduler");
-        
+
         let listener_descriptor = ListenerDescriptor {
             chain_id,
             l_type: ListenerType::ScheduleProviderReconnection,
@@ -325,40 +341,44 @@ mod tests {
                 use_jitter: true,
             },
         };
-        
+
         let mut listener = ProviderReconnectionListener::<G2Curve>::new(
             listener_descriptor.clone(),
             chain_identity_arc.clone(),
             f_ts.clone(),
         );
-        
+
         println!("ProviderReconnectionListener created");
-        
+
         listener.initialize().await?;
         println!("Listener initialized");
-        
+
         let tasks_before: Vec<ComponentTaskType> = {
             let scheduler = f_ts.read().await;
             scheduler.get_tasks().into_iter().cloned().collect()
         };
-        
+
         println!("Tasks before listen: {:?}", tasks_before);
-        
+
         {
             println!("Simulating provider disconnection by resetting provider");
             let mut chain_identity = chain_identity_arc.write().await;
             let _ = chain_identity.reset_provider().await;
         }
-        
+
         println!("Executing listener.listen()");
         let listen_result = listener.listen().await;
-        assert!(listen_result.is_ok(), "listener.listen() failed: {:?}", listen_result);
-        
+        assert!(
+            listen_result.is_ok(),
+            "listener.listen() failed: {:?}",
+            listen_result
+        );
+
         {
             let scheduler = f_ts.read().await;
             let tasks_after = scheduler.get_tasks();
             println!("Tasks after listen: {:?}", tasks_after);
-            
+
             for task in &tasks_before {
                 if let ComponentTaskType::Listener(task_chain_id, _) = task {
                     if *task_chain_id == chain_id {
@@ -371,7 +391,7 @@ mod tests {
                 }
             }
         }
-        
+
         println!("Testing handle_interruption");
         let interruption_result = listener.handle_interruption().await;
         assert!(
@@ -379,34 +399,35 @@ mod tests {
             "handle_interruption failed: {:?}",
             interruption_result
         );
-        
+
         assert_eq!(listener.chain_id(), chain_id);
         let returned_descriptor = listener.listener_descriptor();
         assert_listener_descriptor_equals(&returned_descriptor, &listener_descriptor);
-        
+
         if let Some(jitter_fn) = listener.jitter_fn() {
             let original_duration = Duration::from_millis(1000);
             let jittered_duration = jitter_fn(original_duration);
             assert!(
-                jittered_duration >= Duration::from_millis(800) && jittered_duration <= Duration::from_millis(1200),
+                jittered_duration >= Duration::from_millis(800)
+                    && jittered_duration <= Duration::from_millis(1200),
                 "Jittered duration should be within 20% of original"
             );
         } else {
             panic!("jitter_fn should return Some");
         }
-        
+
         let display_string = format!("{}", listener);
         assert_eq!(display_string, "ProviderReconnectionListener");
-        
+
         println!("Test completed successfully");
         Ok(())
     }
-    
+
     impl SimpleFixedTaskScheduler {
         pub fn has_task(&self, task: &ComponentTaskType) -> bool {
             self.get_tasks().contains(&task)
         }
-        
+
         pub fn get_task_state(&self, _task: &ComponentTaskType) -> &'static str {
             "unknown"
         }
