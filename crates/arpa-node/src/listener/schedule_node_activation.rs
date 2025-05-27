@@ -188,11 +188,12 @@ mod tests {
 
         fn create_chain_identity(&self) -> Arc<RwLock<ChainIdentityHandlerType<G2Curve>>> {
             let config = Config::default();
+            let ws_endpoint = self._anvil.ws_endpoint();
             let chain_identity = GeneralMainChainIdentity::new(
                 self.chain_id,
                 self.wallet.clone(),
                 self.ws_provider.clone(),
-                format!("ws://127.0.0.1:8545"),
+                ws_endpoint,
                 self.controller_address,
                 Address::random(),
                 self.node_registry_address,

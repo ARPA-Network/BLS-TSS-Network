@@ -30,7 +30,7 @@ jobs:
           version: nightly-cc5637a979050c39b3d06bc4cc6134f0591ee8d0
       - name: Install Solc
         run: |
-          curl -fsSL https://github.com/ethereum/solidity/releases/download/v0.8.30/solc-static-linux -o /usr/local/bin/solc
+          curl -fsSL https://github.com/ethereum/solidity/releases/download/v0.8.27/solc-static-linux -o /usr/local/bin/solc
           chmod +x /usr/local/bin/solc
         shell: bash
       - name: Run all tests
