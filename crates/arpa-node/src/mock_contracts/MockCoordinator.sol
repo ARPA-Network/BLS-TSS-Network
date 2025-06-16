@@ -77,7 +77,7 @@ contract MockCoordinator {
         sharesData = _shares;
         responsesData = _responses;
         justificationsData = _justifications;
-        currentPhase = 1; // 默认开始Phase 1
+        currentPhase = 1; 
     }
     
     function clearAllData() external {
