@@ -591,6 +591,7 @@ dependencies = [
  "chrono",
  "dkg-core",
  "ethers",
+ "ethers-core",
  "futures",
  "glob",
  "gumdrop",

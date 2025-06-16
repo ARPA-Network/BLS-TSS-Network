@@ -75,5 +75,6 @@ check-latest = { version = "1.0.2", default-features = false, features = [
 unittest = []  
 
 [dev-dependencies]
-arpa-node = { path = ".", features = [] }  
+arpa-node = { path = ".", features = ["unittest"] }  
 regex = "1.11.1" 
+ethers-core.workspace = true

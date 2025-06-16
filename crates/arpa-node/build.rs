@@ -10,11 +10,11 @@ const SOLIDITY_EXTENSION: &str = "sol";
 #[cfg(feature = "unittest")]
 const OUTPUT_DIR: &str = "./src/test_contracts";
 #[cfg(feature = "unittest")]
-const CONTRACT_DIR: &str = "./src/listener/test-contract";
+const CONTRACT_DIR: &str = "./src/mock_contracts";
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("cargo:rerun-if-changed=proto");
-    println!("cargo:rerun-if-changed=src/listener/test-contract");
+    println!("cargo:rerun-if-changed=src/mock_contracts");
 
     let mut prost_build = prost_build::Config::new();
     prost_build.btree_map(["members"]);

@@ -28,7 +28,20 @@ contract MockAdapter is IRequestTypeBase, IAdapter {
         uint256 estimatedPayment
     );
 
+    event RandomnessRequestResult(
+        bytes32 indexed requestId,
+        uint32 indexed groupIndex,
+        address committer,
+        address[] participantMembers,
+        uint256 randomness,
+        uint256 payment,
+        uint256 flatFee,
+        bool success
+    );
+
     mapping(bytes32 => bytes32) public _requestCommitments;
+    mapping(bytes32 => bool) public shouldRevert;
+    mapping(bytes32 => bool) public shouldRevertWithCustomError;
     
     function emitRandomnessRequest(
         bytes32 requestId,
@@ -64,5 +77,45 @@ contract MockAdapter is IRequestTypeBase, IAdapter {
     
     function setRequestCommitment(bytes32 requestId, bytes32 commitment) public {
         _requestCommitments[requestId] = commitment;
+    }
+
+    function setShouldRevert(bytes32 requestId, bool _shouldRevert) public {
+        shouldRevert[requestId] = _shouldRevert;
+    }
+
+    function setShouldRevertWithCustomError(bytes32 requestId, bool _shouldRevertWithCustomError) public {
+        shouldRevertWithCustomError[requestId] = _shouldRevertWithCustomError;
+    }
+
+    function fulfillRandomness(
+        uint32 groupIndex,
+        bytes32 requestId,
+        uint256 signature,
+        bytes calldata /* requestDetail */,
+        bytes calldata /* partialSignatures */
+    ) public {
+        if (shouldRevertWithCustomError[requestId]) {
+            revert("CustomTestError");
+        }
+        
+        if (shouldRevert[requestId]) {
+            revert("TestRevert");
+        }
+
+        delete _requestCommitments[requestId];
+
+        address[] memory participantMembers = new address[](1);
+        participantMembers[0] = msg.sender;
+        
+        emit RandomnessRequestResult(
+            requestId,
+            groupIndex,
+            msg.sender,
+            participantMembers,
+            uint256(keccak256(abi.encode(signature))), 
+            1000, 
+            100,  
+            true  
+        );
     }
 }

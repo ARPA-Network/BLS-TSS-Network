@@ -149,7 +149,6 @@ impl<PC: Curve> FulfillRandomnessHandler for GeneralFulfillRandomnessHandler<PC>
                     )
                     .await?;
 
-                // TODO add a special retry mechanism for gas price too high
                 self.randomness_signature_cache
                     .write()
                     .await
@@ -414,4 +413,622 @@ where
     <S as ThresholdScheme>::Error: Sync + Send,
     <S as SignatureScheme>::Error: Sync + Send,
 {
+}
+
+#[cfg(feature = "unittest")]
+mod tests {
+    use super::*;
+    use crate::{
+        event::{ready_to_fulfill_randomness_task::ReadyToFulfillRandomnessTask, types::Topic},
+        queue::event_queue::EventQueue,
+        scheduler::dynamic::SimpleDynamicTaskScheduler,
+        test_contracts::mockadapter::{deploy_mock_adapter, get_mock_adapter_at},
+    };
+    use arpa_core::{Config, GeneralMainChainIdentity, RandomnessTask, PartialSignature};
+    use arpa_dal::{
+        cache::{InMemoryBlockInfoCache, InMemorySignatureResultCache}, 
+        BlockInfoHandler, BlockInfoUpdater, SignatureResultCacheHandler
+    };
+    use ethers::prelude::*;
+    use std::{collections::BTreeMap, sync::Arc};
+    use threshold_bls::{poly::Eval, schemes::bn254::{G2Curve, G2Scheme}};
+    use tokio::sync::RwLock;
+
+    const TEST_CHAIN_ID: u64 = 1;
+    const TEST_BLOCK_HEIGHT: usize = 1000;
+    const TEST_BLOCK_TIME: usize = 12;
+    const TEST_SUBSCRIPTION_ID: u64 = 1;
+    const TEST_GROUP_INDEX: u32 = 1;
+    const TEST_SEED: usize = 12345;
+    const TEST_REQUEST_CONFIRMATIONS: u16 = 6;
+    const TEST_CALLBACK_GAS_LIMIT: u32 = 100000;
+    const TEST_CALLBACK_MAX_GAS_PRICE: usize = 20000000000;
+    const TEST_ASSIGNMENT_BLOCK_HEIGHT: usize = 100;
+    const TEST_THRESHOLD: usize = 2;
+    const HIGH_BLOCK_HEIGHT: usize = 100000;
+    const LOW_GAS_PRICE: usize = 1;
+    const SIGNATURE_SIZE: usize = 32;
+    const RANDOMNESS_SIZE: usize = 96;
+    const NUM_SIGNERS: usize = 3;
+    const WS_ENDPOINT: &str = "ws://localhost:8545";
+
+    async fn setup_anvil() -> (ethers::utils::AnvilInstance, Arc<Provider<Ws>>, LocalWallet) {
+        let anvil = ethers::utils::Anvil::new().spawn();
+        let ws_provider = Provider::<Ws>::connect(anvil.ws_endpoint())
+            .await.expect("Failed to connect to anvil");
+        let ws_provider = Arc::new(ws_provider);
+        let wallet: LocalWallet = anvil.keys()[0].clone().into();
+        let wallet = wallet.with_chain_id(anvil.chain_id());
+        (anvil, ws_provider, wallet)
+    }
+
+    async fn deploy_adapter(ws_provider: Arc<Provider<Ws>>, wallet: LocalWallet) -> Address {
+        let client = SignerMiddleware::new((*ws_provider).clone(), wallet.clone());
+        let client = Arc::new(client);
+        deploy_mock_adapter(client.clone()).await.unwrap()
+    }
+
+    async fn create_chain_identity(
+        chain_id: u64,
+        wallet: LocalWallet,
+        ws_provider: Arc<Provider<Ws>>,
+        ws_endpoint: String,
+        adapter_address: Address,
+    ) -> Arc<RwLock<ChainIdentityHandlerType<G2Curve>>> {
+        let config = Config::default();
+        let general_chain_identity = GeneralMainChainIdentity::new(
+            chain_id.try_into().unwrap(),
+            wallet.clone(),
+            ws_provider.clone(),
+            ws_endpoint,
+            Address::random(),
+            Address::random(), 
+            adapter_address,
+            config.get_time_limits().contract_transaction_retry_descriptor,
+            config.get_time_limits().contract_view_retry_descriptor,
+            None,
+        );
+        Arc::new(RwLock::new(Box::new(general_chain_identity)))
+    }
+
+    fn create_block_cache(
+        chain_id: usize,
+        block_height: usize,
+        block_time: usize,
+    ) -> Arc<RwLock<Box<dyn BlockInfoHandler>>> {
+        let mut cache = InMemoryBlockInfoCache::new(chain_id, block_time);
+        cache.set_block_height(block_height);
+        Arc::new(RwLock::new(Box::new(cache)))
+    }
+
+    fn create_signature_cache() -> Arc<RwLock<Box<dyn SignatureResultCacheHandler<RandomnessResultCache>>>> {
+        let cache = InMemorySignatureResultCache::new();
+        Arc::new(RwLock::new(Box::new(cache)))
+    }
+
+    fn create_schedulers() -> (Arc<RwLock<EventQueue>>, Arc<RwLock<SimpleDynamicTaskScheduler>>) {
+        (
+            Arc::new(RwLock::new(EventQueue::new())),
+            Arc::new(RwLock::new(SimpleDynamicTaskScheduler::new()))
+        )
+    }
+
+    fn create_test_randomness_task(request_id: Vec<u8>) -> RandomnessTask {
+        let mut full_request_id = vec![0u8; 32];
+        let copy_len = std::cmp::min(request_id.len(), 32);
+        full_request_id[..copy_len].copy_from_slice(&request_id[..copy_len]);
+        
+        RandomnessTask {
+            request_id: full_request_id, 
+            subscription_id: TEST_SUBSCRIPTION_ID,
+            group_index: TEST_GROUP_INDEX,
+            request_type: arpa_core::RandomnessRequestType::Randomness,
+            params: vec![],
+            requester: Address::random(),
+            seed: U256::from(TEST_SEED),
+            request_confirmations: TEST_REQUEST_CONFIRMATIONS,
+            callback_gas_limit: TEST_CALLBACK_GAS_LIMIT,
+            callback_max_gas_price: U256::from(TEST_CALLBACK_MAX_GAS_PRICE), 
+            assignment_block_height: TEST_ASSIGNMENT_BLOCK_HEIGHT,
+        }
+    }
+
+    fn create_test_partial_signatures() -> BTreeMap<Address, PartialSignature> {
+        let mut partial_signatures = BTreeMap::new();
+        
+        for i in 0..NUM_SIGNERS {
+            let addr = Address::random();
+            let eval = Eval {
+                value: vec![i as u8; SIGNATURE_SIZE], 
+                index: i as u32,
+            };
+            let serialized = bincode::serialize(&eval).unwrap();
+            partial_signatures.insert(addr, PartialSignature {
+                index: i,
+                signed_partial_signature: serialized, 
+            });
+        }
+        partial_signatures
+    }
+
+    async fn setup_signature_cache_with_task(
+        cache: Arc<RwLock<Box<dyn SignatureResultCacheHandler<RandomnessResultCache>>>>,
+        randomness_task: RandomnessTask,
+        partial_signatures: BTreeMap<Address, PartialSignature>,
+        committed_times: usize,
+    ) {
+        cache.write().await.add(
+            randomness_task.group_index as usize,
+            randomness_task.clone(),
+            vec![1, 2, 3],
+            TEST_THRESHOLD,
+        ).await.unwrap();
+
+        for (address, partial_sig) in partial_signatures {
+            cache.write().await.add_partial_signature(
+                randomness_task.request_id.clone(),
+                address,
+                partial_sig.index,
+                partial_sig.signed_partial_signature,
+            ).await.unwrap();
+        }
+        
+        for _ in 0..committed_times {
+            cache.write().await.incr_committed_times(&randomness_task.request_id).await.unwrap();
+        }
+    }
+
+    async fn create_signature_cache_with_task(
+        randomness_task: RandomnessTask,
+        partial_signatures: BTreeMap<Address, PartialSignature>,
+        committed_times: usize,
+    ) -> Arc<RwLock<Box<dyn SignatureResultCacheHandler<RandomnessResultCache>>>> {
+        let cache = create_signature_cache();
+        setup_signature_cache_with_task(cache.clone(), randomness_task, partial_signatures, committed_times).await;
+        cache
+    }
+
+    #[tokio::test]
+    async fn test_subscriber_creation() {
+        let (_anvil, ws_provider, wallet) = setup_anvil().await;
+        let adapter_address = deploy_adapter(ws_provider.clone(), wallet.clone()).await;
+        
+        let chain_identity = create_chain_identity(
+            TEST_CHAIN_ID, wallet, ws_provider, WS_ENDPOINT.to_string(), adapter_address,
+        ).await;
+
+        let block_cache = create_block_cache(TEST_CHAIN_ID as usize, TEST_BLOCK_HEIGHT, TEST_BLOCK_TIME);
+        let signature_cache = create_signature_cache();
+        let (eq, ts) = create_schedulers();
+        let id_address = Address::random();
+
+        let subscriber = RandomnessSignatureAggregationSubscriber::<G2Curve, G2Scheme>::new(
+            TEST_CHAIN_ID.try_into().unwrap(), id_address, chain_identity, block_cache, signature_cache, eq, ts,
+        );
+
+        assert_eq!(subscriber.chain_id, TEST_CHAIN_ID  as usize);
+        assert_eq!(subscriber.id_address, id_address);
+    }
+
+    #[tokio::test]
+    async fn test_fulfill_randomness_handler_creation() {
+        let (_anvil, ws_provider, wallet) = setup_anvil().await;
+        let adapter_address = deploy_adapter(ws_provider.clone(), wallet.clone()).await;
+        
+        let chain_identity = create_chain_identity(
+            TEST_CHAIN_ID, wallet, ws_provider, WS_ENDPOINT.to_string(), adapter_address,
+        ).await;
+
+        let block_cache = create_block_cache(TEST_CHAIN_ID as usize, TEST_BLOCK_HEIGHT, TEST_BLOCK_TIME);
+        let signature_cache = create_signature_cache();
+        let id_address = Address::random();
+
+        let handler = GeneralFulfillRandomnessHandler {
+            id_address,
+            chain_identity,
+            block_cache,
+            randomness_signature_cache: signature_cache,
+            pc: PhantomData,
+        };
+
+        assert_eq!(handler.id_address, id_address);
+    }
+
+    #[tokio::test]
+    async fn test_fulfill_randomness_handler_task_not_pending() {
+        let (_anvil, ws_provider, wallet) = setup_anvil().await;
+        let adapter_address = deploy_adapter(ws_provider.clone(), wallet.clone()).await;
+        
+        let client = SignerMiddleware::new((*ws_provider).clone(), wallet.clone());
+        let client = Arc::new(client);
+        let adapter_contract = get_mock_adapter_at(adapter_address, client.clone());
+
+        let chain_identity = create_chain_identity(
+            TEST_CHAIN_ID, wallet, ws_provider, WS_ENDPOINT.to_string(), adapter_address,
+        ).await;
+
+        let block_cache = create_block_cache(TEST_CHAIN_ID as usize, TEST_BLOCK_HEIGHT, TEST_BLOCK_TIME);
+        let randomness_task = create_test_randomness_task(vec![1, 2, 3, 4]);
+        let partial_signatures = create_test_partial_signatures();
+        let signature_cache = create_signature_cache_with_task(
+            randomness_task.clone(), partial_signatures.clone(), 0,
+        ).await;
+        let id_address = Address::random();
+        
+        let request_id = H256::from_slice(&randomness_task.request_id);
+        adapter_contract.set_request_commitment(request_id.into(), H256::zero().into()).send().await.unwrap().await.unwrap();
+
+        let handler = GeneralFulfillRandomnessHandler {
+            id_address,
+            chain_identity,
+            block_cache,
+            randomness_signature_cache: signature_cache.clone(),
+            pc: PhantomData,
+        };
+
+        let result = handler.handle(
+            randomness_task.group_index as usize,
+            randomness_task.clone(),
+            vec![1; RANDOMNESS_SIZE],
+            partial_signatures,
+        ).await;
+        assert!(result.is_ok());
+    }
+
+    #[tokio::test]
+    async fn test_fulfill_randomness_handler_task_expired() {
+        let (_anvil, ws_provider, wallet) = setup_anvil().await;
+        let adapter_address = deploy_adapter(ws_provider.clone(), wallet.clone()).await;
+        
+        let client = SignerMiddleware::new((*ws_provider).clone(), wallet.clone());
+        let client = Arc::new(client);
+        let adapter_contract = get_mock_adapter_at(adapter_address, client.clone());
+
+        let chain_identity = create_chain_identity(
+            TEST_CHAIN_ID, wallet, ws_provider, WS_ENDPOINT.to_string(), adapter_address,
+        ).await;
+
+        let block_cache = create_block_cache(TEST_CHAIN_ID as usize, HIGH_BLOCK_HEIGHT, TEST_BLOCK_TIME);
+        let randomness_task = create_test_randomness_task(vec![1, 2, 3, 4]);
+        let partial_signatures = create_test_partial_signatures();
+        let signature_cache = create_signature_cache_with_task(
+            randomness_task.clone(), partial_signatures.clone(), 0,
+        ).await;
+        let id_address = Address::random();
+
+        let request_id = H256::from_slice(&randomness_task.request_id);
+        adapter_contract.set_request_commitment(request_id.into(), H256::from_low_u64_be(1).into()).send().await.unwrap().await.unwrap();
+
+        let handler = GeneralFulfillRandomnessHandler {
+            id_address,
+            chain_identity,
+            block_cache,
+            randomness_signature_cache: signature_cache.clone(),
+            pc: PhantomData,
+        };
+
+        let result = handler.handle(
+            randomness_task.group_index as usize,
+            randomness_task.clone(),
+            vec![1; RANDOMNESS_SIZE],
+            partial_signatures,
+        ).await;
+
+        assert!(result.is_ok());
+    }
+
+    #[tokio::test]
+    async fn test_fulfill_randomness_handler_gas_price_too_high() {
+        let (_anvil, ws_provider, wallet) = setup_anvil().await;
+        let adapter_address = deploy_adapter(ws_provider.clone(), wallet.clone()).await;
+        
+        let client = SignerMiddleware::new((*ws_provider).clone(), wallet.clone());
+        let client = Arc::new(client);
+        let adapter_contract = get_mock_adapter_at(adapter_address, client.clone());
+
+        let chain_identity = create_chain_identity(
+            TEST_CHAIN_ID, wallet, ws_provider, WS_ENDPOINT.to_string(), adapter_address,
+        ).await;
+
+        let block_cache = create_block_cache(TEST_CHAIN_ID as usize, TEST_BLOCK_HEIGHT, TEST_BLOCK_TIME);
+        let mut randomness_task = create_test_randomness_task(vec![1, 2, 3, 4]);
+        let partial_signatures = create_test_partial_signatures();
+        let signature_cache = create_signature_cache_with_task(
+            randomness_task.clone(), partial_signatures.clone(), 0,
+        ).await;
+        let id_address = Address::random();
+        randomness_task.callback_max_gas_price = U256::from(LOW_GAS_PRICE);
+        
+        let request_id = H256::from_slice(&randomness_task.request_id);
+        adapter_contract.set_request_commitment(request_id.into(), H256::from_low_u64_be(1).into()).send().await.unwrap().await.unwrap();
+
+        let handler = GeneralFulfillRandomnessHandler {
+            id_address,
+            chain_identity,
+            block_cache,
+            randomness_signature_cache: signature_cache.clone(),
+            pc: PhantomData,
+        };
+
+        let result = handler.handle(
+            randomness_task.group_index as usize,
+            randomness_task.clone(),
+            vec![1; RANDOMNESS_SIZE],
+            partial_signatures,
+        ).await;
+
+        assert!(result.is_ok());
+    }
+
+    #[tokio::test]
+    async fn test_fulfill_randomness_handler_success() {
+        let (_anvil, ws_provider, wallet) = setup_anvil().await;
+        let adapter_address = deploy_adapter(ws_provider.clone(), wallet.clone()).await;
+        
+        let client = SignerMiddleware::new((*ws_provider).clone(), wallet.clone());
+        let client = Arc::new(client);
+        let adapter_contract = get_mock_adapter_at(adapter_address, client.clone());
+
+        let chain_identity = create_chain_identity(
+            TEST_CHAIN_ID, wallet, ws_provider, WS_ENDPOINT.to_string(), adapter_address,
+        ).await;
+
+        let block_cache = create_block_cache(TEST_CHAIN_ID as usize, TEST_BLOCK_HEIGHT, TEST_BLOCK_TIME);
+        let randomness_task = create_test_randomness_task(vec![1, 2, 3, 4]);
+        let partial_signatures = create_test_partial_signatures();
+        let signature_cache = create_signature_cache_with_task(
+            randomness_task.clone(), partial_signatures.clone(), 0,
+        ).await;
+        let id_address = Address::random();
+        
+        let request_id = H256::from_slice(&randomness_task.request_id);
+        adapter_contract.set_request_commitment(request_id.into(), H256::from_low_u64_be(1).into()).send().await.unwrap().await.unwrap();
+        adapter_contract.set_should_revert(request_id.into(), false).send().await.unwrap().await.unwrap();
+        adapter_contract.set_should_revert_with_custom_error(request_id.into(), false).send().await.unwrap().await.unwrap();
+
+        let handler = GeneralFulfillRandomnessHandler {
+            id_address,
+            chain_identity,
+            block_cache,
+            randomness_signature_cache: signature_cache.clone(),
+            pc: PhantomData,
+        };
+
+        let result = handler.handle(
+            randomness_task.group_index as usize,
+            randomness_task.clone(),
+            vec![1; SIGNATURE_SIZE],
+            partial_signatures,
+        ).await;
+
+        assert!(result.is_ok());
+    }
+
+    #[tokio::test]
+    async fn test_fulfill_randomness_handler_transaction_failed() {
+        let (_anvil, ws_provider, wallet) = setup_anvil().await;
+        let adapter_address = deploy_adapter(ws_provider.clone(), wallet.clone()).await;
+        
+        let client = SignerMiddleware::new((*ws_provider).clone(), wallet.clone());
+        let client = Arc::new(client);
+        let adapter_contract = get_mock_adapter_at(adapter_address, client.clone());
+
+        let chain_identity = create_chain_identity(
+            TEST_CHAIN_ID, wallet, ws_provider, WS_ENDPOINT.to_string(), adapter_address,
+        ).await;
+
+        let block_cache = create_block_cache(TEST_CHAIN_ID as usize, TEST_BLOCK_HEIGHT, TEST_BLOCK_TIME);
+        let randomness_task = create_test_randomness_task(vec![1, 2, 3, 4]);
+        let partial_signatures = create_test_partial_signatures();
+        let signature_cache = create_signature_cache_with_task(
+            randomness_task.clone(), partial_signatures.clone(), 0,
+        ).await;
+        let id_address = Address::random();
+        let request_id = H256::from_slice(&randomness_task.request_id);
+        adapter_contract.set_request_commitment(request_id.into(), H256::from_low_u64_be(1).into()).send().await.unwrap().await.unwrap();
+        adapter_contract.set_should_revert(request_id.into(), true).send().await.unwrap().await.unwrap();
+
+        let handler = GeneralFulfillRandomnessHandler {
+            id_address,
+            chain_identity,
+            block_cache,
+            randomness_signature_cache: signature_cache.clone(),
+            pc: PhantomData,
+        };
+
+        let result = handler.handle(
+            randomness_task.group_index as usize,
+            randomness_task.clone(),
+            vec![1; SIGNATURE_SIZE],
+            partial_signatures,
+        ).await;
+        assert!(result.is_ok());
+    }
+
+    #[tokio::test]
+    async fn test_fulfill_randomness_handler_custom_error() {
+        let (_anvil, ws_provider, wallet) = setup_anvil().await;
+        let adapter_address = deploy_adapter(ws_provider.clone(), wallet.clone()).await;
+        
+        let client = SignerMiddleware::new((*ws_provider).clone(), wallet.clone());
+        let client = Arc::new(client);
+        let adapter_contract = get_mock_adapter_at(adapter_address, client.clone());
+
+        let chain_identity = create_chain_identity(
+            TEST_CHAIN_ID, wallet, ws_provider, WS_ENDPOINT.to_string(), adapter_address,
+        ).await;
+
+        let block_cache = create_block_cache(TEST_CHAIN_ID as usize, TEST_BLOCK_HEIGHT, TEST_BLOCK_TIME);
+        let randomness_task = create_test_randomness_task(vec![1, 2, 3, 4]);
+        let partial_signatures = create_test_partial_signatures();
+        let signature_cache = create_signature_cache_with_task(
+            randomness_task.clone(), partial_signatures.clone(), 0,
+        ).await;
+        let id_address = Address::random();
+
+        let request_id = H256::from_slice(&randomness_task.request_id);
+        adapter_contract.set_request_commitment(request_id.into(), H256::from_low_u64_be(1).into()).send().await.unwrap().await.unwrap();
+        adapter_contract.set_should_revert_with_custom_error(request_id.into(), true).send().await.unwrap().await.unwrap();
+
+        let handler = GeneralFulfillRandomnessHandler {
+            id_address,
+            chain_identity,
+            block_cache,
+            randomness_signature_cache: signature_cache.clone(),
+            pc: PhantomData,
+        };
+
+        let result = handler.handle(
+            randomness_task.group_index as usize,
+            randomness_task.clone(),
+            vec![1; SIGNATURE_SIZE],
+            partial_signatures,
+        ).await;
+        assert!(result.is_ok());
+    }
+
+    #[tokio::test]
+    async fn test_subscriber_notify_with_faulty_task() {
+        let (_anvil, ws_provider, wallet) = setup_anvil().await;
+        let adapter_address = deploy_adapter(ws_provider.clone(), wallet.clone()).await;
+        
+        let chain_identity = create_chain_identity(
+            TEST_CHAIN_ID, wallet, ws_provider, WS_ENDPOINT.to_string(), adapter_address,
+        ).await;
+
+        let block_cache = create_block_cache(TEST_CHAIN_ID as usize, TEST_BLOCK_HEIGHT, TEST_BLOCK_TIME);
+        let (eq, ts) = create_schedulers();
+        let id_address = Address::random();
+
+        let randomness_task = create_test_randomness_task(vec![1, 2, 3, 4]);
+        let partial_signatures = create_test_partial_signatures();
+        
+        let signature_cache = create_signature_cache_with_task(
+            randomness_task.clone(),
+            partial_signatures.clone(),
+            DEFAULT_MAX_RANDOMNESS_FULFILLMENT_ATTEMPTS,
+        ).await;
+
+        let subscriber = RandomnessSignatureAggregationSubscriber::<G2Curve, G2Scheme>::new(
+            TEST_CHAIN_ID as usize, id_address, chain_identity, block_cache, signature_cache.clone(), eq, ts,
+        );
+
+        let result_cache = RandomnessResultCache {
+            group_index: randomness_task.group_index as usize,
+            randomness_task: randomness_task.clone(),
+            message: vec![1, 2, 3],
+            threshold: TEST_THRESHOLD,
+            partial_signatures,
+            committed_times: DEFAULT_MAX_RANDOMNESS_FULFILLMENT_ATTEMPTS, 
+        };
+
+        let event = ReadyToFulfillRandomnessTask {
+            chain_id: TEST_CHAIN_ID.try_into().unwrap(),
+            tasks: vec![result_cache],
+        };
+
+        let result = subscriber.notify(Topic::ReadyToFulfillRandomnessTask(TEST_CHAIN_ID as usize), &event).await;
+        assert!(result.is_ok());
+    }
+
+    #[tokio::test]
+    async fn test_subscriber_notify_with_valid_task() {
+        let (_anvil, ws_provider, wallet) = setup_anvil().await;
+        let adapter_address = deploy_adapter(ws_provider.clone(), wallet.clone()).await;
+        
+        let chain_identity = create_chain_identity(
+            TEST_CHAIN_ID, wallet, ws_provider, WS_ENDPOINT.to_string(), adapter_address,
+        ).await;
+
+        let block_cache = create_block_cache(TEST_CHAIN_ID as usize, TEST_BLOCK_HEIGHT, TEST_BLOCK_TIME);
+        let signature_cache = create_signature_cache();
+        let (eq, ts) = create_schedulers();
+        let id_address = Address::random();
+
+        let subscriber = RandomnessSignatureAggregationSubscriber::<G2Curve, G2Scheme>::new(
+            TEST_CHAIN_ID as usize, id_address, chain_identity, block_cache, signature_cache.clone(), eq, ts,
+        );
+
+        let randomness_task = create_test_randomness_task(vec![1, 2, 3, 4]);
+        let partial_signatures = create_test_partial_signatures();
+
+        let result_cache = RandomnessResultCache {
+            group_index: randomness_task.group_index as usize,
+            randomness_task: randomness_task.clone(),
+            message: vec![1, 2, 3],
+            threshold: TEST_THRESHOLD,
+            partial_signatures,
+            committed_times: 0,
+        };
+
+        let event = ReadyToFulfillRandomnessTask {
+            chain_id: TEST_CHAIN_ID as usize,
+            tasks: vec![result_cache],
+        };
+
+        let result = subscriber.notify(Topic::ReadyToFulfillRandomnessTask(TEST_CHAIN_ID as usize), &event).await;
+        assert!(result.is_ok());
+    }
+
+    #[tokio::test]
+    async fn test_subscriber_subscribe() {
+        let (_anvil, ws_provider, wallet) = setup_anvil().await;
+        let adapter_address = deploy_adapter(ws_provider.clone(), wallet.clone()).await;
+        
+        let chain_identity = create_chain_identity(
+            TEST_CHAIN_ID, wallet, ws_provider, WS_ENDPOINT.to_string(), adapter_address,
+        ).await;
+
+        let block_cache = create_block_cache(TEST_CHAIN_ID as usize, TEST_BLOCK_HEIGHT, TEST_BLOCK_TIME);
+        let signature_cache = create_signature_cache();
+        let (eq, ts) = create_schedulers();
+        let id_address = Address::random();
+
+        let subscriber = RandomnessSignatureAggregationSubscriber::<G2Curve, G2Scheme>::new(
+            TEST_CHAIN_ID as usize, id_address, chain_identity, block_cache, signature_cache, eq.clone(), ts,
+        );
+
+        subscriber.subscribe().await;
+    }
+
+    #[tokio::test]
+    async fn test_subscriber_notify_with_multiple_tasks() {
+        let (_anvil, ws_provider, wallet) = setup_anvil().await;
+        let adapter_address = deploy_adapter(ws_provider.clone(), wallet.clone()).await;
+        
+        let chain_identity = create_chain_identity(
+            TEST_CHAIN_ID, wallet, ws_provider, WS_ENDPOINT.to_string(), adapter_address,
+        ).await;
+
+        let block_cache = create_block_cache(TEST_CHAIN_ID as usize, TEST_BLOCK_HEIGHT, TEST_BLOCK_TIME);
+        let signature_cache = create_signature_cache();
+        let (eq, ts) = create_schedulers();
+        let id_address = Address::random();
+
+        let subscriber = RandomnessSignatureAggregationSubscriber::<G2Curve, G2Scheme>::new(
+            TEST_CHAIN_ID as usize, id_address, chain_identity, block_cache, signature_cache.clone(), eq, ts,
+        );
+
+        let mut tasks = Vec::new();
+        for i in 0..NUM_SIGNERS {
+            let randomness_task = create_test_randomness_task(vec![i as u8, i as u8+1, i as u8+2, i as u8+3]);
+            let partial_signatures = create_test_partial_signatures();
+
+            let result_cache = RandomnessResultCache {
+                group_index: randomness_task.group_index as usize,
+                randomness_task: randomness_task.clone(),
+                message: vec![i as u8, i as u8+1, i as u8+2],
+                threshold: TEST_THRESHOLD,
+                partial_signatures,
+                committed_times: 0,
+            };
+
+            tasks.push(result_cache);
+        }
+
+        let event = ReadyToFulfillRandomnessTask { chain_id: TEST_CHAIN_ID as usize, tasks };
+
+        let result = subscriber.notify(Topic::ReadyToFulfillRandomnessTask(TEST_CHAIN_ID as usize), &event).await;
+        assert!(result.is_ok());
+    }
 }

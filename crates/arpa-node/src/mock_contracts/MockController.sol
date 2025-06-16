@@ -30,13 +30,29 @@ interface IController {
         uint256[4] publicKey;
     }
     
+    struct CommitDkgParams {
+        uint256 groupIndex;
+        uint256 groupEpoch;
+        bytes publicKey;
+        bytes partialPublicKey;
+        address[] disqualifiedNodes;
+    }
+    
     function getGroup(uint256 groupIndex) external view returns (Group memory);
+    
+    function commitDkg(CommitDkgParams memory params) external;
+    
+    function getCoordinator(uint256 groupIndex) external view returns (address);
 }
 
 contract MockController is IController {
     mapping(uint256 => Group) private groups;
+    mapping(uint256 => address) private _coordinators;  
     address public nodeRegistryAddress;
     address public adapterAddress;
+    
+    bool public shouldSucceed = true;
+    string public failureMessage = "";
     
     event DkgTask(
         uint256 indexed globalEpoch,
@@ -47,6 +63,12 @@ contract MockController is IController {
         address[] members,
         uint256 assignmentBlockHeight,
         address coordinatorAddress
+    );
+    
+    event CommitDkgSuccess(
+        uint256 indexed groupIndex,
+        uint256 indexed groupEpoch,
+        address indexed committer
     );
     
     constructor(address _nodeRegistryAddress) {
@@ -124,6 +146,14 @@ contract MockController is IController {
         return groups[groupIndex];
     }
     
+    function setCoordinator(uint256 groupIndex, address coordinator) external {
+        _coordinators[groupIndex] = coordinator;
+    }
+    
+    function getCoordinator(uint256 groupIndex) public view override(IController) returns (address) {
+        return _coordinators[groupIndex];
+    }
+    
     function emitDkgTaskEvent(
         uint256 globalEpoch,
         uint256 groupIndex,
@@ -148,5 +178,25 @@ contract MockController is IController {
     
     function setAdapterAddress(address _adapterAddress) external {
         adapterAddress = _adapterAddress;
+    }
+    
+    function commitDkg(CommitDkgParams memory params) external override(IController) {
+        if (!shouldSucceed) {
+            revert(failureMessage);
+        }
+        
+        emit CommitDkgSuccess(
+            params.groupIndex,
+            params.groupEpoch,
+            msg.sender
+        );
+    }
+    
+    function setShouldSucceed(bool _shouldSucceed) external {
+        shouldSucceed = _shouldSucceed;
+    }
+    
+    function setFailureMessage(string memory _message) external {
+        failureMessage = _message;
     }
 }
