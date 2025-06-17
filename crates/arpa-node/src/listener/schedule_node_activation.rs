@@ -122,7 +122,7 @@ mod tests {
     use crate::subscriber::{DebuggableEvent, DebuggableSubscriber, Subscriber};
     use crate::test_contracts::mockcontroller::deploy_with_args_and_get_mock_controller;
     use crate::test_contracts::mocknoderegistry::{
-        deploy_and_get_mock_node_registry, MockNodeRegistry,
+        deploy_with_args_and_get_mock_node_registry, MockNodeRegistry
     };
     use ethers::middleware::SignerMiddleware;
     use ethers::signers::{LocalWallet, Signer};
@@ -274,7 +274,14 @@ mod tests {
     ) -> Result<(Address, Address), Box<dyn std::error::Error>> {
         println!("Deploying mock contracts...");
 
-        let node_registry = deploy_and_get_mock_node_registry(client.clone()).await?;
+        let node_registry = deploy_with_args_and_get_mock_node_registry(
+            client.clone(),
+            (
+                Address::random(), 
+                Address::random(), 
+                Address::random(), 
+            )
+        ).await?;
         let node_registry_address = node_registry.address();
         println!(
             "Node Registry contract deployed at: {}",
