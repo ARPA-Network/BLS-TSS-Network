@@ -118,7 +118,7 @@ impl<PC: Curve> FulfillRandomnessHandler for GeneralFulfillRandomnessHandler<PC>
         if client.is_task_pending(&randomness_task_request_id).await? {
             if self.block_cache.read().await.get_block_height()
                 - randomness_task.assignment_block_height
-                > 86400 / self.block_cache.read().await.get_block_time()
+                > 86400 * 1000 / self.block_cache.read().await.get_block_time()
             {
                 self.randomness_signature_cache
                     .write()
