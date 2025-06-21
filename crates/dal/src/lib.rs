@@ -215,6 +215,7 @@ pub trait SignatureResultCacheUpdater<T: ResultCache> {
     async fn get_ready_to_commit_signatures(
         &mut self,
         current_block_height: usize,
+        randomness_aggregation_waiting_block_number: usize,
     ) -> DataAccessResult<Vec<T>>;
 
     async fn add(

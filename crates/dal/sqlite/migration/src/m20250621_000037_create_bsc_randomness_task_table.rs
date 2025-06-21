@@ -1,0 +1,120 @@
+use sea_orm_migration::prelude::*;
+
+#[derive(DeriveMigrationName)]
+pub struct Migration;
+
+#[async_trait::async_trait]
+impl MigrationTrait for Migration {
+    async fn up(&self, manager: &SchemaManager) -> Result<(), DbErr> {
+        manager
+            .create_table(
+                Table::create()
+                    .table(BSCRandomnessTask::Table)
+                    .if_not_exists()
+                    .col(
+                        ColumnDef::new(BSCRandomnessTask::Id)
+                            .integer()
+                            .not_null()
+                            .primary_key(),
+                    )
+                    .col(
+                        ColumnDef::new(BSCRandomnessTask::RequestId)
+                            .blob(BlobSize::Medium)
+                            .not_null(),
+                    )
+                    .col(
+                        ColumnDef::new(BSCRandomnessTask::SubscriptionId)
+                            .big_unsigned()
+                            .not_null(),
+                    )
+                    .col(
+                        ColumnDef::new(BSCRandomnessTask::GroupIndex)
+                            .unsigned()
+                            .not_null(),
+                    )
+                    .col(
+                        ColumnDef::new(BSCRandomnessTask::RequestType)
+                            .tiny_unsigned()
+                            .not_null(),
+                    )
+                    .col(
+                        ColumnDef::new(BSCRandomnessTask::Params)
+                            .blob(BlobSize::Medium)
+                            .not_null(),
+                    )
+                    .col(
+                        ColumnDef::new(BSCRandomnessTask::Requester)
+                            .text()
+                            .not_null(),
+                    )
+                    .col(
+                        ColumnDef::new(BSCRandomnessTask::Seed)
+                            .blob(BlobSize::Medium)
+                            .not_null(),
+                    )
+                    .col(
+                        ColumnDef::new(BSCRandomnessTask::RequestConfirmations)
+                            .unsigned()
+                            .not_null(),
+                    )
+                    .col(
+                        ColumnDef::new(BSCRandomnessTask::CallbackGasLimit)
+                            .unsigned()
+                            .not_null(),
+                    )
+                    .col(
+                        ColumnDef::new(BSCRandomnessTask::CallbackMaxGasPrice)
+                            .blob(BlobSize::Medium)
+                            .not_null(),
+                    )
+                    .col(
+                        ColumnDef::new(BSCRandomnessTask::AssignmentBlockHeight)
+                            .big_unsigned()
+                            .not_null(),
+                    )
+                    .col(
+                        ColumnDef::new(BSCRandomnessTask::State)
+                            .tiny_unsigned()
+                            .not_null(),
+                    )
+                    .col(
+                        ColumnDef::new(BSCRandomnessTask::CreateAt)
+                            .date_time()
+                            .not_null(),
+                    )
+                    .col(
+                        ColumnDef::new(BSCRandomnessTask::UpdateAt)
+                            .date_time()
+                            .not_null(),
+                    )
+                    .to_owned(),
+            )
+            .await
+    }
+
+    async fn down(&self, manager: &SchemaManager) -> Result<(), DbErr> {
+        manager
+            .drop_table(Table::drop().table(BSCRandomnessTask::Table).to_owned())
+            .await
+    }
+}
+
+#[derive(Iden)]
+pub enum BSCRandomnessTask {
+    Table,
+    Id,
+    RequestId,
+    SubscriptionId,
+    GroupIndex,
+    RequestType,
+    Params,
+    Requester,
+    Seed,
+    RequestConfirmations,
+    CallbackGasLimit,
+    CallbackMaxGasPrice,
+    AssignmentBlockHeight,
+    State,
+    CreateAt,
+    UpdateAt,
+}

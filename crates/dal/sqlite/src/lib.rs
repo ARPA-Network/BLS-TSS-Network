@@ -6,19 +6,25 @@ mod test_helper;
 mod types;
 pub use crate::group::GroupInfoDBClient;
 pub use crate::node::NodeInfoDBClient;
+use crate::result::ArpaChainSignatureResultDBClient;
+use crate::result::BSCSignatureResultDBClient;
 pub use crate::result::OPSignatureResultDBClient;
 pub use crate::result::SignatureResultDBClient;
+use crate::task::ArpaChainBLSTasksDBClient;
 pub use crate::task::BLSTasksDBClient;
+use crate::task::BSCBLSTasksDBClient;
 pub use crate::task::OPBLSTasksDBClient;
 pub use crate::types::DBError;
 pub use crate::types::DBResult;
 pub use crate::types::SqliteDB;
 use arpa_core::RandomnessTask;
+use arpa_core::ARPA_CHAIN_ID;
 use arpa_core::B3_MAINNET_CHAIN_ID;
 use arpa_core::B3_TESTNET_CHAIN_ID;
 use arpa_core::BASE_GOERLI_TESTNET_CHAIN_ID;
 use arpa_core::BASE_MAINNET_CHAIN_ID;
 use arpa_core::BASE_SEPOLIA_TESTNET_CHAIN_ID;
+use arpa_core::BSC_MAINNET_CHAIN_ID;
 use arpa_core::LOOT_MAINNET_CHAIN_ID;
 use arpa_core::LOOT_TESTNET_CHAIN_ID;
 use arpa_core::OP_DEVNET_CHAIN_ID;
@@ -133,6 +139,10 @@ impl SqliteDB {
             B3_MAINNET_CHAIN_ID | B3_TESTNET_CHAIN_ID => {
                 Ok(Box::new(self.get_b3_bls_tasks_client::<RandomnessTask>()))
             }
+            ARPA_CHAIN_ID => Ok(Box::new(
+                self.get_arpa_chain_bls_tasks_client::<RandomnessTask>(),
+            )),
+            BSC_MAINNET_CHAIN_ID => Ok(Box::new(self.get_bsc_bls_tasks_client::<RandomnessTask>())),
             _ => Err(DataAccessError::InvalidChainId(chain_id)),
         }
     }
@@ -166,6 +176,10 @@ impl SqliteDB {
             B3_MAINNET_CHAIN_ID | B3_TESTNET_CHAIN_ID => {
                 Ok(Box::new(self.get_b3_randomness_result_client().await?))
             }
+            ARPA_CHAIN_ID => Ok(Box::new(
+                self.get_arpa_chain_randomness_result_client().await?,
+            )),
+            BSC_MAINNET_CHAIN_ID => Ok(Box::new(self.get_bsc_randomness_result_client().await?)),
             _ => Err(DataAccessError::InvalidChainId(chain_id)),
         }
     }
@@ -227,6 +241,8 @@ impl BLSTasksHandler<RandomnessTask> for RedstoneBLSTasksDBClient<RandomnessTask
 impl BLSTasksHandler<RandomnessTask> for LootBLSTasksDBClient<RandomnessTask> {}
 impl BLSTasksHandler<RandomnessTask> for TaikoBLSTasksDBClient<RandomnessTask> {}
 impl BLSTasksHandler<RandomnessTask> for B3BLSTasksDBClient<RandomnessTask> {}
+impl BLSTasksHandler<RandomnessTask> for BSCBLSTasksDBClient<RandomnessTask> {}
+impl BLSTasksHandler<RandomnessTask> for ArpaChainBLSTasksDBClient<RandomnessTask> {}
 
 impl SignatureResultCacheHandler<RandomnessResultCache>
     for SignatureResultDBClient<RandomnessResultCache>
@@ -254,6 +270,14 @@ impl SignatureResultCacheHandler<RandomnessResultCache>
 }
 impl SignatureResultCacheHandler<RandomnessResultCache>
     for B3SignatureResultDBClient<RandomnessResultCache>
+{
+}
+impl SignatureResultCacheHandler<RandomnessResultCache>
+    for BSCSignatureResultDBClient<RandomnessResultCache>
+{
+}
+impl SignatureResultCacheHandler<RandomnessResultCache>
+    for ArpaChainSignatureResultDBClient<RandomnessResultCache>
 {
 }
 
