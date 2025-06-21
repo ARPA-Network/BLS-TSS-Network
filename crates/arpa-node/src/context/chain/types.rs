@@ -278,10 +278,14 @@ where
             ListenerType::RandomnessSignatureAggregation => {
                 let id_address = self.get_node_cache().read().await.get_id_address().unwrap();
 
+                let randomness_aggregation_waiting_block_number =
+                    self.time_limits.randomness_aggregation_waiting_block_number;
+
                 let p_randomness_signature_aggregation =
                     RandomnessSignatureAggregationListener::new(
                         listener,
                         id_address,
+                        randomness_aggregation_waiting_block_number,
                         self.get_block_cache(),
                         self.get_group_cache(),
                         self.get_randomness_result_cache(),
@@ -700,10 +704,14 @@ where
             ListenerType::RandomnessSignatureAggregation => {
                 let id_address = self.get_node_cache().read().await.get_id_address().unwrap();
 
+                let randomness_aggregation_waiting_block_number =
+                    self.time_limits.randomness_aggregation_waiting_block_number;
+
                 let p_randomness_signature_aggregation =
                     RandomnessSignatureAggregationListener::new(
                         listener,
                         id_address,
+                        randomness_aggregation_waiting_block_number,
                         self.get_block_cache(),
                         self.get_group_cache(),
                         self.get_randomness_result_cache(),

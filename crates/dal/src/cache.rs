@@ -811,6 +811,7 @@ impl SignatureResultCacheUpdater<RandomnessResultCache>
     async fn get_ready_to_commit_signatures(
         &mut self,
         current_block_height: usize,
+        randomness_aggregation_waiting_block_number: usize,
     ) -> DataAccessResult<Vec<RandomnessResultCache>> {
         let ready_to_commit_signatures = self
             .signature_result_caches
@@ -818,7 +819,8 @@ impl SignatureResultCacheUpdater<RandomnessResultCache>
             .filter(|v| {
                 ((current_block_height + 1)
                     >= v.result_cache.randomness_task.assignment_block_height
-                        + v.result_cache.randomness_task.request_confirmations as usize)
+                        + v.result_cache.randomness_task.request_confirmations as usize
+                        + randomness_aggregation_waiting_block_number)
                     && v.state == BLSResultCacheState::NotCommitted
                     && v.result_cache.partial_signatures.len() >= v.result_cache.threshold
             })

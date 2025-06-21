@@ -17,6 +17,7 @@ use tokio::sync::RwLock;
 pub struct RandomnessSignatureAggregationListener<PC: Curve> {
     listener_descriptor: ListenerDescriptor,
     id_address: Address,
+    randomness_aggregation_waiting_block_number: usize,
     block_cache: Arc<RwLock<Box<dyn BlockInfoHandler>>>,
     group_cache: Arc<RwLock<Box<dyn GroupInfoHandler<PC>>>>,
     randomness_signature_cache:
@@ -35,6 +36,7 @@ impl<PC: Curve> RandomnessSignatureAggregationListener<PC> {
     pub fn new(
         listener_descriptor: ListenerDescriptor,
         id_address: Address,
+        randomness_aggregation_waiting_block_number: usize,
         block_cache: Arc<RwLock<Box<dyn BlockInfoHandler>>>,
         group_cache: Arc<RwLock<Box<dyn GroupInfoHandler<PC>>>>,
         randomness_signature_cache: Arc<
@@ -45,6 +47,7 @@ impl<PC: Curve> RandomnessSignatureAggregationListener<PC> {
         RandomnessSignatureAggregationListener {
             listener_descriptor,
             id_address,
+            randomness_aggregation_waiting_block_number,
             block_cache,
             group_cache,
             randomness_signature_cache,
@@ -75,7 +78,10 @@ impl<PC: Curve + Sync + Send> Listener for RandomnessSignatureAggregationListene
                 .randomness_signature_cache
                 .write()
                 .await
-                .get_ready_to_commit_signatures(current_block_height)
+                .get_ready_to_commit_signatures(
+                    current_block_height,
+                    self.randomness_aggregation_waiting_block_number,
+                )
                 .await?;
 
             if !ready_signatures.is_empty() {
@@ -371,6 +377,7 @@ mod tests {
             .read()
             .await
             .get_id_address();
+        let randomness_aggregation_waiting_block_number = 0;
         let block_cache = context.get_main_chain().get_block_cache();
         let group_cache = context.get_main_chain().get_group_cache();
         let randomness_signature_cache = context.get_main_chain().get_randomness_result_cache();
@@ -391,6 +398,7 @@ mod tests {
         RandomnessSignatureAggregationListener::<G2Curve>::new(
             listener_descriptor,
             id_address,
+            randomness_aggregation_waiting_block_number,
             block_cache,
             group_cache,
             randomness_signature_cache,

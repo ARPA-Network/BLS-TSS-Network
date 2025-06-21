@@ -345,6 +345,7 @@ pub struct TimeLimitDescriptorHolder {
     pub dkg_wait_for_phase_interval_millis: Option<u64>,
     pub dkg_timeout_duration: Option<usize>,
     pub randomness_task_exclusive_window: usize,
+    pub randomness_aggregation_waiting_block_number: Option<usize>,
     pub provider_polling_interval_millis: u64,
     pub provider_reconnection_interval_millis: Option<u64>,
     pub provider_reset_descriptor: FixedIntervalRetryDescriptor,
@@ -360,6 +361,7 @@ pub struct TimeLimitDescriptor {
     pub dkg_wait_for_phase_interval_millis: u64,
     pub dkg_timeout_duration: usize,
     pub randomness_task_exclusive_window: usize,
+    pub randomness_aggregation_waiting_block_number: usize,
     pub provider_polling_interval_millis: u64,
     pub provider_reconnection_interval_millis: u64,
     pub provider_reset_descriptor: FixedIntervalRetryDescriptor,
@@ -376,6 +378,7 @@ impl Default for TimeLimitDescriptor {
             dkg_wait_for_phase_interval_millis: DEFAULT_DKG_WAIT_FOR_PHASE_INTERVAL_MILLIS,
             dkg_timeout_duration: DEFAULT_DKG_TIMEOUT_DURATION,
             randomness_task_exclusive_window: DEFAULT_RANDOMNESS_TASK_EXCLUSIVE_WINDOW,
+            randomness_aggregation_waiting_block_number: 0,
             provider_polling_interval_millis: DEFAULT_PROVIDER_POLLING_INTERVAL_MILLIS,
             provider_reconnection_interval_millis: DEFAULT_PROVIDER_RECONNECTION_INTERVAL_MILLIS,
             provider_reset_descriptor: FixedIntervalRetryDescriptor {
@@ -432,6 +435,11 @@ impl From<TimeLimitDescriptorHolder> for TimeLimitDescriptor {
             } else {
                 time_limit_descriptor_holder.randomness_task_exclusive_window
             };
+        let randomness_aggregation_waiting_block_number =
+            match time_limit_descriptor_holder.randomness_aggregation_waiting_block_number {
+                None => 0,
+                Some(v) => v,
+            };
         let provider_polling_interval_millis =
             if time_limit_descriptor_holder.provider_polling_interval_millis == 0 {
                 DEFAULT_PROVIDER_POLLING_INTERVAL_MILLIS
@@ -457,6 +465,7 @@ impl From<TimeLimitDescriptorHolder> for TimeLimitDescriptor {
             dkg_wait_for_phase_interval_millis,
             dkg_timeout_duration,
             randomness_task_exclusive_window,
+            randomness_aggregation_waiting_block_number,
             provider_polling_interval_millis,
             provider_reconnection_interval_millis,
             provider_reset_descriptor,

@@ -148,10 +148,14 @@ impl SignatureResultCacheUpdater<RandomnessResultCache>
     async fn get_ready_to_commit_signatures(
         &mut self,
         current_block_height: usize,
+        randomness_aggregation_waiting_block_number: usize,
     ) -> DataAccessResult<Vec<RandomnessResultCache>> {
         let ready_to_commit_signatures = self
             .signature_results_cache
-            .get_ready_to_commit_signatures(current_block_height)
+            .get_ready_to_commit_signatures(
+                current_block_height,
+                randomness_aggregation_waiting_block_number,
+            )
             .await?;
 
         if ready_to_commit_signatures.is_empty() {
