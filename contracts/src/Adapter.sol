@@ -20,11 +20,11 @@ contract Adapter is UUPSUpgradeable, IAdapter, IAdapterOwner, RequestIdBase, Own
     using Address for address;
 
     // *Constants*
-    uint16 public constant MAX_CONSUMERS = 100;
-    uint16 public constant MAX_REQUEST_CONFIRMATIONS = 200;
-    uint32 public constant RANDOMNESS_REWARD_GAS = 9000;
-    uint32 public constant VERIFICATION_GAS_OVER_MINIMUM_THRESHOLD = 50000;
-    uint32 public constant DEFAULT_MINIMUM_THRESHOLD = 3;
+    uint16 internal constant MAX_CONSUMERS = 100;
+    uint16 internal constant MAX_REQUEST_CONFIRMATIONS = 200;
+    uint32 internal constant RANDOMNESS_REWARD_GAS = 9000;
+    uint32 internal constant VERIFICATION_GAS_OVER_MINIMUM_THRESHOLD = 50000;
+    uint32 internal constant DEFAULT_MINIMUM_THRESHOLD = 3;
 
     // *State Variables*
     IController internal _controller;
@@ -399,43 +399,15 @@ contract Adapter is UUPSUpgradeable, IAdapter, IAdapterOwner, RequestIdBase, Own
         _cancelSubscriptionHelper(subId, to);
     }
 
-    function cancelOvertimeRequest(bytes32 requestId, RequestDetail calldata requestDetail)
+    function cancelOvertimeRequests(bytes32[] calldata requestIds, RequestDetail[] calldata requestDetails)
         external
         override(IAdapter)
-        onlySubOwner(requestDetail.subId)
     {
-        if (_requestCommitments[requestId] == 0) {
-            revert NoCorrespondingRequest();
+        for (uint256 i = 0; i < requestIds.length; i++) {
+            bytes32 requestId = requestIds[i];
+            RequestDetail calldata requestDetail = requestDetails[i];
+            _cancelOvertimeRequest(requestId, requestDetail);
         }
-        if (
-            _requestCommitments[requestId]
-                != keccak256(
-                    abi.encode(
-                        requestId,
-                        requestDetail.subId,
-                        requestDetail.groupIndex,
-                        requestDetail.requestType,
-                        requestDetail.params,
-                        requestDetail.callbackContract,
-                        requestDetail.seed,
-                        requestDetail.requestConfirmations,
-                        requestDetail.callbackGasLimit,
-                        requestDetail.callbackMaxGasPrice,
-                        requestDetail.blockNum
-                    )
-                )
-        ) {
-            revert IncorrectCommitment();
-        }
-        uint256 blockNum24H = 1 days / ChainHelper.getBlockTime();
-        if (block.number < requestDetail.blockNum + blockNum24H) {
-            revert RequestNotExpired();
-        }
-        delete _requestCommitments[requestId];
-        _subscriptions[requestDetail.subId].inflightCost -=
-            _subscriptions[requestDetail.subId].inflightPayments[requestId];
-        delete _subscriptions[requestDetail.subId].inflightPayments[requestId];
-        emit OvertimeRequestCanceled(requestId, requestDetail.subId);
     }
 
     function requestRandomness(RandomnessRequestParams calldata params)
@@ -506,7 +478,7 @@ contract Adapter is UUPSUpgradeable, IAdapter, IAdapterOwner, RequestIdBase, Own
                 p.requestConfirmations,
                 p.callbackGasLimit,
                 p.callbackMaxGasPrice,
-                block.number
+                ChainHelper._getBlockNumber()
             )
         );
 
@@ -565,13 +537,13 @@ contract Adapter is UUPSUpgradeable, IAdapter, IAdapterOwner, RequestIdBase, Own
             revert ExceedCallbackMaxGasPrice(tx.gasprice, requestDetail.callbackMaxGasPrice);
         }
 
-        if (block.number < requestDetail.blockNum + requestDetail.requestConfirmations) {
+        if (ChainHelper._getBlockNumber() < requestDetail.blockNum + requestDetail.requestConfirmations) {
             revert TaskStillWithinRequestConfirmations();
         }
 
         if (
             groupIndex != requestDetail.groupIndex
-                && block.number <= requestDetail.blockNum + _config.signatureTaskExclusiveWindow
+                && ChainHelper._getBlockNumber() <= requestDetail.blockNum + _config.signatureTaskExclusiveWindow
         ) {
             revert TaskStillExclusive();
         }
@@ -780,6 +752,26 @@ contract Adapter is UUPSUpgradeable, IAdapter, IAdapterOwner, RequestIdBase, Own
     // Internal
     // =============
 
+    function _cancelOvertimeRequest(bytes32 requestId, RequestDetail calldata requestDetail)
+        internal
+        onlySubOwner(requestDetail.subId)
+    {
+        if (_requestCommitments[requestId] == 0) {
+            revert NoCorrespondingRequest();
+        }
+        if (
+            ChainHelper._getBlockNumber()
+                < requestDetail.blockNum + ChainHelper.getRequestExpirationBlockNumberDuration()
+        ) {
+            revert RequestNotExpired();
+        }
+        delete _requestCommitments[requestId];
+        _subscriptions[requestDetail.subId].inflightCost -=
+            _subscriptions[requestDetail.subId].inflightPayments[requestId];
+        delete _subscriptions[requestDetail.subId].inflightPayments[requestId];
+        emit OvertimeRequestCanceled(requestId, requestDetail.subId);
+    }
+
     function _rewardRandomness(address[] memory participantMembers, uint256 payment, uint256 flatFee) internal {
         _cumulativeCommitterReward += _config.committerRewardPerSignature;
         _cumulativePartialSignatureReward += _config.rewardPerSignature * participantMembers.length;
@@ -833,11 +825,9 @@ contract Adapter is UUPSUpgradeable, IAdapter, IAdapterOwner, RequestIdBase, Own
         if (_flatFeeConfig.isFlatFeePromotionEnabledPermanently) {
             reqCount = sub.reqCount;
         } else if (
-            _flatFeeConfig
-                //solhint-disable-next-line not-rely-on-time
-                .flatFeePromotionStartTimestamp <= block.timestamp
             //solhint-disable-next-line not-rely-on-time
-            && block.timestamp <= _flatFeeConfig.flatFeePromotionEndTimestamp
+            _flatFeeConfig.flatFeePromotionStartTimestamp <= block.timestamp
+                && block.timestamp <= _flatFeeConfig.flatFeePromotionEndTimestamp
         ) {
             if (sub.lastRequestTimestamp < _flatFeeConfig.flatFeePromotionStartTimestamp) {
                 reqCount = 1;
@@ -884,11 +874,9 @@ contract Adapter is UUPSUpgradeable, IAdapter, IAdapterOwner, RequestIdBase, Own
         if (_flatFeeConfig.isFlatFeePromotionEnabledPermanently) {
             reqCount = sub.reqCount;
         } else if (
-            _flatFeeConfig
-                //solhint-disable-next-line not-rely-on-time
-                .flatFeePromotionStartTimestamp <= block.timestamp
             //solhint-disable-next-line not-rely-on-time
-            && block.timestamp <= _flatFeeConfig.flatFeePromotionEndTimestamp
+            _flatFeeConfig.flatFeePromotionStartTimestamp <= block.timestamp
+                && block.timestamp <= _flatFeeConfig.flatFeePromotionEndTimestamp
         ) {
             if (sub.lastRequestTimestamp < _flatFeeConfig.flatFeePromotionStartTimestamp) {
                 sub.reqCountInCurrentPeriod = 1;

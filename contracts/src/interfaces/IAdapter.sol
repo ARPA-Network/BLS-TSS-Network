@@ -60,7 +60,7 @@ interface IAdapter is IRequestTypeBase {
     function removeConsumer(uint64 subId, address consumer) external;
 
     // delete the request that cannot be fulfilled, triggered by user themselves
-    function cancelOvertimeRequest(bytes32 requestId, RequestDetail calldata requestDetail) external;
+    function cancelOvertimeRequests(bytes32[] memory requestIds, RequestDetail[] calldata requestDetails) external;
 
     // View
     function getLastSubscription(address consumer) external view returns (uint64);
