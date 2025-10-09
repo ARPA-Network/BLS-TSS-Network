@@ -21,16 +21,12 @@ contract AdapterTest is RandcastTestHelper {
     uint256 internal _plentyOfEthBalance = 1e6 * 1e18;
 
     function setUp() public {
-        // _minimumRequestConfirmations = 3;
-        // skip(1000);
-        // _prepareRandcastContracts();
-        // vm.prank(_user);
-        // _getRandomNumberExample = new GetRandomNumberExample(address(_adapter));
-        // _subId = _prepareSubscription(
-        //     _user,
-        //     address(_getRandomNumberExample),
-        //     _plentyOfEthBalance
-        // );
+        _minimumRequestConfirmations = 3;
+        skip(1000);
+        _prepareRandcastContracts();
+        vm.prank(_user);
+        _getRandomNumberExample = new GetRandomNumberExample(address(_adapter));
+        _subId = _prepareSubscription(_user, address(_getRandomNumberExample), _plentyOfEthBalance);
     }
 
     function testAdapterAddress() public {
@@ -67,14 +63,15 @@ contract AdapterTest is RandcastTestHelper {
             emit log_uint(inflightCost);
 
             // 0 flat fee until the first request is actually fulfilled
-            uint256 payment = IAdapter(address(_adapter)).estimatePaymentAmountInETH(
-                _getRandomNumberExample.callbackGasLimit() + RANDOMNESS_REWARD_GAS * uint32(groupSize)
-                    + VERIFICATION_GAS_OVER_MINIMUM_THRESHOLD * (uint32(groupSize) - DEFAULT_MINIMUM_THRESHOLD),
-                _gasExceptCallback,
-                0,
-                tx.gasprice * 3,
-                uint32(groupSize)
-            );
+            uint256 payment = IAdapter(address(_adapter))
+                .estimatePaymentAmountInETH(
+                    _getRandomNumberExample.callbackGasLimit() + RANDOMNESS_REWARD_GAS * uint32(groupSize)
+                        + VERIFICATION_GAS_OVER_MINIMUM_THRESHOLD * (uint32(groupSize) - DEFAULT_MINIMUM_THRESHOLD),
+                    _gasExceptCallback,
+                    0,
+                    tx.gasprice * 3,
+                    uint32(groupSize)
+                );
 
             _inflightCost += payment;
 
@@ -150,6 +147,7 @@ contract AdapterTest is RandcastTestHelper {
         IAdapter(address(_adapter)).cancelOvertimeRequests(requestIds, requestDetails);
 
         (,,, inflightCost,,,,,) = IAdapter(address(_adapter)).getSubscription(_subId);
+        emit log_uint(inflightCost);
         assertEq(inflightCost > 0, true);
 
         vm.roll(block.number + 7200);

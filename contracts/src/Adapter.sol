@@ -152,6 +152,7 @@ contract Adapter is UUPSUpgradeable, IAdapter, IAdapterOwner, RequestIdBase, Own
     error GasLimitTooBig(uint32 have, uint32 want);
     error RequestNotExpired();
     error ExceedCallbackMaxGasPrice(uint256 have, uint256 want);
+    error TransferETHFailed();
 
     // *Modifiers*
     modifier onlySubOwner(uint64 subId) {
@@ -287,7 +288,10 @@ contract Adapter is UUPSUpgradeable, IAdapter, IAdapterOwner, RequestIdBase, Own
         if (msg.sender != address(_controller)) {
             revert SenderNotController();
         }
-        payable(recipient).transfer(ethAmount);
+        (bool success,) = payable(recipient).call{value: ethAmount}("");
+        if (!success) {
+            revert TransferETHFailed();
+        }
     }
 
     function createSubscription() external override(IAdapter) nonReentrant returns (uint64) {
@@ -384,12 +388,7 @@ contract Adapter is UUPSUpgradeable, IAdapter, IAdapterOwner, RequestIdBase, Own
         emit SubscriptionReferralSet(subId, referralSubId);
     }
 
-    function cancelSubscription(uint64 subId, address to)
-        external
-        override(IAdapter)
-        onlySubOwner(subId)
-        nonReentrant
-    {
+    function cancelSubscription(uint64 subId, address to) external override(IAdapter) onlySubOwner(subId) nonReentrant {
         if (to == address(0)) {
             revert InvalidZeroAddress();
         }
@@ -508,30 +507,7 @@ contract Adapter is UUPSUpgradeable, IAdapter, IAdapterOwner, RequestIdBase, Own
     ) public virtual override(IAdapter) nonReentrant {
         uint256 startGas = gasleft();
 
-        bytes32 commitment = _requestCommitments[requestId];
-        if (commitment == 0) {
-            revert NoCorrespondingRequest();
-        }
-        if (
-            commitment
-                != keccak256(
-                    abi.encode(
-                        requestId,
-                        requestDetail.subId,
-                        requestDetail.groupIndex,
-                        requestDetail.requestType,
-                        requestDetail.params,
-                        requestDetail.callbackContract,
-                        requestDetail.seed,
-                        requestDetail.requestConfirmations,
-                        requestDetail.callbackGasLimit,
-                        requestDetail.callbackMaxGasPrice,
-                        requestDetail.blockNum
-                    )
-                )
-        ) {
-            revert IncorrectCommitment();
-        }
+        _verifyRequestCommitment(requestId, requestDetail);
 
         if (tx.gasprice > requestDetail.callbackMaxGasPrice) {
             revert ExceedCallbackMaxGasPrice(tx.gasprice, requestDetail.callbackMaxGasPrice);
@@ -629,16 +605,8 @@ contract Adapter is UUPSUpgradeable, IAdapter, IAdapterOwner, RequestIdBase, Own
         return _randomnessCount;
     }
 
-    function getCurrentSubId() external view override(IAdapter) returns (uint64) {
-        return _currentSubId;
-    }
-
     function getCumulativeData() external view override(IAdapter) returns (uint256, uint256, uint256) {
         return (_cumulativeFlatFee, _cumulativeCommitterReward, _cumulativePartialSignatureReward);
-    }
-
-    function getController() external view override(IAdapter) returns (address) {
-        return address(_controller);
     }
 
     function getAdapterConfig()
@@ -752,13 +720,38 @@ contract Adapter is UUPSUpgradeable, IAdapter, IAdapterOwner, RequestIdBase, Own
     // Internal
     // =============
 
+    function _verifyRequestCommitment(bytes32 requestId, RequestDetail calldata requestDetail) internal view {
+        bytes32 commitment = _requestCommitments[requestId];
+        if (commitment == 0) {
+            revert NoCorrespondingRequest();
+        }
+        if (
+            commitment
+                != keccak256(
+                    abi.encode(
+                        requestId,
+                        requestDetail.subId,
+                        requestDetail.groupIndex,
+                        requestDetail.requestType,
+                        requestDetail.params,
+                        requestDetail.callbackContract,
+                        requestDetail.seed,
+                        requestDetail.requestConfirmations,
+                        requestDetail.callbackGasLimit,
+                        requestDetail.callbackMaxGasPrice,
+                        requestDetail.blockNum
+                    )
+                )
+        ) {
+            revert IncorrectCommitment();
+        }
+    }
+
     function _cancelOvertimeRequest(bytes32 requestId, RequestDetail calldata requestDetail)
         internal
         onlySubOwner(requestDetail.subId)
     {
-        if (_requestCommitments[requestId] == 0) {
-            revert NoCorrespondingRequest();
-        }
+        _verifyRequestCommitment(requestId, requestDetail);
         if (
             ChainHelper._getBlockNumber()
                 < requestDetail.blockNum + ChainHelper.getRequestExpirationBlockNumberDuration()
@@ -766,8 +759,8 @@ contract Adapter is UUPSUpgradeable, IAdapter, IAdapterOwner, RequestIdBase, Own
             revert RequestNotExpired();
         }
         delete _requestCommitments[requestId];
-        _subscriptions[requestDetail.subId].inflightCost -=
-            _subscriptions[requestDetail.subId].inflightPayments[requestId];
+        _subscriptions[requestDetail.subId]
+        .inflightCost -= _subscriptions[requestDetail.subId].inflightPayments[requestId];
         delete _subscriptions[requestDetail.subId].inflightPayments[requestId];
         emit OvertimeRequestCanceled(requestId, requestDetail.subId);
     }
@@ -826,8 +819,8 @@ contract Adapter is UUPSUpgradeable, IAdapter, IAdapterOwner, RequestIdBase, Own
             reqCount = sub.reqCount;
         } else if (
             //solhint-disable-next-line not-rely-on-time
-            _flatFeeConfig.flatFeePromotionStartTimestamp <= block.timestamp
-                && block.timestamp <= _flatFeeConfig.flatFeePromotionEndTimestamp
+            _flatFeeConfig.flatFeePromotionStartTimestamp <= ChainHelper._getBlockNumber()
+                && ChainHelper._getBlockNumber() <= _flatFeeConfig.flatFeePromotionEndTimestamp
         ) {
             if (sub.lastRequestTimestamp < _flatFeeConfig.flatFeePromotionStartTimestamp) {
                 reqCount = 1;
@@ -839,8 +832,8 @@ contract Adapter is UUPSUpgradeable, IAdapter, IAdapterOwner, RequestIdBase, Own
         // Estimate upper cost of this fulfillment.
         uint256 payment = estimatePaymentAmountInETH(
             callbackGasLimit,
-            _config.gasExceptCallback + RANDOMNESS_REWARD_GAS * groupSize
-                + VERIFICATION_GAS_OVER_MINIMUM_THRESHOLD * (groupSize - DEFAULT_MINIMUM_THRESHOLD),
+            _config.gasExceptCallback + RANDOMNESS_REWARD_GAS * groupSize + VERIFICATION_GAS_OVER_MINIMUM_THRESHOLD
+                * (groupSize - DEFAULT_MINIMUM_THRESHOLD),
             sub.freeRequestCount > 0
                 ? 0
                 : (getFeeTier(reqCount) * _flatFeeConfig.flatFeePromotionGlobalPercentage / 100),
@@ -875,8 +868,8 @@ contract Adapter is UUPSUpgradeable, IAdapter, IAdapterOwner, RequestIdBase, Own
             reqCount = sub.reqCount;
         } else if (
             //solhint-disable-next-line not-rely-on-time
-            _flatFeeConfig.flatFeePromotionStartTimestamp <= block.timestamp
-                && block.timestamp <= _flatFeeConfig.flatFeePromotionEndTimestamp
+            _flatFeeConfig.flatFeePromotionStartTimestamp <= ChainHelper._getBlockNumber()
+                && ChainHelper._getBlockNumber() <= _flatFeeConfig.flatFeePromotionEndTimestamp
         ) {
             if (sub.lastRequestTimestamp < _flatFeeConfig.flatFeePromotionStartTimestamp) {
                 sub.reqCountInCurrentPeriod = 1;
@@ -887,7 +880,7 @@ contract Adapter is UUPSUpgradeable, IAdapter, IAdapterOwner, RequestIdBase, Own
         }
 
         //solhint-disable-next-line not-rely-on-time
-        sub.lastRequestTimestamp = block.timestamp;
+        sub.lastRequestTimestamp = ChainHelper._getBlockNumber();
 
         uint256 flatFee;
         if (sub.freeRequestCount > 0) {
@@ -924,7 +917,10 @@ contract Adapter is UUPSUpgradeable, IAdapter, IAdapterOwner, RequestIdBase, Own
         uint256 balance = _subscriptions[subId].balance;
         delete _subscriptions[subId].owner;
         emit SubscriptionCanceled(subId, to, balance);
-        payable(to).transfer(balance);
+        (bool success,) = payable(to).call{value: balance}("");
+        if (!success) {
+            revert TransferETHFailed();
+        }
     }
 
     // Get the amount of gas used for fulfillment

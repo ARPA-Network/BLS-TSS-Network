@@ -88,11 +88,7 @@ interface IAdapter is IRequestTypeBase {
 
     function getRandomnessCount() external view returns (uint256);
 
-    function getCurrentSubId() external view returns (uint64);
-
     function getCumulativeData() external view returns (uint256, uint256, uint256);
-
-    function getController() external view returns (address);
 
     function getAdapterConfig()
         external
