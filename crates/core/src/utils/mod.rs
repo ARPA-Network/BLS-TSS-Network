@@ -1,33 +1,34 @@
-use chrono::Local;
-use ethers_core::{
-    types::{Address, I256, U256},
-    utils::{hex, keccak256},
+use alloy::{
+    eips::eip1559::Eip1559Estimation,
+    hex,
+    primitives::{utils::keccak256, Address, FixedBytes, U256},
 };
+use chrono::Local;
 use log::info;
 
 /// The threshold max change/difference (in %) at which we will ignore the fee history values
 /// under it.
 pub const EIP1559_FEE_ESTIMATION_THRESHOLD_MAX_CHANGE: i64 = 200;
-pub const OP_MAINNET_CHAIN_ID: usize = 10;
-pub const OP_GOERLI_TESTNET_CHAIN_ID: usize = 420;
-pub const OP_SEPOLIA_TESTNET_CHAIN_ID: usize = 11155420;
-pub const OP_DEVNET_CHAIN_ID: usize = 901;
-pub const BASE_MAINNET_CHAIN_ID: usize = 8453;
-pub const BASE_GOERLI_TESTNET_CHAIN_ID: usize = 84531;
-pub const BASE_SEPOLIA_TESTNET_CHAIN_ID: usize = 84532;
-pub const REDSTONE_HOLESKY_TESTNET_CHAIN_ID: usize = 17001;
-pub const REDSTONE_MAINNET_CHAIN_ID: usize = 690;
-pub const REDSTONE_GARNET_TESTNET_CHAIN_ID: usize = 17069;
-pub const LOOT_MAINNET_CHAIN_ID: usize = 5151706;
-pub const LOOT_TESTNET_CHAIN_ID: usize = 9088912;
-pub const TAIKO_HEKLA_TESTNET_CHAIN_ID: usize = 167009;
-pub const TAIKO_MAINNET_CHAIN_ID: usize = 167000;
-pub const B3_MAINNET_CHAIN_ID: usize = 8333;
-pub const B3_TESTNET_CHAIN_ID: usize = 1993;
-pub const BSC_MAINNET_CHAIN_ID: usize = 56;
-pub const ARPA_CHAIN_ID: usize = 4224;
+pub const OP_MAINNET_CHAIN_ID: u64 = 10;
+pub const OP_GOERLI_TESTNET_CHAIN_ID: u64 = 420;
+pub const OP_SEPOLIA_TESTNET_CHAIN_ID: u64 = 11155420;
+pub const OP_DEVNET_CHAIN_ID: u64 = 901;
+pub const BASE_MAINNET_CHAIN_ID: u64 = 8453;
+pub const BASE_GOERLI_TESTNET_CHAIN_ID: u64 = 84531;
+pub const BASE_SEPOLIA_TESTNET_CHAIN_ID: u64 = 84532;
+pub const REDSTONE_HOLESKY_TESTNET_CHAIN_ID: u64 = 17001;
+pub const REDSTONE_MAINNET_CHAIN_ID: u64 = 690;
+pub const REDSTONE_GARNET_TESTNET_CHAIN_ID: u64 = 17069;
+pub const LOOT_MAINNET_CHAIN_ID: u64 = 5151706;
+pub const LOOT_TESTNET_CHAIN_ID: u64 = 9088912;
+pub const TAIKO_HEKLA_TESTNET_CHAIN_ID: u64 = 167009;
+pub const TAIKO_MAINNET_CHAIN_ID: u64 = 167000;
+pub const B3_MAINNET_CHAIN_ID: u64 = 8333;
+pub const B3_TESTNET_CHAIN_ID: u64 = 1993;
+pub const BSC_MAINNET_CHAIN_ID: u64 = 56;
+pub const ARPA_CHAIN_ID: u64 = 4224;
 
-pub fn supports_eip1559(chain_id: usize) -> bool {
+pub fn supports_eip1559(chain_id: u64) -> bool {
     chain_id != LOOT_MAINNET_CHAIN_ID && chain_id != LOOT_TESTNET_CHAIN_ID
 }
 
@@ -40,10 +41,13 @@ pub fn address_to_string(address: Address) -> String {
     to_checksum(&address, None)
 }
 
+pub fn random_address() -> Address {
+    let nonce = rand::random::<u64>();
+    Address::ZERO.create(nonce)
+}
+
 pub fn u256_to_vec(x: &U256) -> Vec<u8> {
-    let mut x_bytes = vec![0u8; 32];
-    x.to_big_endian(&mut x_bytes);
-    x_bytes
+    x.to_be_bytes_vec()
 }
 
 pub fn pad_to_bytes32(s: &[u8]) -> Option<[u8; 32]> {
@@ -58,6 +62,20 @@ pub fn pad_to_bytes32(s: &[u8]) -> Option<[u8; 32]> {
     result[..s_len].clone_from_slice(s);
 
     Some(result)
+}
+
+pub fn pad_to_bytes32_fixed_bytes(s: &[u8]) -> Option<FixedBytes<32>> {
+    let s_len = s.len();
+    if s_len > 32 {
+        return None;
+    }
+    let mut result: [u8; 32] = Default::default();
+    result[..s_len].clone_from_slice(s);
+    Some(FixedBytes::from(result))
+}
+
+pub fn bytes32_to_fixed_bytes(s: [u8; 32]) -> FixedBytes<32> {
+    FixedBytes::from(s)
 }
 
 pub fn ser_bytes_in_hex_string<T, S>(v: &T, s: S) -> Result<S::Ok, S::Error>
@@ -86,7 +104,7 @@ pub fn to_checksum(addr: &Address, chain_id: Option<u8>) -> String {
     let hash = hex::encode(keccak256(prefixed_addr));
     let hash = hash.as_bytes();
 
-    let addr_hex = hex::encode(addr.as_bytes());
+    let addr_hex = hex::encode(addr);
     let addr_hex = addr_hex.as_bytes();
 
     addr_hex
@@ -102,8 +120,10 @@ pub fn to_checksum(addr: &Address, chain_id: Option<u8>) -> String {
         })
 }
 
+// fn estimate(&self, base_fee: u128, rewards: &[Vec<u128>]) -> Eip1559Estimation;
+
 /// The EIP-1559 fee estimator which is based on the work by [ethers-rs](https://github.com/gakonst/ethers-rs/blob/e0e79df7e9032e882fce4f47bcc25d87bceaec68/ethers-core/src/utils/mod.rs#L500) and [MyCrypto](https://github.com/MyCryptoHQ/MyCrypto/blob/master/src/services/ApiService/Gas/eip1559.ts)
-pub fn eip1559_gas_price_estimator(base: U256, tips: Vec<Vec<U256>>) -> (U256, U256) {
+pub fn eip1559_gas_price_estimator(base: u128, tips: &[Vec<u128>]) -> Eip1559Estimation {
     info!("base: {:?}", base);
     info!("tips: {:?}", tips);
 
@@ -113,9 +133,9 @@ pub fn eip1559_gas_price_estimator(base: U256, tips: Vec<Vec<U256>>) -> (U256, U
 }
 
 pub fn fallback_eip1559_gas_price_estimator(
-    base: U256,
-    max_priority_fee_per_gas: U256,
-) -> (U256, U256) {
+    base: u128,
+    max_priority_fee_per_gas: u128,
+) -> Eip1559Estimation {
     info!("base: {:?}", base);
     info!("max_priority_fee_per_gas: {:?}", max_priority_fee_per_gas);
 
@@ -126,17 +146,17 @@ pub fn fallback_eip1559_gas_price_estimator(
     } else {
         potential_max_fee
     };
-    (max_fee_per_gas, max_priority_fee_per_gas)
+
+    Eip1559Estimation {
+        max_fee_per_gas,
+        max_priority_fee_per_gas,
+    }
 }
 
-fn estimate_priority_fee(rewards: Vec<Vec<U256>>) -> U256 {
-    let mut rewards: Vec<U256> = rewards
-        .iter()
-        .map(|r| r[0])
-        .filter(|r| *r > U256::zero())
-        .collect();
+fn estimate_priority_fee(rewards: &[Vec<u128>]) -> u128 {
+    let mut rewards: Vec<u128> = rewards.iter().map(|r| r[0]).filter(|r| *r > 0).collect();
     if rewards.is_empty() {
-        return U256::zero();
+        return 0;
     }
     if rewards.len() == 1 {
         return rewards[0];
@@ -149,12 +169,12 @@ fn estimate_priority_fee(rewards: Vec<Vec<U256>>) -> U256 {
     let mut rewards_copy = rewards.clone();
     rewards_copy.rotate_left(1);
 
-    let mut percentage_change: Vec<I256> = rewards
+    let mut percentage_change: Vec<i128> = rewards
         .iter()
         .zip(rewards_copy.iter())
         .map(|(a, b)| {
-            let a = I256::try_from(*a).expect("priority fee overflow");
-            let b = I256::try_from(*b).expect("priority fee overflow");
+            let a = *a as i128;
+            let b = *b as i128;
             ((b - a) * 100) / a
         })
         .collect();
@@ -184,9 +204,9 @@ fn estimate_priority_fee(rewards: Vec<Vec<U256>>) -> U256 {
 #[cfg(test)]
 pub mod util_tests {
 
-    use ethers_core::types::Address;
+    use alloy::primitives::Address;
 
-    use crate::{address_to_string, format_now_date};
+    use crate::{address_to_string, format_now_date, random_address};
 
     #[test]
     fn test_format_now_date() {
@@ -205,5 +225,13 @@ pub mod util_tests {
         let bad_address_in_str = "0x1";
         let address = bad_address_in_str.parse::<Address>();
         assert!(address.is_err());
+    }
+
+    #[test]
+    fn test_random_address() {
+        for _ in 0..10 {
+            let address = random_address();
+            println!("{:?}", address);
+        }
     }
 }

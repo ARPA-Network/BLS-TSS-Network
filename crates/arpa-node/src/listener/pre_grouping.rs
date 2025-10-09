@@ -5,6 +5,7 @@ use crate::{
     event::new_dkg_task::NewDKGTask,
     queue::{event_queue::EventQueue, EventPublisher},
 };
+use alloy::providers::Provider;
 use arpa_contract_client::controller::ControllerLogs;
 use arpa_core::{
     log::{build_task_related_payload, LogType},
@@ -12,7 +13,6 @@ use arpa_core::{
 };
 use arpa_dal::GroupInfoHandler;
 use async_trait::async_trait;
-use ethers::providers::Middleware;
 use log::info;
 use serde_json::json;
 use std::{marker::PhantomData, sync::Arc};
@@ -127,7 +127,7 @@ impl<PC: Curve + Sync + Send> Listener for PreGroupingListener<PC> {
         Ok(())
     }
 
-    fn chain_id(&self) -> usize {
+    fn chain_id(&self) -> u64 {
         self.listener_descriptor.chain_id
     }
 
@@ -164,7 +164,7 @@ mod tests {
         anvil: AnvilInstance,
         wallet: LocalWallet,
         id_address: Address,
-        chain_id: usize,
+        chain_id: u64,
         controller_address: Address,
         adapter_address: Address,
         node_registry_address: Address,
@@ -176,9 +176,9 @@ mod tests {
             let wallet: LocalWallet = anvil.keys()[0].clone().into();
             let id_address = wallet.address();
             let chain_id = anvil.chain_id() as usize;
-            let controller_address = Address::random();
-            let adapter_address = Address::random();
-            let node_registry_address = Address::random();
+            let controller_address = random_address();
+            let adapter_address = random_address();
+            let node_registry_address = random_address();
 
             Self {
                 anvil,
@@ -284,9 +284,9 @@ mod tests {
     impl DkgTaskParams {
         fn new(id_address: Address, include_self: bool) -> Self {
             let members = if include_self {
-                vec![id_address, Address::random(), Address::random()]
+                vec![id_address, random_address(), random_address()]
             } else {
-                vec![Address::random(), Address::random(), Address::random()]
+                vec![random_address(), random_address(), random_address()]
             };
 
             Self {
@@ -297,12 +297,12 @@ mod tests {
                 size: U256::from(3),
                 threshold: U256::from(2),
                 assignment_block_height: U256::from(100),
-                coordinator_address: Address::random(),
+                coordinator_address: random_address(),
             }
         }
     }
 
-    fn create_listener_descriptor(chain_id: usize) -> ListenerDescriptor {
+    fn create_listener_descriptor(chain_id: u64) -> ListenerDescriptor {
         ListenerDescriptor {
             chain_id,
             l_type: ListenerType::PreGrouping,
@@ -411,8 +411,8 @@ mod tests {
             size: 3,
             threshold: 2,
             assignment_block_height: 100,
-            members: vec![env.id_address, Address::random(), Address::random()],
-            coordinator_address: Address::random(),
+            members: vec![env.id_address, random_address(), random_address()],
+            coordinator_address: random_address(),
         };
 
         components
@@ -534,8 +534,8 @@ mod tests {
                 size: 3,
                 threshold: 2,
                 assignment_block_height: 50,
-                members: vec![env.id_address, Address::random(), Address::random()],
-                coordinator_address: Address::random(),
+                members: vec![env.id_address, random_address(), random_address()],
+                coordinator_address: random_address(),
             };
 
             group_cache_write.save_task_info(0, dkg_task).await?;

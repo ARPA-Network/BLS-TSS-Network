@@ -1,6 +1,7 @@
 use crate::types::DBError;
 use crate::types::RandomnessRecord;
 use crate::types::SqliteDB;
+use alloy::primitives::Address;
 use arpa_core::format_now_date;
 use arpa_core::BLSTaskError;
 use arpa_core::{RandomnessTask, Task};
@@ -15,7 +16,6 @@ use arpa_dal::SignatureResultCacheUpdater;
 use async_trait::async_trait;
 use entity::prelude::TaikoRandomnessResult;
 use entity::taiko_randomness_result;
-use ethers_core::types::Address;
 use migration::Expr;
 use migration::Query;
 use migration::SelectStatement;

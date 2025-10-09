@@ -12,14 +12,14 @@ use tokio::sync::RwLock;
 
 #[derive(Debug)]
 pub struct BlockSubscriber {
-    chain_id: usize,
+    chain_id: u64,
     block_cache: Arc<RwLock<Box<dyn BlockInfoHandler>>>,
     eq: Arc<RwLock<EventQueue>>,
 }
 
 impl BlockSubscriber {
     pub fn new(
-        chain_id: usize,
+        chain_id: u64,
         block_cache: Arc<RwLock<Box<dyn BlockInfoHandler>>>,
         eq: Arc<RwLock<EventQueue>>,
     ) -> Self {
@@ -33,7 +33,7 @@ impl BlockSubscriber {
 
 #[async_trait]
 impl Subscriber for BlockSubscriber {
-    async fn notify(&self, topic: Topic, payload: &(dyn DebuggableEvent)) -> NodeResult<()> {
+    async fn notify(&self, topic: Topic, payload: &dyn DebuggableEvent) -> NodeResult<()> {
         debug!("{:?}", topic);
 
         let &NewBlock { block_height, .. } = payload.as_any().downcast_ref::<NewBlock>().unwrap();

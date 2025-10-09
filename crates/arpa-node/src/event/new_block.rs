@@ -3,12 +3,12 @@ use crate::subscriber::DebuggableEvent;
 
 #[derive(Clone, Debug)]
 pub struct NewBlock {
-    pub chain_id: usize,
+    pub chain_id: u64,
     pub block_height: usize,
 }
 
 impl NewBlock {
-    pub fn new(chain_id: usize, block_height: usize) -> Self {
+    pub fn new(chain_id: u64, block_height: usize) -> Self {
         NewBlock {
             chain_id,
             block_height,

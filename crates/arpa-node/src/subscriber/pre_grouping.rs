@@ -44,7 +44,7 @@ impl<C: Curve + std::fmt::Debug + Sync + Send> EventPublisher<RunDKG> for PreGro
 
 #[async_trait]
 impl<C: Curve + std::fmt::Debug + Sync + Send + 'static> Subscriber for PreGroupingSubscriber<C> {
-    async fn notify(&self, topic: Topic, payload: &(dyn DebuggableEvent)) -> NodeResult<()> {
+    async fn notify(&self, topic: Topic, payload: &dyn DebuggableEvent) -> NodeResult<()> {
         debug!("{:?}", topic);
 
         let NewDKGTask {

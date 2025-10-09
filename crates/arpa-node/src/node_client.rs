@@ -1,9 +1,12 @@
+use alloy::providers::WsConnect;
+use alloy::signers::local::PrivateKeySigner;
 use arpa_contract_client::controller::ControllerClientBuilder;
 use arpa_contract_client::controller::ControllerViews;
 use arpa_contract_client::error::ContractClientError;
 use arpa_contract_client::node_registry::NodeRegistryViews;
 use arpa_contract_client::node_registry::{NodeRegistryClientBuilder, NodeRegistryTransactions};
 use arpa_core::address_to_string;
+use arpa_core::build_client;
 use arpa_core::build_wallet_from_config;
 use arpa_core::log::build_general_payload;
 use arpa_core::log::build_transaction_receipt_payload;
@@ -22,12 +25,6 @@ use arpa_node::context::types::GeneralContext;
 use arpa_node::context::{Context, TaskWaiter};
 use arpa_sqlite_db::SqliteDB;
 use check_latest::check_max_async;
-use ethers::core::k256::ecdsa::SigningKey;
-use ethers::providers::Provider;
-use ethers::providers::Ws;
-use ethers::signers::Signer;
-use ethers::signers::Wallet;
-use ethers::types::U256;
 use log::{error, info, LevelFilter};
 use log4rs::append::console::ConsoleAppender;
 use log4rs::append::rolling_file::policy::compound::roll::delete::DeleteRoller;
@@ -66,7 +63,7 @@ pub struct Opt {
 
 fn init_logger(
     node_id: &str,
-    l1_chain_id: usize,
+    l1_chain_id: u64,
     log_level: &str,
     context_logging: bool,
     log_file_path: &str,
@@ -211,7 +208,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 async fn start(
     config: Config,
-    wallet: Wallet<SigningKey>,
+    wallet: PrivateKeySigner,
     mut shutdown_rx: tokio::sync::broadcast::Receiver<()>,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let id_address = wallet.address();
@@ -234,7 +231,7 @@ async fn start(
 
     let db = SqliteDB::build(
         data_path.as_os_str().to_str().unwrap(),
-        &wallet.signer().to_bytes(),
+        wallet.to_bytes().as_slice(),
     )
     .await?;
 
@@ -301,21 +298,28 @@ async fn start(
 
     let randomness_result_cache = Arc::new(RwLock::new(db.build_randomness_result_cache(0).await?));
 
-    let provider = Arc::new(
-        Provider::<Ws>::connect_with_reconnects(
-            config.get_provider_endpoint(),
-            DEFAULT_WEBSOCKET_PROVIDER_RECONNECT_TIMES,
-        )
-        .await?
-        .interval(Duration::from_millis(
-            config.get_time_limits().provider_polling_interval_millis,
-        )),
+    // let provider = Arc::new(
+    //     Provider::<Ws>::connect_with_reconnects(
+    //         config.get_provider_endpoint(),
+    //         DEFAULT_WEBSOCKET_PROVIDER_RECONNECT_TIMES,
+    //     )
+    //     .await?
+    //     .interval(Duration::from_millis(
+    //         config.get_time_limits().provider_polling_interval_millis,
+    //     )),
+    // );
+
+    let ws_connect = WsConnect::new(config.get_provider_endpoint()).with_retry_interval(
+        Duration::from_millis(config.get_time_limits().provider_polling_interval_millis),
     );
 
+    let client = build_client(wallet.clone(), l1_chain_id, ws_connect.clone()).await?;
+
     let main_chain_identity = GeneralMainChainIdentity::new(
-        config.get_main_chain_id(),
+        l1_chain_id,
         wallet.clone(),
-        provider,
+        ws_connect,
+        client,
         config.get_provider_endpoint().to_string(),
         config
             .get_controller_address()
@@ -355,25 +359,23 @@ async fn start(
     let mut context = GeneralContext::new(main_chain, config);
 
     for relayed_chain_config in relayed_chains_config {
-        let provider = Arc::new(
-            Provider::<Ws>::connect_with_reconnects(
-                relayed_chain_config.get_provider_endpoint(),
-                DEFAULT_WEBSOCKET_PROVIDER_RECONNECT_TIMES,
-            )
-            .await?
-            .interval(Duration::from_millis(
+        let relayed_chain_id = relayed_chain_config.get_chain_id();
+
+        let ws_connect = WsConnect::new(relayed_chain_config.get_provider_endpoint())
+            .with_max_retries(DEFAULT_WEBSOCKET_PROVIDER_RECONNECT_TIMES)
+            .with_retry_interval(Duration::from_millis(
                 relayed_chain_config
                     .get_time_limits()
                     .provider_polling_interval_millis,
-            )),
-        );
+            ));
 
-        let relayed_chain_id = relayed_chain_config.get_chain_id();
+        let client = build_client(wallet.clone(), relayed_chain_id, ws_connect.clone()).await?;
 
         let relayed_chain_identity = GeneralRelayedChainIdentity::new(
             relayed_chain_id,
             wallet.clone(),
-            provider,
+            ws_connect,
+            client,
             relayed_chain_config.get_provider_endpoint().to_string(),
             relayed_chain_config
                 .get_controller_oracle_address()
@@ -450,8 +452,8 @@ async fn start(
                         "Node registered",
                         l1_chain_id,
                         receipt.transaction_hash,
-                        receipt.gas_used.unwrap_or(U256::zero()),
-                        receipt.effective_gas_price.unwrap_or(U256::zero()),
+                        receipt.gas_used,
+                        receipt.effective_gas_price,
                     )
                 );
             }
@@ -464,8 +466,8 @@ async fn start(
                             "Node register failed",
                             l1_chain_id,
                             receipt.transaction_hash,
-                            receipt.gas_used.unwrap_or(U256::zero()),
-                            receipt.effective_gas_price.unwrap_or(U256::zero()),
+                            receipt.gas_used,
+                            receipt.effective_gas_price,
                         )
                     );
                 }

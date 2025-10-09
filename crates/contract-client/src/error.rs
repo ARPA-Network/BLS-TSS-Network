@@ -1,7 +1,5 @@
-use arpa_core::{HttpWalletSigner, WsWalletSigner};
-use ethers::{
-    prelude::{ContractError, ProviderError, WalletError},
-    types::TransactionReceipt,
+use alloy::{
+    providers::PendingTransactionError, rpc::types::TransactionReceipt, transports::TransportError,
 };
 use rustc_hex::FromHexError;
 use thiserror::Error;
@@ -10,20 +8,22 @@ pub type ContractClientResult<A> = Result<A, ContractClientError>;
 
 #[derive(Debug, Error)]
 pub enum ContractClientError {
+    #[error("custom error: {0}")]
+    CustomError(String),
     #[error(transparent)]
     RpcClientError(#[from] tonic::transport::Error),
     #[error(transparent)]
     RpcResponseError(#[from] tonic::Status),
     #[error(transparent)]
-    ChainProviderError(#[from] ProviderError),
+    ContractError(#[from] alloy::contract::Error),
     #[error(transparent)]
-    WsContractError(#[from] ContractError<WsWalletSigner>),
+    SignerError(#[from] alloy::signers::Error),
     #[error(transparent)]
-    HttpContractError(#[from] ContractError<HttpWalletSigner>),
+    PendingTransactionError(#[from] PendingTransactionError),
+    #[error(transparent)]
+    TransportError(#[from] TransportError),
     #[error(transparent)]
     AddressParseError(#[from] FromHexError),
-    #[error(transparent)]
-    WalletError(#[from] WalletError),
     #[error("can't fetch new block, please check provider")]
     FetchingBlockError,
     #[error("can't fetch dkg task, please check provider")]

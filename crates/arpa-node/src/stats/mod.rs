@@ -92,9 +92,12 @@ mod tests {
         http::{self},
         test,
     };
+    use alloy::node_bindings::Anvil;
+    use alloy::providers::WsConnect;
+    use alloy::signers::local::PrivateKeySigner;
     use arpa_core::{
-        Config, GeneralMainChainIdentity, ListenerDescriptor, ListenerType, RandomnessTask,
-        PLACEHOLDER_ADDRESS,
+        build_client, random_address, Config, GeneralMainChainIdentity, ListenerDescriptor,
+        ListenerType, RandomnessTask, PLACEHOLDER_ADDRESS,
     };
     use arpa_dal::{
         cache::{
@@ -103,22 +106,18 @@ mod tests {
         },
         BLSTasksHandler, GroupInfoHandler, NodeInfoHandler, SignatureResultCacheHandler,
     };
-    use ethers::{
-        providers::{Provider, Ws},
-        types::Address,
-        utils::Anvil,
-    };
     use threshold_bls::{curve::bn254::G2Curve, schemes::bn254::G2Scheme};
 
     async fn build_context() -> NodeContext<G2Curve, G2Scheme> {
         let config = Config::default();
 
-        let fake_wallet = "4c0883a69102937d6231471b5dbb6204fe5129617082792ae468d01a3f362318"
-            .parse()
-            .unwrap();
+        let fake_wallet: PrivateKeySigner =
+            "4c0883a69102937d6231471b5dbb6204fe5129617082792ae468d01a3f362318"
+                .parse()
+                .unwrap();
 
         let node_cache: Arc<RwLock<Box<dyn NodeInfoHandler<G2Curve>>>> = Arc::new(RwLock::new(
-            Box::new(InMemoryNodeInfoCache::<G2Curve>::new(Address::random())),
+            Box::new(InMemoryNodeInfoCache::<G2Curve>::new(random_address())),
         ));
 
         let group_cache: Arc<RwLock<Box<dyn GroupInfoHandler<G2Curve>>>> = Arc::new(RwLock::new(
@@ -134,9 +133,14 @@ mod tests {
             RandomnessResultCache,
         >::new())));
 
-        let avnil = Anvil::new().spawn();
+        let chain_id = config.get_main_chain_id();
 
-        let provider = Arc::new(Provider::<Ws>::connect(avnil.ws_endpoint()).await.unwrap());
+        let avnil = Anvil::new().chain_id(chain_id).spawn();
+
+        let ws_connect = WsConnect::new(avnil.ws_endpoint());
+        let client = build_client(fake_wallet.clone(), chain_id, ws_connect.clone())
+            .await
+            .unwrap();
 
         let contract_transaction_retry_descriptor = config
             .get_time_limits()
@@ -145,16 +149,15 @@ mod tests {
         let contract_view_retry_descriptor =
             config.get_time_limits().contract_view_retry_descriptor;
 
-        let chain_id = config.get_main_chain_id();
-
         let main_chain_identity = GeneralMainChainIdentity::new(
             chain_id,
             fake_wallet,
-            provider,
+            ws_connect,
+            client,
             avnil.ws_endpoint(),
-            Address::random(),
-            Address::random(),
-            Address::random(),
+            random_address(),
+            random_address(),
+            random_address(),
             contract_transaction_retry_descriptor,
             contract_view_retry_descriptor,
             config.get_max_priority_fee_per_gas(),

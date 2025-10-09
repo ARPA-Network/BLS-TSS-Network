@@ -19,10 +19,10 @@ path = "src/user_shell.rs"
 arpa-contract-client.workspace = true
 arpa-core.workspace = true
 
+alloy = { version = "1.0.36", features = ["full", "provider-anvil-node"] }
 tokio = { version = "1.37.0", features = ["full"] }
 serde = "1.0.106"
 serde_yaml = "0.8"
-ethers.workspace = true
 thiserror = "1.0.15"
 bincode = "1.2.1"
 hex = "0.4.2"

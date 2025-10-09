@@ -5,11 +5,11 @@ use crate::{
     event::dkg_success::DKGSuccess,
     queue::{event_queue::EventQueue, EventPublisher},
 };
+use alloy::providers::Provider;
 use arpa_contract_client::controller::ControllerViews;
 use arpa_core::{DKGStatus, ListenerDescriptor};
 use arpa_dal::GroupInfoHandler;
 use async_trait::async_trait;
-use ethers::providers::Middleware;
 use std::{marker::PhantomData, sync::Arc};
 use threshold_bls::group::Curve;
 use tokio::sync::RwLock;
@@ -95,7 +95,7 @@ impl<PC: Curve + Sync + Send + 'static> Listener for PostCommitGroupingListener<
         Ok(())
     }
 
-    fn chain_id(&self) -> usize {
+    fn chain_id(&self) -> u64 {
         self.listener_descriptor.chain_id
     }
 
@@ -182,7 +182,7 @@ mod tests {
             pc: PhantomData,
         };
 
-        let dummy_id_address = Address::random();
+        let dummy_id_address = random_address();
         let dummy_group = Group::<PC> {
             index: 1,
             epoch: 1,
@@ -191,7 +191,7 @@ mod tests {
             state: true,
             public_key: None,
             members: BTreeMap::new(),
-            committers: vec![Address::random()],
+            committers: vec![random_address()],
             c: PhantomData,
         };
 
@@ -228,7 +228,7 @@ mod tests {
             wallet.clone().with_chain_id(anvil.chain_id()),
         ));
 
-        let node_registry_address = Address::random();
+        let node_registry_address = random_address();
 
         let controller = deploy_with_args_and_get_mock_controller(client, node_registry_address)
             .await
@@ -238,7 +238,7 @@ mod tests {
     }
 
     fn setup_chain_identity(
-        chain_id: usize,
+        chain_id: u64,
         wallet: LocalWallet,
         ws_provider: Arc<Provider<Ws>>,
         ws_endpoint: String,
@@ -252,8 +252,8 @@ mod tests {
             ws_provider.clone(),
             ws_endpoint,
             controller_address,
-            Address::random(),
-            Address::random(),
+            random_address(),
+            random_address(),
             config
                 .get_time_limits()
                 .contract_transaction_retry_descriptor,
@@ -319,7 +319,7 @@ mod tests {
 
     async fn setup_group_cache(
         id_address: Address,
-        chain_id: usize,
+        chain_id: u64,
         group_index: usize,
         epoch: usize,
         size: usize,
@@ -340,7 +340,7 @@ mod tests {
                 threshold,
                 assignment_block_height: 100,
                 members: member_addresses.clone(),
-                coordinator_address: Address::random(),
+                coordinator_address: random_address(),
             };
 
             group_cache_write.save_task_info(chain_id, dkg_task).await?;
@@ -353,7 +353,7 @@ mod tests {
     }
 
     fn create_listener(
-        chain_id: usize,
+        chain_id: u64,
         chain_identity_arc: Arc<RwLock<ChainIdentityHandlerType<G2Curve>>>,
         group_cache: Arc<RwLock<Box<dyn GroupInfoHandler<G2Curve>>>>,
         event_queue: Arc<RwLock<EventQueue>>,
@@ -380,7 +380,7 @@ mod tests {
 
     fn assert_dkg_success_event(
         event: &DKGSuccess<G2Curve>,
-        expected_chain_id: usize,
+        expected_chain_id: u64,
         expected_id_address: Address,
         expected_group_index: usize,
         expected_epoch: usize,
@@ -399,7 +399,7 @@ mod tests {
 
     async fn wait_and_verify_event(
         event_receiver: &mut tokio::sync::mpsc::Receiver<Box<dyn std::any::Any + Send>>,
-        expected_chain_id: usize,
+        expected_chain_id: u64,
         expected_id_address: Address,
         expected_group_index: usize,
         expected_epoch: usize,
@@ -464,8 +464,8 @@ mod tests {
 
         let mut member_addresses = Vec::new();
         member_addresses.push(id_address);
-        member_addresses.push(Address::random());
-        member_addresses.push(Address::random());
+        member_addresses.push(random_address());
+        member_addresses.push(random_address());
 
         let committer_addresses = vec![id_address];
 

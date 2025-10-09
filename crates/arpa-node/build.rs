@@ -1,6 +1,9 @@
 use std::fs;
+#[cfg(feature = "unittest")]
 use std::io::Write;
+#[cfg(feature = "unittest")]
 use std::path::{Path, PathBuf};
+#[cfg(feature = "unittest")]
 use std::process::Command;
 
 const RPC_STUB_DIR: &str = "./src/rpc_stub";
@@ -16,12 +19,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("cargo:rerun-if-changed=proto");
     println!("cargo:rerun-if-changed=src/listener/test-contract");
 
-    let mut prost_build = prost_build::Config::new();
+    let mut prost_build = tonic_prost_build::Config::new();
     prost_build.btree_map(["members"]);
     fs::create_dir_all(RPC_STUB_DIR)?;
     let protos = &["proto/committer.proto", "proto/management.proto"];
 
-    tonic_build::configure()
+    tonic_prost_build::configure()
         .out_dir(RPC_STUB_DIR)
         .compile_with_config(prost_build, protos, &[PROTO_DIR])?;
 

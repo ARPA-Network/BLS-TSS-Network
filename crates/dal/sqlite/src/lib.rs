@@ -17,6 +17,7 @@ pub use crate::task::OPBLSTasksDBClient;
 pub use crate::types::DBError;
 pub use crate::types::DBResult;
 pub use crate::types::SqliteDB;
+use alloy::hex;
 use arpa_core::RandomnessTask;
 use arpa_core::ARPA_CHAIN_ID;
 use arpa_core::B3_MAINNET_CHAIN_ID;
@@ -43,7 +44,6 @@ use arpa_dal::BLSTasksHandler;
 use arpa_dal::GroupInfoHandler;
 use arpa_dal::NodeInfoHandler;
 use arpa_dal::SignatureResultCacheHandler;
-use ethers_core::utils::hex;
 use log::LevelFilter;
 use migration::Migrator;
 use migration::MigratorTrait;
@@ -112,7 +112,7 @@ impl SqliteDB {
 
     pub fn build_randomness_tasks_cache(
         &self,
-        chain_id: usize,
+        chain_id: u64,
     ) -> DataAccessResult<Box<dyn BLSTasksHandler<RandomnessTask>>> {
         match chain_id {
             0 => Ok(Box::new(self.get_bls_tasks_client::<RandomnessTask>())),
@@ -149,7 +149,7 @@ impl SqliteDB {
 
     pub async fn build_randomness_result_cache(
         &self,
-        chain_id: usize,
+        chain_id: u64,
     ) -> DataAccessResult<Box<dyn SignatureResultCacheHandler<RandomnessResultCache>>> {
         match chain_id {
             0 => Ok(Box::new(self.get_randomness_result_client().await?)),
@@ -285,6 +285,7 @@ impl SignatureResultCacheHandler<RandomnessResultCache>
 pub mod sqlite_tests {
     use crate::test_helper;
     use crate::SqliteDB;
+    use alloy::primitives::{Address, U256};
     use arpa_core::DKGStatus;
     use arpa_core::DKGTask;
     use arpa_core::RandomnessRequestType;
@@ -297,8 +298,6 @@ pub mod sqlite_tests {
     use arpa_dal::GroupInfoUpdater;
     use arpa_dal::NodeInfoFetcher;
     use arpa_dal::NodeInfoUpdater;
-    use ethers_core::types::Address;
-    use ethers_core::types::U256;
     use std::{fs, path::PathBuf};
     use threshold_bls::curve::bn254::G2Curve;
     use threshold_bls::schemes::bn254::G2Scheme;
@@ -639,7 +638,7 @@ pub mod sqlite_tests {
 
         let request_id = vec![1];
 
-        let seed = U256::from_big_endian(&String::from("test task").into_bytes());
+        let seed = U256::from_be_slice(String::from("test task").as_bytes());
 
         let task = RandomnessTask {
             request_id: request_id.clone(),
@@ -651,7 +650,7 @@ pub mod sqlite_tests {
             seed,
             request_confirmations: 0,
             callback_gas_limit: 0,
-            callback_max_gas_price: 0.into(),
+            callback_max_gas_price: 0,
             assignment_block_height: 100,
         };
 
@@ -704,7 +703,7 @@ pub mod sqlite_tests {
 
         let request_id = vec![1];
 
-        let seed = U256::from_big_endian(&String::from("test task").into_bytes());
+        let seed = U256::from_be_slice(String::from("test task").as_bytes());
 
         let task = RandomnessTask {
             request_id: request_id.clone(),
@@ -716,7 +715,7 @@ pub mod sqlite_tests {
             seed,
             request_confirmations: 0,
             callback_gas_limit: 0,
-            callback_max_gas_price: 0.into(),
+            callback_max_gas_price: 0,
             assignment_block_height: 100,
         };
 

@@ -1,8 +1,7 @@
 use crate::ser_bytes_in_hex_string;
-use crate::ser_u256_in_dec_string;
 use crate::Group;
 use crate::TaskType;
-use ethers_core::types::{Address, H256, U256};
+use alloy::primitives::{Address, B256};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use std::fmt::Display;
@@ -48,7 +47,7 @@ pub enum LogType {
 pub struct Payload<'a> {
     pub log_type: LogType,
     pub message: &'a str,
-    pub chain_id: Option<usize>,
+    pub chain_id: Option<u64>,
     pub group_log: Option<GroupLog>,
     pub task_log: Option<TaskLog<'a>>,
     pub transaction_receipt_log: Option<TransactionReceiptLog>,
@@ -70,7 +69,7 @@ pub struct GroupLog {
     pub public_key: Option<String>,
     pub members: Vec<MemberLog>,
     pub committers: Vec<Address>,
-    pub relayed_chain_id: Option<usize>,
+    pub relayed_chain_id: Option<u64>,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -117,14 +116,16 @@ pub struct TaskLog<'a> {
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct TransactionReceiptLog {
-    pub transaction_hash: H256,
-    #[serde(serialize_with = "ser_u256_in_dec_string")]
-    pub gas_used: U256,
-    #[serde(serialize_with = "ser_u256_in_dec_string")]
-    pub effective_gas_price: U256,
+    pub transaction_hash: B256,
+    pub gas_used: u64,
+    pub effective_gas_price: u128,
 }
 
-pub fn build_general_payload(log_type: LogType, message: &str, chain_id: Option<usize>) -> Payload {
+pub fn build_general_payload<'a>(
+    log_type: LogType,
+    message: &'a str,
+    chain_id: Option<u64>,
+) -> Payload<'a> {
     Payload {
         log_type,
         message,
@@ -138,7 +139,7 @@ pub fn build_general_payload(log_type: LogType, message: &str, chain_id: Option<
 pub fn build_group_related_payload<'a, C: Curve>(
     log_type: LogType,
     message: &'a str,
-    chain_id: usize,
+    chain_id: u64,
     group: &'a Group<C>,
 ) -> Payload<'a> {
     Payload {
@@ -154,7 +155,7 @@ pub fn build_group_related_payload<'a, C: Curve>(
 pub fn build_task_related_payload<'a>(
     log_type: LogType,
     message: &'a str,
-    chain_id: usize,
+    chain_id: u64,
     request_id: &'a [u8],
     task_type: TaskType,
     task_json: Value,
@@ -175,14 +176,14 @@ pub fn build_task_related_payload<'a>(
     }
 }
 
-pub fn build_transaction_receipt_payload(
+pub fn build_transaction_receipt_payload<'a>(
     log_type: LogType,
-    message: &str,
-    chain_id: usize,
-    transaction_hash: H256,
-    gas_used: U256,
-    effective_gas_price: U256,
-) -> Payload {
+    message: &'a str,
+    chain_id: u64,
+    transaction_hash: B256,
+    gas_used: u64,
+    effective_gas_price: u128,
+) -> Payload<'a> {
     Payload {
         log_type,
         message,
@@ -201,12 +202,12 @@ pub fn build_transaction_receipt_payload(
 pub fn build_group_related_transaction_receipt_payload<'a, C: Curve>(
     log_type: LogType,
     message: &'a str,
-    chain_id: usize,
+    chain_id: u64,
     group: &'a Group<C>,
-    relayed_chain_id: Option<usize>,
-    transaction_hash: H256,
-    gas_used: U256,
-    effective_gas_price: U256,
+    relayed_chain_id: Option<u64>,
+    transaction_hash: B256,
+    gas_used: u64,
+    effective_gas_price: u128,
 ) -> Payload<'a> {
     let mut group_log: GroupLog = group.into();
     group_log.relayed_chain_id = relayed_chain_id;
@@ -229,13 +230,13 @@ pub fn build_group_related_transaction_receipt_payload<'a, C: Curve>(
 pub fn build_task_related_transaction_receipt_payload<'a>(
     log_type: LogType,
     message: &'a str,
-    chain_id: usize,
+    chain_id: u64,
     request_id: &'a [u8],
     task_type: TaskType,
     task_json: Value,
-    transaction_hash: H256,
-    gas_used: U256,
-    effective_gas_price: U256,
+    transaction_hash: B256,
+    gas_used: u64,
+    effective_gas_price: u128,
 ) -> Payload<'a> {
     Payload {
         log_type,
@@ -287,9 +288,9 @@ mod test {
             &request_id,
             TaskType::BLS(BLSTaskType::Randomness),
             json!({ "task": "Randomness" }),
-            H256::zero(),
-            U256::zero(),
-            U256::zero(),
+            B256::ZERO,
+            0,
+            0,
         );
         println!("{}", payload);
     }

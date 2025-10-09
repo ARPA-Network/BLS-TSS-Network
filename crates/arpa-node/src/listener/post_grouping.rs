@@ -108,7 +108,7 @@ impl<PC: Curve + Sync + Send + 'static> Listener for PostGroupingListener<PC> {
         Ok(())
     }
 
-    fn chain_id(&self) -> usize {
+    fn chain_id(&self) -> u64 {
         self.listener_descriptor.chain_id
     }
 
@@ -209,7 +209,7 @@ mod tests {
     }
 
     async fn create_test_caches(
-        chain_id: usize,
+        chain_id: u64,
         id_address: Address,
     ) -> (
         Arc<RwLock<Box<dyn BlockInfoHandler>>>,
@@ -238,8 +238,8 @@ mod tests {
             size: 3,
             threshold: 2,
             assignment_block_height: 50,
-            members: vec![id_address, Address::random(), Address::random()],
-            coordinator_address: Address::random(),
+            members: vec![id_address, random_address(), random_address()],
+            coordinator_address: random_address(),
         };
 
         group_cache_write.save_task_info(0, dkg_task).await?;
@@ -249,7 +249,7 @@ mod tests {
         Ok(())
     }
 
-    fn create_listener_descriptor(chain_id: usize) -> ListenerDescriptor {
+    fn create_listener_descriptor(chain_id: u64) -> ListenerDescriptor {
         ListenerDescriptor {
             chain_id,
             l_type: ListenerType::PostGrouping,
@@ -287,8 +287,8 @@ mod tests {
             provider,
             anvil.ws_endpoint(),
             controller,
-            Address::random(),
-            Address::random(),
+            random_address(),
+            random_address(),
             config
                 .get_time_limits()
                 .contract_transaction_retry_descriptor,
@@ -304,7 +304,7 @@ mod tests {
     }
 
     async fn create_test_listener_with_chain_identity(
-        chain_id: usize,
+        chain_id: u64,
         id_address: Address,
         block_height: usize,
         dkg_status: DKGStatus,
@@ -344,7 +344,7 @@ mod tests {
     }
 
     async fn create_test_listener(
-        chain_id: usize,
+        chain_id: u64,
         id_address: Address,
         block_height: usize,
         dkg_status: DKGStatus,
@@ -378,7 +378,7 @@ mod tests {
         let size = 3usize;
         let threshold = 2usize;
         let empty_public_key = [U256::zero(), U256::zero(), U256::zero(), U256::zero()];
-        let member_addresses = vec![id_address, Address::random(), Address::random()];
+        let member_addresses = vec![id_address, random_address(), random_address()];
 
         let tx_request = controller.set_group(
             group_index.into(),
@@ -406,7 +406,7 @@ mod tests {
     #[tokio::test]
     async fn test_post_grouping_listener_timeout() -> NodeResult<()> {
         let chain_id = 1;
-        let id_address = Address::random();
+        let id_address = random_address();
         let dkg_timeout_duration = 100;
 
         let anvil = Anvil::new().chain_id(chain_id as u64).spawn();
@@ -417,7 +417,7 @@ mod tests {
         let wallet = wallet.with_chain_id(chain_id as u64);
         let client = Arc::new(SignerMiddleware::new(http_provider.clone(), wallet.clone()));
 
-        let node_registry_address = Address::random();
+        let node_registry_address = random_address();
         let controller =
             deploy_with_args_and_get_mock_controller(client.clone(), node_registry_address)
                 .await
@@ -441,8 +441,8 @@ mod tests {
             ws_provider,
             anvil.ws_endpoint(),
             controller_address,
-            Address::random(),
-            Address::random(),
+            random_address(),
+            random_address(),
             config
                 .get_time_limits()
                 .contract_transaction_retry_descriptor,
@@ -484,7 +484,7 @@ mod tests {
     #[tokio::test]
     async fn test_post_grouping_listener_no_timeout() -> NodeResult<()> {
         let chain_id = 1;
-        let id_address = Address::random();
+        let id_address = random_address();
         let dkg_timeout_duration = 100;
 
         let (listener, mut event_receiver) = create_test_listener(
@@ -511,7 +511,7 @@ mod tests {
     #[tokio::test]
     async fn test_post_grouping_listener_dkg_none() -> NodeResult<()> {
         let chain_id = 1;
-        let id_address = Address::random();
+        let id_address = random_address();
         let dkg_timeout_duration = 100;
 
         let (listener, mut event_receiver) = create_test_listener(

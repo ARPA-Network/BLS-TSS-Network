@@ -1,44 +1,58 @@
 use crate::{
-    contract_stub::controller::{
-        CommitDkgParams, Controller, DkgTaskFilter, Group as ContractGroup,
-    },
     controller::{
         ControllerClientBuilder, ControllerLogs, ControllerTransactions, ControllerViews,
     },
     error::{ContractClientError, ContractClientResult},
+    ethers::{
+        controller::{
+            Controller::{ControllerInstance, DkgTask as ContractDkgTask},
+            IController::CommitDkgParams,
+        },
+        parse_controller_contract_group,
+    },
     ServiceClient,
 };
 use crate::{TransactionCaller, ViewCaller};
+use alloy::{
+    eips::BlockNumberOrTag,
+    primitives::{Address, U256},
+    rpc::types::TransactionReceipt,
+    sol,
+};
 use arpa_core::{
-    u256_to_vec, ChainIdentity, DKGTask, ExponentialBackoffRetryDescriptor,
-    GeneralMainChainIdentity, GeneralRelayedChainIdentity, Group, MainChainIdentity, Member,
-    WsWalletSigner,
+    ChainIdentity, DKGTask, ExponentialBackoffRetryDescriptor, GeneralMainChainIdentity,
+    GeneralRelayedChainIdentity, Group, MainChainIdentity, ProviderClientWithSigner,
 };
 use async_trait::async_trait;
-use ethers::prelude::*;
+use futures_util::StreamExt;
 use log::info;
-use std::collections::BTreeMap;
-use std::marker::PhantomData;
-use std::{future::Future, sync::Arc};
+use std::future::Future;
 use threshold_bls::group::Curve;
 
+sol! {
+    #[sol(ignore_unlinked)]
+    #[sol(rpc)]
+    Controller,
+    "abi/Controller.json"
+}
+
 pub struct ControllerClient {
-    chain_id: usize,
+    chain_id: u64,
     controller_address: Address,
-    client: Arc<WsWalletSigner>,
+    client: ProviderClientWithSigner,
     contract_transaction_retry_descriptor: ExponentialBackoffRetryDescriptor,
     contract_view_retry_descriptor: ExponentialBackoffRetryDescriptor,
-    max_priority_fee_per_gas: Option<U256>,
+    max_priority_fee_per_gas: Option<u128>,
 }
 
 impl ControllerClient {
     pub fn new(
-        chain_id: usize,
+        chain_id: u64,
         controller_address: Address,
         identity: &GeneralMainChainIdentity,
         contract_transaction_retry_descriptor: ExponentialBackoffRetryDescriptor,
         contract_view_retry_descriptor: ExponentialBackoffRetryDescriptor,
-        max_priority_fee_per_gas: Option<U256>,
+        max_priority_fee_per_gas: Option<u128>,
     ) -> Self {
         ControllerClient {
             chain_id,
@@ -74,7 +88,7 @@ impl<C: Curve> ControllerClientBuilder<C> for GeneralRelayedChainIdentity {
     }
 }
 
-type ControllerContract = Controller<WsWalletSigner>;
+type ControllerContract = ControllerInstance<ProviderClientWithSigner>;
 
 #[async_trait]
 impl ServiceClient<ControllerContract> for ControllerClient {
@@ -104,18 +118,18 @@ impl ControllerTransactions for ControllerClient {
         let controller_contract =
             ServiceClient::<ControllerContract>::prepare_service_client(self).await?;
 
-        let call = controller_contract.commit_dkg(CommitDkgParams {
-            group_index: group_index.into(),
-            group_epoch: group_epoch.into(),
-            public_key: public_key.into(),
-            partial_public_key: partial_public_key.into(),
-            disqualified_nodes,
+        let call = controller_contract.commitDkg(CommitDkgParams {
+            groupIndex: U256::from(group_index),
+            groupEpoch: U256::from(group_epoch),
+            publicKey: public_key.into(),
+            partialPublicKey: partial_public_key.into(),
+            disqualifiedNodes: disqualified_nodes,
         });
 
         ControllerClient::call_contract_transaction(
             self.chain_id,
             "commit_dkg",
-            controller_contract.client_ref(),
+            controller_contract.provider(),
             call,
             self.contract_transaction_retry_descriptor,
             true,
@@ -132,12 +146,13 @@ impl ControllerTransactions for ControllerClient {
         let controller_contract =
             ServiceClient::<ControllerContract>::prepare_service_client(self).await?;
 
-        let call = controller_contract.post_process_dkg(group_index.into(), group_epoch.into());
+        let call =
+            controller_contract.postProcessDkg(U256::from(group_index), U256::from(group_epoch));
 
         ControllerClient::call_contract_transaction(
             self.chain_id,
             "post_process_dkg",
-            controller_contract.client_ref(),
+            controller_contract.provider(),
             call,
             self.contract_transaction_retry_descriptor,
             false,
@@ -156,11 +171,11 @@ impl<C: Curve> ControllerViews<C> for ControllerClient {
         ControllerClient::call_contract_view(
             self.chain_id,
             "get_group",
-            controller_contract.get_group(group_index.into()),
+            controller_contract.getGroup(U256::from(group_index)),
             self.contract_view_retry_descriptor,
         )
         .await
-        .map(parse_contract_group)
+        .map(parse_controller_contract_group)
     }
 
     async fn get_coordinator(&self, group_index: usize) -> ContractClientResult<Address> {
@@ -170,7 +185,7 @@ impl<C: Curve> ControllerViews<C> for ControllerClient {
         ControllerClient::call_contract_view(
             self.chain_id,
             "get_coordinator",
-            controller_contract.get_coordinator(group_index.into()),
+            controller_contract.getCoordinator(U256::from(group_index)),
             self.contract_view_retry_descriptor,
         )
         .await
@@ -183,12 +198,12 @@ impl<C: Curve> ControllerViews<C> for ControllerClient {
         let config = ControllerClient::call_contract_view(
             self.chain_id,
             "get_controller_config",
-            controller_contract.get_controller_config(),
+            controller_contract.getControllerConfig(),
             self.contract_view_retry_descriptor,
         )
         .await?;
 
-        Ok(config.0)
+        Ok(config.nodeRegistryContractAddress)
     }
 }
 
@@ -203,114 +218,44 @@ impl ControllerLogs for ControllerClient {
     ) -> ContractClientResult<()> {
         let contract = Controller::new(self.controller_address, self.client.clone());
 
-        let events = contract
-            .event::<DkgTaskFilter>()
-            .from_block(BlockNumber::Latest);
-
-        let mut stream = events.subscribe().await?.with_meta();
+        let mut stream = contract
+            .DkgTask_filter()
+            .from_block(BlockNumberOrTag::Latest)
+            .subscribe()
+            .await?
+            .into_stream();
 
         while let Some(Ok(evt)) = stream.next().await {
             let (
-                DkgTaskFilter {
-                    global_epoch: _,
-                    group_index,
-                    group_epoch,
+                ContractDkgTask {
+                    globalEpoch: _,
+                    groupIndex,
+                    groupEpoch,
                     size,
                     threshold,
                     members,
-                    assignment_block_height: _,
-                    coordinator_address,
+                    assignmentBlockHeight: _,
+                    coordinatorAddress,
                 },
                 meta,
             ) = evt;
 
             info!(
                 "Received DKG task: group_index: {}, epoch: {}, size: {}, threshold: {}, members: {:?}, coordinator_address: {}, block_number: {}",
-                group_index, group_epoch, size, threshold, members, coordinator_address, meta.block_number
+                groupIndex, groupEpoch, size, threshold, members, coordinatorAddress, meta.block_number.unwrap_or(0)
             );
 
             let task = DKGTask {
-                group_index: group_index.as_usize(),
-                epoch: group_epoch.as_usize(),
-                size: size.as_usize(),
-                threshold: threshold.as_usize(),
+                group_index: groupIndex.to::<usize>(),
+                epoch: groupEpoch.to::<usize>(),
+                size: size.to::<usize>(),
+                threshold: threshold.to::<usize>(),
                 members,
-                assignment_block_height: meta.block_number.as_usize(),
-                coordinator_address,
+                assignment_block_height: meta.block_number.unwrap_or(0) as usize,
+                coordinator_address: coordinatorAddress,
             };
             cb(task).await?;
         }
         Err(ContractClientError::FetchingDkgTaskError)
-    }
-}
-
-fn parse_contract_group<C: Curve>(cg: ContractGroup) -> Group<C> {
-    let ContractGroup {
-        index,
-        epoch,
-        size,
-        threshold,
-        public_key,
-        members,
-        committers,
-        commit_cache_list: _,
-        is_strictly_majority_consensus_reached,
-    } = cg;
-
-    let members: BTreeMap<Address, Member<C>> = members
-        .into_iter()
-        .enumerate()
-        .map(|(index, cm)| {
-            let partial_public_key =
-                if cm.partial_public_key.is_empty() || cm.partial_public_key[0] == U256::zero() {
-                    None
-                } else {
-                    let bytes = cm
-                        .partial_public_key
-                        .iter()
-                        .map(u256_to_vec)
-                        .reduce(|mut acc, mut e| {
-                            acc.append(&mut e);
-                            acc
-                        })
-                        .unwrap();
-                    Some(bincode::deserialize(&bytes).unwrap())
-                };
-
-            let m = Member {
-                index,
-                dkg_index: Some(0),
-                id_address: cm.node_id_address,
-                rpc_endpoint: None,
-                partial_public_key,
-            };
-            (m.id_address, m)
-        })
-        .collect();
-
-    let public_key = if public_key.is_empty() || public_key[0] == U256::zero() {
-        None
-    } else {
-        let bytes = public_key
-            .iter()
-            .map(u256_to_vec)
-            .reduce(|mut acc, mut e| {
-                acc.append(&mut e);
-                acc
-            })
-            .unwrap();
-        Some(bincode::deserialize(&bytes).unwrap())
-    };
-
-    Group {
-        index: index.as_usize(),
-        epoch: epoch.as_usize(),
-        size: size.as_usize(),
-        threshold: threshold.as_usize(),
-        state: is_strictly_majority_consensus_reached,
-        public_key,
-        members,
-        committers,
-        c: PhantomData,
     }
 }

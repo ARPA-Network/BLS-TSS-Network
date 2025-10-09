@@ -5,10 +5,11 @@ use crate::{
     event::node_activation::NodeActivation,
     queue::{event_queue::EventQueue, EventPublisher},
 };
+use alloy::primitives::Address;
+use alloy::providers::Provider;
 use arpa_contract_client::{controller::ControllerViews, node_registry::NodeRegistryViews};
 use arpa_core::ListenerDescriptor;
 use async_trait::async_trait;
-use ethers::{providers::Middleware, types::Address};
 use std::{marker::PhantomData, sync::Arc};
 use threshold_bls::group::Curve;
 use tokio::sync::RwLock;
@@ -105,7 +106,7 @@ impl<PC: Curve + Sync + Send> Listener for NodeActivationListener<PC> {
         Ok(())
     }
 
-    fn chain_id(&self) -> usize {
+    fn chain_id(&self) -> u64 {
         self.listener_descriptor.chain_id
     }
 
@@ -145,7 +146,7 @@ mod tests {
         ws_provider: Arc<Provider<Ws>>,
         wallet: LocalWallet,
         id_address: Address,
-        chain_id: usize,
+        chain_id: u64,
         controller_address: Address,
         node_registry_address: Address,
     }
@@ -195,7 +196,7 @@ mod tests {
                 self.ws_provider.clone(),
                 ws_endpoint,
                 self.controller_address,
-                Address::random(),
+                random_address(),
                 self.node_registry_address,
                 config
                     .get_time_limits()
@@ -388,7 +389,7 @@ mod tests {
 
     fn assert_node_activation_event(
         event: &NodeActivation,
-        expected_chain_id: usize,
+        expected_chain_id: u64,
         expected_is_eigenlayer: bool,
         expected_node_registry_address: Address,
     ) {

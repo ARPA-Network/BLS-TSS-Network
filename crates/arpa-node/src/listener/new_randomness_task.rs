@@ -5,6 +5,8 @@ use crate::{
     event::new_randomness_task::NewRandomnessTask,
     queue::{event_queue::EventQueue, EventPublisher},
 };
+use alloy::primitives::Address;
+use alloy::providers::Provider;
 use arpa_contract_client::adapter::AdapterLogs;
 use arpa_core::{
     log::{build_task_related_payload, LogType},
@@ -12,7 +14,6 @@ use arpa_core::{
 };
 use arpa_dal::BLSTasksHandler;
 use async_trait::async_trait;
-use ethers::{providers::Middleware, types::Address};
 use log::info;
 use serde_json::json;
 use std::{marker::PhantomData, sync::Arc};
@@ -127,7 +128,7 @@ impl<PC: Curve + Sync + Send> Listener for NewRandomnessTaskListener<PC> {
         Ok(())
     }
 
-    fn chain_id(&self) -> usize {
+    fn chain_id(&self) -> u64 {
         self.listener_descriptor.chain_id
     }
 
@@ -168,7 +169,7 @@ mod tests {
         ws_provider: Arc<Provider<Ws>>,
         wallet: LocalWallet,
         id_address: Address,
-        chain_id: usize,
+        chain_id: u64,
         client: Arc<SignerMiddleware<Provider<Http>, LocalWallet>>,
         chain_identity_arc: Arc<RwLock<ChainIdentityHandlerType<G2Curve>>>,
         randomness_tasks_cache: Arc<RwLock<Box<dyn BLSTasksHandler<RandomnessTask>>>>,
@@ -275,7 +276,7 @@ mod tests {
             let adapter_address = mock_adapter.address();
             println!("Mock Adapter deployed at: {}", adapter_address);
 
-            let controller_address = Address::random();
+            let controller_address = random_address();
             let config = Config::default();
             let chain_identity = GeneralMainChainIdentity::new(
                 chain_id,
@@ -284,7 +285,7 @@ mod tests {
                 anvil.ws_endpoint(),
                 controller_address,
                 adapter_address,
-                Address::random(),
+                random_address(),
                 config
                     .get_time_limits()
                     .contract_transaction_retry_descriptor,
@@ -426,7 +427,7 @@ mod tests {
         fn verify_against_event(
             &self,
             event: &NewRandomnessTask,
-            expected_chain_id: usize,
+            expected_chain_id: u64,
             _current_block_number: u64,
         ) -> NodeResult<()> {
             println!(

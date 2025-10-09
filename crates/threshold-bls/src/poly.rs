@@ -68,8 +68,7 @@ impl<C: Element> Poly<C> {
     ///
     /// In the context of secret sharing, the threshold is the degree + 1.
     pub fn new(degree: usize) -> Self {
-        use rand::prelude::*;
-        Self::new_from(degree, &mut thread_rng())
+        Self::new_from(degree, &mut rand::thread_rng())
     }
 
     /// Returns a polynomial from the given list of coefficients
@@ -358,7 +357,6 @@ pub mod tests {
     use super::*;
     use crate::curve::bls12381::Scalar as Sc;
     use crate::curve::bls12381::G1;
-    use rand::prelude::*;
 
     #[test]
     fn poly_degree() {
@@ -574,7 +572,7 @@ pub mod tests {
 
     #[test]
     fn new_neg_constant() {
-        let mut constant = Sc::rand(&mut thread_rng());
+        let mut constant = Sc::rand(&mut rand::thread_rng());
         let p = Poly::<Sc>::new_neg_constant(constant);
 
         constant.negate();

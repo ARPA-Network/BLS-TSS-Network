@@ -1,8 +1,8 @@
 use crate::{ConfigError, SchedulerError};
-use ethers_core::rand::{thread_rng, Rng};
-use ethers_core::types::U256;
-use ethers_core::{k256::ecdsa::SigningKey, types::Address};
-use ethers_signers::{coins_bip39::English, LocalWallet, MnemonicBuilder, Wallet};
+use alloy::primitives::Address;
+use alloy::signers::local::PrivateKeySigner;
+use alloy::signers::local::{coins_bip39::English, MnemonicBuilder};
+use rand::{thread_rng, Rng};
 use serde::de;
 use serde::{Deserialize, Serialize};
 use std::env;
@@ -10,7 +10,7 @@ use std::fmt::{self};
 use std::time::Duration;
 use std::{fs::read_to_string, path::PathBuf};
 
-pub const PLACEHOLDER_ADDRESS: Address = Address::zero();
+pub const PLACEHOLDER_ADDRESS: Address = Address::ZERO;
 
 pub const GAS_RAISE_PERCENTAGE: u32 = 40;
 
@@ -59,7 +59,7 @@ pub const DEFAULT_ROLLING_LOG_FILE_SIZE: u64 = 10 * 1024 * 1024 * 1024;
 pub const DEFAULT_BLOCK_TIME: usize = 12;
 pub const DEFAULT_MAX_RANDOMNESS_FULFILLMENT_ATTEMPTS: usize = 3;
 
-pub const DEFAULT_WEBSOCKET_PROVIDER_RECONNECT_TIMES: usize = 1000000;
+pub const DEFAULT_WEBSOCKET_PROVIDER_RECONNECT_TIMES: u32 = 1000000;
 
 pub fn jitter(duration: Duration) -> Duration {
     duration.mul_f64(thread_rng().gen_range(0.5..=1.0))
@@ -77,7 +77,7 @@ struct ConfigHolder {
     pub node_management_rpc_token: String,
     pub node_statistics_http_endpoint: String,
     pub provider_endpoint: String,
-    pub chain_id: usize,
+    pub chain_id: u64,
     pub is_eigenlayer: Option<bool>,
     pub is_consistent_asset_and_node_account: Option<bool>,
     pub enable_node_auto_activation: Option<bool>,
@@ -279,7 +279,7 @@ struct ListenerDescriptorHolder {
 
 #[derive(Debug, Copy, Clone, Serialize, Deserialize)]
 pub struct ListenerDescriptor {
-    pub chain_id: usize,
+    pub chain_id: u64,
     pub l_type: ListenerType,
     pub interval_millis: u64,
     pub use_jitter: bool,
@@ -288,7 +288,7 @@ pub struct ListenerDescriptor {
 
 impl ListenerDescriptor {
     fn from(
-        chain_id: usize,
+        chain_id: u64,
         listener_descriptor_holder: ListenerDescriptorHolder,
         provider_reset_descriptor: FixedIntervalRetryDescriptor,
     ) -> Self {
@@ -309,7 +309,7 @@ impl ListenerDescriptor {
     }
 
     fn build(
-        chain_id: usize,
+        chain_id: u64,
         l_type: ListenerType,
         interval_millis: u64,
         reset_descriptor: FixedIntervalRetryDescriptor,
@@ -323,7 +323,7 @@ impl ListenerDescriptor {
         }
     }
 
-    pub fn default(chain_id: usize, l_type: ListenerType) -> Self {
+    pub fn default(chain_id: u64, l_type: ListenerType) -> Self {
         Self {
             chain_id,
             l_type,
@@ -435,11 +435,9 @@ impl From<TimeLimitDescriptorHolder> for TimeLimitDescriptor {
             } else {
                 time_limit_descriptor_holder.randomness_task_exclusive_window
             };
-        let randomness_aggregation_waiting_block_number =
-            match time_limit_descriptor_holder.randomness_aggregation_waiting_block_number {
-                None => 0,
-                Some(v) => v,
-            };
+        let randomness_aggregation_waiting_block_number = time_limit_descriptor_holder
+            .randomness_aggregation_waiting_block_number
+            .unwrap_or_default();
         let provider_polling_interval_millis =
             if time_limit_descriptor_holder.provider_polling_interval_millis == 0 {
                 DEFAULT_PROVIDER_POLLING_INTERVAL_MILLIS
@@ -499,7 +497,7 @@ pub struct Config {
     node_management_rpc_token: String,
     node_statistics_http_endpoint: String,
     provider_endpoint: String,
-    chain_id: usize,
+    chain_id: u64,
     is_eigenlayer: bool,
     is_consistent_asset_and_node_account: bool,
     enable_node_auto_activation: bool,
@@ -511,7 +509,7 @@ pub struct Config {
     // Data file for persistence
     data_path: String,
     account: Account,
-    max_priority_fee_per_gas: Option<U256>,
+    max_priority_fee_per_gas: Option<u128>,
     listeners: Vec<ListenerDescriptor>,
     logger: LoggerDescriptor,
     time_limits: TimeLimitDescriptor,
@@ -658,7 +656,7 @@ impl From<ConfigHolder> for Config {
         };
         let max_priority_fee_per_gas = config_holder
             .max_priority_fee_per_gas
-            .map(|s| U256::from_dec_str(&s).unwrap());
+            .map(|s| s.parse::<u128>().unwrap());
         let listeners = if config_holder.listeners.is_none() {
             vec![
                 ListenerDescriptor::build(
@@ -787,11 +785,11 @@ impl Config {
         self.enable_node_auto_activation
     }
 
-    pub fn get_main_chain_id(&self) -> usize {
+    pub fn get_main_chain_id(&self) -> u64 {
         self.chain_id
     }
 
-    pub fn get_relayed_chain_ids(&self) -> Vec<usize> {
+    pub fn get_relayed_chain_ids(&self) -> Vec<u64> {
         self.relayed_chains.iter().map(|c| c.chain_id).collect()
     }
 
@@ -843,11 +841,11 @@ impl Config {
         &self.account
     }
 
-    pub fn get_max_priority_fee_per_gas(&self) -> Option<U256> {
+    pub fn get_max_priority_fee_per_gas(&self) -> Option<u128> {
         self.max_priority_fee_per_gas
     }
 
-    pub fn find_max_priority_fee_per_gas(&self, chain_id: usize) -> anyhow::Result<Option<U256>> {
+    pub fn find_max_priority_fee_per_gas(&self, chain_id: u64) -> anyhow::Result<Option<u128>> {
         if chain_id == self.chain_id {
             Ok(self.max_priority_fee_per_gas)
         } else {
@@ -859,7 +857,7 @@ impl Config {
         }
     }
 
-    pub fn find_provider_endpoint(&self, chain_id: usize) -> anyhow::Result<String> {
+    pub fn find_provider_endpoint(&self, chain_id: u64) -> anyhow::Result<String> {
         if chain_id == self.chain_id {
             Ok(self.provider_endpoint.clone())
         } else {
@@ -871,7 +869,7 @@ impl Config {
         }
     }
 
-    pub fn find_controller_address(&self, chain_id: usize) -> anyhow::Result<Address> {
+    pub fn find_controller_address(&self, chain_id: u64) -> anyhow::Result<Address> {
         if chain_id == self.chain_id {
             Ok(self.controller_address.parse()?)
         } else {
@@ -883,7 +881,7 @@ impl Config {
         }
     }
 
-    pub fn find_controller_relayer_address(&self, chain_id: usize) -> anyhow::Result<Address> {
+    pub fn find_controller_relayer_address(&self, chain_id: u64) -> anyhow::Result<Address> {
         if chain_id == self.chain_id {
             Ok(self.controller_relayer_address.parse()?)
         } else {
@@ -895,7 +893,7 @@ impl Config {
         }
     }
 
-    pub fn find_arpa_address(&self, chain_id: usize) -> anyhow::Result<Address> {
+    pub fn find_arpa_address(&self, chain_id: u64) -> anyhow::Result<Address> {
         if chain_id == self.chain_id {
             if self.arpa_contract_address.is_empty() {
                 return Err(ConfigError::LackOfARPAContractAddress.into());
@@ -915,7 +913,7 @@ impl Config {
         }
     }
 
-    pub fn find_adapter_address(&self, chain_id: usize) -> anyhow::Result<Address> {
+    pub fn find_adapter_address(&self, chain_id: u64) -> anyhow::Result<Address> {
         if chain_id == self.chain_id {
             Ok(self.adapter_address.parse()?)
         } else {
@@ -927,7 +925,7 @@ impl Config {
         }
     }
 
-    pub fn find_adapter_deployed_block_height(&self, chain_id: usize) -> anyhow::Result<u64> {
+    pub fn find_adapter_deployed_block_height(&self, chain_id: u64) -> anyhow::Result<u64> {
         if chain_id == self.chain_id {
             Ok(self.adapter_deployed_block_height)
         } else {
@@ -961,7 +959,7 @@ impl Config {
 
     pub fn contract_transaction_retry_descriptor(
         &self,
-        chain_id: usize,
+        chain_id: u64,
     ) -> anyhow::Result<ExponentialBackoffRetryDescriptor> {
         if chain_id == self.chain_id {
             Ok(self.time_limits.contract_transaction_retry_descriptor)
@@ -976,7 +974,7 @@ impl Config {
 
     pub fn contract_view_retry_descriptor(
         &self,
-        chain_id: usize,
+        chain_id: u64,
     ) -> anyhow::Result<ExponentialBackoffRetryDescriptor> {
         if chain_id == self.chain_id {
             Ok(self.time_limits.contract_view_retry_descriptor)
@@ -992,7 +990,7 @@ impl Config {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 struct RelayedChainHolder {
-    pub chain_id: usize,
+    pub chain_id: u64,
     pub description: String,
     pub provider_endpoint: String,
     pub controller_oracle_address: String,
@@ -1006,14 +1004,14 @@ struct RelayedChainHolder {
 
 #[derive(Clone, Serialize, Deserialize)]
 pub struct RelayedChain {
-    chain_id: usize,
+    chain_id: u64,
     description: String,
     provider_endpoint: String,
     controller_oracle_address: String,
     adapter_address: String,
     adapter_deployed_block_height: u64,
     arpa_contract_address: String,
-    max_priority_fee_per_gas: Option<U256>,
+    max_priority_fee_per_gas: Option<u128>,
     listeners: Vec<ListenerDescriptor>,
     time_limits: TimeLimitDescriptor,
 }
@@ -1071,7 +1069,7 @@ impl From<RelayedChainHolder> for RelayedChain {
 
         let max_priority_fee_per_gas = relayed_chain_holder
             .max_priority_fee_per_gas
-            .map(|s| U256::from_dec_str(&s).unwrap());
+            .map(|s| s.parse::<u128>().unwrap());
 
         let time_limits = if relayed_chain_holder.time_limits.is_none() {
             TimeLimitDescriptor::default()
@@ -1139,7 +1137,7 @@ impl From<RelayedChainHolder> for RelayedChain {
 }
 
 impl RelayedChain {
-    pub fn get_chain_id(&self) -> usize {
+    pub fn get_chain_id(&self) -> u64 {
         self.chain_id
     }
 
@@ -1167,7 +1165,7 @@ impl RelayedChain {
         &self.arpa_contract_address
     }
 
-    pub fn get_max_priority_fee_per_gas(&self) -> Option<U256> {
+    pub fn get_max_priority_fee_per_gas(&self) -> Option<u128> {
         self.max_priority_fee_per_gas
     }
 
@@ -1182,8 +1180,8 @@ impl RelayedChain {
 
 #[derive(Debug, Eq, Clone, Copy, Hash, PartialEq)]
 pub enum ComponentTaskType {
-    Listener(usize, ListenerType),
-    Subscriber(usize, SubscriberType),
+    Listener(u64, ListenerType),
+    Subscriber(u64, SubscriberType),
     RpcServer(RpcServerType),
     HttpServer(HttpServerType),
 }
@@ -1343,7 +1341,7 @@ pub struct HDWallet {
     pub index: u32,
     pub passphrase: Option<String>,
 }
-pub fn build_wallet_from_config(account: &Account) -> Result<Wallet<SigningKey>, ConfigError> {
+pub fn build_wallet_from_config(account: &Account) -> Result<PrivateKeySigner, ConfigError> {
     if account.hdwallet.is_some() {
         let mut hd = account.hdwallet.clone().unwrap();
         if hd.mnemonic.starts_with('$') {
@@ -1354,10 +1352,10 @@ pub fn build_wallet_from_config(account: &Account) -> Result<Wallet<SigningKey>,
         let mut wallet = MnemonicBuilder::<English>::default().phrase(&*hd.mnemonic);
 
         if hd.path.is_some() {
-            wallet = wallet.derivation_path(&hd.path.unwrap()).unwrap();
+            wallet = wallet.derivation_path(hd.path.unwrap()).unwrap();
         }
         if hd.passphrase.is_some() {
-            wallet = wallet.password(&hd.passphrase.unwrap());
+            wallet = wallet.password(hd.passphrase.unwrap());
         }
         return Ok(wallet.index(hd.index).unwrap().build()?);
     } else if account.keystore.is_some() {
@@ -1367,7 +1365,7 @@ pub fn build_wallet_from_config(account: &Account) -> Result<Wallet<SigningKey>,
         } else if keystore.password.eq("env") {
             keystore.password = env::var("ARPA_NODE_ACCOUNT_KEYSTORE_PASSWORD")?;
         }
-        return Ok(LocalWallet::decrypt_keystore(
+        return Ok(PrivateKeySigner::decrypt_keystore(
             &keystore.path,
             &keystore.password,
         )?);
@@ -1378,7 +1376,7 @@ pub fn build_wallet_from_config(account: &Account) -> Result<Wallet<SigningKey>,
         } else if private_key.eq("env") {
             private_key = env::var("ARPA_NODE_ACCOUNT_PRIVATE_KEY")?;
         }
-        return Ok(private_key.parse::<Wallet<SigningKey>>()?);
+        return Ok(private_key.parse::<PrivateKeySigner>()?);
     }
 
     Err(ConfigError::LackOfAccount)

@@ -9,6 +9,7 @@ use super::{
     GroupInfoUpdater, NodeInfoFetcher, NodeInfoUpdater, ResultCache, SignatureResultCacheFetcher,
     SignatureResultCacheUpdater,
 };
+use alloy::primitives::Address;
 use arpa_core::log::encoder;
 use arpa_core::{
     BLSTask, BLSTaskError, DKGStatus, DKGTask, Group, Member, PartialSignature, RandomnessTask,
@@ -16,7 +17,6 @@ use arpa_core::{
 };
 use async_trait::async_trait;
 use dkg_core::primitives::DKGOutput;
-use ethers_core::types::Address;
 use log::info;
 use std::collections::{BTreeMap, HashMap};
 use threshold_bls::group::{Curve, Element};
@@ -25,13 +25,13 @@ use threshold_bls::sig::Share;
 
 #[derive(Debug, Default)]
 pub struct InMemoryBlockInfoCache {
-    chain_id: usize,
+    chain_id: u64,
     block_height: usize,
     block_time: usize,
 }
 
 impl InMemoryBlockInfoCache {
-    pub fn new(chain_id: usize, block_time: usize) -> Self {
+    pub fn new(chain_id: u64, block_time: usize) -> Self {
         InMemoryBlockInfoCache {
             chain_id,
             block_height: 0,
@@ -43,7 +43,7 @@ impl InMemoryBlockInfoCache {
 impl BlockInfoHandler for InMemoryBlockInfoCache {}
 
 impl BlockInfoFetcher for InMemoryBlockInfoCache {
-    fn get_chain_id(&self) -> usize {
+    fn get_chain_id(&self) -> u64 {
         self.chain_id
     }
 

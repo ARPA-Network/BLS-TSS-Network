@@ -13,13 +13,13 @@ impl Hasher for Keccak256Hasher {
     type Error = BLSError;
 
     fn hash(&self, _domain: &[u8], message: &[u8]) -> Result<Vec<u8>, Self::Error> {
-        Ok(ethers_core::utils::keccak256(message).into())
+        Ok(alloy::primitives::keccak256(message).to_vec())
     }
 }
 
 #[cfg(test)]
 pub mod tests {
-    use ethers_core::utils::hex;
+    use alloy::primitives::hex;
 
     use super::{Hasher, Keccak256Hasher};
 

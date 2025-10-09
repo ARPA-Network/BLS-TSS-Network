@@ -10,9 +10,9 @@ use crate::{
         CommitPartialSignatureReply, CommitPartialSignatureRequest,
     },
 };
+use alloy::primitives::Address;
 use arpa_core::{BLSTaskError, BLSTaskType, SchedulerError};
 use arpa_dal::GroupInfoHandler;
-use ethers::types::Address;
 use futures::Future;
 use std::{marker::PhantomData, sync::Arc};
 use threshold_bls::{
@@ -82,7 +82,7 @@ where
             return Err(Status::not_found(NodeError::NotCommitter.to_string()));
         }
 
-        let chain_id = req.chain_id as usize;
+        let chain_id = req.chain_id as u64;
 
         let req_id_address: Address = req
             .id_address
@@ -128,7 +128,7 @@ where
                         self.context
                             .read()
                             .await
-                            .get_relayed_chain(req.chain_id as usize)
+                            .get_relayed_chain(req.chain_id as u64)
                             .unwrap()
                             .get_randomness_result_cache()
                     };
@@ -226,7 +226,7 @@ where
 
     let group_cache = context.read().await.get_main_chain().get_group_cache();
 
-    let (mut health_reporter, health_service) = tonic_health::server::health_reporter();
+    let (health_reporter, health_service) = tonic_health::server::health_reporter();
     health_reporter
         .set_serving::<CommitterServiceServer<BLSCommitterServiceServer<PC, S>>>()
         .await;
@@ -272,7 +272,7 @@ where
 
     let group_cache = context.read().await.get_main_chain().get_group_cache();
 
-    let (mut health_reporter, health_service) = tonic_health::server::health_reporter();
+    let (health_reporter, health_service) = tonic_health::server::health_reporter();
     health_reporter
         .set_serving::<CommitterServiceServer<BLSCommitterServiceServer<PC, S>>>()
         .await;

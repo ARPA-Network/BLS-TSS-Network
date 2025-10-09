@@ -4,11 +4,11 @@ use crate::{
     event::ready_to_fulfill_randomness_task::ReadyToFulfillRandomnessTask,
     queue::{event_queue::EventQueue, EventPublisher},
 };
+use alloy::primitives::Address;
 use arpa_core::ListenerDescriptor;
 use arpa_dal::cache::RandomnessResultCache;
 use arpa_dal::{BlockInfoHandler, GroupInfoHandler, SignatureResultCacheHandler};
 use async_trait::async_trait;
-use ethers::types::Address;
 use std::{marker::PhantomData, sync::Arc};
 use threshold_bls::group::Curve;
 use tokio::sync::RwLock;
@@ -100,7 +100,7 @@ impl<PC: Curve + Sync + Send> Listener for RandomnessSignatureAggregationListene
         Ok(())
     }
 
-    fn chain_id(&self) -> usize {
+    fn chain_id(&self) -> u64 {
         self.listener_descriptor.chain_id
     }
 
@@ -121,10 +121,14 @@ mod tests {
     use crate::queue::EventSubscriber;
     use crate::scheduler::TaskScheduler;
     use crate::subscriber::{DebuggableEvent, DebuggableSubscriber, Subscriber};
+    use alloy::node_bindings::Anvil;
+    use alloy::primitives::U256;
+    use alloy::providers::WsConnect;
+    use alloy::signers::local::PrivateKeySigner;
     use arpa_core::{
-        ComponentTaskType, Config, DKGStatus, FixedIntervalRetryDescriptor,
-        GeneralMainChainIdentity, ListenerType, RandomnessRequestType, RandomnessTask,
-        PLACEHOLDER_ADDRESS,
+        build_client, random_address, ComponentTaskType, Config, DKGStatus,
+        FixedIntervalRetryDescriptor, GeneralMainChainIdentity, ListenerType,
+        RandomnessRequestType, RandomnessTask, PLACEHOLDER_ADDRESS,
     };
     use arpa_dal::{
         cache::{
@@ -132,11 +136,6 @@ mod tests {
             InMemorySignatureResultCache, RandomnessResultCache,
         },
         BLSTasksHandler, GroupInfoHandler, NodeInfoHandler, SignatureResultCacheHandler,
-    };
-    use ethers::{
-        providers::{Provider, Ws},
-        types::Address,
-        utils::Anvil,
     };
     use std::time::Duration;
     use threshold_bls::schemes::bn254::G2Curve;
@@ -156,8 +155,8 @@ mod tests {
             size: 3,
             threshold: 2,
             assignment_block_height: 100,
-            members: vec![address, Address::random(), Address::random()],
-            coordinator_address: Address::random(),
+            members: vec![address, random_address(), random_address()],
+            coordinator_address: random_address(),
         };
 
         group_cache.save_task_info(0, task).await.unwrap();
@@ -179,7 +178,7 @@ mod tests {
         group_cache: &mut Box<dyn GroupInfoHandler<PC>>,
         address: Address,
     ) {
-        setup_dkg_task(group_cache, address, vec![Address::random()]).await;
+        setup_dkg_task(group_cache, address, vec![random_address()]).await;
     }
 
     async fn mock_set_block_height(block_cache: &mut Box<dyn BlockInfoHandler>, height: u64) {
@@ -196,11 +195,11 @@ mod tests {
             group_index: 1,
             request_type: RandomnessRequestType::Randomness,
             params: vec![1, 2, 3],
-            requester: Address::random(),
-            seed: ethers::types::U256::from(123),
+            requester: random_address(),
+            seed: U256::from(123),
             request_confirmations: 10,
             callback_gas_limit: 100000,
-            callback_max_gas_price: ethers::types::U256::from(1000000000),
+            callback_max_gas_price: 1000000000,
             assignment_block_height: fulfillment_block_number as usize,
         }
     }
@@ -214,7 +213,7 @@ mod tests {
             .await
             .unwrap();
 
-        let addresses = [Address::random(), Address::random()];
+        let addresses = [random_address(), random_address()];
         for (i, addr) in addresses.iter().enumerate() {
             let partial_sig_data = vec![i as u8, 42, 255];
 
@@ -286,12 +285,13 @@ mod tests {
     async fn build_context() -> NodeContext<G2Curve, G2Scheme> {
         let config = Config::default();
 
-        let fake_wallet = "4c0883a69102937d6231471b5dbb6204fe5129617082792ae468d01a3f362318"
-            .parse()
-            .unwrap();
+        let fake_wallet: PrivateKeySigner =
+            "4c0883a69102937d6231471b5dbb6204fe5129617082792ae468d01a3f362318"
+                .parse()
+                .unwrap();
 
         let node_cache: Arc<RwLock<Box<dyn NodeInfoHandler<G2Curve>>>> = Arc::new(RwLock::new(
-            Box::new(InMemoryNodeInfoCache::<G2Curve>::new(Address::random())),
+            Box::new(InMemoryNodeInfoCache::<G2Curve>::new(random_address())),
         ));
 
         let group_cache: Arc<RwLock<Box<dyn GroupInfoHandler<G2Curve>>>> = Arc::new(RwLock::new(
@@ -309,7 +309,15 @@ mod tests {
 
         let avnil = Anvil::new().spawn();
 
-        let provider = Arc::new(Provider::<Ws>::connect(avnil.ws_endpoint()).await.unwrap());
+        let ws_connect = WsConnect::new(avnil.ws_endpoint());
+
+        let client = build_client(
+            fake_wallet.clone(),
+            config.get_main_chain_id(),
+            ws_connect.clone(),
+        )
+        .await
+        .unwrap();
 
         let contract_transaction_retry_descriptor = config
             .get_time_limits()
@@ -321,11 +329,12 @@ mod tests {
         let main_chain_identity = GeneralMainChainIdentity::new(
             config.get_main_chain_id(),
             fake_wallet,
-            provider,
+            ws_connect,
+            client,
             avnil.ws_endpoint(),
-            Address::random(),
-            Address::random(),
-            Address::random(),
+            random_address(),
+            random_address(),
+            random_address(),
             contract_transaction_retry_descriptor,
             contract_view_retry_descriptor,
             None,

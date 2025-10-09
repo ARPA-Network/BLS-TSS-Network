@@ -1,12 +1,15 @@
+#![allow(clippy::large_enum_variant)]
+#![allow(clippy::too_many_arguments)]
 use crate::error::ContractClientError;
-use ::ethers::abi::Detokenize;
-use ::ethers::prelude::builders::ContractCall;
-use ::ethers::prelude::ContractError;
-use ::ethers::providers::{Middleware, ProviderError};
-use ::ethers::types::{BlockNumber, TransactionReceipt, U256, U64};
+use alloy::contract::{CallBuilder, CallDecoder};
+use alloy::eips::eip1559::Eip1559Estimation;
+use alloy::eips::BlockNumberOrTag;
+use alloy::providers::utils::Eip1559Estimator;
+use alloy::providers::Provider;
+use alloy::rpc::types::TransactionReceipt;
 use arpa_core::{
     eip1559_gas_price_estimator, fallback_eip1559_gas_price_estimator, jitter, supports_eip1559,
-    ExponentialBackoffRetryDescriptor,
+    ExponentialBackoffRetryDescriptor, ProviderClientWithSigner,
 };
 use async_trait::async_trait;
 use error::ContractClientResult;
@@ -14,7 +17,6 @@ use log::{error, info};
 use tokio_retry::strategy::ExponentialBackoff;
 use tokio_retry::{Retry, RetryIf};
 
-pub mod contract_stub;
 pub mod error;
 pub mod ethers;
 
@@ -26,19 +28,19 @@ pub trait ServiceClient<C> {
 #[async_trait]
 pub trait TransactionCaller {
     async fn call_contract_transaction<
-        M: Middleware,
-        D: Detokenize + std::fmt::Debug + Send + Sync + 'static,
+        P: Provider,
+        D: CallDecoder + std::fmt::Debug + Send + Sync + 'static,
     >(
-        chain_id: usize,
+        chain_id: u64,
         info: &str,
-        client: &M,
-        mut call: ContractCall<M, D>,
+        client: &ProviderClientWithSigner,
+        call: CallBuilder<P, D>,
         contract_transaction_retry_descriptor: ExponentialBackoffRetryDescriptor,
         retry_on_transaction_fail: bool,
-        max_priority_fee_per_gas: Option<U256>,
+        max_priority_fee_per_gas: Option<u128>,
     ) -> ContractClientResult<TransactionReceipt>
-    where
-        ContractClientError: From<ContractError<M>>,
+// where
+    //     ContractClientError: From<ContractError<M>>,
     {
         let retry_strategy =
             ExponentialBackoff::from_millis(contract_transaction_retry_descriptor.base)
@@ -52,47 +54,57 @@ pub trait TransactionCaller {
                 })
                 .take(contract_transaction_retry_descriptor.max_attempts);
 
+        let mut tx = call.into_transaction_request();
+
         // transform the trx to legacy if the chain does not support EIP-1559
         if !supports_eip1559(chain_id) {
-            call = call.legacy();
+            // call = call.legacy();
             if let Some(max_priority_fee_per_gas) = max_priority_fee_per_gas {
-                call = call.gas_price(max_priority_fee_per_gas);
+                tx.gas_price = Some(max_priority_fee_per_gas);
             }
         }
         // set gas price for EIP-1559 trxs
-        else if let Some(tx) = call.tx.as_eip1559_mut() {
+        else if tx.has_eip1559_fields() {
             let (max_fee, max_priority_fee) = match client
-                .estimate_eip1559_fees(Some(eip1559_gas_price_estimator))
+                .estimate_eip1559_fees_with(Eip1559Estimator::Custom(Box::new(
+                    eip1559_gas_price_estimator,
+                )))
                 .await
             {
                 // if max_priority_fee is zero, it usually means that the chain is a testnet,
                 // we will use the legacy method to set a priority fee, to avoid the transaction being underpriced
-                Ok((max_fee, max_priority_fee)) if !max_priority_fee.is_zero() => {
-                    (max_fee, max_priority_fee)
-                }
+                Ok(Eip1559Estimation {
+                    max_fee_per_gas: max_fee,
+                    max_priority_fee_per_gas,
+                }) if max_priority_fee_per_gas != 0 => (max_fee, max_priority_fee_per_gas),
                 _ => {
                     // try to estimate the gas price using the legacy method
                     let base_fee_per_gas = client
-                        .get_block(BlockNumber::Latest)
-                        .await
-                        .map_err(ContractError::from_middleware_error)?
-                        .ok_or_else(|| ProviderError::CustomError("Latest block not found".into()))?
+                        .get_block(alloy::eips::BlockId::Number(BlockNumberOrTag::Latest))
+                        .await?
+                        .ok_or_else(|| {
+                            ContractClientError::CustomError("Latest block not found".into())
+                        })?
+                        .header
                         .base_fee_per_gas
                         .ok_or_else(|| {
-                            ProviderError::CustomError("EIP-1559 not activated".into())
+                            ContractClientError::CustomError("EIP-1559 not activated".into())
                         })?;
 
-                    let gas_price = client
-                        .get_gas_price()
-                        .await
-                        .map_err(ContractError::from_middleware_error)?;
+                    let gas_price = client.get_gas_price().await?;
+                    // .map_err(ContractError::from_middleware_error)?;
 
-                    fallback_eip1559_gas_price_estimator(
-                        base_fee_per_gas,
-                        gas_price - base_fee_per_gas,
-                    )
+                    let Eip1559Estimation {
+                        max_fee_per_gas,
+                        max_priority_fee_per_gas,
+                    } = fallback_eip1559_gas_price_estimator(
+                        base_fee_per_gas as u128,
+                        gas_price - base_fee_per_gas as u128,
+                    );
+                    (max_fee_per_gas, max_priority_fee_per_gas)
                 }
             };
+
             if let Some(max_priority_fee_per_gas) = max_priority_fee_per_gas {
                 tx.max_priority_fee_per_gas = Some(max_priority_fee_per_gas);
                 if max_priority_fee_per_gas > max_priority_fee {
@@ -110,10 +122,7 @@ pub trait TransactionCaller {
         let transaction_receipt = RetryIf::spawn(
             retry_strategy,
             || async {
-                let pending_tx = call.send().await.map_err(|e| {
-                    let e: ContractClientError = e.into();
-                    e
-                })?;
+                let pending_tx = client.send_transaction(tx.clone()).await?;
 
                 info!(
                     "Calling contract transaction {} with chain_id({}): {:?}",
@@ -122,15 +131,9 @@ pub trait TransactionCaller {
                     pending_tx.tx_hash()
                 );
 
-                let receipt = pending_tx
-                    .await
-                    .map_err(|e| {
-                        let e: ContractClientError = e.into();
-                        e
-                    })?
-                    .ok_or(ContractClientError::NoTransactionReceipt)?;
+                let receipt = pending_tx.get_receipt().await?;
 
-                if receipt.status == Some(U64::from(0)) {
+                if !receipt.status() {
                     error!(
                         "Transaction failed({}) with chain_id({}), receipt: {:?}",
                         info, chain_id, receipt
@@ -158,17 +161,14 @@ pub trait TransactionCaller {
 #[async_trait]
 pub trait ViewCaller {
     async fn call_contract_view<
-        M: Middleware,
-        D: Detokenize + std::fmt::Debug + Send + Sync + 'static,
+        P: Provider,
+        D: CallDecoder + Unpin + std::fmt::Debug + Send + Sync + 'static,
     >(
-        chain_id: usize,
+        chain_id: u64,
         info: &str,
-        call: ContractCall<M, D>,
+        call: CallBuilder<P, D>,
         contract_view_retry_descriptor: ExponentialBackoffRetryDescriptor,
-    ) -> ContractClientResult<D>
-    where
-        ContractClientError: From<ContractError<M>>,
-    {
+    ) -> ContractClientResult<D::CallOutput> {
         let retry_strategy = ExponentialBackoff::from_millis(contract_view_retry_descriptor.base)
             .factor(contract_view_retry_descriptor.factor)
             .map(|e| {
@@ -181,33 +181,29 @@ pub trait ViewCaller {
             .take(contract_view_retry_descriptor.max_attempts);
 
         let res = Retry::spawn(retry_strategy, || async {
-            let result = call.call().await.map_err(|e| {
-                let e: ContractClientError = e.into();
-                e
-            })?;
+            let result = call.call().await?;
 
             info!(
-                "Calling contract view {} with chain_id({}), calldata: {:?}, result: {:?}",
+                "Calling contract view {} with chain_id({}), calldata: {:?}",
                 info,
                 chain_id,
                 call.calldata(),
-                result
             );
 
-            Result::<D, ContractClientError>::Ok(result)
+            Result::<D::CallOutput, ContractClientError>::Ok(result)
         })
         .await?;
 
         Ok(res)
     }
 
-    async fn call_contract_view_without_log<M: Middleware, D: Detokenize + Send + Sync + 'static>(
-        call: ContractCall<M, D>,
+    async fn call_contract_view_without_log<
+        P: Provider,
+        D: CallDecoder + Unpin + std::fmt::Debug + Send + Sync + 'static,
+    >(
+        call: CallBuilder<P, D>,
         contract_view_retry_descriptor: ExponentialBackoffRetryDescriptor,
-    ) -> ContractClientResult<D>
-    where
-        ContractClientError: From<ContractError<M>>,
-    {
+    ) -> ContractClientResult<D::CallOutput> {
         let retry_strategy = ExponentialBackoff::from_millis(contract_view_retry_descriptor.base)
             .factor(contract_view_retry_descriptor.factor)
             .map(|e| {
@@ -220,12 +216,9 @@ pub trait ViewCaller {
             .take(contract_view_retry_descriptor.max_attempts);
 
         let res = Retry::spawn(retry_strategy, || async {
-            let result = call.call().await.map_err(|e| {
-                let e: ContractClientError = e.into();
-                e
-            })?;
+            let result = call.call().await?;
 
-            Result::<D, ContractClientError>::Ok(result)
+            Result::<D::CallOutput, ContractClientError>::Ok(result)
         })
         .await?;
 
@@ -235,18 +228,18 @@ pub trait ViewCaller {
 
 pub mod node_registry {
     use crate::error::ContractClientResult;
+    use alloy::primitives::Address;
+    use alloy::rpc::types::TransactionReceipt;
+    use alloy::signers::local::PrivateKeySigner;
     use arpa_core::Node;
     use async_trait::async_trait;
-    use ethers::core::types::Address;
-    use ethers::signers::LocalWallet;
-    use ethers::types::TransactionReceipt;
 
     #[async_trait]
     pub trait NodeRegistryTransactions {
         async fn node_register_as_eigenlayer_operator(
             &self,
             id_public_key: Vec<u8>,
-            asset_account_signer: &LocalWallet,
+            asset_account_signer: &PrivateKeySigner,
         ) -> ContractClientResult<TransactionReceipt>;
 
         async fn node_register_by_consistent_native_staking(
@@ -256,7 +249,7 @@ pub mod node_registry {
 
         async fn node_activate_as_eigenlayer_operator(
             &self,
-            asset_account_signer: &LocalWallet,
+            asset_account_signer: &PrivateKeySigner,
         ) -> ContractClientResult<TransactionReceipt>;
 
         async fn node_activate_by_consistent_native_staking(
@@ -281,10 +274,10 @@ pub mod node_registry {
 
 pub mod controller {
     use crate::error::ContractClientResult;
+    use alloy::primitives::Address;
+    use alloy::rpc::types::TransactionReceipt;
     use arpa_core::{DKGTask, Group};
     use async_trait::async_trait;
-    use ethers::core::types::Address;
-    use ethers::types::TransactionReceipt;
     use std::future::Future;
     use threshold_bls::group::Curve;
 
@@ -339,9 +332,10 @@ pub mod controller {
 
 pub mod controller_oracle {
     use crate::error::ContractClientResult;
+    use alloy::primitives::Address;
+    use alloy::rpc::types::TransactionReceipt;
     use arpa_core::Group;
     use async_trait::async_trait;
-    use ethers::types::{Address, TransactionReceipt};
     use threshold_bls::group::Curve;
 
     #[async_trait]
@@ -366,14 +360,14 @@ pub mod controller_oracle {
 
 pub mod controller_relayer {
     use crate::error::ContractClientResult;
+    use alloy::rpc::types::TransactionReceipt;
     use async_trait::async_trait;
-    use ethers::types::TransactionReceipt;
 
     #[async_trait]
     pub trait ControllerRelayerTransactions {
         async fn relay_group(
             &self,
-            chain_id: usize,
+            chain_id: u64,
             group_index: usize,
         ) -> ContractClientResult<TransactionReceipt>;
     }
@@ -386,9 +380,10 @@ pub mod controller_relayer {
 }
 
 pub mod coordinator {
+    use alloy::primitives::Address;
+    use alloy::rpc::types::TransactionReceipt;
     use async_trait::async_trait;
     use dkg_core::BoardPublisher;
-    use ethers::{core::types::Address, types::TransactionReceipt};
     use thiserror::Error;
     use threshold_bls::group::Curve;
 
@@ -446,10 +441,10 @@ pub mod coordinator {
 }
 
 pub mod adapter {
+    use alloy::primitives::{Address, U256};
+    use alloy::rpc::types::TransactionReceipt;
     use arpa_core::{PartialSignature, RandomnessTask};
     use async_trait::async_trait;
-    use ethers::core::types::Address;
-    use ethers::types::{TransactionReceipt, U256};
     use std::collections::BTreeMap;
     use std::future::Future;
 

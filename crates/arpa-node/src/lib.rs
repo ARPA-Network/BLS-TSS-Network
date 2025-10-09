@@ -1,5 +1,7 @@
 #![allow(incomplete_features)]
 #![allow(async_fn_in_trait)]
+#![allow(clippy::large_enum_variant)]
+#![allow(clippy::result_large_err)]
 pub mod algorithm;
 pub mod committer;
 pub mod context;

@@ -55,7 +55,7 @@ pub struct GeneralMainChain<
     PC: Curve,
     S: SignatureScheme + ThresholdScheme<Public = PC::Point, Private = PC::Scalar>,
 > {
-    id: usize,
+    id: u64,
     description: String,
     is_eigenlayer: bool,
     is_consistent_asset_and_node_account: bool,
@@ -149,7 +149,7 @@ where
 
     type ChainIdentity = ChainIdentityHandlerType<PC>;
 
-    fn id(&self) -> usize {
+    fn id(&self) -> u64 {
         self.id
     }
 
@@ -532,7 +532,7 @@ pub struct GeneralRelayedChain<
     PC: Curve,
     S: SignatureScheme + ThresholdScheme<Public = PC::Point, Private = PC::Scalar>,
 > {
-    id: usize,
+    id: u64,
     description: String,
     chain_identity: Arc<RwLock<ChainIdentityHandlerType<PC>>>,
     node_cache: Arc<RwLock<Box<dyn NodeInfoHandler<PC>>>>,
@@ -618,7 +618,7 @@ where
 
     type ChainIdentity = ChainIdentityHandlerType<PC>;
 
-    fn id(&self) -> usize {
+    fn id(&self) -> u64 {
         self.id
     }
 

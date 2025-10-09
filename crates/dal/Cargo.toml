@@ -17,7 +17,7 @@ dkg-core.workspace = true
 threshold-bls.workspace = true
 
 tokio = { version = "1.37.0", features = ["full"] }
-ethers-core.workspace = true
+alloy = { workspace = true, features = ["full"] }
 thiserror = "1.0.15"
 anyhow = "1.0.31"
 serde = "1.0.106"

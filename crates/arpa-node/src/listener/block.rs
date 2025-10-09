@@ -85,7 +85,7 @@ impl<PC: Curve + Sync + Send> Listener for BlockListener<PC> {
         Ok(())
     }
 
-    fn chain_id(&self) -> usize {
+    fn chain_id(&self) -> u64 {
         self.listener_descriptor.chain_id
     }
 
@@ -100,14 +100,20 @@ mod tests {
     use crate::event::types::Topic;
     use crate::queue::EventSubscriber;
     use crate::subscriber::{DebuggableEvent, DebuggableSubscriber, Subscriber};
+    use alloy::network::TransactionBuilder;
+    use alloy::node_bindings::{Anvil, AnvilInstance};
+    use alloy::providers::Provider;
+    use alloy::providers::WsConnect;
+    use alloy::rpc::types::TransactionRequest;
+    use alloy::signers::Signer;
+    use alloy::{
+        primitives::{Address, U256},
+        signers::local::PrivateKeySigner,
+    };
     use anyhow::anyhow;
-    use arpa_core::{Config, FixedIntervalRetryDescriptor, GeneralMainChainIdentity, ListenerType};
-    use ethers::middleware::SignerMiddleware;
-    use ethers::signers::{LocalWallet, Signer};
-    use ethers::{
-        providers::{Http, Middleware, Provider, Ws},
-        types::{Address, TransactionRequest, U256},
-        utils::{Anvil, AnvilInstance},
+    use arpa_core::{
+        build_client, Config, FixedIntervalRetryDescriptor, GeneralMainChainIdentity, ListenerType,
+        ProviderClientWithSigner,
     };
     use std::sync::Arc;
     use std::time::Duration;
@@ -118,7 +124,7 @@ mod tests {
     async fn mock_subscriber(
         eq: &mut EventQueue,
         subscriber_name: &str,
-        chain_id: usize,
+        chain_id: u64,
     ) -> tokio::sync::mpsc::Receiver<Box<dyn std::any::Any + Send>> {
         let (sender, receiver) = tokio::sync::mpsc::channel(100);
 
@@ -174,36 +180,43 @@ mod tests {
     }
 
     async fn setup_test_environment() -> (
-        usize,
+        u64,
         Arc<RwLock<ChainIdentityHandlerType<G2Curve>>>,
         Arc<RwLock<EventQueue>>,
         ListenerDescriptor,
-        Arc<Provider<Ws>>,
-        Arc<SignerMiddleware<Provider<Http>, LocalWallet>>,
+        ProviderClientWithSigner,
+        PrivateKeySigner,
         AnvilInstance,
     ) {
         let anvil = Anvil::new().spawn();
 
-        let ws_provider = Arc::new(Provider::<Ws>::connect(anvil.ws_endpoint()).await.unwrap());
-        let http_provider = Provider::<Http>::try_from(anvil.endpoint()).unwrap();
+        let ws_connect = WsConnect::new(anvil.ws_endpoint());
 
-        let wallet: LocalWallet = anvil.keys()[0].clone().into();
+        // let ws_provider = Arc::new(Provider::<Ws>::connect(ws_connect.clone()).await.unwrap());
+        // let http_provider = Provider::<Http>::try_from(anvil.endpoint()).unwrap();
 
-        let chain_id = anvil.chain_id() as usize;
+        let wallet: PrivateKeySigner = anvil.keys()[0].clone().into();
 
-        let controller_address = Address::random();
-        let adapter_address = Address::random();
+        let chain_id = anvil.chain_id();
+
+        let controller_address = Address::ZERO;
+        let adapter_address = Address::ZERO;
 
         let config = Config::default();
+
+        let client = build_client(wallet.clone(), chain_id, ws_connect.clone())
+            .await
+            .unwrap();
 
         let chain_identity = GeneralMainChainIdentity::new(
             chain_id,
             wallet.clone(),
-            ws_provider.clone(),
+            ws_connect.clone(),
+            client.clone(),
             anvil.ws_endpoint(),
             controller_address,
             adapter_address,
-            Address::random(),
+            Address::ZERO,
             config
                 .get_time_limits()
                 .contract_transaction_retry_descriptor,
@@ -229,23 +242,22 @@ mod tests {
             },
         };
 
-        let signer = wallet.with_chain_id(anvil.chain_id());
-        let client = Arc::new(SignerMiddleware::new(http_provider, signer));
+        let signer = wallet.with_chain_id(Some(anvil.chain_id()));
 
         (
             chain_id,
             chain_identity_arc,
             event_queue,
             listener_descriptor,
-            ws_provider,
             client,
+            signer,
             anvil,
         )
     }
 
     async fn verify_new_block_event(
         mut event_receiver: tokio::sync::mpsc::Receiver<Box<dyn std::any::Any + Send>>,
-        expected_chain_id: usize,
+        expected_chain_id: u64,
         expected_block_height: Option<usize>,
         timeout_duration: Duration,
     ) -> NodeResult<NewBlock> {
@@ -280,7 +292,7 @@ mod tests {
 
     async fn setup_event_subscriber(
         event_queue: &Arc<RwLock<EventQueue>>,
-        chain_id: usize,
+        chain_id: u64,
     ) -> tokio::sync::mpsc::Receiver<Box<dyn std::any::Any + Send>> {
         let mut eq_write = event_queue.write().await;
         mock_subscriber(&mut *eq_write, "test_subscriber", chain_id).await
@@ -329,8 +341,8 @@ mod tests {
             chain_identity_arc,
             event_queue,
             listener_descriptor,
-            _ws_provider,
             client,
+            _wallet,
             _anvil,
         ) = setup_test_environment().await;
 
@@ -343,16 +355,13 @@ mod tests {
 
         sleep(Duration::from_millis(500)).await;
 
-        let tx = TransactionRequest::new()
-            .to(Address::random())
-            .value(U256::from(1));
+        let tx = TransactionRequest::default()
+            .to(Address::ZERO)
+            .value(U256::from(1))
+            .with_chain_id(chain_id);
 
-        client
-            .send_transaction(tx, None)
-            .await
-            .unwrap()
-            .await
-            .unwrap();
+        let pending_tx = client.send_transaction(tx).await.unwrap();
+        pending_tx.get_receipt().await.unwrap();
 
         let result =
             verify_new_block_event(event_receiver, chain_id, None, Duration::from_secs(5)).await;

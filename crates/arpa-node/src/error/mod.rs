@@ -1,9 +1,9 @@
+use alloy::transports::TransportError;
 use arpa_contract_client::error::ContractClientError;
 use arpa_core::SchedulerError;
 use arpa_dal::error::DataAccessError;
 use arpa_sqlite_db::DBError;
 use dkg_core::{primitives::DKGError, DKGNodeError};
-use ethers::providers::ProviderError;
 use rustc_hex::FromHexError;
 use thiserror::Error;
 use threshold_bls::sig::BLSError;
@@ -55,6 +55,9 @@ pub enum NodeError {
     ContractClientError(#[from] ContractClientError),
 
     #[error(transparent)]
+    TransportError(#[from] TransportError),
+
+    #[error(transparent)]
     RpcClientError(#[from] tonic::transport::Error),
 
     #[error(transparent)]
@@ -68,9 +71,6 @@ pub enum NodeError {
 
     #[error(transparent)]
     FromHexError(#[from] FromHexError),
-
-    #[error(transparent)]
-    ProviderError(#[from] ProviderError),
 
     #[error("can't parse address format")]
     AddressFormatError,

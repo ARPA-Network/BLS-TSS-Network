@@ -1,44 +1,58 @@
 use crate::{
     adapter::{AdapterClientBuilder, AdapterLogs, AdapterTransactions, AdapterViews},
-    contract_stub::adapter::{
-        Adapter, PartialSignature as ContractPartialSignature, RandomnessRequestFilter,
-        RequestDetail,
-    },
     error::{ContractClientError, ContractClientResult},
+    ethers::adapter::{
+        Adapter::{AdapterInstance, RandomnessRequest as ContractRandomnessRequest},
+        IAdapter::{PartialSignature as ContractPartialSignature, RequestDetail},
+    },
     ServiceClient, TransactionCaller, ViewCaller,
+};
+use alloy::{
+    eips::BlockNumberOrTag,
+    hex,
+    primitives::{Address, U256},
+    rpc::types::TransactionReceipt,
+    sol,
 };
 use arpa_core::{
     pad_to_bytes32, ChainIdentity, ExponentialBackoffRetryDescriptor, GeneralMainChainIdentity,
-    GeneralRelayedChainIdentity, PartialSignature, RandomnessRequestType, RandomnessTask,
-    WsWalletSigner, DEFAULT_MINIMUM_THRESHOLD, FULFILL_RANDOMNESS_GAS_EXCEPT_CALLBACK,
+    GeneralRelayedChainIdentity, PartialSignature, ProviderClientWithSigner, RandomnessRequestType,
+    RandomnessTask, DEFAULT_MINIMUM_THRESHOLD, FULFILL_RANDOMNESS_GAS_EXCEPT_CALLBACK,
     RANDOMNESS_REWARD_GAS, VERIFICATION_GAS_OVER_MINIMUM_THRESHOLD,
 };
 use async_trait::async_trait;
-use ethers::{prelude::*, utils::hex};
+use futures_util::StreamExt;
 use log::info;
-use std::{collections::BTreeMap, future::Future, sync::Arc};
+use std::{collections::BTreeMap, future::Future};
 use threshold_bls::poly::Eval;
+
+sol! {
+    #[sol(ignore_unlinked)]
+    #[sol(rpc)]
+    Adapter,
+    "abi/Adapter.json"
+}
 
 #[allow(dead_code)]
 pub struct AdapterClient {
-    chain_id: usize,
+    chain_id: u64,
     main_id_address: Address,
     adapter_address: Address,
-    client: Arc<WsWalletSigner>,
+    client: ProviderClientWithSigner,
     contract_transaction_retry_descriptor: ExponentialBackoffRetryDescriptor,
     contract_view_retry_descriptor: ExponentialBackoffRetryDescriptor,
-    max_priority_fee_per_gas: Option<U256>,
+    max_priority_fee_per_gas: Option<u128>,
 }
 
 impl AdapterClient {
     pub fn new(
-        chain_id: usize,
+        chain_id: u64,
         main_id_address: Address,
         adapter_address: Address,
-        client: Arc<WsWalletSigner>,
+        client: ProviderClientWithSigner,
         contract_transaction_retry_descriptor: ExponentialBackoffRetryDescriptor,
         contract_view_retry_descriptor: ExponentialBackoffRetryDescriptor,
-        max_priority_fee_per_gas: Option<U256>,
+        max_priority_fee_per_gas: Option<u128>,
     ) -> Self {
         AdapterClient {
             chain_id,
@@ -84,7 +98,7 @@ impl AdapterClientBuilder for GeneralRelayedChainIdentity {
     }
 }
 
-type AdapterContract = Adapter<WsWalletSigner>;
+type AdapterContract = AdapterInstance<ProviderClientWithSigner>;
 
 #[async_trait]
 impl ServiceClient<AdapterContract> for AdapterClient {
@@ -115,7 +129,7 @@ impl AdapterTransactions for AdapterClient {
 
         let r_id = pad_to_bytes32(&task.request_id).unwrap();
 
-        let sig = U256::from(signature.as_slice());
+        let sig = U256::from_be_slice(signature.as_slice());
 
         let ps: Vec<ContractPartialSignature> = partial_signatures
             .values()
@@ -123,28 +137,28 @@ impl AdapterTransactions for AdapterClient {
                 let eval: Eval<Vec<u8>> =
                     bincode::deserialize(&ps.signed_partial_signature).unwrap();
 
-                let sig: U256 = U256::from(eval.value.as_slice());
+                let sig: U256 = U256::from_be_slice(eval.value.as_slice());
                 ContractPartialSignature {
-                    index: ps.index.into(),
-                    partial_signature: sig,
+                    index: U256::from(ps.index),
+                    partialSignature: sig,
                 }
             })
             .collect();
 
         let rd = RequestDetail {
-            sub_id: task.subscription_id,
-            group_index: task.group_index,
-            request_type: task.request_type.to_u8(),
+            subId: task.subscription_id,
+            groupIndex: task.group_index,
+            requestType: task.request_type.to_u8(),
             params: task.params.into(),
-            callback_contract: task.requester,
+            callbackContract: task.requester,
             seed: task.seed,
-            request_confirmations: task.request_confirmations,
-            callback_gas_limit: task.callback_gas_limit,
-            callback_max_gas_price: task.callback_max_gas_price,
-            block_num: task.assignment_block_height.into(),
+            requestConfirmations: task.request_confirmations,
+            callbackGasLimit: task.callback_gas_limit,
+            callbackMaxGasPrice: U256::from(task.callback_max_gas_price),
+            blockNum: U256::from(task.assignment_block_height),
         };
 
-        let call = adapter_contract.fulfill_randomness(group_index as u32, r_id, sig, rd, ps);
+        let call = adapter_contract.fulfillRandomness(group_index as u32, r_id.into(), sig, rd, ps);
 
         let partial_signers_count = partial_signatures.len() as u32;
 
@@ -157,16 +171,16 @@ impl AdapterTransactions for AdapterClient {
 
         let extra_add_reward_gas = partial_signers_count * RANDOMNESS_REWARD_GAS;
 
+        let txn_gas_limit = task.callback_gas_limit
+            + FULFILL_RANDOMNESS_GAS_EXCEPT_CALLBACK
+            + extra_verification_gas
+            + extra_add_reward_gas;
+
         AdapterClient::call_contract_transaction(
             self.chain_id,
             "fulfill_randomness",
-            adapter_contract.client_ref(),
-            call.gas(
-                task.callback_gas_limit
-                    + FULFILL_RANDOMNESS_GAS_EXCEPT_CALLBACK
-                    + extra_verification_gas
-                    + extra_add_reward_gas,
-            ),
+            adapter_contract.provider(),
+            call.gas(txn_gas_limit as u64),
             self.contract_transaction_retry_descriptor,
             false,
             self.max_priority_fee_per_gas,
@@ -184,7 +198,7 @@ impl AdapterViews for AdapterClient {
         AdapterClient::call_contract_view(
             self.chain_id,
             "get_last_randomness",
-            adapter_contract.get_last_randomness(),
+            adapter_contract.getLastRandomness(),
             self.contract_view_retry_descriptor,
         )
         .await
@@ -198,12 +212,12 @@ impl AdapterViews for AdapterClient {
         AdapterClient::call_contract_view(
             self.chain_id,
             "get_pending_request",
-            adapter_contract.get_pending_request_commitment(r_id),
+            adapter_contract.getPendingRequestCommitment(r_id.into()),
             self.contract_view_retry_descriptor,
         )
         .await
         .map(|r| {
-            let r = U256::from(r);
+            let r = U256::from_be_slice(r.as_slice());
             !r.is_zero()
         })
     }
@@ -220,45 +234,46 @@ impl AdapterLogs for AdapterClient {
     ) -> ContractClientResult<()> {
         let contract = Adapter::new(self.adapter_address, self.client.clone());
 
-        let events = contract
-            .event::<RandomnessRequestFilter>()
-            .from_block(BlockNumber::Latest);
-
-        let mut stream = events.subscribe().await?.with_meta();
+        let mut stream = contract
+            .RandomnessRequest_filter()
+            .from_block(BlockNumberOrTag::Latest)
+            .subscribe()
+            .await?
+            .into_stream();
 
         while let Some(Ok(evt)) = stream.next().await {
             let (
-                RandomnessRequestFilter {
-                    request_id,
-                    sub_id,
-                    group_index,
-                    request_type,
+                ContractRandomnessRequest {
+                    requestId,
+                    subId,
+                    groupIndex,
+                    requestType,
                     params,
                     sender,
                     seed,
-                    request_confirmations,
-                    callback_gas_limit,
-                    callback_max_gas_price,
-                    estimated_payment: _,
+                    requestConfirmations,
+                    callbackGasLimit,
+                    callbackMaxGasPrice,
+                    estimatedPayment: _,
                 },
                 meta,
             ) = evt;
 
             info!( "Received randomness task: chain_id: {}, group_index: {}, request_id: {}, sender: {:?}, sub_id: {}, seed: {}, request_confirmations: {}, callback_gas_limit: {}, callback_max_gas_price: {}, block_number: {}",
-                self.chain_id, group_index, format!("0x{}", hex::encode(request_id)), sender, sub_id, seed, request_confirmations, callback_gas_limit, callback_max_gas_price, meta.block_number);
+                self.chain_id, groupIndex, format!("0x{}", hex::encode(requestId)), sender, subId, seed, requestConfirmations, callbackGasLimit, callbackMaxGasPrice, meta.block_number.unwrap_or(0));
 
             let task = RandomnessTask {
-                request_id: request_id.to_vec(),
-                subscription_id: sub_id,
-                group_index,
-                request_type: RandomnessRequestType::from(request_type),
+                request_id: requestId.to_vec(),
+                subscription_id: subId,
+                group_index: groupIndex,
+                request_type: RandomnessRequestType::from(requestType),
                 params: params.to_vec(),
                 requester: sender,
                 seed,
-                request_confirmations,
-                callback_gas_limit,
-                callback_max_gas_price,
-                assignment_block_height: meta.block_number.as_usize(),
+                request_confirmations: requestConfirmations,
+                callback_gas_limit: callbackGasLimit,
+                callback_max_gas_price: callbackMaxGasPrice.to::<u128>(),
+                assignment_block_height: meta.block_number.unwrap_or(0) as usize,
             };
             cb(task).await?;
         }

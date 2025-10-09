@@ -25,7 +25,7 @@ pub trait Chain<
     type RandomnessResultCaches;
     type ChainIdentity;
 
-    fn id(&self) -> usize;
+    fn id(&self) -> u64;
 
     fn description(&self) -> &str;
 

@@ -5,11 +5,12 @@ use crate::{
     event::ready_to_handle_randomness_task::ReadyToHandleRandomnessTask,
     queue::{event_queue::EventQueue, EventPublisher},
 };
+use alloy::primitives::Address;
+use alloy::providers::Provider;
 use arpa_contract_client::adapter::AdapterViews;
 use arpa_core::{ListenerDescriptor, RandomnessTask};
 use arpa_dal::{BLSTasksHandler, BlockInfoHandler, GroupInfoHandler};
 use async_trait::async_trait;
-use ethers::{providers::Middleware, types::Address};
 use std::{marker::PhantomData, sync::Arc};
 use threshold_bls::group::Curve;
 use tokio::sync::RwLock;
@@ -130,7 +131,7 @@ impl<PC: Curve + Sync + Send> Listener for ReadyToHandleRandomnessTaskListener<P
         Ok(())
     }
 
-    fn chain_id(&self) -> usize {
+    fn chain_id(&self) -> u64 {
         self.listener_descriptor.chain_id
     }
 
@@ -275,7 +276,7 @@ mod tests {
     async fn create_test_subscriber(
         eq: &mut EventQueue,
         subscriber_name: &str,
-        chain_id: usize,
+        chain_id: u64,
     ) -> tokio::sync::mpsc::Receiver<Box<dyn std::any::Any + Send>> {
         let (sender, receiver) = tokio::sync::mpsc::channel(100);
 
@@ -353,7 +354,7 @@ mod tests {
             group_index: 1,
             request_type: RandomnessRequestType::Randomness,
             params,
-            requester: Address::random(),
+            requester: random_address(),
             seed: U256::from(seed),
             request_confirmations: 5,
             callback_gas_limit: 100000,
@@ -388,7 +389,7 @@ mod tests {
                 threshold: 2,
                 assignment_block_height: 90,
                 members: vec![id_address],
-                coordinator_address: Address::random(),
+                coordinator_address: random_address(),
             };
             group_cache_write.save_task_info(0, dkg_task).await.unwrap();
             group_cache_write
@@ -450,7 +451,7 @@ mod tests {
 
     async fn verify_event_content(
         event: &ReadyToHandleRandomnessTask,
-        expected_chain_id: usize,
+        expected_chain_id: u64,
         expected_task_count: Option<usize>,
         expected_request_ids: Option<Vec<Vec<u8>>>,
         test_name: &str,
@@ -512,7 +513,7 @@ mod tests {
 
         println!("Adapter contract deployed at: {}", adapter_address);
 
-        let controller_address = Address::random();
+        let controller_address = random_address();
         let config = Config::default();
 
         let chain_identity = GeneralMainChainIdentity::new(
@@ -521,7 +522,7 @@ mod tests {
             ws_provider.clone(),
             anvil.ws_endpoint(),
             controller_address,
-            Address::random(),
+            random_address(),
             adapter_address,
             config
                 .get_time_limits()

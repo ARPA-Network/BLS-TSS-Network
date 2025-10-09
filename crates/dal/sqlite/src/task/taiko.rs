@@ -93,7 +93,7 @@ impl BLSTasksUpdater<RandomnessTask> for TaikoBLSTasksDBClient<RandomnessTask> {
             seed_bytes,
             task.request_confirmations as i32,
             task.callback_gas_limit as i32,
-            u256_to_vec(&task.callback_max_gas_price),
+            task.callback_max_gas_price.to_be_bytes().to_vec(),
             task.assignment_block_height as i64,
         )
         .await
@@ -112,11 +112,7 @@ impl BLSTasksUpdater<RandomnessTask> for TaikoBLSTasksDBClient<RandomnessTask> {
         randomness_task_exclusive_window: usize,
     ) -> DataAccessResult<Vec<RandomnessTask>> {
         let before_assignment_block_height =
-            if current_block_height > randomness_task_exclusive_window {
-                current_block_height - randomness_task_exclusive_window
-            } else {
-                0
-            };
+            current_block_height.saturating_sub(randomness_task_exclusive_window);
         TaikoRandomnessTaskMutation::fetch_available_tasks(
             self.get_connection(),
             current_group_index as i32,

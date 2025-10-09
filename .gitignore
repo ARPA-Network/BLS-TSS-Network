@@ -43,3 +43,4 @@ passwd
 /contracts/output/
 
 *.log
+*.keystore

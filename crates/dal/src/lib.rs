@@ -1,12 +1,12 @@
 pub mod cache;
 pub mod error;
 
+use alloy::primitives::Address;
 use arpa_core::{DKGStatus, DKGTask, Group, Member, Task};
 use async_trait::async_trait;
 use cache::BLSResultCache;
 pub use dkg_core::primitives::DKGOutput;
 use error::DataAccessResult;
-use ethers_core::types::Address;
 use std::collections::BTreeMap;
 use std::fmt::Debug;
 use threshold_bls::{group::Curve, sig::Share};
@@ -35,7 +35,7 @@ pub trait SignatureResultCacheHandler<T: ResultCache>:
 }
 
 pub trait BlockInfoFetcher {
-    fn get_chain_id(&self) -> usize;
+    fn get_chain_id(&self) -> u64;
 
     fn get_block_height(&self) -> usize;
 

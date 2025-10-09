@@ -1,9 +1,7 @@
 use crate::ser_bytes_in_hex_string;
 use crate::ser_u256_in_dec_string;
-use ethers_core::{
-    types::{Address, U256},
-    utils::hex,
-};
+use alloy::hex;
+use alloy::primitives::{Address, U256};
 use serde::{Deserialize, Serialize};
 use std::{collections::BTreeMap, marker::PhantomData};
 use threshold_bls::{group::Curve, serialize::point_to_hex};
@@ -38,8 +36,7 @@ pub struct RandomnessTask {
     pub seed: U256,
     pub request_confirmations: u16,
     pub callback_gas_limit: u32,
-    #[serde(serialize_with = "ser_u256_in_dec_string")]
-    pub callback_max_gas_price: U256,
+    pub callback_max_gas_price: u128,
     pub assignment_block_height: usize,
 }
 

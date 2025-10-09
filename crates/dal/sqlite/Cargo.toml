@@ -12,13 +12,14 @@ keywords.workspace = true
 exclude.workspace = true
 
 [dependencies]
-entity = { version = "0.3.0-alpha.2", path = "./entity" }
-migration = { version = "0.3.0-alpha.2", path = "./migration" }
+entity = { version = "0.4.0-alpha.1", path = "./entity" }
+migration = { version = "0.4.0-alpha.1", path = "./migration" }
 arpa-core.workspace = true
 arpa-dal.workspace = true
 threshold-bls.workspace = true
 dkg-core.workspace = true
 
+alloy = { workspace = true, features = ["full"] }
 sea-orm = { version = "0.12", features = [
       "sqlx-sqlite",
       "runtime-tokio-rustls",
@@ -34,7 +35,6 @@ libsqlite3-sys = { version = "^0.26.0", default-features = false, features = [
 chrono = "0.4"
 log = "0.4"
 tokio = { version = "1.37.0", features = ["full"] }
-ethers-core.workspace = true
 thiserror = "1.0.15"
 anyhow = "1.0.31"
 bincode = "1.2.1"

@@ -53,13 +53,12 @@ pub mod tests {
         queue::event_queue::EventQueue,
         subscriber::{block::BlockSubscriber, Subscriber},
     };
-    use arpa_core::{Config, GeneralMainChainIdentity, ListenerDescriptor, ListenerType};
-    use arpa_dal::{cache::InMemoryBlockInfoCache, BlockInfoHandler};
-    use ethers::{
-        providers::{Provider, Ws},
-        types::Address,
-        utils::Anvil,
+    use alloy::{node_bindings::Anvil, providers::WsConnect, signers::local::PrivateKeySigner};
+    use arpa_core::{
+        build_client, random_address, Config, GeneralMainChainIdentity, ListenerDescriptor,
+        ListenerType,
     };
+    use arpa_dal::{cache::InMemoryBlockInfoCache, BlockInfoHandler};
     use std::{sync::Arc, time::Duration};
     use threshold_bls::schemes::bn254::G2Curve;
     use tokio::sync::RwLock;
@@ -82,9 +81,10 @@ pub mod tests {
 
         s.subscribe().await;
 
-        let fake_wallet = "4c0883a69102937d6231471b5dbb6204fe5129617082792ae468d01a3f362318"
-            .parse()
-            .unwrap();
+        let fake_wallet: PrivateKeySigner =
+            "4c0883a69102937d6231471b5dbb6204fe5129617082792ae468d01a3f362318"
+                .parse()
+                .unwrap();
 
         let contract_transaction_retry_descriptor = config
             .get_time_limits()
@@ -95,21 +95,22 @@ pub mod tests {
 
         let avnil = Anvil::new().spawn();
 
-        let provider = Arc::new(
-            Provider::<Ws>::connect(avnil.ws_endpoint())
-                .await
-                .unwrap()
-                .interval(Duration::from_millis(3000)),
-        );
+        let ws_connect =
+            WsConnect::new(avnil.ws_endpoint()).with_retry_interval(Duration::from_millis(3000));
+
+        let client = build_client(fake_wallet.clone(), chain_id, ws_connect.clone())
+            .await
+            .unwrap();
 
         let chain_identity = GeneralMainChainIdentity::new(
             0,
             fake_wallet,
-            provider,
+            ws_connect,
+            client,
             avnil.ws_endpoint(),
-            Address::random(),
-            Address::random(),
-            Address::random(),
+            random_address(),
+            random_address(),
+            random_address(),
             contract_transaction_retry_descriptor,
             contract_view_retry_descriptor,
             None,
