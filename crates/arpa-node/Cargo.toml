@@ -71,9 +71,6 @@ check-latest = { version = "1.0.2", default-features = false, features = [
     "async",
 ] }
 
-[features]
-unittest = []  
-
 [dev-dependencies]
 alloy = { workspace = true, features = ["full", "provider-anvil-node"] }
 arpa-node = { path = ".", features = [] }  

@@ -117,36 +117,39 @@ impl<PC: Curve + Sync + Send + 'static> Listener for PostGroupingListener<PC> {
     }
 }
 
-#[cfg(feature = "unittest")]
+#[cfg(test)]
 mod tests {
     use super::*;
     use crate::event::types::Topic;
     use crate::event::Event;
+    use crate::listener::post_grouping::tests::MockController::MockControllerInstance;
     use crate::queue::EventSubscriber;
     use crate::subscriber::{DebuggableEvent, DebuggableSubscriber, Subscriber};
-    use crate::test_contracts::mockcontroller::deploy_with_args_and_get_mock_controller;
-
-    use ethers::middleware::SignerMiddleware;
-    use ethers::providers::{Http, Provider, Ws};
-    use ethers::signers::{LocalWallet, Signer};
-    use ethers::types::{Address, U256};
-    use ethers::utils::Anvil;
-
-    use threshold_bls::schemes::bn254::G2Curve;
-
+    use alloy::node_bindings::Anvil;
+    use alloy::primitives::{Address, U256};
+    use alloy::providers::WsConnect;
+    use alloy::signers::local::PrivateKeySigner;
+    use alloy::sol;
+    use anyhow::anyhow;
     use arpa_core::{
-        Config, DKGStatus, FixedIntervalRetryDescriptor, GeneralMainChainIdentity, Group,
-        ListenerType,
+        build_client, random_address, Config, DKGStatus, FixedIntervalRetryDescriptor,
+        GeneralMainChainIdentity, Group, ListenerType, ProviderClientWithSigner,
     };
     use arpa_dal::{
         cache::{InMemoryBlockInfoCache, InMemoryGroupInfoCache},
         GroupInfoHandler,
     };
-
-    use anyhow::anyhow;
     use std::sync::Arc;
     use std::time::Duration;
+    use threshold_bls::schemes::bn254::G2Curve;
     use tokio::time::timeout;
+
+    sol! {
+        #[sol(ignore_unlinked)]
+        #[sol(rpc)]
+        MockController,
+        "test-contract/MockController.json"
+    }
 
     async fn mock_subscribe_to_events(
         eq: &mut EventQueue,
@@ -268,23 +271,21 @@ mod tests {
     ) -> NodeResult<Arc<RwLock<ChainIdentityHandlerType<PC>>>> {
         let anvil = Anvil::new().spawn();
 
-        let provider = Arc::new(
-            Provider::<Ws>::connect(anvil.ws_endpoint())
-                .await
-                .map_err(|e| anyhow!("Failed to connect to WS provider: {}", e))?,
-        );
+        let ws_connect = WsConnect::new(anvil.ws_endpoint());
+        let wallet: PrivateKeySigner = anvil.keys()[0].clone().into();
+        let chain_id = anvil.chain_id();
 
-        let wallet: LocalWallet = anvil.keys()[0].clone().into();
-        let chain_id = anvil.chain_id() as usize;
+        let client = build_client(wallet.clone(), chain_id, ws_connect.clone()).await?;
 
         let config = Config::default();
 
-        let controller = controller_address.unwrap_or_else(Address::random);
+        let controller = controller_address.unwrap_or_else(|| random_address());
 
         let chain_identity = GeneralMainChainIdentity::new(
             chain_id,
             wallet.clone(),
-            provider,
+            ws_connect.clone(),
+            client.clone(),
             anvil.ws_endpoint(),
             controller,
             random_address(),
@@ -368,23 +369,21 @@ mod tests {
     }
 
     async fn setup_contract_group(
-        controller: &crate::test_contracts::mockcontroller::MockController<
-            SignerMiddleware<Provider<Http>, LocalWallet>,
-        >,
+        controller: &MockControllerInstance<ProviderClientWithSigner>,
         id_address: Address,
     ) -> NodeResult<()> {
         let group_index = 1usize;
         let epoch = 1usize;
         let size = 3usize;
         let threshold = 2usize;
-        let empty_public_key = [U256::zero(), U256::zero(), U256::zero(), U256::zero()];
+        let empty_public_key = [U256::ZERO, U256::ZERO, U256::ZERO, U256::ZERO];
         let member_addresses = vec![id_address, random_address(), random_address()];
 
-        let tx_request = controller.set_group(
-            group_index.into(),
-            epoch.into(),
-            size.into(),
-            threshold.into(),
+        let tx_request = controller.setGroup(
+            U256::from(group_index),
+            U256::from(epoch),
+            U256::from(size),
+            U256::from(threshold),
             false,
             empty_public_key,
             member_addresses.clone(),
@@ -396,6 +395,7 @@ mod tests {
             .map_err(|e| anyhow!("Failed to send setGroup transaction: {}", e))?;
 
         pending_tx
+            .get_receipt()
             .await
             .map_err(|e| anyhow!("setGroup transaction failed: {}", e))?;
 
@@ -411,34 +411,26 @@ mod tests {
 
         let anvil = Anvil::new().chain_id(chain_id as u64).spawn();
 
-        let http_provider =
-            Provider::<Http>::try_from(anvil.endpoint()).expect("Failed to create HTTP provider");
-        let wallet: LocalWallet = anvil.keys()[0].clone().into();
-        let wallet = wallet.with_chain_id(chain_id as u64);
-        let client = Arc::new(SignerMiddleware::new(http_provider.clone(), wallet.clone()));
+        let ws_connect = WsConnect::new(anvil.ws_endpoint());
+        let wallet: PrivateKeySigner = anvil.keys()[0].clone().into();
+        let client = build_client(wallet.clone(), chain_id, ws_connect.clone()).await?;
 
         let node_registry_address = random_address();
-        let controller =
-            deploy_with_args_and_get_mock_controller(client.clone(), node_registry_address)
-                .await
-                .map_err(|e| anyhow!("Failed to deploy mock controller: {}", e))?;
+        let controller = MockController::deploy(client.clone(), node_registry_address)
+            .await
+            .map_err(|e| anyhow!("Failed to deploy mock controller: {}", e))?;
 
-        let controller_address = controller.address();
+        let controller_address = *controller.address();
         println!("MockController deployed at: {}", controller_address);
 
         setup_contract_group(&controller, id_address).await?;
-
-        let ws_provider = Arc::new(
-            Provider::<Ws>::connect(anvil.ws_endpoint())
-                .await
-                .map_err(|e| anyhow!("Failed to connect to WS provider: {}", e))?,
-        );
 
         let config = Config::default();
         let chain_identity = GeneralMainChainIdentity::new(
             chain_id,
             wallet.clone(),
-            ws_provider,
+            ws_connect.clone(),
+            client.clone(),
             anvil.ws_endpoint(),
             controller_address,
             random_address(),
