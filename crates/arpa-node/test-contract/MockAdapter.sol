@@ -1,19 +1,12 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.0;
 
-interface IRequestTypeBase {
+contract MockAdapter {
     enum RequestType {
         Randomness,
         RandomWords,
         Shuffling
     }
-}
-
-interface IAdapter {
-    function getPendingRequestCommitment(bytes32 requestId) external view returns (bytes32);
-}
-
-contract MockAdapter is IRequestTypeBase, IAdapter {
     event RandomnessRequest(
         bytes32 indexed requestId,
         uint64 indexed subId,
@@ -29,7 +22,7 @@ contract MockAdapter is IRequestTypeBase, IAdapter {
     );
 
     mapping(bytes32 => bytes32) public _requestCommitments;
-    
+
     function emitRandomnessRequest(
         bytes32 requestId,
         uint64 subId,
@@ -57,11 +50,11 @@ contract MockAdapter is IRequestTypeBase, IAdapter {
             estimatedPayment
         );
     }
-    
-    function getPendingRequestCommitment(bytes32 requestId) public view override(IAdapter) returns (bytes32) {
+
+    function getPendingRequestCommitment(bytes32 requestId) public view returns (bytes32) {
         return _requestCommitments[requestId];
     }
-    
+
     function setRequestCommitment(bytes32 requestId, bytes32 commitment) public {
         _requestCommitments[requestId] = commitment;
     }

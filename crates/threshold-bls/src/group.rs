@@ -1,6 +1,6 @@
 //! Traits for operating on Groups and Elliptic Curves.
 
-use rand_core::RngCore;
+use rand::Rng;
 use serde::{Deserialize, Serialize};
 use std::fmt::{Debug, Display};
 use std::marker::PhantomData;
@@ -28,7 +28,7 @@ pub trait Element:
     fn mul(&mut self, mul: &Self::RHS);
 
     /// Samples a random element using the provided RNG
-    fn rand<R: RngCore>(rng: &mut R) -> Self;
+    fn rand<R: Rng>(rng: &mut R) -> Self;
 
     /// Returns the zero element of the group
     fn zero() -> Self {

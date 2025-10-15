@@ -4,13 +4,13 @@ use crate::{
     error::NodeResult,
     scheduler::{fixed::SimpleFixedTaskScheduler, FixedTaskScheduler},
 };
+use alloy::providers::Provider;
 use arpa_core::{
     jitter_fluctuate,
     log::{build_general_payload, LogType},
     ComponentTaskType, ListenerDescriptor, ListenerType,
 };
 use async_trait::async_trait;
-use ethers::providers::Middleware;
 use log::{debug, error};
 use std::{marker::PhantomData, sync::Arc, time::Duration};
 use threshold_bls::group::Curve;
@@ -141,7 +141,7 @@ impl<PC: Curve + Sync + Send> Listener for ProviderReconnectionListener<PC> {
         Ok(())
     }
 
-    fn chain_id(&self) -> usize {
+    fn chain_id(&self) -> u64 {
         self.listener_descriptor.chain_id
     }
 
@@ -160,15 +160,16 @@ impl<PC: Curve + Sync + Send> Listener for ProviderReconnectionListener<PC> {
 mod tests {
     use super::*;
     use crate::{context::ChainIdentityHandlerType, scheduler::TaskScheduler};
+    use alloy::node_bindings::Anvil;
+    use alloy::node_bindings::AnvilInstance;
+    use alloy::providers::WsConnect;
+    use alloy::signers::local::PrivateKeySigner;
+    use alloy::signers::Signer;
+    use arpa_core::build_client;
+    use arpa_core::random_address;
     use arpa_core::{
         Config, FixedIntervalRetryDescriptor, GeneralMainChainIdentity, ListenerType,
         SubscriberType,
-    };
-    use ethers::{
-        providers::{Provider, Ws},
-        signers::{LocalWallet, Signer},
-        types::Address,
-        utils::{Anvil, AnvilInstance},
     };
     use std::{sync::Arc, time::Duration};
     use threshold_bls::schemes::bn254::G2Curve;
@@ -198,7 +199,7 @@ mod tests {
             Ok(())
         }
 
-        fn chain_id(&self) -> usize {
+        fn chain_id(&self) -> u64 {
             self.descriptor.chain_id
         }
 
@@ -207,7 +208,7 @@ mod tests {
         }
     }
 
-    fn create_mock_listener(chain_id: usize, l_type: ListenerType, message: &str) -> MockListener {
+    fn create_mock_listener(chain_id: u64, l_type: ListenerType, message: &str) -> MockListener {
         MockListener {
             descriptor: ListenerDescriptor {
                 chain_id,
@@ -226,7 +227,7 @@ mod tests {
 
     async fn setup_test_environment() -> NodeResult<(
         AnvilInstance,
-        usize,
+        u64,
         Arc<RwLock<ChainIdentityHandlerType<G2Curve>>>,
         Arc<RwLock<SimpleFixedTaskScheduler>>,
     )> {
@@ -235,30 +236,36 @@ mod tests {
         let anvil = Anvil::new().spawn();
         println!("Anvil instance started at {}", anvil.endpoint());
 
-        let ws_provider = Arc::new(Provider::<Ws>::connect(anvil.ws_endpoint()).await?);
+        let ws_connect =
+            WsConnect::new(anvil.ws_endpoint()).with_retry_interval(Duration::from_millis(3000));
+
         println!("Connected to Anvil WebSocket at {}", anvil.ws_endpoint());
 
-        let wallet: LocalWallet = anvil.keys()[0].clone().into();
-        let wallet_with_chain_id = wallet.clone().with_chain_id(anvil.chain_id());
-        let chain_id = anvil.chain_id() as usize;
+        let wallet: PrivateKeySigner = anvil.keys()[0].clone().into();
+        let wallet_with_chain_id = wallet.clone().with_chain_id(Some(anvil.chain_id()));
+        let chain_id = anvil.chain_id();
         println!(
             "Using wallet address: {}, Chain ID: {}",
             wallet.clone().address(),
             chain_id
         );
 
-        let adapter_address = Address::random();
-        let controller_address = Address::random();
+        let adapter_address = random_address();
+        let controller_address = random_address();
         let config = Config::default();
+
+        let client =
+            build_client(wallet_with_chain_id.clone(), chain_id, ws_connect.clone()).await?;
 
         let chain_identity = GeneralMainChainIdentity::new(
             chain_id,
             wallet_with_chain_id.clone(),
-            ws_provider.clone(),
+            ws_connect.clone(),
+            client,
             anvil.ws_endpoint(),
             controller_address,
             adapter_address,
-            Address::random(),
+            random_address(),
             config
                 .get_time_limits()
                 .contract_transaction_retry_descriptor,
@@ -281,7 +288,7 @@ mod tests {
 
     async fn add_test_tasks(
         f_ts: &Arc<RwLock<SimpleFixedTaskScheduler>>,
-        chain_id: usize,
+        chain_id: u64,
     ) -> NodeResult<()> {
         let mut scheduler = f_ts.write().await;
 

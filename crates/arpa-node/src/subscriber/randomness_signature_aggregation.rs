@@ -7,6 +7,7 @@ use crate::{
     queue::{event_queue::EventQueue, EventSubscriber},
     scheduler::{dynamic::SimpleDynamicTaskScheduler, TaskScheduler},
 };
+use alloy::primitives::Address;
 use arpa_contract_client::{
     adapter::{AdapterTransactions, AdapterViews},
     error::ContractClientError,
@@ -19,7 +20,6 @@ use arpa_core::{
 use arpa_dal::{cache::RandomnessResultCache, BLSResultCacheState};
 use arpa_dal::{BlockInfoHandler, SignatureResultCacheHandler};
 use async_trait::async_trait;
-use ethers::types::{Address, U256};
 use log::{debug, error, info};
 use serde_json::json;
 use std::{collections::BTreeMap, marker::PhantomData, sync::Arc};
@@ -34,7 +34,7 @@ pub struct RandomnessSignatureAggregationSubscriber<
     PC: Curve,
     S: SignatureScheme + ThresholdScheme<Public = PC::Point, Private = PC::Scalar>,
 > {
-    chain_id: usize,
+    chain_id: u64,
     id_address: Address,
     chain_identity: Arc<RwLock<ChainIdentityHandlerType<PC>>>,
     block_cache: Arc<RwLock<Box<dyn BlockInfoHandler>>>,
@@ -50,7 +50,7 @@ impl<PC: Curve, S: SignatureScheme + ThresholdScheme<Public = PC::Point, Private
     RandomnessSignatureAggregationSubscriber<PC, S>
 {
     pub fn new(
-        chain_id: usize,
+        chain_id: u64,
         id_address: Address,
         chain_identity: Arc<RwLock<ChainIdentityHandlerType<PC>>>,
         block_cache: Arc<RwLock<Box<dyn BlockInfoHandler>>>,
@@ -118,7 +118,7 @@ impl<PC: Curve> FulfillRandomnessHandler for GeneralFulfillRandomnessHandler<PC>
         if client.is_task_pending(&randomness_task_request_id).await? {
             if self.block_cache.read().await.get_block_height()
                 - randomness_task.assignment_block_height
-                > 86400 / self.block_cache.read().await.get_block_time()
+                > 86400 * 1000 / self.block_cache.read().await.get_block_time()
             {
                 self.randomness_signature_cache
                     .write()
@@ -191,8 +191,8 @@ impl<PC: Curve> FulfillRandomnessHandler for GeneralFulfillRandomnessHandler<PC>
                             TaskType::BLS(BLSTaskType::Randomness),
                             randomness_task_json,
                             receipt.transaction_hash,
-                            receipt.gas_used.unwrap_or(U256::zero()),
-                            receipt.effective_gas_price.unwrap_or(U256::zero()),
+                            receipt.gas_used,
+                            receipt.effective_gas_price,
                         )
                     );
                 }
@@ -218,8 +218,8 @@ impl<PC: Curve> FulfillRandomnessHandler for GeneralFulfillRandomnessHandler<PC>
                                     TaskType::BLS(BLSTaskType::Randomness),
                                     randomness_task_json,
                                     receipt.transaction_hash,
-                                    receipt.gas_used.unwrap_or(U256::zero()),
-                                    receipt.effective_gas_price.unwrap_or(U256::zero()),
+                                    receipt.gas_used,
+                                    receipt.effective_gas_price,
                                 )
                             );
                         }
@@ -275,7 +275,7 @@ where
     <S as ThresholdScheme>::Error: Sync + Send,
     <S as SignatureScheme>::Error: Sync + Send,
 {
-    async fn notify(&self, topic: Topic, payload: &(dyn DebuggableEvent)) -> NodeResult<()> {
+    async fn notify(&self, topic: Topic, payload: &dyn DebuggableEvent) -> NodeResult<()> {
         debug!("{:?}", topic);
 
         let ReadyToFulfillRandomnessTask {

@@ -5,6 +5,7 @@ use super::{
     error::NodeResult,
     scheduler::FixedTaskScheduler,
 };
+use alloy::primitives::Address;
 use anyhow::Result;
 use arpa_contract_client::controller::ControllerTransactions;
 use arpa_core::{
@@ -15,7 +16,6 @@ use arpa_core::{
     DEFAULT_COMMIT_PARTIAL_SIGNATURE_RETRY_USE_JITTER,
 };
 use arpa_dal::error::DataAccessResult;
-use ethers::types::Address;
 use threshold_bls::{
     group::Curve,
     sig::{Share, SignatureScheme, ThresholdScheme},
@@ -57,12 +57,11 @@ pub trait NodeService {
 pub trait ComponentService {
     async fn list_fixed_tasks(&self) -> SchedulerResult<Vec<ComponentTaskType>>;
 
-    async fn start_listener(&self, chain_id: usize, task_type: ListenerType)
-        -> SchedulerResult<()>;
+    async fn start_listener(&self, chain_id: u64, task_type: ListenerType) -> SchedulerResult<()>;
 
     async fn shutdown_listener(
         &self,
-        chain_id: usize,
+        chain_id: u64,
         task_type: ListenerType,
     ) -> SchedulerResult<()>;
 }
@@ -98,7 +97,7 @@ pub trait BLSRandomnessService<PC: Curve> {
 
     async fn send_partial_sig(
         &self,
-        chain_id: usize,
+        chain_id: u64,
         member_id_address: Address,
         msg: Vec<u8>,
         randomness_task_request_id: Vec<u8>,
@@ -181,11 +180,7 @@ where
             .collect())
     }
 
-    async fn start_listener(
-        &self,
-        chain_id: usize,
-        task_type: ListenerType,
-    ) -> SchedulerResult<()> {
+    async fn start_listener(&self, chain_id: u64, task_type: ListenerType) -> SchedulerResult<()> {
         let main_chain_id = self
             .get_main_chain()
             .get_chain_identity()
@@ -218,7 +213,7 @@ where
 
     async fn shutdown_listener(
         &self,
-        chain_id: usize,
+        chain_id: u64,
         task_type: ListenerType,
     ) -> SchedulerResult<()> {
         self.get_fixed_task_handler()
@@ -486,7 +481,7 @@ where
 
     async fn send_partial_sig(
         &self,
-        chain_id: usize,
+        chain_id: u64,
         member_id_address: Address,
         msg: Vec<u8>,
         randomness_task_request_id: Vec<u8>,

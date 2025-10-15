@@ -76,9 +76,10 @@ listeners:
     use_jitter: true
 
 time_limits:
-  block_time: 3
+  block_time: 3000
   dkg_timeout_duration: 40
   randomness_task_exclusive_window: 10
+  randomness_aggregation_waiting_block_number: 0
   listener_interval_millis: 10000
   dkg_wait_for_phase_interval_millis: 10000
   provider_polling_interval_millis: 10000
@@ -126,8 +127,9 @@ relayed_chains:
         interval_millis: 1000
         use_jitter: true
     time_limits:
-      block_time: 2
+      block_time: 2000
       randomness_task_exclusive_window: 10
+      randomness_aggregation_waiting_block_number: 0
       listener_interval_millis: 1000
       provider_polling_interval_millis: 1000
       provider_reconnection_interval_millis: 30000

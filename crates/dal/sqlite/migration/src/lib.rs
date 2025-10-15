@@ -32,6 +32,14 @@ mod m20250506_000029_create_b3_randomness_task_table;
 mod m20250506_000030_create_b3_randomness_task_index;
 mod m20250506_000031_create_b3_randomness_result_table;
 mod m20250506_000032_create_b3_randomness_result_index;
+mod m20250621_000033_create_arpachain_randomness_task_table;
+mod m20250621_000034_create_arpachain_randomness_task_index;
+mod m20250621_000035_create_arpachain_randomness_result_table;
+mod m20250621_000036_create_arpachain_randomness_result_index;
+mod m20250621_000037_create_bsc_randomness_task_table;
+mod m20250621_000038_create_bsc_randomness_task_index;
+mod m20250621_000039_create_bsc_randomness_result_table;
+mod m20250621_000040_create_bsc_randomness_result_index;
 
 pub use m20220920_000001_create_node_info_table::NodeInfo;
 pub use m20220920_000002_create_group_info_table::GroupInfo;
@@ -51,6 +59,10 @@ pub use m20240318_000025_create_taiko_randomness_task_table::TaikoRandomnessTask
 pub use m20240318_000027_create_taiko_randomness_result_table::TaikoRandomnessResult;
 pub use m20250506_000029_create_b3_randomness_task_table::B3RandomnessTask;
 pub use m20250506_000031_create_b3_randomness_result_table::B3RandomnessResult;
+pub use m20250621_000033_create_arpachain_randomness_task_table::ArpaChainRandomnessTask;
+pub use m20250621_000035_create_arpachain_randomness_result_table::ArpaChainRandomnessResult;
+pub use m20250621_000037_create_bsc_randomness_task_table::BSCRandomnessTask;
+pub use m20250621_000039_create_bsc_randomness_result_table::BSCRandomnessResult;
 pub struct Migrator;
 
 #[async_trait::async_trait]
@@ -89,6 +101,14 @@ impl MigratorTrait for Migrator {
             Box::new(m20250506_000030_create_b3_randomness_task_index::Migration),
             Box::new(m20250506_000031_create_b3_randomness_result_table::Migration),
             Box::new(m20250506_000032_create_b3_randomness_result_index::Migration),
+            Box::new(m20250621_000033_create_arpachain_randomness_task_table::Migration),
+            Box::new(m20250621_000034_create_arpachain_randomness_task_index::Migration),
+            Box::new(m20250621_000035_create_arpachain_randomness_result_table::Migration),
+            Box::new(m20250621_000036_create_arpachain_randomness_result_index::Migration),
+            Box::new(m20250621_000037_create_bsc_randomness_task_table::Migration),
+            Box::new(m20250621_000038_create_bsc_randomness_task_index::Migration),
+            Box::new(m20250621_000039_create_bsc_randomness_result_table::Migration),
+            Box::new(m20250621_000040_create_bsc_randomness_result_index::Migration),
         ]
     }
 }

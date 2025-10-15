@@ -1,11 +1,10 @@
 use super::{hasher::Hasher, HashToCurve};
 use crate::curve::BLSError;
-use ark_ec::models::{
-    short_weierstrass_jacobian::{GroupAffine, GroupProjective},
-    SWModelParameters,
-};
-use ark_ff::{Field, PrimeField, Zero};
-use ethers_core::utils::hex;
+use alloy::hex;
+use ark_ec::{models::short_weierstrass::Affine, short_weierstrass::SWCurveConfig};
+// GroupAffine, GroupProjective, SWCurveConfig
+use ark_ec::AffineRepr;
+use ark_ff::{Field, PrimeField};
 use log::debug;
 use std::marker::PhantomData;
 
@@ -21,7 +20,7 @@ pub struct TryAndIncrement<'a, H, P> {
 impl<'a, H, P> TryAndIncrement<'a, H, P>
 where
     H: Hasher<Error = BLSError>,
-    P: SWModelParameters,
+    P: SWCurveConfig,
 {
     /// Instantiates a new Try-and-increment hasher with the provided hashing method
     /// and curve parameters based on the type
@@ -36,9 +35,9 @@ where
 impl<'a, H, P> HashToCurve for TryAndIncrement<'a, H, P>
 where
     H: Hasher<Error = BLSError>,
-    P: SWModelParameters,
+    P: SWCurveConfig,
 {
-    type Output = GroupProjective<P>;
+    type Output = Affine<P>;
 
     fn hash(&self, domain: &[u8], message: &[u8]) -> Result<Self::Output, BLSError> {
         self.hash_with_attempt(domain, message).map(|res| res.0)
@@ -48,13 +47,13 @@ where
 impl<'a, H, P> TryAndIncrement<'a, H, P>
 where
     H: Hasher<Error = BLSError>,
-    P: SWModelParameters,
+    P: SWCurveConfig,
 {
     pub fn hash_with_attempt(
         &self,
         domain: &[u8],
         message: &[u8],
-    ) -> Result<(GroupProjective<P>, usize), BLSError> {
+    ) -> Result<(Affine<P>, usize), BLSError> {
         let mut candidate_hash = self.hasher.hash(domain, message)?;
 
         for c in 0..NUM_TRIES {
@@ -63,20 +62,20 @@ where
                 let f = <P::BaseField as Field>::BasePrimeField::from_be_bytes_mod_order(
                     &candidate_hash,
                 );
-                P::BaseField::from_base_prime_field_elems(&[f])
+                P::BaseField::from_base_prime_field_elems([f])
             } else {
                 P::BaseField::from_random_bytes(&candidate_hash)
             };
 
             if let Some(x) = xfield {
-                if let Some(p) = GroupAffine::get_point_from_x(x, false) {
+                if let Some(p) = Affine::get_point_from_x_unchecked(x, false) {
                     debug!(
                         "succeeded hashing \"{}\" to curve in {} tries",
                         hex::encode(message),
                         c + 1
                     );
 
-                    let scaled = p.scale_by_cofactor();
+                    let scaled = p.mul_by_cofactor();
                     if scaled.is_zero() {
                         continue;
                     }

@@ -8,7 +8,6 @@ use crate::{
 use arpa_contract_client::{error::ContractClientError, node_registry::NodeRegistryTransactions};
 use arpa_core::log::{build_general_payload, build_transaction_receipt_payload, LogType};
 use async_trait::async_trait;
-use ethers::{providers::Middleware, types::U256};
 use log::{debug, error, info};
 use std::{marker::PhantomData, sync::Arc};
 use threshold_bls::group::Curve;
@@ -38,7 +37,7 @@ impl<PC: Curve> NodeActivationSubscriber<PC> {
 impl<PC: Curve + std::fmt::Debug + Sync + Send + 'static> Subscriber
     for NodeActivationSubscriber<PC>
 {
-    async fn notify(&self, topic: Topic, payload: &(dyn DebuggableEvent)) -> NodeResult<()> {
+    async fn notify(&self, topic: Topic, payload: &dyn DebuggableEvent) -> NodeResult<()> {
         debug!("{:?}", topic);
 
         let &NodeActivation {
@@ -55,14 +54,7 @@ impl<PC: Curve + std::fmt::Debug + Sync + Send + 'static> Subscriber
 
         let receipt_result = if is_eigenlayer {
             node_registry_client
-                .node_activate_as_eigenlayer_operator(
-                    self.chain_identity
-                        .read()
-                        .await
-                        .get_client()
-                        .inner()
-                        .signer(),
-                )
+                .node_activate_as_eigenlayer_operator(self.chain_identity.read().await.get_signer())
                 .await
         } else {
             node_registry_client
@@ -79,8 +71,8 @@ impl<PC: Curve + std::fmt::Debug + Sync + Send + 'static> Subscriber
                         "Node activated",
                         chain_id,
                         receipt.transaction_hash,
-                        receipt.gas_used.unwrap_or(U256::zero()),
-                        receipt.effective_gas_price.unwrap_or(U256::zero()),
+                        receipt.gas_used,
+                        receipt.effective_gas_price,
                     )
                 );
             }
@@ -93,8 +85,8 @@ impl<PC: Curve + std::fmt::Debug + Sync + Send + 'static> Subscriber
                             "Node activate failed",
                             chain_id,
                             receipt.transaction_hash,
-                            receipt.gas_used.unwrap_or(U256::zero()),
-                            receipt.effective_gas_price.unwrap_or(U256::zero()),
+                            receipt.gas_used,
+                            receipt.effective_gas_price,
                         )
                     );
                 }

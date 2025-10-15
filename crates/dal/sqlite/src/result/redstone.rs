@@ -1,6 +1,7 @@
 use crate::types::DBError;
 use crate::types::RandomnessRecord;
 use crate::types::SqliteDB;
+use alloy::primitives::Address;
 use arpa_core::format_now_date;
 use arpa_core::BLSTaskError;
 use arpa_core::{RandomnessTask, Task};
@@ -15,7 +16,6 @@ use arpa_dal::SignatureResultCacheUpdater;
 use async_trait::async_trait;
 use entity::prelude::RedstoneRandomnessResult;
 use entity::redstone_randomness_result;
-use ethers_core::types::Address;
 use migration::Expr;
 use migration::Query;
 use migration::SelectStatement;
@@ -149,10 +149,14 @@ impl SignatureResultCacheUpdater<RandomnessResultCache>
     async fn get_ready_to_commit_signatures(
         &mut self,
         current_block_height: usize,
+        randomness_aggregation_waiting_block_number: usize,
     ) -> DataAccessResult<Vec<RandomnessResultCache>> {
         let ready_to_commit_signatures = self
             .signature_results_cache
-            .get_ready_to_commit_signatures(current_block_height)
+            .get_ready_to_commit_signatures(
+                current_block_height,
+                randomness_aggregation_waiting_block_number,
+            )
             .await?;
 
         if ready_to_commit_signatures.is_empty() {

@@ -1,3 +1,4 @@
+use super::{BLSRandomnessService, DBService, DKGService, GroupInfo, NodeInfo, NodeService};
 use crate::context::types::GeneralContext;
 use crate::context::ContextFetcher;
 use crate::error::NodeError;
@@ -15,27 +16,22 @@ use crate::rpc_stub::management::{
     StartListenerReply, StartListenerRequest, VerifyPartialSigsReply, VerifyPartialSigsRequest,
     VerifySigReply, VerifySigRequest,
 };
+use alloy::hex::FromHexError;
 use arpa_core::{
     address_to_string, Group as ModelGroup, ListenerType, Member as ModelMember, SchedulerError,
 };
 use arpa_dal::error::DataAccessError;
 use arpa_log::debug;
 use hyper::http::HeaderValue;
-use rustc_hex::FromHexError;
 use std::sync::Arc;
-use std::{
-    task::{Context, Poll},
-    time::Duration,
-};
+use std::task::{Context, Poll};
+use thiserror::Error;
 use threshold_bls::group::Curve;
 use threshold_bls::sig::{SignatureScheme, ThresholdScheme};
 use tokio::sync::RwLock;
-use tonic::transport::Body;
-use tonic::{body::BoxBody, transport::Server, Request, Response, Status};
+use tonic::{transport::Server, Request, Response, Status};
 use tower::{Layer, Service};
 use uuid::Uuid;
-
-use super::{BLSRandomnessService, DBService, DKGService, GroupInfo, NodeInfo, NodeService};
 
 type NodeContext<PC, S> = Arc<RwLock<GeneralContext<PC, S>>>;
 
@@ -99,7 +95,7 @@ where
         self.context
             .write()
             .await
-            .start_listener(req.chain_id as usize, task_type)
+            .start_listener(req.chain_id as u64, task_type)
             .await
             .map_err(|e: SchedulerError| Status::already_exists(e.to_string()))?;
 
@@ -119,7 +115,7 @@ where
         self.context
             .write()
             .await
-            .shutdown_listener(req.chain_id as usize, task_type)
+            .shutdown_listener(req.chain_id as u64, task_type)
             .await
             .map_err(|e: SchedulerError| Status::not_found(e.to_string()))?;
 
@@ -310,7 +306,7 @@ where
             .write()
             .await
             .send_partial_sig(
-                req.chain_id as usize,
+                req.chain_id as u64,
                 member_id_address,
                 msg,
                 request_id,
@@ -417,7 +413,7 @@ where
     // The stack of middleware that our service will be wrapped in
     let layer = tower::ServiceBuilder::new()
         // Apply middleware from tower
-        .timeout(Duration::from_secs(30))
+        // .timeout(Duration::from_secs(30))
         // Apply our own middleware
         .layer(LogLayer::new(context.clone()))
         // Interceptors can be also be applied as middleware
@@ -476,8 +472,18 @@ struct LogService<
     context: NodeContext<PC, SS>,
 }
 
+#[derive(Debug, Error)]
+enum LogError<E> {
+    #[error("{0}")]
+    Injected(String),
+    #[error("Inner error: {0}")]
+    Inner(E),
+}
+
 impl<
         S,
+        ReqBody,
+        ResBody,
         PC: Curve + std::fmt::Debug + Clone + Sync + Send + 'static,
         SS: SignatureScheme
             + ThresholdScheme<Public = PC::Point, Private = PC::Scalar>
@@ -485,20 +491,24 @@ impl<
             + Send
             + Sync
             + 'static,
-    > Service<hyper::Request<Body>> for LogService<S, PC, SS>
+    > Service<hyper::Request<ReqBody>> for LogService<S, PC, SS>
 where
-    S: Service<hyper::Request<Body>, Response = hyper::Response<BoxBody>> + Clone + Send + 'static,
+    S: Service<hyper::Request<ReqBody>, Response = hyper::Response<ResBody>>
+        + Clone
+        + Send
+        + 'static,
     S::Future: Send + 'static,
+    ReqBody: std::fmt::Debug + Send + 'static,
 {
     type Response = S::Response;
-    type Error = S::Error;
+    type Error = LogError<S::Error>;
     type Future = futures::future::BoxFuture<'static, Result<Self::Response, Self::Error>>;
 
     fn poll_ready(&mut self, cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
-        self.inner.poll_ready(cx)
+        self.inner.poll_ready(cx).map_err(LogError::Inner)
     }
 
-    fn call(&mut self, req: hyper::Request<Body>) -> Self::Future {
+    fn call(&mut self, req: hyper::Request<ReqBody>) -> Self::Future {
         // This is necessary because tonic internally uses `tower::buffer::Buffer`.
         // See https://github.com/tower-rs/tower/issues/547#issuecomment-767629149
         // for details on why this is necessary
@@ -523,10 +533,12 @@ where
 
             match req.headers().get("authorization") {
                 Some(t) if token == t => {}
-                _ => return Ok(Status::unauthenticated("No valid auth token").to_http()),
+                _ => {
+                    return Err(LogError::Injected("No valid auth token".to_string()));
+                }
             };
 
-            let response = inner.call(req).await?;
+            let response = inner.call(req).await.map_err(LogError::Inner)?;
 
             log_mdc::remove("management_request_id");
 

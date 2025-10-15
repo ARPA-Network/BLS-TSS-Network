@@ -1,4 +1,4 @@
-use ethers::types::Address;
+use alloy::primitives::Address;
 
 use crate::subscriber::DebuggableEvent;
 
@@ -6,13 +6,13 @@ use super::{types::Topic, Event};
 
 #[derive(Clone, Debug)]
 pub struct NodeActivation {
-    pub chain_id: usize,
+    pub chain_id: u64,
     pub is_eigenlayer: bool,
     pub node_registry_address: Address,
 }
 
 impl NodeActivation {
-    pub fn new(chain_id: usize, is_eigenlayer: bool, node_registry_address: Address) -> Self {
+    pub fn new(chain_id: u64, is_eigenlayer: bool, node_registry_address: Address) -> Self {
         NodeActivation {
             chain_id,
             is_eigenlayer,

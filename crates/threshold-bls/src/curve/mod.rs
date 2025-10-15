@@ -71,11 +71,10 @@ mod tests {
     use crate::curve::bn254::G2Curve;
     use crate::group::Curve;
     use crate::group::Element;
-    use ethers_core::utils::hex;
-    use rand::prelude::*;
+    use alloy::hex;
 
     fn keypair<C: Curve>() -> (C::Scalar, C::Point) {
-        let private = C::Scalar::rand(&mut thread_rng());
+        let private = C::Scalar::rand(&mut rand::thread_rng());
         let mut public = C::Point::one();
         public.mul(&private);
         (private, public)

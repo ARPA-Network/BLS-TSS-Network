@@ -36,7 +36,7 @@ pub struct GeneralContext<
     S: SignatureScheme + ThresholdScheme<Public = PC::Point, Private = PC::Scalar>,
 > {
     main_chain: GeneralMainChain<PC, S>,
-    relayed_chains: HashMap<usize, RelayedChainType<PC, S>>,
+    relayed_chains: HashMap<u64, RelayedChainType<PC, S>>,
     eq: Arc<RwLock<EventQueue>>,
     ts: Arc<RwLock<SimpleDynamicTaskScheduler>>,
     f_ts: Arc<RwLock<SimpleFixedTaskScheduler>>,
@@ -84,13 +84,13 @@ where
         &self.main_chain
     }
 
-    fn contains_relayed_chain(&self, index: usize) -> bool {
+    fn contains_relayed_chain(&self, index: u64) -> bool {
         self.relayed_chains.contains_key(&index)
     }
 
     fn get_relayed_chain(
         &self,
-        index: usize,
+        index: u64,
     ) -> Option<
         &Box<
             dyn RelayedChain<
@@ -186,7 +186,7 @@ impl<
             + 'static,
     > ContextFetcher for GeneralContext<PC, S>
 {
-    fn get_supported_relayed_chains(&self) -> Vec<usize> {
+    fn get_supported_relayed_chains(&self) -> Vec<u64> {
         self.relayed_chains.keys().cloned().collect()
     }
 

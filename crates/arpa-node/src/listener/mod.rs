@@ -85,7 +85,7 @@ pub trait Listener: Debug + Display {
         Ok(())
     }
 
-    fn chain_id(&self) -> usize;
+    fn chain_id(&self) -> u64;
 
     fn listener_descriptor(&self) -> ListenerDescriptor;
 
@@ -131,7 +131,7 @@ pub mod tests {
         handle_interruption_counter: Arc<AtomicUsize>,
         should_fail: Arc<AtomicBool>,
         interruption_should_fail: Arc<AtomicBool>,
-        chain_id: usize,
+        chain_id: u64,
         initialized: Arc<AtomicBool>,
     }
 
@@ -187,13 +187,13 @@ pub mod tests {
             }
         }
 
-        fn chain_id(&self) -> usize {
+        fn chain_id(&self) -> u64 {
             self.chain_id
         }
     }
 
     fn create_test_listener(
-        chain_id: usize,
+        chain_id: u64,
     ) -> (
         TestListener,
         Arc<AtomicUsize>,

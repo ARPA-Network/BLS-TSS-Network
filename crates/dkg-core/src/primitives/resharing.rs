@@ -362,7 +362,8 @@ where
     /// - bundle's dealer index is in range
     /// - a justification was required for the given share (no-op)
     /// - share corresponds to public polynomial received in the bundled shares during
-    /// first period.
+    ///   first period.
+    ///
     /// Return an output if `len(qual) > thr`
     fn process_justifications(
         self,

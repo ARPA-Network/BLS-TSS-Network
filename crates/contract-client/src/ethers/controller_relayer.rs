@@ -1,32 +1,44 @@
 use crate::{
-    contract_stub::controller_relayer::ControllerRelayer,
+    // contract_stub::controller_relayer::ControllerRelayer,
     controller_relayer::{ControllerRelayerClientBuilder, ControllerRelayerTransactions},
     error::ContractClientResult,
-    ServiceClient, TransactionCaller,
+    ethers::controller_relayer::ControllerRelayer::ControllerRelayerInstance,
+    ServiceClient,
+    TransactionCaller,
+};
+use alloy::{
+    primitives::{Address, U256},
+    rpc::types::TransactionReceipt,
+    sol,
 };
 use arpa_core::{
     ChainIdentity, ExponentialBackoffRetryDescriptor, GeneralMainChainIdentity,
-    GeneralRelayedChainIdentity, MainChainIdentity, WsWalletSigner,
+    GeneralRelayedChainIdentity, MainChainIdentity, ProviderClientWithSigner,
 };
 use async_trait::async_trait;
-use ethers::prelude::*;
-use std::sync::Arc;
+
+sol! {
+    #[sol(ignore_unlinked)]
+    #[sol(rpc)]
+    ControllerRelayer,
+    "abi/ControllerRelayer.json"
+}
 
 pub struct ControllerRelayerClient {
-    chain_id: usize,
+    chain_id: u64,
     controller_relayer_address: Address,
-    client: Arc<WsWalletSigner>,
+    client: ProviderClientWithSigner,
     contract_transaction_retry_descriptor: ExponentialBackoffRetryDescriptor,
-    max_priority_fee_per_gas: Option<U256>,
+    max_priority_fee_per_gas: Option<u128>,
 }
 
 impl ControllerRelayerClient {
     pub fn new(
-        chain_id: usize,
+        chain_id: u64,
         controller_relayer_address: Address,
         identity: &GeneralMainChainIdentity,
         contract_transaction_retry_descriptor: ExponentialBackoffRetryDescriptor,
-        max_priority_fee_per_gas: Option<U256>,
+        max_priority_fee_per_gas: Option<u128>,
     ) -> Self {
         ControllerRelayerClient {
             chain_id,
@@ -60,7 +72,7 @@ impl ControllerRelayerClientBuilder for GeneralRelayedChainIdentity {
     }
 }
 
-type ControllerRelayerContract = ControllerRelayer<WsWalletSigner>;
+type ControllerRelayerContract = ControllerRelayerInstance<ProviderClientWithSigner>;
 
 #[async_trait]
 impl ServiceClient<ControllerRelayerContract> for ControllerRelayerClient {
@@ -79,18 +91,19 @@ impl TransactionCaller for ControllerRelayerClient {}
 impl ControllerRelayerTransactions for ControllerRelayerClient {
     async fn relay_group(
         &self,
-        chain_id: usize,
+        chain_id: u64,
         group_index: usize,
     ) -> ContractClientResult<TransactionReceipt> {
         let controller_relayer_contract =
             ServiceClient::<ControllerRelayerContract>::prepare_service_client(self).await?;
 
-        let call = controller_relayer_contract.relay_group(chain_id.into(), group_index.into());
+        let call =
+            controller_relayer_contract.relayGroup(U256::from(chain_id), U256::from(group_index));
 
         ControllerRelayerClient::call_contract_transaction(
             self.chain_id,
             "relay_group",
-            controller_relayer_contract.client_ref(),
+            controller_relayer_contract.provider(),
             call,
             self.contract_transaction_retry_descriptor,
             false,

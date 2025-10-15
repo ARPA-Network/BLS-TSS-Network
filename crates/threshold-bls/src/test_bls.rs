@@ -1,9 +1,5 @@
 #[cfg(test)]
 pub mod tests {
-    use ark_ec::ProjectiveCurve;
-    use ark_serialize::CanonicalSerialize;
-    use ethers_core::{types::U256, utils::hex};
-
     use crate::curve::bn254::PairingCurve;
     use crate::group::{Element, Scalar};
     use crate::poly::Eval;
@@ -14,6 +10,9 @@ pub mod tests {
         schemes::bn254::G2Scheme as SigScheme,
         sig::{G2Scheme, Scheme, Share, SignatureScheme, ThresholdScheme},
     };
+    use alloy::{hex, primitives::U256};
+    use ark_ec::CurveGroup;
+    use ark_serialize::CanonicalSerialize;
 
     #[test]
     fn test_dkg_bls_over_bn254() {
@@ -89,8 +88,7 @@ pub mod tests {
         for i in 0..seed_arr.len() {
             let seed = hex::decode(seed_arr[i]).unwrap();
             let block_num = U256::from(block_num_arr[i]);
-            let mut block_num_bytes = vec![0u8; 32];
-            block_num.to_big_endian(&mut block_num_bytes);
+            let block_num_bytes = block_num.to_be_bytes::<32>().to_vec();
 
             // Generate the partial signatures
             let msg = [seed, block_num_bytes].concat();
@@ -171,9 +169,9 @@ pub mod tests {
         print!(" ");
         println!("{:?}", hex::encode(x2.clone()));
         // Dec
-        print!("{:?}", U256::from(&x1 as &[u8]));
+        print!("{:?}", U256::from_be_slice(&x1));
         print!(" ");
-        println!("{:?}", U256::from(&x2 as &[u8]));
+        println!("{:?}", U256::from_be_slice(&x2));
         println!("");
     }
 
@@ -186,24 +184,36 @@ pub mod tests {
         // Hex
         println!("{:?}", hex::encode(x1.clone()));
         // Dec
-        println!("{:?}", U256::from(&x1 as &[u8]));
+        println!("{:?}", U256::from_be_slice(&x1));
         println!("");
     }
 
     fn print_g2_point(p: &G2) {
         let mut xbytes = vec![];
-        p.0.into_affine().x.serialize(&mut xbytes).unwrap();
+        p.0.into_affine()
+            .x
+            .serialize_compressed(&mut xbytes)
+            .unwrap();
         let mut ybytes = vec![];
-        p.0.into_affine().y.serialize(&mut ybytes).unwrap();
+        p.0.into_affine()
+            .y
+            .serialize_compressed(&mut ybytes)
+            .unwrap();
         print_g2_affine("x", &xbytes);
         print_g2_affine("y", &ybytes);
     }
 
     fn print_g1_point(p: &G1) {
         let mut xbytes = vec![];
-        p.0.into_affine().x.serialize(&mut xbytes).unwrap();
+        p.0.into_affine()
+            .x
+            .serialize_compressed(&mut xbytes)
+            .unwrap();
         let mut ybytes = vec![];
-        p.0.into_affine().y.serialize(&mut ybytes).unwrap();
+        p.0.into_affine()
+            .y
+            .serialize_compressed(&mut ybytes)
+            .unwrap();
         print_g1_affine("x", &xbytes);
         print_g1_affine("y", &ybytes);
     }

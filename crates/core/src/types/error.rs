@@ -1,4 +1,4 @@
-use ethers_signers::WalletError;
+use alloy::signers::local::LocalSignerError;
 use std::env::VarError;
 use std::string::FromUtf8Error;
 use thiserror::Error;
@@ -29,10 +29,10 @@ pub enum SchedulerError {
     TaskAlreadyExisted,
 
     #[error("the chain id: {0} is not supported")]
-    InvalidChainId(usize),
+    InvalidChainId(u64),
 
     #[error("the listener {1} is not supported in relayed chain {0}")]
-    UnsupportedListenerType(usize, String),
+    UnsupportedListenerType(u64, String),
 
     #[error("the listener failed to initialize. Error: {0}")]
     ListenerInitializationError(String),
@@ -47,9 +47,9 @@ pub enum ConfigError {
     #[error(transparent)]
     EnvVarNotExisted(#[from] VarError),
     #[error(transparent)]
-    BuildingAccountError(#[from] WalletError),
+    BuildingAccountError(#[from] LocalSignerError),
     #[error("the chain id: {0} is not supported")]
-    InvalidChainId(usize),
+    InvalidChainId(u64),
     #[error("lack of ARPA contract address")]
     LackOfARPAContractAddress,
 }
