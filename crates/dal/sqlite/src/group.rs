@@ -1,6 +1,7 @@
 use crate::types::DBError;
 use crate::types::DBResult;
 use crate::types::SqliteDB;
+use alloy::primitives::Address;
 use arpa_core::Group;
 use arpa_core::Member;
 use arpa_core::{format_now_date, DKGStatus};
@@ -12,7 +13,6 @@ use arpa_dal::{DKGOutput, GroupInfoFetcher, GroupInfoUpdater};
 use async_trait::async_trait;
 use entity::group_info;
 use entity::prelude::GroupInfo;
-use ethers_core::types::Address;
 use log::info;
 use sea_orm::{ActiveModelTrait, DbConn, DbErr, EntityTrait, QueryOrder, Set};
 use std::collections::BTreeMap;

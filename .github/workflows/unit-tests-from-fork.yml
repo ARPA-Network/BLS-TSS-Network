@@ -19,7 +19,7 @@ jobs:
       - name: Install latest nightly
         uses: actions-rs/toolchain@v1
         with:
-          toolchain: nightly-2024-05-14
+          toolchain: nightly
           override: true
           components: rustfmt, clippy
       - name: Install Protoc
@@ -27,11 +27,11 @@ jobs:
       - name: Install Anvil
         uses: foundry-rs/foundry-toolchain@v1
         with:
-          version: nightly-7bef9caccfe62761225be66e84bea2810e656c96
+          version: nightly
       - name: Install Solc
         run: |
           curl -fsSL https://github.com/ethereum/solidity/releases/download/v0.8.27/solc-static-linux -o /usr/local/bin/solc
           chmod +x /usr/local/bin/solc
         shell: bash
       - name: Run all tests
-        run: CARGO_HTTP_MULTIPLEXING=false cargo test --features unittest -- --test-threads=1 --nocapture
+        run: CARGO_HTTP_MULTIPLEXING=false cargo test --all -- --test-threads=1 --nocapture

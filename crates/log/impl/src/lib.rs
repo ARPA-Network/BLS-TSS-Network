@@ -1,5 +1,4 @@
 #![feature(box_patterns)]
-
 use proc_macro::TokenStream;
 use proc_macro2::{Ident, TokenStream as TokenStream2};
 use quote::quote;

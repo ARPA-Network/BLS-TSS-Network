@@ -19,7 +19,7 @@ jobs:
       - name: Install latest nightly
         uses: actions-rs/toolchain@v1
         with:
-          toolchain: nightly-2024-05-14
+          toolchain: nightly
           override: true
           components: rustfmt, clippy
       - name: Install Protoc
@@ -30,7 +30,7 @@ jobs:
       - name: Install Anvil
         uses: foundry-rs/foundry-toolchain@v1
         with:
-          version: nightly-cc5637a979050c39b3d06bc4cc6134f0591ee8d0
+          version: nightly
       - name: Build
         run: cargo build
       - name: Format

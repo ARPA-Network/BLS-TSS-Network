@@ -15,7 +15,6 @@ use arpa_core::{
 use arpa_dal::{GroupInfoHandler, NodeInfoHandler};
 use async_trait::async_trait;
 use core::fmt::Debug;
-use ethers::types::U256;
 use log::{debug, error, info};
 use rand::{prelude::ThreadRng, RngCore};
 use std::{marker::PhantomData, sync::Arc};
@@ -171,8 +170,8 @@ impl<
                                     self.group_cache.read().await.get_group()?,
                                     None,
                                     receipt.transaction_hash,
-                                    receipt.gas_used.unwrap_or(U256::zero()),
-                                    receipt.effective_gas_price.unwrap_or(U256::zero())
+                                    receipt.gas_used,
+                                    receipt.effective_gas_price
                                 )
                             );
                         }
@@ -187,8 +186,8 @@ impl<
                                         self.group_cache.read().await.get_group()?,
                                         None,
                                         receipt.transaction_hash,
-                                        receipt.gas_used.unwrap_or(U256::zero()),
-                                        receipt.effective_gas_price.unwrap_or(U256::zero())
+                                        receipt.gas_used,
+                                        receipt.effective_gas_price
                                     )
                                 );
                             }
@@ -258,8 +257,8 @@ impl<
                                     self.group_cache.read().await.get_group()?,
                                     None,
                                     receipt.transaction_hash,
-                                    receipt.gas_used.unwrap_or(U256::zero()),
-                                    receipt.effective_gas_price.unwrap_or(U256::zero())
+                                    receipt.gas_used,
+                                    receipt.effective_gas_price
                                 )
                             );
                         }
@@ -274,8 +273,8 @@ impl<
                                         self.group_cache.read().await.get_group()?,
                                         None,
                                         receipt.transaction_hash,
-                                        receipt.gas_used.unwrap_or(U256::zero()),
-                                        receipt.effective_gas_price.unwrap_or(U256::zero())
+                                        receipt.gas_used,
+                                        receipt.effective_gas_price
                                     )
                                 );
                             }
@@ -313,7 +312,7 @@ impl<
 
 #[async_trait]
 impl<PC: Curve + std::fmt::Debug + Sync + Send + 'static> Subscriber for InGroupingSubscriber<PC> {
-    async fn notify(&self, topic: Topic, payload: &(dyn DebuggableEvent)) -> NodeResult<()> {
+    async fn notify(&self, topic: Topic, payload: &dyn DebuggableEvent) -> NodeResult<()> {
         debug!("{:?}", topic);
 
         let RunDKG { dkg_task: task, .. } =

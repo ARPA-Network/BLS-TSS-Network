@@ -4,12 +4,12 @@ use arpa_core::RandomnessTask;
 
 #[derive(Clone, Debug)]
 pub struct ReadyToHandleRandomnessTask {
-    pub chain_id: usize,
+    pub chain_id: u64,
     pub tasks: Vec<RandomnessTask>,
 }
 
 impl ReadyToHandleRandomnessTask {
-    pub fn new(chain_id: usize, tasks: Vec<RandomnessTask>) -> Self {
+    pub fn new(chain_id: u64, tasks: Vec<RandomnessTask>) -> Self {
         ReadyToHandleRandomnessTask { chain_id, tasks }
     }
 }

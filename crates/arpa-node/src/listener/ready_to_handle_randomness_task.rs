@@ -5,11 +5,12 @@ use crate::{
     event::ready_to_handle_randomness_task::ReadyToHandleRandomnessTask,
     queue::{event_queue::EventQueue, EventPublisher},
 };
+use alloy::primitives::Address;
+use alloy::providers::Provider;
 use arpa_contract_client::adapter::AdapterViews;
 use arpa_core::{ListenerDescriptor, RandomnessTask};
 use arpa_dal::{BLSTasksHandler, BlockInfoHandler, GroupInfoHandler};
 use async_trait::async_trait;
-use ethers::{providers::Middleware, types::Address};
 use std::{marker::PhantomData, sync::Arc};
 use threshold_bls::group::Curve;
 use tokio::sync::RwLock;
@@ -130,7 +131,7 @@ impl<PC: Curve + Sync + Send> Listener for ReadyToHandleRandomnessTaskListener<P
         Ok(())
     }
 
-    fn chain_id(&self) -> usize {
+    fn chain_id(&self) -> u64 {
         self.listener_descriptor.chain_id
     }
 
@@ -139,59 +140,63 @@ impl<PC: Curve + Sync + Send> Listener for ReadyToHandleRandomnessTaskListener<P
     }
 }
 
-#[cfg(feature = "unittest")]
+#[cfg(test)]
 mod tests {
     use super::*;
     use crate::error::NodeError;
     use crate::event::types::Topic;
+    use crate::listener::ready_to_handle_randomness_task::tests::MockAdapter::MockAdapterInstance;
     use crate::queue::EventSubscriber;
     use crate::subscriber::{DebuggableEvent, DebuggableSubscriber, Subscriber};
-    use crate::test_contracts::mockadapter::{deploy_with_args_and_get_mock_adapter, MockAdapter};
-    use ethers::middleware::SignerMiddleware;
-    use ethers::signers::{LocalWallet, Signer};
-    use threshold_bls::schemes::bn254::G2Curve;
-
+    use alloy::node_bindings::Anvil;
+    use alloy::primitives::U256;
+    use alloy::providers::WsConnect;
+    use alloy::signers::local::PrivateKeySigner;
+    use alloy::sol;
     use anyhow::anyhow;
     use arpa_core::{
-        Config, FixedIntervalRetryDescriptor, GeneralMainChainIdentity, ListenerType,
-        RandomnessRequestType,
+        build_client, random_address, Config, FixedIntervalRetryDescriptor,
+        GeneralMainChainIdentity, ListenerType, ProviderClientWithSigner, RandomnessRequestType,
     };
     use arpa_dal::cache::{InMemoryBLSTasksQueue, InMemoryBlockInfoCache, InMemoryGroupInfoCache};
-    use ethers::{
-        providers::{Http, Provider, Ws},
-        types::{Address, U256},
-        utils::Anvil,
-    };
     use std::sync::Arc;
     use std::time::Duration;
+    use threshold_bls::schemes::bn254::G2Curve;
     use tokio::time::timeout;
 
+    sol! {
+        #[sol(ignore_unlinked)]
+        #[sol(rpc)]
+        MockAdapter,
+        "test-contract/MockAdapter.json"
+    }
+
     async fn setup_contract_with_commitment(
-        adapter: &MockAdapter<SignerMiddleware<Provider<Http>, LocalWallet>>,
+        adapter: &MockAdapterInstance<ProviderClientWithSigner>,
         request_id: [u8; 32],
         commitment: [u8; 32],
         description: &str,
     ) -> Result<(), Box<dyn std::error::Error>> {
-        let tx = adapter.set_request_commitment(request_id.into(), commitment.into());
-        let receipt = tx.send().await?.await?;
+        let tx = adapter.setRequestCommitment(request_id.into(), commitment.into());
+        let receipt = tx.send().await?.get_receipt().await?;
         println!(
             "  {} in block {}",
             description,
-            receipt.unwrap().block_number.unwrap()
+            receipt.block_number.unwrap()
         );
         Ok(())
     }
 
     async fn verify_contract_commitment(
-        adapter: &MockAdapter<SignerMiddleware<Provider<Http>, LocalWallet>>,
+        adapter: &MockAdapterInstance<ProviderClientWithSigner>,
         request_id: [u8; 32],
         expected_non_zero: bool,
     ) -> Result<(), Box<dyn std::error::Error>> {
         let result = adapter
-            .get_pending_request_commitment(request_id.into())
+            .getPendingRequestCommitment(request_id.into())
             .call()
             .await?;
-        let result_as_u256 = U256::from(result);
+        let result_as_u256 = U256::from_be_slice(result.as_slice());
         let is_non_zero = !result_as_u256.is_zero();
 
         if expected_non_zero {
@@ -210,12 +215,12 @@ mod tests {
     }
 
     async fn setup_mock_adapter(
-        client: Arc<SignerMiddleware<Provider<Http>, LocalWallet>>,
+        client: ProviderClientWithSigner,
         pending_request_ids: Vec<[u8; 32]>,
     ) -> Result<Address, Box<dyn std::error::Error>> {
         println!("Deploying mock adapter contract...");
 
-        let adapter = deploy_with_args_and_get_mock_adapter(client.clone(), ()).await?;
+        let adapter = MockAdapter::deploy(client.clone()).await?;
         let adapter_address = adapter.address();
         println!("Adapter contract deployed at: {}", adapter_address);
 
@@ -258,24 +263,24 @@ mod tests {
         .await?;
 
         let result = adapter
-            .get_pending_request_commitment(test_request_id.into())
+            .getPendingRequestCommitment(test_request_id.into())
             .call()
             .await?;
         println!("Verification call result: {:?}", result);
-        let result_as_u256 = U256::from(result);
+        let result_as_u256 = U256::from_be_slice(result.as_slice());
         println!(
             "As U256: {}, Is non-zero: {}",
             result_as_u256,
             !result_as_u256.is_zero()
         );
 
-        Ok(adapter_address)
+        Ok(*adapter_address)
     }
 
     async fn create_test_subscriber(
         eq: &mut EventQueue,
         subscriber_name: &str,
-        chain_id: usize,
+        chain_id: u64,
     ) -> tokio::sync::mpsc::Receiver<Box<dyn std::any::Any + Send>> {
         let (sender, receiver) = tokio::sync::mpsc::channel(100);
 
@@ -353,11 +358,11 @@ mod tests {
             group_index: 1,
             request_type: RandomnessRequestType::Randomness,
             params,
-            requester: Address::random(),
+            requester: random_address(),
             seed: U256::from(seed),
             request_confirmations: 5,
             callback_gas_limit: 100000,
-            callback_max_gas_price: U256::from(10000000000u64),
+            callback_max_gas_price: 10000000000,
             assignment_block_height: 90,
         }
     }
@@ -388,7 +393,7 @@ mod tests {
                 threshold: 2,
                 assignment_block_height: 90,
                 members: vec![id_address],
-                coordinator_address: Address::random(),
+                coordinator_address: random_address(),
             };
             group_cache_write.save_task_info(0, dkg_task).await.unwrap();
             group_cache_write
@@ -450,7 +455,7 @@ mod tests {
 
     async fn verify_event_content(
         event: &ReadyToHandleRandomnessTask,
-        expected_chain_id: usize,
+        expected_chain_id: u64,
         expected_task_count: Option<usize>,
         expected_request_ids: Option<Vec<Vec<u8>>>,
         test_name: &str,
@@ -482,23 +487,17 @@ mod tests {
         let anvil = Anvil::new().spawn();
         println!("Anvil instance started at {}", anvil.endpoint());
 
-        let http_provider = Provider::<Http>::try_from(anvil.endpoint())
-            .map_err(|e| anyhow!("Failed to create HTTP provider: {}", e))?;
-
-        let ws_provider = Arc::new(Provider::<Ws>::connect(anvil.ws_endpoint()).await?);
+        let ws_connect = WsConnect::new(anvil.ws_endpoint());
         println!("Connected to Anvil WebSocket at {}", anvil.ws_endpoint());
 
-        let wallet: LocalWallet = anvil.keys()[0].clone().into();
+        let wallet: PrivateKeySigner = anvil.keys()[0].clone().into();
         let id_address = wallet.address();
         println!("Using wallet address: {}", id_address);
 
-        let chain_id = anvil.chain_id() as usize;
+        let chain_id = anvil.chain_id();
         println!("Chain ID: {}", chain_id);
 
-        let client = Arc::new(SignerMiddleware::new(
-            http_provider,
-            wallet.clone().with_chain_id(anvil.chain_id()),
-        ));
+        let client = build_client(wallet.clone(), chain_id, ws_connect.clone()).await?;
 
         let request_id1 = [1u8; 32];
         let request_id2 = [2u8; 32];
@@ -512,16 +511,17 @@ mod tests {
 
         println!("Adapter contract deployed at: {}", adapter_address);
 
-        let controller_address = Address::random();
+        let controller_address = random_address();
         let config = Config::default();
 
         let chain_identity = GeneralMainChainIdentity::new(
             chain_id,
             wallet.clone(),
-            ws_provider.clone(),
+            ws_connect.clone(),
+            client.clone(),
             anvil.ws_endpoint(),
             controller_address,
-            Address::random(),
+            random_address(),
             adapter_address,
             config
                 .get_time_limits()

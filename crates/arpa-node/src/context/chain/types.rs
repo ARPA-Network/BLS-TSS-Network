@@ -55,7 +55,7 @@ pub struct GeneralMainChain<
     PC: Curve,
     S: SignatureScheme + ThresholdScheme<Public = PC::Point, Private = PC::Scalar>,
 > {
-    id: usize,
+    id: u64,
     description: String,
     is_eigenlayer: bool,
     is_consistent_asset_and_node_account: bool,
@@ -149,7 +149,7 @@ where
 
     type ChainIdentity = ChainIdentityHandlerType<PC>;
 
-    fn id(&self) -> usize {
+    fn id(&self) -> u64 {
         self.id
     }
 
@@ -278,10 +278,14 @@ where
             ListenerType::RandomnessSignatureAggregation => {
                 let id_address = self.get_node_cache().read().await.get_id_address().unwrap();
 
+                let randomness_aggregation_waiting_block_number =
+                    self.time_limits.randomness_aggregation_waiting_block_number;
+
                 let p_randomness_signature_aggregation =
                     RandomnessSignatureAggregationListener::new(
                         listener,
                         id_address,
+                        randomness_aggregation_waiting_block_number,
                         self.get_block_cache(),
                         self.get_group_cache(),
                         self.get_randomness_result_cache(),
@@ -528,7 +532,7 @@ pub struct GeneralRelayedChain<
     PC: Curve,
     S: SignatureScheme + ThresholdScheme<Public = PC::Point, Private = PC::Scalar>,
 > {
-    id: usize,
+    id: u64,
     description: String,
     chain_identity: Arc<RwLock<ChainIdentityHandlerType<PC>>>,
     node_cache: Arc<RwLock<Box<dyn NodeInfoHandler<PC>>>>,
@@ -614,7 +618,7 @@ where
 
     type ChainIdentity = ChainIdentityHandlerType<PC>;
 
-    fn id(&self) -> usize {
+    fn id(&self) -> u64 {
         self.id
     }
 
@@ -700,10 +704,14 @@ where
             ListenerType::RandomnessSignatureAggregation => {
                 let id_address = self.get_node_cache().read().await.get_id_address().unwrap();
 
+                let randomness_aggregation_waiting_block_number =
+                    self.time_limits.randomness_aggregation_waiting_block_number;
+
                 let p_randomness_signature_aggregation =
                     RandomnessSignatureAggregationListener::new(
                         listener,
                         id_address,
+                        randomness_aggregation_waiting_block_number,
                         self.get_block_cache(),
                         self.get_group_cache(),
                         self.get_randomness_result_cache(),

@@ -85,9 +85,9 @@ pub trait Context<
 
     fn get_main_chain(&self) -> &Self::MainChain;
 
-    fn contains_relayed_chain(&self, index: usize) -> bool;
+    fn contains_relayed_chain(&self, index: u64) -> bool;
 
-    fn get_relayed_chain(&self, index: usize) -> Option<&RelayedChainType<PC, S>>;
+    fn get_relayed_chain(&self, index: u64) -> Option<&RelayedChainType<PC, S>>;
 
     fn add_relayed_chain(&mut self, relayed_chain: RelayedChainType<PC, S>) -> NodeResult<()>;
 
@@ -102,7 +102,7 @@ pub trait TaskWaiter {
 }
 
 pub trait ContextFetcher {
-    fn get_supported_relayed_chains(&self) -> Vec<usize>;
+    fn get_supported_relayed_chains(&self) -> Vec<u64>;
 
     fn get_fixed_task_handler(&self) -> Arc<RwLock<SimpleFixedTaskScheduler>>;
 

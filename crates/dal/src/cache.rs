@@ -9,6 +9,7 @@ use super::{
     GroupInfoUpdater, NodeInfoFetcher, NodeInfoUpdater, ResultCache, SignatureResultCacheFetcher,
     SignatureResultCacheUpdater,
 };
+use alloy::primitives::Address;
 use arpa_core::log::encoder;
 use arpa_core::{
     BLSTask, BLSTaskError, DKGStatus, DKGTask, Group, Member, PartialSignature, RandomnessTask,
@@ -16,7 +17,6 @@ use arpa_core::{
 };
 use async_trait::async_trait;
 use dkg_core::primitives::DKGOutput;
-use ethers_core::types::Address;
 use log::info;
 use std::collections::{BTreeMap, HashMap};
 use threshold_bls::group::{Curve, Element};
@@ -25,13 +25,13 @@ use threshold_bls::sig::Share;
 
 #[derive(Debug, Default)]
 pub struct InMemoryBlockInfoCache {
-    chain_id: usize,
+    chain_id: u64,
     block_height: usize,
     block_time: usize,
 }
 
 impl InMemoryBlockInfoCache {
-    pub fn new(chain_id: usize, block_time: usize) -> Self {
+    pub fn new(chain_id: u64, block_time: usize) -> Self {
         InMemoryBlockInfoCache {
             chain_id,
             block_height: 0,
@@ -43,7 +43,7 @@ impl InMemoryBlockInfoCache {
 impl BlockInfoHandler for InMemoryBlockInfoCache {}
 
 impl BlockInfoFetcher for InMemoryBlockInfoCache {
-    fn get_chain_id(&self) -> usize {
+    fn get_chain_id(&self) -> u64 {
         self.chain_id
     }
 
@@ -811,6 +811,7 @@ impl SignatureResultCacheUpdater<RandomnessResultCache>
     async fn get_ready_to_commit_signatures(
         &mut self,
         current_block_height: usize,
+        randomness_aggregation_waiting_block_number: usize,
     ) -> DataAccessResult<Vec<RandomnessResultCache>> {
         let ready_to_commit_signatures = self
             .signature_result_caches
@@ -818,7 +819,8 @@ impl SignatureResultCacheUpdater<RandomnessResultCache>
             .filter(|v| {
                 ((current_block_height + 1)
                     >= v.result_cache.randomness_task.assignment_block_height
-                        + v.result_cache.randomness_task.request_confirmations as usize)
+                        + v.result_cache.randomness_task.request_confirmations as usize
+                        + randomness_aggregation_waiting_block_number)
                     && v.state == BLSResultCacheState::NotCommitted
                     && v.result_cache.partial_signatures.len() >= v.result_cache.threshold
             })

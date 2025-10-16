@@ -17,7 +17,6 @@ use arpa_core::{
 use arpa_dal::GroupInfoHandler;
 use arpa_log::*;
 use async_trait::async_trait;
-use ethers::types::U256;
 use log::{debug, error, info};
 use std::{marker::PhantomData, sync::Arc};
 use threshold_bls::group::Curve;
@@ -26,7 +25,7 @@ use tokio::sync::RwLock;
 #[derive(Debug)]
 pub struct PostGroupingSubscriber<PC: Curve> {
     chain_identity: Arc<RwLock<ChainIdentityHandlerType<PC>>>,
-    supported_relayed_chains: Vec<usize>,
+    supported_relayed_chains: Vec<u64>,
     group_cache: Arc<RwLock<Box<dyn GroupInfoHandler<PC>>>>,
     eq: Arc<RwLock<EventQueue>>,
     ts: Arc<RwLock<SimpleDynamicTaskScheduler>>,
@@ -36,7 +35,7 @@ pub struct PostGroupingSubscriber<PC: Curve> {
 impl<PC: Curve> PostGroupingSubscriber<PC> {
     pub fn new(
         chain_identity: Arc<RwLock<ChainIdentityHandlerType<PC>>>,
-        supported_relayed_chains: Vec<usize>,
+        supported_relayed_chains: Vec<u64>,
         group_cache: Arc<RwLock<Box<dyn GroupInfoHandler<PC>>>>,
         eq: Arc<RwLock<EventQueue>>,
         ts: Arc<RwLock<SimpleDynamicTaskScheduler>>,
@@ -64,7 +63,7 @@ pub trait DKGPostProcessHandler<PC: Curve> {
 
 pub struct GeneralDKGPostProcessHandler<PC: Curve> {
     chain_identity: Arc<RwLock<ChainIdentityHandlerType<PC>>>,
-    supported_relayed_chains: Vec<usize>,
+    supported_relayed_chains: Vec<u64>,
     group_cache: Arc<RwLock<Box<dyn GroupInfoHandler<PC>>>>,
     c: PhantomData<PC>,
 }
@@ -137,8 +136,8 @@ impl<PC: Curve + Sync + Send + 'static> DKGPostProcessHandler<PC>
                             self.group_cache.read().await.get_group()?,
                             None,
                             receipt.transaction_hash,
-                            receipt.gas_used.unwrap_or(U256::zero()),
-                            receipt.effective_gas_price.unwrap_or(U256::zero())
+                            receipt.gas_used,
+                            receipt.effective_gas_price
                         )
                     );
                 }
@@ -158,8 +157,8 @@ impl<PC: Curve + Sync + Send + 'static> DKGPostProcessHandler<PC>
                                     self.group_cache.read().await.get_group()?,
                                     Some(*relayed_chain_id),
                                     receipt.transaction_hash,
-                                    receipt.gas_used.unwrap_or(U256::zero()),
-                                    receipt.effective_gas_price.unwrap_or(U256::zero())
+                                    receipt.gas_used,
+                                    receipt.effective_gas_price
                                 )
                             );
                         }
@@ -177,7 +176,7 @@ impl<PC: Curve + std::fmt::Debug + Sync + Send + 'static> Subscriber
     for PostGroupingSubscriber<PC>
 {
     #[log_function]
-    async fn notify(&self, topic: Topic, payload: &(dyn DebuggableEvent)) -> NodeResult<()> {
+    async fn notify(&self, topic: Topic, payload: &dyn DebuggableEvent) -> NodeResult<()> {
         debug!("{:?}", topic);
 
         let DKGPostProcess {

@@ -169,9 +169,9 @@ pub fn compute_bundle_response(
 /// following way:
 ///
 /// - All responses get broadcast: You assume that shares of other nodes are
-/// not good unless you hear otherwise.  - Broadcast only responses which
-/// are complaints: You assume that shares of other nodes are good unless
-/// you hear otherwise.
+///   not good unless you hear otherwise.  - Broadcast only responses which
+///   are complaints: You assume that shares of other nodes are good unless
+///   you hear otherwise.
 pub fn process_shares_get_all<C: Curve>(
     dealers: &Group<C>,
     share_holders: &Group<C>,

@@ -1,27 +1,35 @@
+use alloy::eips::{BlockId, BlockNumberOrTag};
+use alloy::primitives::{Address, B256, U256};
+use alloy::providers::{Provider, WsConnect};
+use alloy::signers::k256::ecdsa::SigningKey;
+use alloy::signers::local::coins_bip39::English;
+use alloy::signers::local::{MnemonicBuilder, PrivateKeySigner};
 use arpa_contract_client::adapter::AdapterViews;
-use arpa_contract_client::contract_stub::adapter::Adapter as AdapterContract;
-use arpa_contract_client::contract_stub::ierc20::IERC20 as ArpaContract;
-use arpa_contract_client::contract_stub::staking::Staking as StakingContract;
+use arpa_contract_client::ethers::adapter::Adapter::{self, AdapterInstance};
 use arpa_contract_client::ethers::adapter::AdapterClient;
-use arpa_contract_client::ethers::controller::ControllerClient;
-use arpa_contract_client::ethers::controller_oracle::ControllerOracleClient;
+use arpa_contract_client::ethers::controller::{self, Controller, ControllerClient};
+use arpa_contract_client::ethers::controller_oracle::{
+    self, ControllerOracle, ControllerOracleClient,
+};
+use arpa_contract_client::ethers::ierc20::IERC20 as ArpaContract;
+use arpa_contract_client::ethers::node_registry::INodeRegistry::{self};
 use arpa_contract_client::ethers::node_registry::NodeRegistryClient;
+use arpa_contract_client::ethers::staking::Staking as StakingContract;
+use arpa_contract_client::ethers::{
+    parse_controller_contract_group, parse_controller_contract_member,
+    parse_controller_oracle_contract_group, parse_controller_oracle_contract_member,
+};
 use arpa_contract_client::node_registry::{NodeRegistryTransactions, NodeRegistryViews};
 use arpa_contract_client::{ServiceClient, TransactionCaller, ViewCaller};
 use arpa_core::{
-    address_to_string, build_wallet_from_config, pad_to_bytes32, Account, Config, ConfigError,
-    GeneralMainChainIdentity, GeneralRelayedChainIdentity, Keystore, WsWalletSigner,
+    address_to_string, build_client, build_wallet_from_config, pad_to_bytes32_fixed_bytes, Account,
+    Config, ConfigError, GeneralMainChainIdentity, GeneralRelayedChainIdentity, Keystore,
+    ProviderClientWithSigner,
 };
 use arpa_dal::NodeInfoFetcher;
 use arpa_node::context::ChainIdentityHandlerType;
 use arpa_node::management::client::GeneralManagementClient;
 use arpa_sqlite_db::SqliteDB;
-use ethers::prelude::k256::ecdsa::SigningKey;
-use ethers::providers::{Middleware, Provider, Ws};
-use ethers::signers::coins_bip39::English;
-use ethers::signers::Signer;
-use ethers::signers::{LocalWallet, MnemonicBuilder};
-use ethers::types::{Address, BlockId, BlockNumber, H256, U256, U64};
 use reedline_repl_rs::clap::{value_parser, Arg, ArgAction, ArgMatches, Command};
 use reedline_repl_rs::Repl;
 use std::collections::BTreeMap;
@@ -29,7 +37,6 @@ use std::env;
 use std::fs::File;
 use std::io::{BufRead, BufReader};
 use std::path::PathBuf;
-use std::sync::Arc;
 use std::time::Duration;
 use structopt::StructOpt;
 use threshold_bls::curve::bn254::G2Curve;
@@ -63,8 +70,8 @@ pub struct Opt {
 
 struct Context<PC: Curve> {
     config: Config,
-    wallet: LocalWallet,
-    chain_identities: BTreeMap<usize, ChainIdentityHandlerType<PC>>,
+    wallet: PrivateKeySigner,
+    chain_identities: BTreeMap<u64, ChainIdentityHandlerType<PC>>,
     db: SqliteDB,
     staking_contract_address: Option<Address>,
     node_registry_address: Option<Address>,
@@ -73,7 +80,7 @@ struct Context<PC: Curve> {
 }
 
 impl<PC: Curve> Context<PC> {
-    pub fn chain_identity(&self, chain_id: usize) -> anyhow::Result<&ChainIdentityHandlerType<PC>> {
+    pub fn chain_identity(&self, chain_id: u64) -> anyhow::Result<&ChainIdentityHandlerType<PC>> {
         if !self.chain_identities.contains_key(&chain_id) {
             return Err(ConfigError::InvalidChainId(chain_id).into());
         }
@@ -81,24 +88,26 @@ impl<PC: Curve> Context<PC> {
     }
 
     pub async fn staking_contract_address(&mut self) -> anyhow::Result<Address> {
+        let node_registry_address = self.node_registry_address().await?;
+
         if self.staking_contract_address.is_none() {
             let main_chain_id = self.config.get_main_chain_id();
             let client = self
                 .chain_identities
                 .get(&main_chain_id)
                 .unwrap()
-                .build_controller_client();
+                .build_node_registry_client(node_registry_address);
 
             let controller_contract = client.prepare_service_client().await?;
 
-            let staking_contract_address = ControllerClient::call_contract_view(
+            let staking_contract_address = NodeRegistryClient::call_contract_view(
                 main_chain_id,
-                "controller_config",
-                controller_contract.get_controller_config(),
+                "node_registry_config",
+                controller_contract.getNodeRegistryConfig(),
                 self.config.get_time_limits().contract_view_retry_descriptor,
             )
             .await?
-            .0;
+            .stakingContractAddress;
 
             self.staking_contract_address = Some(staking_contract_address);
 
@@ -121,11 +130,11 @@ impl<PC: Curve> Context<PC> {
             let node_registry_address = ControllerClient::call_contract_view(
                 main_chain_id,
                 "controller_config",
-                controller_contract.get_controller_config(),
+                controller_contract.getControllerConfig(),
                 self.config.get_time_limits().contract_view_retry_descriptor,
             )
             .await?
-            .0;
+            .nodeRegistryContractAddress;
 
             self.node_registry_address = Some(node_registry_address);
 
@@ -140,32 +149,32 @@ impl<PC: Curve> Context<PC> {
 pub struct RandomnessRequestResult {
     pub request_id: String,
     pub group_index: u32,
-    pub committer: ethers::core::types::Address,
-    pub participant_members: Vec<ethers::core::types::Address>,
-    pub randommness: ethers::core::types::U256,
-    pub payment: ethers::core::types::U256,
-    pub flat_fee: ethers::core::types::U256,
+    pub committer: Address,
+    pub participant_members: Vec<Address>,
+    pub randommness: U256,
+    pub payment: U256,
+    pub flat_fee: U256,
     pub success: bool,
 }
 
 #[derive(Debug)]
 pub struct Block {
     /// Hash of the block
-    pub hash: Option<H256>,
+    pub hash: Option<B256>,
     /// Hash of the parent
-    pub parent_hash: H256,
+    pub parent_hash: B256,
     /// Hash of the uncles
-    pub uncles_hash: H256,
+    pub uncles_hash: B256,
     /// Miner/author's address. None if pending.
     pub author: Option<Address>,
     /// State root hash
-    pub state_root: H256,
+    pub state_root: B256,
     /// Transactions root hash
-    pub transactions_root: H256,
+    pub transactions_root: B256,
     /// Transactions receipts root hash
-    pub receipts_root: H256,
+    pub receipts_root: B256,
     /// Block number. None if pending.
-    pub number: Option<U64>,
+    pub number: Option<u64>,
     /// Gas Used
     pub gas_used: U256,
     /// Gas Limit
@@ -176,21 +185,21 @@ pub struct Block {
     pub size: Option<U256>,
 }
 
-impl<TX> From<ethers::types::Block<TX>> for Block {
-    fn from(block: ethers::types::Block<TX>) -> Self {
+impl<TX> From<alloy::rpc::types::Block<TX>> for Block {
+    fn from(block: alloy::rpc::types::Block<TX>) -> Self {
         Self {
-            hash: block.hash,
-            parent_hash: block.parent_hash,
-            uncles_hash: block.uncles_hash,
-            author: block.author,
-            state_root: block.state_root,
-            transactions_root: block.transactions_root,
-            receipts_root: block.receipts_root,
-            number: block.number,
-            gas_used: block.gas_used,
-            gas_limit: block.gas_limit,
-            timestamp: block.timestamp,
-            size: block.size,
+            hash: Some(block.header.hash),
+            parent_hash: block.header.parent_hash,
+            uncles_hash: block.header.ommers_hash,
+            author: Some(block.header.beneficiary),
+            state_root: block.header.state_root,
+            transactions_root: block.header.transactions_root,
+            receipts_root: block.header.receipts_root,
+            number: Some(block.header.number),
+            gas_used: U256::from(block.header.gas_used),
+            gas_limit: U256::from(block.header.gas_limit),
+            timestamp: U256::from(block.header.timestamp),
+            size: block.header.size,
         }
     }
 }
@@ -213,7 +222,7 @@ async fn send<PC: Curve>(
         Some(("approve-arpa-to-staking", sub_matches)) => {
             let main_chain_id = context.config.get_main_chain_id();
             let amount = sub_matches.get_one::<String>("amount").unwrap();
-            let amount = U256::from_dec_str(amount).unwrap();
+            let amount = U256::from_str_radix(amount, 10).unwrap();
 
             let arpa_contract = ArpaContract::new(
                 context.config.find_arpa_address(main_chain_id)?,
@@ -223,7 +232,7 @@ async fn send<PC: Curve>(
             let trx_hash = ArpaClient::call_contract_transaction(
                 main_chain_id,
                 "approve-arpa-to-staking",
-                arpa_contract.client_ref(),
+                arpa_contract.provider(),
                 arpa_contract.approve(context.staking_contract_address().await?, amount),
                 context
                     .config
@@ -242,7 +251,7 @@ async fn send<PC: Curve>(
         Some(("stake", sub_matches)) => {
             let main_chain_id = context.config.get_main_chain_id();
             let amount = sub_matches.get_one::<String>("amount").unwrap();
-            let amount = U256::from_dec_str(amount).unwrap();
+            let amount = U256::from_str_radix(amount, 10).unwrap();
 
             let staking_contract = StakingContract::new(
                 context.staking_contract_address().await?,
@@ -252,7 +261,7 @@ async fn send<PC: Curve>(
             let is_operator = StakingClient::call_contract_view(
                 main_chain_id,
                 "is_operator",
-                staking_contract.is_operator(context.wallet.address()),
+                staking_contract.isOperator(context.wallet.address()),
                 context
                     .config
                     .contract_view_retry_descriptor(main_chain_id)?,
@@ -273,7 +282,7 @@ async fn send<PC: Curve>(
             let balance = ArpaClient::call_contract_view(
                 main_chain_id,
                 "balance_of",
-                arpa_contract.balance_of(context.chain_identity(main_chain_id)?.get_id_address()),
+                arpa_contract.balanceOf(context.chain_identity(main_chain_id)?.get_id_address()),
                 context
                     .config
                     .contract_view_retry_descriptor(main_chain_id)?,
@@ -310,7 +319,7 @@ async fn send<PC: Curve>(
             let trx_hash = StakingClient::call_contract_transaction(
                 main_chain_id,
                 "stake",
-                staking_contract.client_ref(),
+                staking_contract.provider(),
                 staking_contract.stake(amount),
                 context
                     .config
@@ -329,7 +338,7 @@ async fn send<PC: Curve>(
         Some(("unstake", sub_matches)) => {
             let main_chain_id = context.config.get_main_chain_id();
             let amount = sub_matches.get_one::<String>("amount").unwrap();
-            let amount = U256::from_dec_str(amount).unwrap();
+            let amount = U256::from_str_radix(amount, 10).unwrap();
 
             let staking_contract = StakingContract::new(
                 context.staking_contract_address().await?,
@@ -339,7 +348,7 @@ async fn send<PC: Curve>(
             let staked_amount = StakingClient::call_contract_view(
                 main_chain_id,
                 "staked_amount",
-                staking_contract.get_stake(context.chain_identity(main_chain_id)?.get_id_address()),
+                staking_contract.getStake(context.chain_identity(main_chain_id)?.get_id_address()),
                 context
                     .config
                     .contract_view_retry_descriptor(main_chain_id)?,
@@ -356,7 +365,7 @@ async fn send<PC: Curve>(
             let trx_hash = StakingClient::call_contract_transaction(
                 main_chain_id,
                 "unstake",
-                staking_contract.client_ref(),
+                staking_contract.provider(),
                 staking_contract.unstake(amount),
                 context
                     .config
@@ -382,8 +391,8 @@ async fn send<PC: Curve>(
             let trx_hash = StakingClient::call_contract_transaction(
                 main_chain_id,
                 "claim_frozen_principal",
-                staking_contract.client_ref(),
-                staking_contract.claim_frozen_principal(),
+                staking_contract.provider(),
+                staking_contract.claimFrozenPrincipal(),
                 context
                     .config
                     .get_time_limits()
@@ -429,7 +438,7 @@ async fn send<PC: Curve>(
 
             let node = NodeRegistryViews::get_node(&client, context.wallet.address()).await?;
 
-            if node.id_address != Address::zero() {
+            if node.id_address != Address::ZERO {
                 return Ok(Some("Node already registered".to_string()));
             }
 
@@ -482,7 +491,7 @@ async fn send<PC: Curve>(
 
             let node = NodeRegistryViews::get_node(&client, context.wallet.address()).await?;
 
-            if node.id_address == Address::zero() {
+            if node.id_address == Address::ZERO {
                 return Ok(Some("Node has not registered".to_string()));
             }
 
@@ -508,7 +517,7 @@ async fn send<PC: Curve>(
 
             let node = NodeRegistryViews::get_node(&client, context.wallet.address()).await?;
 
-            if node.id_address == Address::zero() {
+            if node.id_address == Address::ZERO {
                 return Ok(Some("Node has not registered".to_string()));
             }
 
@@ -517,8 +526,8 @@ async fn send<PC: Curve>(
             let trx_hash = ControllerClient::call_contract_transaction(
                 main_chain_id,
                 "node_quit",
-                controller_contract.client_ref(),
-                controller_contract.node_quit(),
+                controller_contract.provider(),
+                controller_contract.nodeQuit(),
                 context
                     .config
                     .get_time_limits()
@@ -544,7 +553,7 @@ async fn send<PC: Curve>(
 
             let node = NodeRegistryViews::get_node(&client, context.wallet.address()).await?;
 
-            if node.id_address == Address::zero() {
+            if node.id_address == Address::ZERO {
                 return Ok(Some("Node has not registered".to_string()));
             }
 
@@ -563,9 +572,8 @@ async fn send<PC: Curve>(
             let trx_hash = ControllerClient::call_contract_transaction(
                 main_chain_id,
                 "change_dkg_public_key",
-                controller_contract.client_ref(),
-                controller_contract
-                    .change_dkg_public_key(bincode::serialize(&dkg_public_key)?.into()),
+                controller_contract.provider(),
+                controller_contract.changeDkgPublicKey(bincode::serialize(&dkg_public_key)?.into()),
                 context
                     .config
                     .get_time_limits()
@@ -581,11 +589,11 @@ async fn send<PC: Curve>(
             )))
         }
         Some(("withdraw", sub_matches)) => {
-            let chain_id = sub_matches.get_one::<usize>("chain-id").unwrap();
+            let chain_id = sub_matches.get_one::<u64>("chain-id").unwrap();
             let recipient = sub_matches.get_one::<String>("recipient").unwrap();
             let recipient = recipient.parse::<Address>()?;
 
-            if recipient == Address::zero() {
+            if recipient == Address::ZERO {
                 return Ok(Some("Invalid recipient address".to_string()));
             }
             if *chain_id == context.config.get_main_chain_id() {
@@ -596,7 +604,7 @@ async fn send<PC: Curve>(
 
                 let node = NodeRegistryViews::get_node(&client, context.wallet.address()).await?;
 
-                if node.id_address == Address::zero() {
+                if node.id_address == Address::ZERO {
                     return Ok(Some("Node has not registered".to_string()));
                 }
 
@@ -605,8 +613,8 @@ async fn send<PC: Curve>(
                 let trx_hash = ControllerClient::call_contract_transaction(
                     *chain_id,
                     "node_withdraw",
-                    controller_contract.client_ref(),
-                    controller_contract.node_withdraw(recipient),
+                    controller_contract.provider(),
+                    controller_contract.nodeWithdraw(recipient),
                     context
                         .config
                         .get_time_limits()
@@ -630,8 +638,8 @@ async fn send<PC: Curve>(
                 let trx_hash = ControllerOracleClient::call_contract_transaction(
                     *chain_id,
                     "node_withdraw",
-                    controller_oracle_contract.client_ref(),
-                    controller_oracle_contract.node_withdraw(recipient),
+                    controller_oracle_contract.provider(),
+                    controller_oracle_contract.nodeWithdraw(recipient),
                     context
                         .config
                         .contract_transaction_retry_descriptor(*chain_id)?,
@@ -672,7 +680,7 @@ async fn call<PC: Curve>(
         }
         // getGroup
         Some(("group", sub_matches)) => {
-            let chain_id = sub_matches.get_one::<usize>("chain-id").unwrap();
+            let chain_id = sub_matches.get_one::<u64>("chain-id").unwrap();
             let group_index = sub_matches.get_one::<usize>("group-index").unwrap();
 
             if *chain_id == context.config.get_main_chain_id() {
@@ -684,10 +692,11 @@ async fn call<PC: Curve>(
                 let group = ControllerClient::call_contract_view(
                     *chain_id,
                     "get_group",
-                    controller_contract.get_group((*group_index).into()),
+                    controller_contract.getGroup(U256::from(*group_index)),
                     context.config.contract_view_retry_descriptor(*chain_id)?,
                 )
                 .await?;
+                let group = parse_controller_contract_group::<G2Curve>(group);
                 Ok(Some(format!("{:#?}", group)))
             } else {
                 let client = context
@@ -700,16 +709,17 @@ async fn call<PC: Curve>(
                 let group = ControllerOracleClient::call_contract_view(
                     *chain_id,
                     "get_group",
-                    controller_oracle_contract.get_group((*group_index).into()),
+                    controller_oracle_contract.getGroup(U256::from(*group_index)),
                     context.config.contract_view_retry_descriptor(*chain_id)?,
                 )
                 .await?;
+                let group = parse_controller_oracle_contract_group::<G2Curve>(group);
                 Ok(Some(format!("{:#?}", group)))
             }
         }
         // getValidGroupIndices
         Some(("valid-group-indices", sub_matches)) => {
-            let chain_id = sub_matches.get_one::<usize>("chain-id").unwrap();
+            let chain_id = sub_matches.get_one::<u64>("chain-id").unwrap();
 
             if *chain_id == context.config.get_main_chain_id() {
                 let client = context.chain_identity(*chain_id)?.build_controller_client();
@@ -719,7 +729,7 @@ async fn call<PC: Curve>(
                 let valid_group_indices = ControllerClient::call_contract_view(
                     *chain_id,
                     "valid_group_indices",
-                    controller_contract.get_valid_group_indices(),
+                    controller_contract.getValidGroupIndices(),
                     context.config.contract_view_retry_descriptor(*chain_id)?,
                 )
                 .await?;
@@ -735,7 +745,7 @@ async fn call<PC: Curve>(
                 let valid_group_indices = ControllerOracleClient::call_contract_view(
                     *chain_id,
                     "valid_group_indices",
-                    controller_oracle_contract.get_valid_group_indices(),
+                    controller_oracle_contract.getValidGroupIndices(),
                     context.config.contract_view_retry_descriptor(*chain_id)?,
                 )
                 .await?;
@@ -745,7 +755,7 @@ async fn call<PC: Curve>(
         }
         // getGroupEpoch
         Some(("group-epoch", sub_matches)) => {
-            let chain_id = sub_matches.get_one::<usize>("chain-id").unwrap();
+            let chain_id = sub_matches.get_one::<u64>("chain-id").unwrap();
 
             if *chain_id == context.config.get_main_chain_id() {
                 let client = context.chain_identity(*chain_id)?.build_controller_client();
@@ -755,7 +765,7 @@ async fn call<PC: Curve>(
                 let group_epoch = ControllerClient::call_contract_view(
                     *chain_id,
                     "group_epoch",
-                    controller_contract.get_group_epoch(),
+                    controller_contract.getGroupEpoch(),
                     context.config.contract_view_retry_descriptor(*chain_id)?,
                 )
                 .await?;
@@ -770,7 +780,7 @@ async fn call<PC: Curve>(
                 let group_epoch = ControllerOracleClient::call_contract_view(
                     *chain_id,
                     "group_epoch",
-                    controller_oracle_contract.get_group_epoch(),
+                    controller_oracle_contract.getGroupEpoch(),
                     context.config.contract_view_retry_descriptor(*chain_id)?,
                 )
                 .await?;
@@ -779,7 +789,7 @@ async fn call<PC: Curve>(
         }
         // getGroupCount
         Some(("group-count", sub_matches)) => {
-            let chain_id = sub_matches.get_one::<usize>("chain-id").unwrap();
+            let chain_id = sub_matches.get_one::<u64>("chain-id").unwrap();
 
             if *chain_id == context.config.get_main_chain_id() {
                 let client = context.chain_identity(*chain_id)?.build_controller_client();
@@ -788,7 +798,7 @@ async fn call<PC: Curve>(
                 let group_count = ControllerClient::call_contract_view(
                     *chain_id,
                     "group_count",
-                    controller_contract.get_group_count(),
+                    controller_contract.getGroupCount(),
                     context.config.contract_view_retry_descriptor(*chain_id)?,
                 )
                 .await?;
@@ -803,7 +813,7 @@ async fn call<PC: Curve>(
                 let group_count = ControllerOracleClient::call_contract_view(
                     *chain_id,
                     "group_count",
-                    controller_oracle_contract.get_group_count(),
+                    controller_oracle_contract.getGroupCount(),
                     context.config.contract_view_retry_descriptor(*chain_id)?,
                 )
                 .await?;
@@ -813,7 +823,7 @@ async fn call<PC: Curve>(
         }
         // getBelongingGroup
         Some(("belonging-group", sub_matches)) => {
-            let chain_id = sub_matches.get_one::<usize>("chain-id").unwrap();
+            let chain_id = sub_matches.get_one::<u64>("chain-id").unwrap();
             let node_address = sub_matches.get_one::<String>("id-address").unwrap();
             let node_address = node_address.parse::<Address>()?;
 
@@ -822,10 +832,13 @@ async fn call<PC: Curve>(
 
                 let controller_contract = client.prepare_service_client().await?;
 
-                let (belonging_group_index, member_index) = ControllerClient::call_contract_view(
+                let controller::Controller::getBelongingGroupReturn {
+                    _0: belonging_group_index,
+                    _1: member_index,
+                } = ControllerClient::call_contract_view(
                     *chain_id,
                     "belonging_group",
-                    controller_contract.get_belonging_group(node_address),
+                    controller_contract.getBelongingGroup(node_address),
                     context.config.contract_view_retry_descriptor(*chain_id)?,
                 )
                 .await?;
@@ -841,14 +854,16 @@ async fn call<PC: Curve>(
 
                 let controller_oracle_contract = client.prepare_service_client().await?;
 
-                let (belonging_group_index, member_index) =
-                    ControllerOracleClient::call_contract_view(
-                        *chain_id,
-                        "belonging_group",
-                        controller_oracle_contract.get_belonging_group(node_address),
-                        context.config.contract_view_retry_descriptor(*chain_id)?,
-                    )
-                    .await?;
+                let controller_oracle::ControllerOracle::getBelongingGroupReturn {
+                    _0: belonging_group_index,
+                    _1: member_index,
+                } = ControllerOracleClient::call_contract_view(
+                    *chain_id,
+                    "belonging_group",
+                    controller_oracle_contract.getBelongingGroup(node_address),
+                    context.config.contract_view_retry_descriptor(*chain_id)?,
+                )
+                .await?;
 
                 Ok(Some(format!(
                     "belonging_group_index: {:#?}, member_index: {:#?}",
@@ -858,7 +873,7 @@ async fn call<PC: Curve>(
         }
         // getMember
         Some(("member", sub_matches)) => {
-            let chain_id = sub_matches.get_one::<usize>("chain-id").unwrap();
+            let chain_id = sub_matches.get_one::<u64>("chain-id").unwrap();
             let group_index = sub_matches.get_one::<usize>("group-index").unwrap();
             let member_index = sub_matches.get_one::<usize>("member-index").unwrap();
 
@@ -870,10 +885,13 @@ async fn call<PC: Curve>(
                 let member = ControllerClient::call_contract_view(
                     *chain_id,
                     "member",
-                    controller_contract.get_member((*group_index).into(), (*member_index).into()),
+                    controller_contract
+                        .getMember(U256::from(*group_index), U256::from(*member_index)),
                     context.config.contract_view_retry_descriptor(*chain_id)?,
                 )
                 .await?;
+
+                let member = parse_controller_contract_member::<G2Curve>(member, *member_index);
 
                 Ok(Some(format!("{:#?}", member)))
             } else {
@@ -887,10 +905,13 @@ async fn call<PC: Curve>(
                     *chain_id,
                     "member",
                     controller_oracle_contract
-                        .get_member((*group_index).into(), (*member_index).into()),
+                        .getMember(U256::from(*group_index), U256::from(*member_index)),
                     context.config.contract_view_retry_descriptor(*chain_id)?,
                 )
                 .await?;
+
+                let member =
+                    parse_controller_oracle_contract_member::<G2Curve>(member, *member_index);
 
                 Ok(Some(format!("{:#?}", member)))
             }
@@ -909,7 +930,7 @@ async fn call<PC: Curve>(
             let coordinator = ControllerClient::call_contract_view(
                 main_chain_id,
                 "coordinator",
-                controller_contract.get_coordinator((*group_index).into()),
+                controller_contract.getCoordinator(U256::from(*group_index)),
                 context
                     .config
                     .contract_view_retry_descriptor(main_chain_id)?,
@@ -920,7 +941,7 @@ async fn call<PC: Curve>(
         }
         // getNodeWithdrawableTokens
         Some(("node-withdrawable-tokens", sub_matches)) => {
-            let chain_id = sub_matches.get_one::<usize>("chain-id").unwrap();
+            let chain_id = sub_matches.get_one::<u64>("chain-id").unwrap();
             let node_address = sub_matches.get_one::<String>("id-address").unwrap();
             let node_address = node_address.parse::<Address>()?;
 
@@ -932,14 +953,16 @@ async fn call<PC: Curve>(
 
                 let node_registry_contract = client.prepare_service_client().await?;
 
-                let (node_withdrawable_eth, node_withdrawable_arpa) =
-                    NodeRegistryClient::call_contract_view(
-                        *chain_id,
-                        "node_withdrawable_tokens",
-                        node_registry_contract.get_node_withdrawable_tokens(node_address),
-                        context.config.contract_view_retry_descriptor(*chain_id)?,
-                    )
-                    .await?;
+                let INodeRegistry::getNodeWithdrawableTokensReturn {
+                    _0: node_withdrawable_eth,
+                    _1: node_withdrawable_arpa,
+                } = NodeRegistryClient::call_contract_view(
+                    *chain_id,
+                    "node_withdrawable_tokens",
+                    node_registry_contract.getNodeWithdrawableTokens(node_address),
+                    context.config.contract_view_retry_descriptor(*chain_id)?,
+                )
+                .await?;
 
                 Ok(Some(format!(
                     "node_withdrawable_eth: {:#?}, node_withdrawable_arpa: {:#?}",
@@ -952,14 +975,16 @@ async fn call<PC: Curve>(
 
                 let controller_oracle_contract = client.prepare_service_client().await?;
 
-                let (node_withdrawable_eth, node_withdrawable_arpa) =
-                    ControllerOracleClient::call_contract_view(
-                        *chain_id,
-                        "node_withdrawable_tokens",
-                        controller_oracle_contract.get_node_withdrawable_tokens(node_address),
-                        context.config.contract_view_retry_descriptor(*chain_id)?,
-                    )
-                    .await?;
+                let ControllerOracle::getNodeWithdrawableTokensReturn {
+                    _0: node_withdrawable_eth,
+                    _1: node_withdrawable_arpa,
+                } = ControllerOracleClient::call_contract_view(
+                    *chain_id,
+                    "node_withdrawable_tokens",
+                    controller_oracle_contract.getNodeWithdrawableTokens(node_address),
+                    context.config.contract_view_retry_descriptor(*chain_id)?,
+                )
+                .await?;
 
                 Ok(Some(format!(
                     "node_withdrawable_eth: {:#?}, node_withdrawable_arpa: {:#?}",
@@ -976,19 +1001,19 @@ async fn call<PC: Curve>(
 
             let controller_contract = client.prepare_service_client().await?;
 
-            let (
-                node_registry_contract_address,
-                adapter_contract_address,
-                disqualified_node_penalty_amount,
-                default_number_of_committers,
-                default_dkg_phase_duration,
-                group_max_capacity,
-                ideal_number_of_groups,
-                dkg_post_process_reward,
-            ) = ControllerClient::call_contract_view(
+            let Controller::getControllerConfigReturn {
+                nodeRegistryContractAddress: node_registry_contract_address,
+                adapterContractAddress: adapter_contract_address,
+                disqualifiedNodePenaltyAmount: disqualified_node_penalty_amount,
+                defaultNumberOfCommitters: default_number_of_committers,
+                defaultDkgPhaseDuration: default_dkg_phase_duration,
+                groupMaxCapacity: group_max_capacity,
+                idealNumberOfGroups: ideal_number_of_groups,
+                dkgPostProcessReward: dkg_post_process_reward,
+            } = ControllerClient::call_contract_view(
                 main_chain_id,
                 "controller_config",
-                controller_contract.get_controller_config(),
+                controller_contract.getControllerConfig(),
                 context
                     .config
                     .contract_view_retry_descriptor(main_chain_id)?,
@@ -1008,40 +1033,38 @@ async fn call<PC: Curve>(
             dkg_post_process_reward,)))
         }
         Some(("fulfillments-as-committer", sub_matches)) => {
-            let chain_id = sub_matches.get_one::<usize>("chain-id").unwrap();
+            let chain_id = sub_matches.get_one::<u64>("chain-id").unwrap();
             let client = context
                 .chain_identity(*chain_id)?
                 .build_adapter_client(context.wallet.address());
 
             let adapter_contract =
-                ServiceClient::<AdapterContract<WsWalletSigner>>::prepare_service_client(&client)
+                ServiceClient::<AdapterInstance<ProviderClientWithSigner>>::prepare_service_client(&client)
                     .await?;
 
             let filter = adapter_contract
-                .randomness_request_result_filter()
-                .address(ethers::types::ValueOrArray::Value(
-                    context.chain_identity(*chain_id)?.get_adapter_address(),
-                ))
+                .RandomnessRequestResult_filter()
+                .address(context.chain_identity(*chain_id)?.get_adapter_address())
                 .topic3(context.chain_identity(*chain_id)?.get_id_address())
                 .from_block(
                     context
                         .config
                         .find_adapter_deployed_block_height(*chain_id)?,
                 )
-                .to_block(BlockNumber::Latest);
+                .to_block(BlockNumberOrTag::Latest);
 
             let logs = filter.query().await?;
 
             let logs = logs
                 .iter()
-                .map(|log| RandomnessRequestResult {
-                    request_id: format!("0x{}", hex::encode(log.request_id)),
-                    group_index: log.group_index,
+                .map(|(log, _)| RandomnessRequestResult {
+                    request_id: format!("0x{}", hex::encode(log.requestId)),
+                    group_index: log.groupIndex,
                     committer: log.committer,
-                    participant_members: log.participant_members.clone(),
+                    participant_members: log.participantMembers.clone(),
                     randommness: log.randommness,
                     payment: log.payment,
-                    flat_fee: log.flat_fee,
+                    flat_fee: log.flatFee,
                     success: log.success,
                 })
                 .collect::<Vec<_>>();
@@ -1051,40 +1074,38 @@ async fn call<PC: Curve>(
             Ok(Some(format!("log: {:#?}", logs)))
         }
         Some(("fulfillments-as-participant", sub_matches)) => {
-            let chain_id = sub_matches.get_one::<usize>("chain-id").unwrap();
+            let chain_id = sub_matches.get_one::<u64>("chain-id").unwrap();
             let client = context
                 .chain_identity(*chain_id)?
                 .build_adapter_client(context.chain_identity(*chain_id)?.get_id_address());
 
             let adapter_contract =
-                ServiceClient::<AdapterContract<WsWalletSigner>>::prepare_service_client(&client)
+                ServiceClient::<AdapterInstance<ProviderClientWithSigner>>::prepare_service_client(&client)
                     .await?;
 
             let filter = adapter_contract
-                .randomness_request_result_filter()
-                .address(ethers::types::ValueOrArray::Value(
-                    context.chain_identity(*chain_id)?.get_adapter_address(),
-                ))
+                .RandomnessRequestResult_filter()
+                .address(context.chain_identity(*chain_id)?.get_adapter_address())
                 .from_block(
                     context
                         .config
                         .find_adapter_deployed_block_height(*chain_id)?,
                 )
-                .to_block(BlockNumber::Latest);
+                .to_block(BlockNumberOrTag::Latest);
 
             let logs = filter.query().await?;
 
             let logs = logs
                 .iter()
-                .filter(|log| log.participant_members.contains(&context.wallet.address()))
-                .map(|log| RandomnessRequestResult {
-                    request_id: format!("0x{}", hex::encode(log.request_id)),
-                    group_index: log.group_index,
+                .filter(|(log, _)| log.participantMembers.contains(&context.wallet.address()))
+                .map(|(log, _)| RandomnessRequestResult {
+                    request_id: format!("0x{}", hex::encode(log.requestId)),
+                    group_index: log.groupIndex,
                     committer: log.committer,
-                    participant_members: log.participant_members.clone(),
+                    participant_members: log.participantMembers.clone(),
                     randommness: log.randommness,
                     payment: log.payment,
-                    flat_fee: log.flat_fee,
+                    flat_fee: log.flatFee,
                     success: log.success,
                 })
                 .collect::<Vec<_>>();
@@ -1104,7 +1125,7 @@ async fn call<PC: Curve>(
                 main_chain_id,
                 "delegation_reward",
                 staking_contract
-                    .get_delegation_reward(context.chain_identity(main_chain_id)?.get_id_address()),
+                    .getDelegationReward(context.chain_identity(main_chain_id)?.get_id_address()),
                 context
                     .config
                     .contract_view_retry_descriptor(main_chain_id)?,
@@ -1123,7 +1144,7 @@ async fn call<PC: Curve>(
             let delegates_count = StakingClient::call_contract_view(
                 main_chain_id,
                 "delegates_count",
-                staking_contract.get_delegates_count(),
+                staking_contract.getDelegatesCount(),
                 context
                     .config
                     .contract_view_retry_descriptor(main_chain_id)?,
@@ -1142,7 +1163,7 @@ async fn call<PC: Curve>(
             let amount = StakingClient::call_contract_view(
                 main_chain_id,
                 "get_stake",
-                staking_contract.get_stake(context.chain_identity(main_chain_id)?.get_id_address()),
+                staking_contract.getStake(context.chain_identity(main_chain_id)?.get_id_address()),
                 context
                     .config
                     .contract_view_retry_descriptor(main_chain_id)?,
@@ -1158,11 +1179,14 @@ async fn call<PC: Curve>(
                 context.chain_identity(main_chain_id)?.get_client(),
             );
 
-            let (amounts, timestamps) = StakingClient::call_contract_view(
+            let StakingContract::getFrozenPrincipalReturn {
+                amounts,
+                unlockTimestamps,
+            } = StakingClient::call_contract_view(
                 main_chain_id,
                 "frozen_principal",
                 staking_contract
-                    .get_frozen_principal(context.chain_identity(main_chain_id)?.get_id_address()),
+                    .getFrozenPrincipal(context.chain_identity(main_chain_id)?.get_id_address()),
                 context
                     .config
                     .contract_view_retry_descriptor(main_chain_id)?,
@@ -1171,24 +1195,21 @@ async fn call<PC: Curve>(
 
             Ok(Some(format!(
                 "amounts: {:#?}, unfreeze timestamps: {:#?}",
-                amounts, timestamps
+                amounts, unlockTimestamps
             )))
         }
         Some(("balance-of-eth", sub_matches)) => {
-            let chain_id = sub_matches.get_one::<usize>("chain-id").unwrap();
+            let chain_id = sub_matches.get_one::<u64>("chain-id").unwrap();
             let provider = context.chain_identity(*chain_id)?.get_provider();
 
             let balance = provider
-                .get_balance(
-                    context.chain_identity(*chain_id)?.get_id_address(),
-                    Some(BlockId::Number(BlockNumber::Latest)),
-                )
+                .get_balance(context.chain_identity(*chain_id)?.get_id_address())
                 .await?;
 
             Ok(Some(format!("balance: {:#?}", balance)))
         }
         Some(("balance-of-arpa", sub_matches)) => {
-            let chain_id = sub_matches.get_one::<usize>("chain-id").unwrap();
+            let chain_id = sub_matches.get_one::<u64>("chain-id").unwrap();
             let arpa_contract = ArpaContract::new(
                 context.config.find_arpa_address(*chain_id)?,
                 context.chain_identity(*chain_id)?.get_client(),
@@ -1197,7 +1218,7 @@ async fn call<PC: Curve>(
             let balance = ArpaClient::call_contract_view(
                 *chain_id,
                 "balance_of",
-                arpa_contract.balance_of(context.wallet.address()),
+                arpa_contract.balanceOf(context.wallet.address()),
                 context.config.contract_view_retry_descriptor(*chain_id)?,
             )
             .await?;
@@ -1206,27 +1227,27 @@ async fn call<PC: Curve>(
         }
         // getAdapterConfig
         Some(("adapter-config", sub_matches)) => {
-            let chain_id = sub_matches.get_one::<usize>("chain-id").unwrap();
+            let chain_id = sub_matches.get_one::<u64>("chain-id").unwrap();
             let client = context
                 .chain_identity(*chain_id)?
                 .build_adapter_client(context.wallet.address());
 
             let adapter_contract =
-                ServiceClient::<AdapterContract<WsWalletSigner>>::prepare_service_client(&client)
+                ServiceClient::<AdapterInstance<ProviderClientWithSigner>>::prepare_service_client(&client)
                     .await?;
 
-            let (
-                minimum_request_confirmations,
-                max_gas_limit,
-                gas_after_payment_calculation,
-                gas_except_callback,
-                signature_task_exclusive_window,
-                reward_per_signature,
-                committer_reward_per_signature,
-            ) = AdapterClient::call_contract_view(
+            let Adapter::getAdapterConfigReturn {
+                minimumRequestConfirmations,
+                maxGasLimit,
+                gasAfterPaymentCalculation,
+                gasExceptCallback,
+                signatureTaskExclusiveWindow,
+                rewardPerSignature,
+                committerRewardPerSignature,
+            } = AdapterClient::call_contract_view(
                 *chain_id,
                 "adapter_config",
-                adapter_contract.get_adapter_config(),
+                adapter_contract.getAdapterConfig(),
                 context.config.contract_view_retry_descriptor(*chain_id)?,
             )
             .await?;
@@ -1234,31 +1255,31 @@ async fn call<PC: Curve>(
             Ok(Some(format!(
                 "minimum_request_confirmations: {:#?}, max_gas_limit: {:#?}, gas_after_payment_calculation: {:#?}, gas_except_callback: {:#?}, \
                 signature_task_exclusive_window: {:#?}, reward_per_signature: {:#?}, committer_reward_per_signature: {:#?}",
-                minimum_request_confirmations,
-                max_gas_limit,
-                gas_after_payment_calculation,
-                gas_except_callback,
-                signature_task_exclusive_window,
-                reward_per_signature,
-                committer_reward_per_signature,
+                minimumRequestConfirmations,
+                maxGasLimit,
+                gasAfterPaymentCalculation,
+                gasExceptCallback,
+                signatureTaskExclusiveWindow,
+                rewardPerSignature,
+                committerRewardPerSignature,
             )))
         }
 
         // getLastAssignedGroupIndex
         Some(("last-assigned-group-index", sub_matches)) => {
-            let chain_id = sub_matches.get_one::<usize>("chain-id").unwrap();
+            let chain_id = sub_matches.get_one::<u64>("chain-id").unwrap();
             let client = context
                 .chain_identity(*chain_id)?
                 .build_adapter_client(context.wallet.address());
 
             let adapter_contract =
-                ServiceClient::<AdapterContract<WsWalletSigner>>::prepare_service_client(&client)
+                ServiceClient::<AdapterInstance<ProviderClientWithSigner>>::prepare_service_client(&client)
                     .await?;
 
             let last_assigned_group_index = AdapterClient::call_contract_view(
                 *chain_id,
                 "last_assigned_group_index",
-                adapter_contract.get_last_assigned_group_index(),
+                adapter_contract.getLastAssignedGroupIndex(),
                 context.config.contract_view_retry_descriptor(*chain_id)?,
             )
             .await?;
@@ -1270,19 +1291,19 @@ async fn call<PC: Curve>(
         }
         // getRandomnessCount
         Some(("randomness-count", sub_matches)) => {
-            let chain_id = sub_matches.get_one::<usize>("chain-id").unwrap();
+            let chain_id = sub_matches.get_one::<u64>("chain-id").unwrap();
             let client = context
                 .chain_identity(*chain_id)?
                 .build_adapter_client(context.wallet.address());
 
             let adapter_contract =
-                ServiceClient::<AdapterContract<WsWalletSigner>>::prepare_service_client(&client)
+                ServiceClient::<AdapterInstance<ProviderClientWithSigner>>::prepare_service_client(&client)
                     .await?;
 
             let randomness_count = AdapterClient::call_contract_view(
                 *chain_id,
                 "randomness_count",
-                adapter_contract.get_randomness_count(),
+                adapter_contract.getRandomnessCount(),
                 context.config.contract_view_retry_descriptor(*chain_id)?,
             )
             .await?;
@@ -1290,14 +1311,14 @@ async fn call<PC: Curve>(
             Ok(Some(format!("randomness_count: {:#?}", randomness_count)))
         }
         Some(("block", sub_matches)) => {
-            let chain_id = sub_matches.get_one::<usize>("chain-id").unwrap();
+            let chain_id = sub_matches.get_one::<u64>("chain-id").unwrap();
             let block_number = sub_matches.get_one::<String>("block-number").unwrap();
             match block_number.as_str() {
                 "latest" => {
                     let block: Option<Block> = context
                         .chain_identity(*chain_id)?
                         .get_provider()
-                        .get_block(BlockNumber::Latest)
+                        .get_block(BlockId::Number(BlockNumberOrTag::Latest))
                         .await?
                         .map(|block| block.into());
                     return Ok(Some(format!("block: {:#?}", block)));
@@ -1306,7 +1327,7 @@ async fn call<PC: Curve>(
                     let block: Option<Block> = context
                         .chain_identity(*chain_id)?
                         .get_provider()
-                        .get_block(BlockNumber::Earliest)
+                        .get_block(BlockId::Number(BlockNumberOrTag::Earliest))
                         .await?
                         .map(|block| block.into());
                     return Ok(Some(format!("block: {:#?}", block)));
@@ -1315,7 +1336,7 @@ async fn call<PC: Curve>(
                     let block: Option<Block> = context
                         .chain_identity(*chain_id)?
                         .get_provider()
-                        .get_block(BlockNumber::Pending)
+                        .get_block(BlockId::Number(BlockNumberOrTag::Pending))
                         .await?
                         .map(|block| block.into());
                     return Ok(Some(format!("block: {:#?}", block)));
@@ -1325,7 +1346,7 @@ async fn call<PC: Curve>(
                         let block: Option<Block> = context
                             .chain_identity(*chain_id)?
                             .get_provider()
-                            .get_block(BlockNumber::Number(block_number.into()))
+                            .get_block(BlockId::Number(block_number.into()))
                             .await?
                             .map(|block| block.into());
                         return Ok(Some(format!("block: {:#?}", block)));
@@ -1336,7 +1357,7 @@ async fn call<PC: Curve>(
         }
         // current-gas-price
         Some(("current-gas-price", sub_matches)) => {
-            let chain_id = sub_matches.get_one::<usize>("chain-id").unwrap();
+            let chain_id = sub_matches.get_one::<u64>("chain-id").unwrap();
             let gas_price = context
                 .chain_identity(*chain_id)?
                 .get_provider()
@@ -1347,14 +1368,14 @@ async fn call<PC: Curve>(
         }
         // trx-receipt
         Some(("trx-receipt", sub_matches)) => {
-            let chain_id = sub_matches.get_one::<usize>("chain-id").unwrap();
+            let chain_id = sub_matches.get_one::<u64>("chain-id").unwrap();
             let trx_hash = sub_matches.get_one::<String>("trx-hash").unwrap();
 
             let receipt = context
                 .chain_identity(*chain_id)?
                 .get_provider()
                 .get_transaction_receipt(
-                    pad_to_bytes32(&hex::decode(
+                    pad_to_bytes32_fixed_bytes(&hex::decode(
                         if let Some(trx_hash_without_prefix) = trx_hash.strip_prefix("0x") {
                             trx_hash_without_prefix
                         } else {
@@ -1369,23 +1390,23 @@ async fn call<PC: Curve>(
         }
         // getCumulativeData
         Some(("cumulative-data", sub_matches)) => {
-            let chain_id = sub_matches.get_one::<usize>("chain-id").unwrap();
+            let chain_id = sub_matches.get_one::<u64>("chain-id").unwrap();
             let client = context
                 .chain_identity(*chain_id)?
                 .build_adapter_client(context.wallet.address());
 
             let adapter_contract =
-                ServiceClient::<AdapterContract<WsWalletSigner>>::prepare_service_client(&client)
+                ServiceClient::<AdapterInstance<ProviderClientWithSigner>>::prepare_service_client(&client)
                     .await?;
 
-            let (
-                cumulative_flat_fee,
-                cumulative_committer_reward,
-                cumulative_partial_signature_reward,
-            ) = AdapterClient::call_contract_view(
+            let Adapter::getCumulativeDataReturn {
+                _0: cumulative_flat_fee,
+                _1: cumulative_committer_reward,
+                _2: cumulative_partial_signature_reward,
+            } = AdapterClient::call_contract_view(
                 *chain_id,
                 "cumulative_data",
-                adapter_contract.get_cumulative_data(),
+                adapter_contract.getCumulativeData(),
                 context.config.contract_view_retry_descriptor(*chain_id)?,
             )
             .await?;
@@ -1394,7 +1415,7 @@ async fn call<PC: Curve>(
             cumulative_flat_fee, cumulative_committer_reward, cumulative_partial_signature_reward)))
         }
         Some(("last-randomness", sub_matches)) => {
-            let chain_id = sub_matches.get_one::<usize>("chain-id").unwrap();
+            let chain_id = sub_matches.get_one::<u64>("chain-id").unwrap();
             let client = context
                 .chain_identity(*chain_id)?
                 .build_adapter_client(context.wallet.address());
@@ -1404,19 +1425,22 @@ async fn call<PC: Curve>(
             Ok(Some(last_randomness.to_string()))
         }
         Some(("pending-request-commitment", sub_matches)) => {
-            let chain_id = sub_matches.get_one::<usize>("chain-id").unwrap();
+            let chain_id = sub_matches.get_one::<u64>("chain-id").unwrap();
             let client = context
                 .chain_identity(*chain_id)?
                 .build_adapter_client(context.wallet.address());
 
             let adapter_contract =
-                ServiceClient::<AdapterContract<WsWalletSigner>>::prepare_service_client(&client)
+                ServiceClient::<AdapterInstance<ProviderClientWithSigner>>::prepare_service_client(&client)
                     .await?;
 
             let r_id = sub_matches.get_one::<String>("request-id").unwrap();
 
             let pending_request_commitment = adapter_contract
-                .get_pending_request_commitment(pad_to_bytes32(&hex::decode(r_id)?).unwrap())
+                .getPendingRequestCommitment(
+                    pad_to_bytes32_fixed_bytes(&hex::decode(r_id)?).unwrap(),
+                )
+                .call()
                 .await?;
 
             Ok(Some(format!(
@@ -1447,7 +1471,7 @@ fn generate<PC: Curve>(
             let name = sub_matches.get_one::<String>("name");
 
             let mut rng = rand::thread_rng();
-            LocalWallet::new_keystore(path, &mut rng, password, name.map(|x| &**x))?;
+            PrivateKeySigner::new_keystore(path, &mut rng, password, name.map(|x| &**x))?;
 
             Ok(Some("keystore generated successfully.".to_owned()))
         }
@@ -1458,13 +1482,12 @@ fn generate<PC: Curve>(
                 .map_or("m/44'/60'/0'/0/0", |s| s);
             let password = sub_matches.get_one::<String>("password").unwrap();
 
-            let mut rng = rand::thread_rng();
             MnemonicBuilder::<English>::default()
                 .word_count(12)
                 .derivation_path(derivation_path)?
                 .write_to(path)
                 .password(password)
-                .build_random(&mut rng)?;
+                .build_random()?;
 
             Ok(Some("Mnemonic generated successfully.".to_owned()))
         }
@@ -1564,18 +1587,22 @@ async fn main() -> anyhow::Result<()> {
 
     let mut chain_identities = BTreeMap::new();
 
-    let provider = Arc::new(
-        Provider::<Ws>::connect_with_reconnects(config.get_provider_endpoint(), 0)
-            .await?
-            .interval(Duration::from_millis(
-                config.get_time_limits().provider_polling_interval_millis,
-            )),
+    let ws_connect = WsConnect::new(config.get_provider_endpoint()).with_retry_interval(
+        Duration::from_millis(config.get_time_limits().provider_polling_interval_millis),
     );
+
+    let client = build_client(
+        wallet.clone(),
+        config.get_main_chain_id(),
+        ws_connect.clone(),
+    )
+    .await?;
 
     let main_chain_identity = GeneralMainChainIdentity::new(
         config.get_main_chain_id(),
         wallet.clone(),
-        provider,
+        ws_connect,
+        client,
         config.get_provider_endpoint().to_owned(),
         config
             .get_controller_address()
@@ -1601,20 +1628,25 @@ async fn main() -> anyhow::Result<()> {
     chain_identities.insert(config.get_main_chain_id(), boxed_main_chain_identity);
 
     for relayed_chain in config.get_relayed_chains().iter() {
-        let provider = Arc::new(
-            Provider::<Ws>::connect_with_reconnects(relayed_chain.get_provider_endpoint(), 0)
-                .await?
-                .interval(Duration::from_millis(
-                    relayed_chain
-                        .get_time_limits()
-                        .provider_polling_interval_millis,
-                )),
+        let ws_connect = WsConnect::new(relayed_chain.get_provider_endpoint()).with_retry_interval(
+            Duration::from_millis(
+                relayed_chain
+                    .get_time_limits()
+                    .provider_polling_interval_millis,
+            ),
         );
+        let client = build_client(
+            wallet.clone(),
+            relayed_chain.get_chain_id(),
+            ws_connect.clone(),
+        )
+        .await?;
 
         let relayed_chain_identity = GeneralRelayedChainIdentity::new(
             relayed_chain.get_chain_id(),
             wallet.clone(),
-            provider,
+            ws_connect,
+            client,
             relayed_chain.get_provider_endpoint().to_string(),
             relayed_chain
                 .get_controller_oracle_address()
@@ -1643,7 +1675,7 @@ async fn main() -> anyhow::Result<()> {
             .as_os_str()
             .to_str()
             .unwrap(),
-        &wallet.signer().to_bytes(),
+        wallet.to_bytes().as_slice(),
     )
     .await
     .unwrap();

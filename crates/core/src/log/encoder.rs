@@ -49,14 +49,14 @@ lazy_static! {
 #[derive(Clone, Debug, Default)]
 pub struct JsonEncoder {
     node_id: String,
-    l1_chain_id: usize,
+    l1_chain_id: u64,
     show_context: bool,
     version: String,
 }
 
 impl JsonEncoder {
     /// Returns a new `JsonEncoder` with a default configuration.
-    pub fn new(node_id: String, l1_chain_id: usize, version: String) -> Self {
+    pub fn new(node_id: String, l1_chain_id: u64, version: String) -> Self {
         JsonEncoder {
             node_id,
             l1_chain_id,
@@ -136,7 +136,7 @@ struct Message<'a> {
     thread: Option<&'a str>,
     thread_id: usize,
     node_id: &'a str,
-    l1_chain_id: usize,
+    l1_chain_id: u64,
     mdc: Mdc,
     node_info: &'a str,
     group_info: &'a str,

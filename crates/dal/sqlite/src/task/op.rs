@@ -3,7 +3,6 @@ use crate::types::DBError;
 use crate::types::SqliteDB;
 use arpa_core::format_now_date;
 use arpa_core::u256_to_vec;
-use arpa_core::RandomnessRequestType;
 use arpa_core::{address_to_string, RandomnessTask, Task};
 use arpa_dal::error::DataAccessResult;
 use arpa_dal::error::RandomnessTaskError;
@@ -11,8 +10,6 @@ use arpa_dal::{BLSTasksFetcher, BLSTasksUpdater};
 use async_trait::async_trait;
 use entity::op_randomness_task;
 use entity::prelude::OpRandomnessTask;
-use ethers_core::types::Address;
-use ethers_core::types::U256;
 use sea_orm::{ActiveModelTrait, DbBackend, DbConn, DbErr, FromQueryResult, Set, Statement};
 use sea_orm::{ColumnTrait, EntityTrait, QueryFilter};
 use std::{marker::PhantomData, sync::Arc};
@@ -94,7 +91,7 @@ impl BLSTasksUpdater<RandomnessTask> for OPBLSTasksDBClient<RandomnessTask> {
             seed_bytes,
             task.request_confirmations as i32,
             task.callback_gas_limit as i32,
-            u256_to_vec(&task.callback_max_gas_price),
+            task.callback_max_gas_price.to_be_bytes().to_vec(),
             task.assignment_block_height as i64,
         )
         .await
@@ -113,11 +110,7 @@ impl BLSTasksUpdater<RandomnessTask> for OPBLSTasksDBClient<RandomnessTask> {
         randomness_task_exclusive_window: usize,
     ) -> DataAccessResult<Vec<RandomnessTask>> {
         let before_assignment_block_height =
-            if current_block_height > randomness_task_exclusive_window {
-                current_block_height - randomness_task_exclusive_window
-            } else {
-                0
-            };
+            current_block_height.saturating_sub(randomness_task_exclusive_window);
         OPRandomnessTaskMutation::fetch_available_tasks(
             self.get_connection(),
             current_group_index as i32,
@@ -127,19 +120,7 @@ impl BLSTasksUpdater<RandomnessTask> for OPBLSTasksDBClient<RandomnessTask> {
         .map(|models| {
             models
                 .into_iter()
-                .map(|model| RandomnessTask {
-                    request_id: model.request_id,
-                    subscription_id: model.subscription_id as u64,
-                    group_index: model.group_index as u32,
-                    request_type: RandomnessRequestType::from(model.request_type as u8),
-                    params: model.params,
-                    requester: model.requester.parse::<Address>().unwrap(),
-                    seed: U256::from_big_endian(&model.seed),
-                    request_confirmations: model.request_confirmations as u16,
-                    callback_gas_limit: model.callback_gas_limit as u32,
-                    callback_max_gas_price: U256::from_big_endian(&model.callback_max_gas_price),
-                    assignment_block_height: model.assignment_block_height as usize,
-                })
+                .map(op_model_to_randomness_task)
                 .collect::<Vec<_>>()
         })
         .map_err(|e| {

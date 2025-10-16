@@ -8,6 +8,7 @@ use crate::{
     queue::{event_queue::EventQueue, EventSubscriber},
     scheduler::{dynamic::SimpleDynamicTaskScheduler, TaskScheduler},
 };
+use alloy::primitives::{Address, U256};
 use arpa_core::{
     log::{build_task_related_payload, LogType},
     u256_to_vec, BLSTaskType, ComponentTaskType, ExponentialBackoffRetryDescriptor, RandomnessTask,
@@ -16,7 +17,6 @@ use arpa_core::{
 use arpa_dal::cache::RandomnessResultCache;
 use arpa_dal::{BLSTasksHandler, GroupInfoHandler, SignatureResultCacheHandler};
 use async_trait::async_trait;
-use ethers::types::{Address, U256};
 use log::{debug, error, info};
 use serde_json::json;
 use std::{marker::PhantomData, sync::Arc};
@@ -33,7 +33,7 @@ pub struct ReadyToHandleRandomnessTaskSubscriber<
     PC: Curve,
     S: SignatureScheme + ThresholdScheme<Public = PC::Point, Private = PC::Scalar>,
 > {
-    pub chain_id: usize,
+    pub chain_id: u64,
     id_address: Address,
     group_cache: Arc<RwLock<Box<dyn GroupInfoHandler<PC>>>>,
     randomness_tasks_cache: Arc<RwLock<Box<dyn BLSTasksHandler<RandomnessTask>>>>,
@@ -51,7 +51,7 @@ impl<PC: Curve, S: SignatureScheme + ThresholdScheme<Public = PC::Point, Private
 {
     #[allow(clippy::too_many_arguments)]
     pub fn new(
-        chain_id: usize,
+        chain_id: u64,
         id_address: Address,
         group_cache: Arc<RwLock<Box<dyn GroupInfoHandler<PC>>>>,
         randomness_tasks_cache: Arc<RwLock<Box<dyn BLSTasksHandler<RandomnessTask>>>>,
@@ -93,7 +93,7 @@ pub struct GeneralRandomnessHandler<
     PC: Curve,
     S: SignatureScheme + ThresholdScheme<Public = PC::Point, Private = PC::Scalar>,
 > {
-    chain_id: usize,
+    chain_id: u64,
     id_address: Address,
     tasks: Vec<RandomnessTask>,
     group_cache: Arc<RwLock<Box<dyn GroupInfoHandler<PC>>>>,
@@ -330,7 +330,7 @@ where
     <S as ThresholdScheme>::Error: Sync + Send,
     <S as SignatureScheme>::Error: Sync + Send,
 {
-    async fn notify(&self, topic: Topic, payload: &(dyn DebuggableEvent)) -> NodeResult<()> {
+    async fn notify(&self, topic: Topic, payload: &dyn DebuggableEvent) -> NodeResult<()> {
         debug!("{:?}", topic);
 
         let ReadyToHandleRandomnessTask { tasks, .. } = payload

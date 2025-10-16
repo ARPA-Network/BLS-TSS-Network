@@ -1,0 +1,124 @@
+use sea_orm_migration::prelude::*;
+
+#[derive(DeriveMigrationName)]
+pub struct Migration;
+
+#[async_trait::async_trait]
+impl MigrationTrait for Migration {
+    async fn up(&self, manager: &SchemaManager) -> Result<(), DbErr> {
+        manager
+            .create_table(
+                Table::create()
+                    .table(ArpaChainRandomnessTask::Table)
+                    .if_not_exists()
+                    .col(
+                        ColumnDef::new(ArpaChainRandomnessTask::Id)
+                            .integer()
+                            .not_null()
+                            .primary_key(),
+                    )
+                    .col(
+                        ColumnDef::new(ArpaChainRandomnessTask::RequestId)
+                            .blob(BlobSize::Medium)
+                            .not_null(),
+                    )
+                    .col(
+                        ColumnDef::new(ArpaChainRandomnessTask::SubscriptionId)
+                            .big_unsigned()
+                            .not_null(),
+                    )
+                    .col(
+                        ColumnDef::new(ArpaChainRandomnessTask::GroupIndex)
+                            .unsigned()
+                            .not_null(),
+                    )
+                    .col(
+                        ColumnDef::new(ArpaChainRandomnessTask::RequestType)
+                            .tiny_unsigned()
+                            .not_null(),
+                    )
+                    .col(
+                        ColumnDef::new(ArpaChainRandomnessTask::Params)
+                            .blob(BlobSize::Medium)
+                            .not_null(),
+                    )
+                    .col(
+                        ColumnDef::new(ArpaChainRandomnessTask::Requester)
+                            .text()
+                            .not_null(),
+                    )
+                    .col(
+                        ColumnDef::new(ArpaChainRandomnessTask::Seed)
+                            .blob(BlobSize::Medium)
+                            .not_null(),
+                    )
+                    .col(
+                        ColumnDef::new(ArpaChainRandomnessTask::RequestConfirmations)
+                            .unsigned()
+                            .not_null(),
+                    )
+                    .col(
+                        ColumnDef::new(ArpaChainRandomnessTask::CallbackGasLimit)
+                            .unsigned()
+                            .not_null(),
+                    )
+                    .col(
+                        ColumnDef::new(ArpaChainRandomnessTask::CallbackMaxGasPrice)
+                            .blob(BlobSize::Medium)
+                            .not_null(),
+                    )
+                    .col(
+                        ColumnDef::new(ArpaChainRandomnessTask::AssignmentBlockHeight)
+                            .big_unsigned()
+                            .not_null(),
+                    )
+                    .col(
+                        ColumnDef::new(ArpaChainRandomnessTask::State)
+                            .tiny_unsigned()
+                            .not_null(),
+                    )
+                    .col(
+                        ColumnDef::new(ArpaChainRandomnessTask::CreateAt)
+                            .date_time()
+                            .not_null(),
+                    )
+                    .col(
+                        ColumnDef::new(ArpaChainRandomnessTask::UpdateAt)
+                            .date_time()
+                            .not_null(),
+                    )
+                    .to_owned(),
+            )
+            .await
+    }
+
+    async fn down(&self, manager: &SchemaManager) -> Result<(), DbErr> {
+        manager
+            .drop_table(
+                Table::drop()
+                    .table(ArpaChainRandomnessTask::Table)
+                    .to_owned(),
+            )
+            .await
+    }
+}
+
+#[derive(Iden)]
+pub enum ArpaChainRandomnessTask {
+    Table,
+    Id,
+    RequestId,
+    SubscriptionId,
+    GroupIndex,
+    RequestType,
+    Params,
+    Requester,
+    Seed,
+    RequestConfirmations,
+    CallbackGasLimit,
+    CallbackMaxGasPrice,
+    AssignmentBlockHeight,
+    State,
+    CreateAt,
+    UpdateAt,
+}

@@ -2,9 +2,9 @@ pub mod client;
 pub mod server;
 
 use crate::error::NodeResult;
+use alloy::primitives::Address;
 use arpa_core::{BLSTaskType, ExponentialBackoffRetryDescriptor};
 use arpa_dal::GroupInfoHandler;
-use ethers::types::Address;
 use std::sync::Arc;
 use threshold_bls::group::Curve;
 use tokio::sync::RwLock;
@@ -16,7 +16,7 @@ pub trait ServiceClient<C> {
 pub trait CommitterService {
     async fn commit_partial_signature(
         self,
-        chain_id: usize,
+        chain_id: u64,
         task_type: BLSTaskType,
         request_id: Vec<u8>,
         message: Vec<u8>,

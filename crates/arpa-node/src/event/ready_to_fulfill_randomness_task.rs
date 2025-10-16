@@ -4,12 +4,12 @@ use arpa_dal::cache::RandomnessResultCache;
 
 #[derive(Clone, Debug)]
 pub struct ReadyToFulfillRandomnessTask {
-    pub chain_id: usize,
+    pub chain_id: u64,
     pub tasks: Vec<RandomnessResultCache>,
 }
 
 impl ReadyToFulfillRandomnessTask {
-    pub fn new(chain_id: usize, tasks: Vec<RandomnessResultCache>) -> Self {
+    pub fn new(chain_id: u64, tasks: Vec<RandomnessResultCache>) -> Self {
         ReadyToFulfillRandomnessTask { chain_id, tasks }
     }
 }

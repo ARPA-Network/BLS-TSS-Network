@@ -5,6 +5,7 @@ use crate::{
     event::new_dkg_task::NewDKGTask,
     queue::{event_queue::EventQueue, EventPublisher},
 };
+use alloy::providers::Provider;
 use arpa_contract_client::controller::ControllerLogs;
 use arpa_core::{
     log::{build_task_related_payload, LogType},
@@ -12,7 +13,6 @@ use arpa_core::{
 };
 use arpa_dal::GroupInfoHandler;
 use async_trait::async_trait;
-use ethers::providers::Middleware;
 use log::info;
 use serde_json::json;
 use std::{marker::PhantomData, sync::Arc};
@@ -127,7 +127,7 @@ impl<PC: Curve + Sync + Send> Listener for PreGroupingListener<PC> {
         Ok(())
     }
 
-    fn chain_id(&self) -> usize {
+    fn chain_id(&self) -> u64 {
         self.listener_descriptor.chain_id
     }
 
@@ -136,103 +136,116 @@ impl<PC: Curve + Sync + Send> Listener for PreGroupingListener<PC> {
     }
 }
 
-#[cfg(feature = "unittest")]
+#[cfg(test)]
 mod tests {
     use super::*;
     use crate::event::types::Topic;
     use crate::queue::EventSubscriber;
     use crate::subscriber::{DebuggableEvent, DebuggableSubscriber, Subscriber};
-    use crate::test_contracts::mockcontroller::deploy_with_args_and_get_mock_controller;
+    use alloy::node_bindings::{Anvil, AnvilInstance};
+    use alloy::primitives::{Address, U256};
+    use alloy::providers::WsConnect;
+    use alloy::signers::local::PrivateKeySigner;
+    use alloy::sol;
     use anyhow::anyhow;
     use arpa_core::{
-        Config, DKGTask, FixedIntervalRetryDescriptor, GeneralMainChainIdentity, ListenerType,
+        build_client, random_address, Config, DKGTask, FixedIntervalRetryDescriptor,
+        GeneralMainChainIdentity, ListenerType, ProviderClientWithSigner,
     };
     use arpa_dal::{cache::InMemoryGroupInfoCache, GroupInfoHandler};
-    use ethers::middleware::SignerMiddleware;
-    use ethers::signers::{LocalWallet, Signer};
-    use ethers::types::{Address, U256};
-    use ethers::{
-        providers::{Http, Provider, Ws},
-        utils::{Anvil, AnvilInstance},
-    };
     use std::sync::Arc;
     use std::time::Duration;
     use threshold_bls::schemes::bn254::G2Curve;
     use tokio::time::timeout;
 
+    sol! {
+        #[sol(ignore_unlinked)]
+        #[sol(rpc)]
+        MockController,
+        "test-contract/MockController.json"
+    }
+
     struct TestEnvironment {
-        anvil: AnvilInstance,
-        wallet: LocalWallet,
+        _anvil: AnvilInstance,
         id_address: Address,
-        chain_id: usize,
+        chain_id: u64,
+        client: ProviderClientWithSigner,
+        chain_identity_arc: Arc<RwLock<ChainIdentityHandlerType<G2Curve>>>,
         controller_address: Address,
-        adapter_address: Address,
-        node_registry_address: Address,
     }
 
     impl TestEnvironment {
-        fn new() -> Self {
+        async fn new() -> NodeResult<Self> {
             let anvil = Anvil::new().spawn();
-            let wallet: LocalWallet = anvil.keys()[0].clone().into();
+            let wallet: PrivateKeySigner = anvil.keys()[0].clone().into();
             let id_address = wallet.address();
-            let chain_id = anvil.chain_id() as usize;
-            let controller_address = Address::random();
-            let adapter_address = Address::random();
-            let node_registry_address = Address::random();
+            let chain_id = anvil.chain_id();
+            let adapter_address = random_address();
+            let node_registry_address = random_address();
+            let config = Config::default();
+            let ws_connect = WsConnect::new(anvil.ws_endpoint());
+            let client = build_client(wallet.clone(), chain_id, ws_connect.clone()).await?;
 
-            Self {
-                anvil,
-                wallet,
-                id_address,
+            let mock_controller = MockController::deploy(client.clone(), node_registry_address)
+                .await
+                .map_err(|e| anyhow!("Failed to deploy mock controller: {}", e))?;
+            let controller_address = *mock_controller.address();
+
+            let chain_identity = GeneralMainChainIdentity::new(
                 chain_id,
+                wallet.clone(),
+                ws_connect,
+                client.clone(),
+                anvil.ws_endpoint(),
                 controller_address,
                 adapter_address,
                 node_registry_address,
-            }
-        }
-
-        async fn deploy_controller(
-            &self,
-        ) -> NodeResult<
-            crate::test_contracts::mockcontroller::MockController<
-                SignerMiddleware<Provider<Http>, LocalWallet>,
-            >,
-        > {
-            let http_provider = Provider::<Http>::try_from(self.anvil.endpoint())
-                .map_err(|e| anyhow!("Failed to create HTTP provider: {}", e))?;
-
-            let client = Arc::new(SignerMiddleware::new(
-                http_provider,
-                self.wallet.clone().with_chain_id(self.anvil.chain_id()),
-            ));
-
-            deploy_with_args_and_get_mock_controller(client, self.node_registry_address)
-                .await
-                .map_err(|e| anyhow!("Failed to deploy mock controller contract: {}", e).into())
-        }
-
-        async fn create_chain_identity(&self) -> GeneralMainChainIdentity {
-            let ws_provider = Arc::new(
-                Provider::<Ws>::connect(self.anvil.ws_endpoint())
-                    .await
-                    .unwrap(),
-            );
-            let config = Config::default();
-
-            GeneralMainChainIdentity::new(
-                self.chain_id,
-                self.wallet.clone(),
-                ws_provider,
-                self.anvil.ws_endpoint(),
-                self.controller_address,
-                self.adapter_address,
-                self.node_registry_address,
                 config
                     .get_time_limits()
                     .contract_transaction_retry_descriptor,
                 config.get_time_limits().contract_view_retry_descriptor,
                 None,
-            )
+            );
+
+            let chain_identity_arc = Arc::new(RwLock::new(
+                Box::new(chain_identity) as ChainIdentityHandlerType<G2Curve>
+            ));
+
+            Ok(Self {
+                _anvil: anvil,
+                id_address,
+                chain_id,
+                client,
+                chain_identity_arc,
+                controller_address,
+            })
+        }
+
+        async fn emit_dkg_event(&self, params: &DkgTaskParams) -> NodeResult<()> {
+            let controller = MockController::new(self.controller_address, self.client.clone());
+
+            let tx = controller.emitDkgTaskEvent(
+                params.global_epoch,
+                params.group_index,
+                params.group_epoch,
+                params.size,
+                params.threshold,
+                params.members.clone(),
+                params.assignment_block_height,
+                params.coordinator_address,
+            );
+
+            let pending_tx = tx
+                .send()
+                .await
+                .map_err(|e| anyhow!("Failed to send transaction: {}", e))?;
+
+            pending_tx
+                .get_receipt()
+                .await
+                .map_err(|e| anyhow!("Transaction failed: {}", e))?;
+
+            Ok(())
         }
     }
 
@@ -244,15 +257,13 @@ mod tests {
 
     impl ListenerComponents {
         async fn new(env: &TestEnvironment) -> Self {
-            let chain_identity = env.create_chain_identity().await;
             let group_cache: Arc<RwLock<Box<dyn GroupInfoHandler<G2Curve>>>> =
                 Arc::new(RwLock::new(Box::new(
                     InMemoryGroupInfoCache::<G2Curve>::new(env.id_address),
                 )));
             let event_queue = Arc::new(RwLock::new(EventQueue::new()));
-            let chain_identity_arc: Arc<RwLock<ChainIdentityHandlerType<G2Curve>>> = Arc::new(
-                RwLock::new(Box::new(chain_identity) as ChainIdentityHandlerType<G2Curve>),
-            );
+            let chain_identity_arc: Arc<RwLock<ChainIdentityHandlerType<G2Curve>>> =
+                env.chain_identity_arc.clone();
 
             let listener_descriptor = create_listener_descriptor(env.chain_id);
             let listener = PreGroupingListener::<G2Curve>::new(
@@ -284,9 +295,9 @@ mod tests {
     impl DkgTaskParams {
         fn new(id_address: Address, include_self: bool) -> Self {
             let members = if include_self {
-                vec![id_address, Address::random(), Address::random()]
+                vec![id_address, random_address(), random_address()]
             } else {
-                vec![Address::random(), Address::random(), Address::random()]
+                vec![random_address(), random_address(), random_address()]
             };
 
             Self {
@@ -297,12 +308,12 @@ mod tests {
                 size: U256::from(3),
                 threshold: U256::from(2),
                 assignment_block_height: U256::from(100),
-                coordinator_address: Address::random(),
+                coordinator_address: random_address(),
             }
         }
     }
 
-    fn create_listener_descriptor(chain_id: usize) -> ListenerDescriptor {
+    fn create_listener_descriptor(chain_id: u64) -> ListenerDescriptor {
         ListenerDescriptor {
             chain_id,
             l_type: ListenerType::PreGrouping,
@@ -366,38 +377,9 @@ mod tests {
         receiver
     }
 
-    async fn emit_dkg_event(
-        controller: &crate::test_contracts::mockcontroller::MockController<
-            SignerMiddleware<Provider<Http>, LocalWallet>,
-        >,
-        params: &DkgTaskParams,
-    ) -> NodeResult<()> {
-        let tx = controller.emit_dkg_task_event(
-            params.global_epoch,
-            params.group_index,
-            params.group_epoch,
-            params.size,
-            params.threshold,
-            params.members.clone(),
-            params.assignment_block_height,
-            params.coordinator_address,
-        );
-
-        let pending_tx = tx
-            .send()
-            .await
-            .map_err(|e| anyhow!("Failed to send transaction: {}", e))?;
-
-        pending_tx
-            .await
-            .map_err(|e| anyhow!("Transaction failed: {}", e))?;
-
-        Ok(())
-    }
-
     #[tokio::test]
     async fn test_pre_grouping_listener() -> NodeResult<()> {
-        let env = TestEnvironment::new();
+        let env = TestEnvironment::new().await?;
         let components = ListenerComponents::new(&env).await;
 
         let mut event_receiver = {
@@ -411,8 +393,8 @@ mod tests {
             size: 3,
             threshold: 2,
             assignment_block_height: 100,
-            members: vec![env.id_address, Address::random(), Address::random()],
-            coordinator_address: Address::random(),
+            members: vec![env.id_address, random_address(), random_address()],
+            coordinator_address: random_address(),
         };
 
         components
@@ -444,8 +426,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_pre_grouping_listener_listen() -> NodeResult<()> {
-        let env = TestEnvironment::new();
-        let controller = env.deploy_controller().await?;
+        let env = TestEnvironment::new().await?;
         let components = ListenerComponents::new(&env).await;
 
         let mut event_receiver = {
@@ -462,7 +443,7 @@ mod tests {
         tokio::time::sleep(Duration::from_millis(500)).await;
 
         let params = DkgTaskParams::new(env.id_address, true);
-        emit_dkg_event(&controller, &params).await?;
+        env.emit_dkg_event(&params).await?;
 
         let received_event = timeout(Duration::from_secs(5), event_receiver.recv())
             .await
@@ -473,9 +454,9 @@ mod tests {
             assert_eq!(task_event.chain_id, env.chain_id);
             assert_eq!(
                 task_event.dkg_task.group_index,
-                params.group_index.as_usize()
+                params.group_index.to::<usize>()
             );
-            assert_eq!(task_event.dkg_task.epoch, params.group_epoch.as_usize());
+            assert_eq!(task_event.dkg_task.epoch, params.group_epoch.to::<usize>());
             assert_eq!(task_event.dkg_task.members, params.members);
             assert_eq!(
                 task_event.dkg_task.coordinator_address,
@@ -491,8 +472,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_pre_grouping_listener_listen_not_member() -> NodeResult<()> {
-        let env = TestEnvironment::new();
-        let controller = env.deploy_controller().await?;
+        let env = TestEnvironment::new().await?;
         let components = ListenerComponents::new(&env).await;
 
         let mut event_receiver = {
@@ -509,7 +489,7 @@ mod tests {
         tokio::time::sleep(Duration::from_millis(500)).await;
 
         let params = DkgTaskParams::new(env.id_address, false);
-        emit_dkg_event(&controller, &params).await?;
+        env.emit_dkg_event(&params).await?;
 
         let timeout_result = timeout(Duration::from_millis(500), event_receiver.recv()).await;
         assert!(
@@ -522,8 +502,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_pre_grouping_listener_listen_same_task() -> NodeResult<()> {
-        let env = TestEnvironment::new();
-        let controller = env.deploy_controller().await?;
+        let env = TestEnvironment::new().await?;
         let components = ListenerComponents::new(&env).await;
 
         {
@@ -534,8 +513,8 @@ mod tests {
                 size: 3,
                 threshold: 2,
                 assignment_block_height: 50,
-                members: vec![env.id_address, Address::random(), Address::random()],
-                coordinator_address: Address::random(),
+                members: vec![env.id_address, random_address(), random_address()],
+                coordinator_address: random_address(),
             };
 
             group_cache_write.save_task_info(0, dkg_task).await?;
@@ -558,7 +537,7 @@ mod tests {
         tokio::time::sleep(Duration::from_millis(500)).await;
 
         let params = DkgTaskParams::new(env.id_address, true);
-        emit_dkg_event(&controller, &params).await?;
+        env.emit_dkg_event(&params).await?;
 
         let timeout_result = timeout(Duration::from_millis(500), event_receiver.recv()).await;
         assert!(

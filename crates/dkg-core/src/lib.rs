@@ -6,7 +6,6 @@
 //! The implementation is a state machine which has Phases 0 to 3. Phase 3 is only reachable if any of the
 //! n parties does not publish its shares in the first phase. If less than t parties participate in any stage,
 //! the DKG fails.
-
 /// Board trait and implementations for publishing data from each DKG phase
 pub mod board;
 pub use board::BoardPublisher;

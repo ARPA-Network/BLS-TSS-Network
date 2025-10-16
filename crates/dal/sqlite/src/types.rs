@@ -1,3 +1,4 @@
+use alloy::primitives::{Address, U256};
 use arpa_core::PartialSignature;
 use arpa_core::RandomnessRequestType;
 use arpa_core::RandomnessTask;
@@ -5,15 +6,15 @@ use arpa_dal::cache::BLSResultCache;
 use arpa_dal::cache::RandomnessResultCache;
 use arpa_dal::error::DataAccessError;
 use arpa_dal::BLSResultCacheState;
+use entity::arpa_chain_randomness_task;
 use entity::b3_randomness_task;
 use entity::base_randomness_task;
+use entity::bsc_randomness_task;
 use entity::loot_randomness_task;
 use entity::op_randomness_task;
 use entity::randomness_task;
 use entity::redstone_randomness_task;
 use entity::taiko_randomness_task;
-use ethers_core::types::Address;
-use ethers_core::types::U256;
 use sea_orm::FromQueryResult;
 use sea_orm::{DatabaseConnection, DbErr};
 use std::collections::BTreeMap;
@@ -61,36 +62,34 @@ pub(crate) struct RandomnessRecord {
 }
 
 impl From<RandomnessRecord> for BLSResultCache<RandomnessResultCache> {
-    fn from(randomness_record: RandomnessRecord) -> Self {
+    fn from(model: RandomnessRecord) -> Self {
         let task = RandomnessTask {
-            request_id: randomness_record.request_id.clone(),
-            subscription_id: randomness_record.subscription_id as u64,
-            group_index: randomness_record.group_index as u32,
-            request_type: RandomnessRequestType::from(randomness_record.request_type as u8),
-            params: randomness_record.params,
-            requester: randomness_record.requester.parse::<Address>().unwrap(),
-            seed: U256::from_big_endian(&randomness_record.seed),
-            request_confirmations: randomness_record.request_confirmations as u16,
-            callback_gas_limit: randomness_record.callback_gas_limit as u32,
-            callback_max_gas_price: U256::from_big_endian(
-                &randomness_record.callback_max_gas_price,
-            ),
-            assignment_block_height: randomness_record.assignment_block_height as usize,
+            request_id: model.request_id.clone(),
+            subscription_id: model.subscription_id as u64,
+            group_index: model.group_index as u32,
+            request_type: RandomnessRequestType::from(model.request_type as u8),
+            params: model.params,
+            requester: model.requester.parse::<Address>().unwrap(),
+            seed: U256::from_be_slice(&model.seed),
+            request_confirmations: model.request_confirmations as u16,
+            callback_gas_limit: model.callback_gas_limit as u32,
+            callback_max_gas_price: compatible_u256_vec_to_u128(&model.callback_max_gas_price),
+            assignment_block_height: model.assignment_block_height as usize,
         };
 
         let partial_signatures: BTreeMap<Address, PartialSignature> =
-            serde_json::from_str(&randomness_record.partial_signatures).unwrap_or(BTreeMap::new());
+            serde_json::from_str(&model.partial_signatures).unwrap_or(BTreeMap::new());
 
         BLSResultCache {
             result_cache: RandomnessResultCache {
-                group_index: randomness_record.group_index as usize,
-                message: randomness_record.message,
+                group_index: model.group_index as usize,
+                message: model.message,
                 randomness_task: task,
                 partial_signatures,
-                threshold: randomness_record.threshold as usize,
-                committed_times: randomness_record.committed_times as usize,
+                threshold: model.threshold as usize,
+                committed_times: model.committed_times as usize,
             },
-            state: BLSResultCacheState::from(randomness_record.state),
+            state: BLSResultCacheState::from(model.state),
         }
     }
 }
@@ -103,10 +102,10 @@ pub(crate) fn model_to_randomness_task(model: randomness_task::Model) -> Randomn
         request_type: RandomnessRequestType::from(model.request_type as u8),
         params: model.params,
         requester: model.requester.parse::<Address>().unwrap(),
-        seed: U256::from_big_endian(&model.seed),
+        seed: U256::from_be_slice(&model.seed),
         request_confirmations: model.request_confirmations as u16,
         callback_gas_limit: model.callback_gas_limit as u32,
-        callback_max_gas_price: U256::from_big_endian(&model.callback_max_gas_price),
+        callback_max_gas_price: compatible_u256_vec_to_u128(&model.callback_max_gas_price),
         assignment_block_height: model.assignment_block_height as usize,
     }
 }
@@ -119,10 +118,10 @@ pub(crate) fn op_model_to_randomness_task(model: op_randomness_task::Model) -> R
         request_type: RandomnessRequestType::from(model.request_type as u8),
         params: model.params,
         requester: model.requester.parse::<Address>().unwrap(),
-        seed: U256::from_big_endian(&model.seed),
+        seed: U256::from_be_slice(&model.seed),
         request_confirmations: model.request_confirmations as u16,
         callback_gas_limit: model.callback_gas_limit as u32,
-        callback_max_gas_price: U256::from_big_endian(&model.callback_max_gas_price),
+        callback_max_gas_price: compatible_u256_vec_to_u128(&model.callback_max_gas_price),
         assignment_block_height: model.assignment_block_height as usize,
     }
 }
@@ -135,10 +134,10 @@ pub(crate) fn base_model_to_randomness_task(model: base_randomness_task::Model) 
         request_type: RandomnessRequestType::from(model.request_type as u8),
         params: model.params,
         requester: model.requester.parse::<Address>().unwrap(),
-        seed: U256::from_big_endian(&model.seed),
+        seed: U256::from_be_slice(&model.seed),
         request_confirmations: model.request_confirmations as u16,
         callback_gas_limit: model.callback_gas_limit as u32,
-        callback_max_gas_price: U256::from_big_endian(&model.callback_max_gas_price),
+        callback_max_gas_price: compatible_u256_vec_to_u128(&model.callback_max_gas_price),
         assignment_block_height: model.assignment_block_height as usize,
     }
 }
@@ -153,10 +152,10 @@ pub(crate) fn redstone_model_to_randomness_task(
         request_type: RandomnessRequestType::from(model.request_type as u8),
         params: model.params,
         requester: model.requester.parse::<Address>().unwrap(),
-        seed: U256::from_big_endian(&model.seed),
+        seed: U256::from_be_slice(&model.seed),
         request_confirmations: model.request_confirmations as u16,
         callback_gas_limit: model.callback_gas_limit as u32,
-        callback_max_gas_price: U256::from_big_endian(&model.callback_max_gas_price),
+        callback_max_gas_price: compatible_u256_vec_to_u128(&model.callback_max_gas_price),
         assignment_block_height: model.assignment_block_height as usize,
     }
 }
@@ -169,10 +168,10 @@ pub(crate) fn loot_model_to_randomness_task(model: loot_randomness_task::Model) 
         request_type: RandomnessRequestType::from(model.request_type as u8),
         params: model.params,
         requester: model.requester.parse::<Address>().unwrap(),
-        seed: U256::from_big_endian(&model.seed),
+        seed: U256::from_be_slice(&model.seed),
         request_confirmations: model.request_confirmations as u16,
         callback_gas_limit: model.callback_gas_limit as u32,
-        callback_max_gas_price: U256::from_big_endian(&model.callback_max_gas_price),
+        callback_max_gas_price: compatible_u256_vec_to_u128(&model.callback_max_gas_price),
         assignment_block_height: model.assignment_block_height as usize,
     }
 }
@@ -187,10 +186,10 @@ pub(crate) fn taiko_model_to_randomness_task(
         request_type: RandomnessRequestType::from(model.request_type as u8),
         params: model.params,
         requester: model.requester.parse::<Address>().unwrap(),
-        seed: U256::from_big_endian(&model.seed),
+        seed: U256::from_be_slice(&model.seed),
         request_confirmations: model.request_confirmations as u16,
         callback_gas_limit: model.callback_gas_limit as u32,
-        callback_max_gas_price: U256::from_big_endian(&model.callback_max_gas_price),
+        callback_max_gas_price: compatible_u256_vec_to_u128(&model.callback_max_gas_price),
         assignment_block_height: model.assignment_block_height as usize,
     }
 }
@@ -203,10 +202,81 @@ pub(crate) fn b3_model_to_randomness_task(model: b3_randomness_task::Model) -> R
         request_type: RandomnessRequestType::from(model.request_type as u8),
         params: model.params,
         requester: model.requester.parse::<Address>().unwrap(),
-        seed: U256::from_big_endian(&model.seed),
+        seed: U256::from_be_slice(&model.seed),
         request_confirmations: model.request_confirmations as u16,
         callback_gas_limit: model.callback_gas_limit as u32,
-        callback_max_gas_price: U256::from_big_endian(&model.callback_max_gas_price),
+        callback_max_gas_price: compatible_u256_vec_to_u128(&model.callback_max_gas_price),
         assignment_block_height: model.assignment_block_height as usize,
+    }
+}
+
+pub(crate) fn bsc_model_to_randomness_task(model: bsc_randomness_task::Model) -> RandomnessTask {
+    RandomnessTask {
+        request_id: model.request_id,
+        subscription_id: model.subscription_id as u64,
+        group_index: model.group_index as u32,
+        request_type: RandomnessRequestType::from(model.request_type as u8),
+        params: model.params,
+        requester: model.requester.parse::<Address>().unwrap(),
+        seed: U256::from_be_slice(&model.seed),
+        request_confirmations: model.request_confirmations as u16,
+        callback_gas_limit: model.callback_gas_limit as u32,
+        callback_max_gas_price: compatible_u256_vec_to_u128(&model.callback_max_gas_price),
+        assignment_block_height: model.assignment_block_height as usize,
+    }
+}
+
+pub(crate) fn arpa_chain_model_to_randomness_task(
+    model: arpa_chain_randomness_task::Model,
+) -> RandomnessTask {
+    RandomnessTask {
+        request_id: model.request_id,
+        subscription_id: model.subscription_id as u64,
+        group_index: model.group_index as u32,
+        request_type: RandomnessRequestType::from(model.request_type as u8),
+        params: model.params,
+        requester: model.requester.parse::<Address>().unwrap(),
+        seed: U256::from_be_slice(&model.seed),
+        request_confirmations: model.request_confirmations as u16,
+        callback_gas_limit: model.callback_gas_limit as u32,
+        callback_max_gas_price: compatible_u256_vec_to_u128(&model.callback_max_gas_price),
+        assignment_block_height: model.assignment_block_height as usize,
+    }
+}
+
+pub(crate) fn compatible_u256_vec_to_u128(vec: &[u8]) -> u128 {
+    if vec.len() == 32 {
+        let u256 = U256::from_be_slice(vec);
+        u256.to::<u128>()
+    } else {
+        u128::from_be_bytes(vec.try_into().unwrap())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use alloy::primitives::U256;
+
+    use crate::types::compatible_u256_vec_to_u128;
+
+    #[test]
+    fn test_u128_vec_to_u128() {
+        let u: u128 = 3124;
+        let vec = u.to_be_bytes().to_vec();
+        assert_eq!(vec.len(), 16);
+        assert_eq!(compatible_u256_vec_to_u128(&vec), 3124);
+        let u128 = u128::from_be_bytes(vec.try_into().unwrap());
+        assert_eq!(u128, 3124);
+    }
+
+    #[test]
+    fn test_old_u256_vec_to_u128() {
+        let x: U256 = U256::from(3124);
+        let vec = x.to_be_bytes_vec();
+        assert_eq!(vec.len(), 32);
+        assert_eq!(compatible_u256_vec_to_u128(&vec), 3124);
+        let u256 = U256::from_be_slice(&vec);
+        let u128 = u256.to::<u128>();
+        assert_eq!(u128, 3124);
     }
 }

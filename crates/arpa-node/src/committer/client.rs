@@ -2,8 +2,8 @@ use super::{CommitterClient, CommitterService, ServiceClient};
 use crate::error::{NodeError, NodeResult};
 use crate::rpc_stub::committer::committer_service_client::CommitterServiceClient;
 use crate::rpc_stub::committer::CommitPartialSignatureRequest;
+use alloy::primitives::Address;
 use arpa_core::{address_to_string, jitter, BLSTaskType, ExponentialBackoffRetryDescriptor};
-use ethers::types::Address;
 use log::error;
 use tokio_retry::{strategy::ExponentialBackoff, RetryIf};
 use tonic::Request;
@@ -73,7 +73,7 @@ impl ServiceClient<CommitterServiceClient<tonic::transport::Channel>> for Genera
 impl CommitterService for GeneralCommitterClient {
     async fn commit_partial_signature(
         self,
-        chain_id: usize,
+        chain_id: u64,
         task_type: BLSTaskType,
         request_id: Vec<u8>,
         message: Vec<u8>,

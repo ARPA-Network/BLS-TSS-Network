@@ -25,8 +25,7 @@ name = "node-config-checker"
 path = "src/node_config_checker.rs"
 
 [build-dependencies]
-prost-build = "0.12"
-tonic-build = "0.11"
+tonic-prost-build = "0.14"
 serde_json = "1.0"
 
 [dependencies]
@@ -51,9 +50,10 @@ futures = "0.3.5"
 async-trait = "0.1.35"
 tokio = { version = "1.37.0", features = ["full"] }
 rustc-hex = "2.1.0"
-tonic = "0.11"
-tonic-health = "0.11"
-prost = "0.12"
+tonic = "0.14"
+tonic-health = "0.14"
+prost = "0.14"
+tonic-prost = "0.14"
 serde_yaml = "0.8"
 tokio-retry = "0.3"
 log = "0.4"
@@ -61,20 +61,18 @@ log4rs = "1.2.0"
 log-mdc = "0.1.0"
 chrono = "0.4"
 structopt = "0.3"
-ethers = { workspace = true, features = ["abigen", "rustls", "ws"] }
+alloy = { workspace = true, features = ["full"] }
 uuid = { version = "1.2.2", features = ["v4", "fast-rng", "macro-diagnostics"] }
-tower = "0.4"
-hyper = "0.14"
+tower = "0.5"
+hyper = "1.7"
 reedline-repl-rs = { version = "1.0.6", features = ["async"] }
 actix-web = "4"
 check-latest = { version = "1.0.2", default-features = false, features = [
     "async",
 ] }
 
-[features]
-unittest = []  
-
 [dev-dependencies]
-arpa-node = { path = ".", features = ["unittest"] }  
+alloy = { workspace = true, features = ["full", "provider-anvil-node"] }
+arpa-node = { path = ".", features = [] }  
 regex = "1.11.1" 
 ethers-core.workspace = true

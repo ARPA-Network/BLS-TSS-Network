@@ -1,7 +1,7 @@
 use crate::address_to_string;
 use crate::types::node::{Group as NodeGroup, Member as NodeMember};
-use ethers_core::types::Address;
-use ethers_core::utils::hex;
+use alloy::hex;
+use alloy::primitives::Address;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use std::hash::{Hash, Hasher};

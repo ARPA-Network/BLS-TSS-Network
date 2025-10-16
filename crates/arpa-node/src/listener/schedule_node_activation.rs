@@ -5,10 +5,11 @@ use crate::{
     event::node_activation::NodeActivation,
     queue::{event_queue::EventQueue, EventPublisher},
 };
+use alloy::primitives::Address;
+use alloy::providers::Provider;
 use arpa_contract_client::{controller::ControllerViews, node_registry::NodeRegistryViews};
 use arpa_core::ListenerDescriptor;
 use async_trait::async_trait;
-use ethers::{providers::Middleware, types::Address};
 use std::{marker::PhantomData, sync::Arc};
 use threshold_bls::group::Curve;
 use tokio::sync::RwLock;
@@ -105,7 +106,7 @@ impl<PC: Curve + Sync + Send> Listener for NodeActivationListener<PC> {
         Ok(())
     }
 
-    fn chain_id(&self) -> usize {
+    fn chain_id(&self) -> u64 {
         self.listener_descriptor.chain_id
     }
 
@@ -114,38 +115,46 @@ impl<PC: Curve + Sync + Send> Listener for NodeActivationListener<PC> {
     }
 }
 
-#[cfg(feature = "unittest")]
+#[cfg(test)]
 mod tests {
     use super::*;
     use crate::event::types::Topic;
     use crate::queue::EventSubscriber;
     use crate::subscriber::{DebuggableEvent, DebuggableSubscriber, Subscriber};
-    use crate::test_contracts::mockcontroller::deploy_with_args_and_get_mock_controller;
-    use crate::test_contracts::mocknoderegistry::{
-        deploy_with_args_and_get_mock_node_registry, MockNodeRegistry
-    };
-    use ethers::middleware::SignerMiddleware;
-    use ethers::signers::{LocalWallet, Signer};
-    use threshold_bls::schemes::bn254::G2Curve;
-
+    use alloy::node_bindings::{Anvil, AnvilInstance};
+    use alloy::providers::WsConnect;
+    use alloy::signers::local::PrivateKeySigner;
+    use alloy::sol;
     use anyhow::anyhow;
-    use arpa_core::{Config, FixedIntervalRetryDescriptor, GeneralMainChainIdentity, ListenerType};
-    use ethers::{
-        providers::{Http, Provider, Ws},
-        types::{Address, Bytes},
-        utils::{Anvil, AnvilInstance},
+    use arpa_core::{
+        build_client, random_address, Config, FixedIntervalRetryDescriptor,
+        GeneralMainChainIdentity, ListenerType, ProviderClientWithSigner,
     };
     use std::sync::Arc;
     use std::time::Duration;
+    use threshold_bls::schemes::bn254::G2Curve;
     use tokio::time::timeout;
+
+    sol! {
+        #[sol(ignore_unlinked)]
+        #[sol(rpc)]
+        MockNodeRegistry,
+        "test-contract/MockNodeRegistry.json"
+    }
+
+    sol! {
+        #[sol(ignore_unlinked)]
+        #[sol(rpc)]
+        MockController,
+        "test-contract/MockController.json"
+    }
 
     struct TestEnvironment {
         _anvil: AnvilInstance,
-        client: Arc<SignerMiddleware<Provider<Http>, LocalWallet>>,
-        ws_provider: Arc<Provider<Ws>>,
-        wallet: LocalWallet,
+        client: ProviderClientWithSigner,
+        wallet: PrivateKeySigner,
         id_address: Address,
-        chain_id: usize,
+        chain_id: u64,
         controller_address: Address,
         node_registry_address: Address,
     }
@@ -155,21 +164,17 @@ mod tests {
             let anvil = Anvil::new().spawn();
             println!("Anvil instance started at {}", anvil.endpoint());
 
-            let http_provider = Provider::<Http>::try_from(anvil.endpoint())?;
-            let ws_provider = Arc::new(Provider::<Ws>::connect(anvil.ws_endpoint()).await?);
+            let ws_connect = WsConnect::new(anvil.ws_endpoint());
             println!("Connected to Anvil WebSocket at {}", anvil.ws_endpoint());
 
-            let wallet: LocalWallet = anvil.keys()[0].clone().into();
+            let wallet: PrivateKeySigner = anvil.keys()[0].clone().into();
             let id_address = wallet.address();
             println!("Using wallet address: {}", id_address);
 
-            let chain_id = anvil.chain_id() as usize;
+            let chain_id = anvil.chain_id();
             println!("Chain ID: {}", chain_id);
 
-            let client = Arc::new(SignerMiddleware::new(
-                http_provider,
-                wallet.clone().with_chain_id(anvil.chain_id()),
-            ));
+            let client = build_client(wallet.clone(), chain_id, ws_connect.clone()).await?;
 
             let (controller_address, node_registry_address) =
                 deploy_contracts(client.clone()).await?;
@@ -177,7 +182,6 @@ mod tests {
             Ok(TestEnvironment {
                 _anvil: anvil,
                 client,
-                ws_provider,
                 wallet,
                 id_address,
                 chain_id,
@@ -188,14 +192,16 @@ mod tests {
 
         fn create_chain_identity(&self) -> Arc<RwLock<ChainIdentityHandlerType<G2Curve>>> {
             let config = Config::default();
+            let ws_connect = WsConnect::new(self._anvil.ws_endpoint());
             let ws_endpoint = self._anvil.ws_endpoint();
             let chain_identity = GeneralMainChainIdentity::new(
                 self.chain_id,
                 self.wallet.clone(),
-                self.ws_provider.clone(),
+                ws_connect.clone(),
+                self.client.clone(),
                 ws_endpoint,
                 self.controller_address,
-                Address::random(),
+                random_address(),
                 self.node_registry_address,
                 config
                     .get_time_limits()
@@ -230,17 +236,14 @@ mod tests {
             let node_registry =
                 MockNodeRegistry::new(self.node_registry_address, self.client.clone());
 
-            let tx = node_registry.register_node(
-                self.id_address,
-                Bytes::from(vec![1, 2, 3]),
-                is_eigenlayer,
-            );
+            let tx =
+                node_registry.registerNode(self.id_address, vec![1, 2, 3].into(), is_eigenlayer);
 
-            let receipt = tx.send().await?.await?;
+            let receipt = tx.send().await?.get_receipt().await?;
             println!(
                 "Node registered: {} in block {}",
                 self.id_address,
-                receipt.unwrap().block_number.unwrap()
+                receipt.block_number.unwrap()
             );
 
             Ok(())
@@ -250,18 +253,18 @@ mod tests {
             let node_registry =
                 MockNodeRegistry::new(self.node_registry_address, self.client.clone());
 
-            let tx = node_registry.set_node_state(self.id_address, is_active);
-            let receipt = tx.send().await?.await?;
+            let tx = node_registry.setNodeState(self.id_address, is_active);
+            let receipt = tx.send().await?.get_receipt().await?;
 
             if is_active {
                 println!(
                     "Node state set to active in block {}",
-                    receipt.unwrap().block_number.unwrap()
+                    receipt.block_number.unwrap()
                 );
             } else {
                 println!(
                     "Node state set to inactive in block {}",
-                    receipt.unwrap().block_number.unwrap()
+                    receipt.block_number.unwrap()
                 );
             }
 
@@ -270,27 +273,19 @@ mod tests {
     }
 
     async fn deploy_contracts(
-        client: Arc<SignerMiddleware<Provider<Http>, LocalWallet>>,
+        client: ProviderClientWithSigner,
     ) -> Result<(Address, Address), Box<dyn std::error::Error>> {
         println!("Deploying mock contracts...");
 
-        let node_registry = deploy_with_args_and_get_mock_node_registry(
-            client.clone(),
-            (
-                Address::random(), 
-                Address::random(), 
-                Address::random(), 
-            )
-        ).await?;
-        let node_registry_address = node_registry.address();
+        let node_registry = MockNodeRegistry::deploy(client.clone()).await?;
+        let node_registry_address = *node_registry.address();
         println!(
             "Node Registry contract deployed at: {}",
             node_registry_address
         );
 
-        let controller =
-            deploy_with_args_and_get_mock_controller(client.clone(), node_registry_address).await?;
-        let controller_address = controller.address();
+        let controller = MockController::deploy(client.clone(), node_registry_address).await?;
+        let controller_address = *controller.address();
         println!("Controller contract deployed at: {}", controller_address);
 
         Ok((controller_address, node_registry_address))
@@ -395,7 +390,7 @@ mod tests {
 
     fn assert_node_activation_event(
         event: &NodeActivation,
-        expected_chain_id: usize,
+        expected_chain_id: u64,
         expected_is_eigenlayer: bool,
         expected_node_registry_address: Address,
     ) {

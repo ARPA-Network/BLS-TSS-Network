@@ -20,31 +20,35 @@ mod test {
         try_and_increment::TryAndIncrement,
         *,
     };
-    use ark_bn254::Parameters;
-    use ark_ec::{bn::BnParameters, models::SWModelParameters, ProjectiveCurve};
+    use alloy::{hex, primitives::U256};
+    use ark_bn254::g2::Config as G2Config;
+    use ark_ec::short_weierstrass::SWCurveConfig;
+    // use ark_ec::{
+    //     bn::BnParameters, models::short_weierstrass::SWModelParameters,
+    //     short_weierstrass::SWCurveConfig, ProjectiveCurve,
+    // };
     use ark_serialize::CanonicalSerialize;
-    use ethers_core::{types::U256, utils::hex};
 
     #[test]
     fn hash_to_curve_direct_g1() {
         let h = Keccak256Hasher;
         // hash_to_curve_test::<_, <Parameters as BnParameters>::G1Parameters>(h, b"hello");
-        hash_to_curve_test::<_, <Parameters as BnParameters>::G2Parameters>(h, b"hello01");
-        hash_to_curve_test::<_, <Parameters as BnParameters>::G2Parameters>(h, b"hello02");
-        hash_to_curve_test::<_, <Parameters as BnParameters>::G2Parameters>(h, b"hello03");
-        hash_to_curve_test::<_, <Parameters as BnParameters>::G2Parameters>(h, b"hello04");
-        hash_to_curve_test::<_, <Parameters as BnParameters>::G2Parameters>(h, b"hello05");
+        hash_to_curve_test::<_, G2Config>(h, b"hello01");
+        hash_to_curve_test::<_, G2Config>(h, b"hello02");
+        hash_to_curve_test::<_, G2Config>(h, b"hello03");
+        hash_to_curve_test::<_, G2Config>(h, b"hello04");
+        hash_to_curve_test::<_, G2Config>(h, b"hello05");
     }
 
-    fn hash_to_curve_test<X: Hasher<Error = BLSError>, P: SWModelParameters>(h: X, input: &[u8]) {
+    fn hash_to_curve_test<X: Hasher<Error = BLSError>, P: SWCurveConfig>(h: X, input: &[u8]) {
         let hasher = TryAndIncrement::<X, P>::new(&h);
         let g = hasher.hash(&[], input).unwrap();
 
         let mut xbytes = vec![];
-        g.into_affine().x.serialize(&mut xbytes).unwrap();
+        g.x.serialize_compressed(&mut xbytes).unwrap();
         println!("{}", g);
         let mut ybytes = vec![];
-        g.into_affine().y.serialize(&mut ybytes).unwrap();
+        g.y.serialize_compressed(&mut ybytes).unwrap();
         print_point("x", &xbytes);
         print_point("y", &ybytes);
     }
@@ -62,9 +66,9 @@ mod test {
         print!(" ");
         println!("{:?}", hex::encode(x2.clone()));
         // Dec
-        print!("{:?}", U256::from(&x1 as &[u8]));
+        print!("{:?}", U256::from_be_slice(&x1));
         print!(" ");
-        println!("{:?}", U256::from(&x2 as &[u8]));
+        println!("{:?}", U256::from_be_slice(&x2));
         println!("");
     }
 }

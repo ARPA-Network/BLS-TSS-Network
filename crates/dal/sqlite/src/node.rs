@@ -1,6 +1,7 @@
 use crate::types::DBError;
 use crate::types::DBResult;
 use crate::types::SqliteDB;
+use alloy::primitives::Address;
 use arpa_core::{address_to_string, format_now_date};
 use arpa_dal::cache::InMemoryNodeInfoCache;
 use arpa_dal::error::DataAccessResult;
@@ -10,7 +11,6 @@ use arpa_dal::NodeInfoUpdater;
 use async_trait::async_trait;
 use entity::node_info;
 use entity::prelude::NodeInfo;
-use ethers_core::types::Address;
 use sea_orm::{ActiveModelTrait, DbConn, DbErr, EntityTrait, QueryOrder, Set};
 use std::sync::Arc;
 use threshold_bls::group::Curve;

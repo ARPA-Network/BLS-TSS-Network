@@ -209,10 +209,9 @@ mod tests {
     use super::*;
     use crate::curve::bn254::{G1Curve, G2Curve, PairingCurve as PCurve};
     use crate::group::Curve;
-    use rand::prelude::*;
 
     fn keypair<C: Curve>() -> (C::Scalar, C::Point) {
-        let private = C::Scalar::rand(&mut thread_rng());
+        let private = C::Scalar::rand(&mut rand::thread_rng());
         let mut public = C::Point::one();
         public.mul(&private);
         (private, public)

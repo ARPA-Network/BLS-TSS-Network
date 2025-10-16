@@ -2,10 +2,14 @@
 
 pub mod prelude;
 
+pub mod arpa_chain_randomness_result;
+pub mod arpa_chain_randomness_task;
 pub mod b3_randomness_result;
 pub mod b3_randomness_task;
 pub mod base_randomness_result;
 pub mod base_randomness_task;
+pub mod bsc_randomness_result;
+pub mod bsc_randomness_task;
 pub mod group_info;
 pub mod loot_randomness_result;
 pub mod loot_randomness_task;

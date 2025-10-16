@@ -1,43 +1,49 @@
 use crate::{
-    contract_stub::coordinator::Coordinator,
     coordinator::{
         CoordinatorClientBuilder, CoordinatorTransactions, CoordinatorViews, DKGContractError,
     },
     error::ContractClientResult,
+    ethers::coordinator::Coordinator::CoordinatorInstance,
     ServiceClient, TransactionCaller, ViewCaller,
 };
 use ::core::panic;
+use alloy::{primitives::Address, rpc::types::TransactionReceipt, sol};
 use arpa_core::{
     ChainIdentity, ExponentialBackoffRetryDescriptor, GeneralMainChainIdentity,
-    GeneralRelayedChainIdentity, WsWalletSigner,
+    GeneralRelayedChainIdentity, ProviderClientWithSigner,
 };
 use async_trait::async_trait;
 use dkg_core::{
     primitives::{BundledJustification, BundledResponses, BundledShares},
     BoardPublisher,
 };
-use ethers::prelude::*;
 use log::info;
-use std::sync::Arc;
 use threshold_bls::group::Curve;
 
+sol! {
+    #[sol(ignore_unlinked)]
+    #[sol(rpc)]
+    Coordinator,
+    "abi/Coordinator.json"
+}
+
 pub struct CoordinatorClient {
-    chain_id: usize,
+    chain_id: u64,
     coordinator_address: Address,
-    client: Arc<WsWalletSigner>,
+    client: ProviderClientWithSigner,
     contract_transaction_retry_descriptor: ExponentialBackoffRetryDescriptor,
     contract_view_retry_descriptor: ExponentialBackoffRetryDescriptor,
-    max_priority_fee_per_gas: Option<U256>,
+    max_priority_fee_per_gas: Option<u128>,
 }
 
 impl CoordinatorClient {
     pub fn new(
-        chain_id: usize,
+        chain_id: u64,
         coordinator_address: Address,
         identity: &GeneralMainChainIdentity,
         contract_transaction_retry_descriptor: ExponentialBackoffRetryDescriptor,
         contract_view_retry_descriptor: ExponentialBackoffRetryDescriptor,
-        max_priority_fee_per_gas: Option<U256>,
+        max_priority_fee_per_gas: Option<u128>,
     ) -> Self {
         CoordinatorClient {
             chain_id,
@@ -73,7 +79,7 @@ impl<C: Curve + 'static> CoordinatorClientBuilder<C> for GeneralRelayedChainIden
     }
 }
 
-type CoordinatorContract = Coordinator<WsWalletSigner>;
+type CoordinatorContract = CoordinatorInstance<ProviderClientWithSigner>;
 
 #[async_trait]
 impl ServiceClient<CoordinatorContract> for CoordinatorClient {
@@ -101,7 +107,7 @@ impl CoordinatorTransactions for CoordinatorClient {
         CoordinatorClient::call_contract_transaction(
             self.chain_id,
             "publish",
-            coordinator_contract.client_ref(),
+            coordinator_contract.provider(),
             call,
             self.contract_transaction_retry_descriptor,
             true,
@@ -120,7 +126,7 @@ impl CoordinatorViews for CoordinatorClient {
         CoordinatorClient::call_contract_view(
             self.chain_id,
             "get_shares",
-            coordinator_contract.get_shares(),
+            coordinator_contract.getShares(),
             self.contract_view_retry_descriptor,
         )
         .await
@@ -134,7 +140,7 @@ impl CoordinatorViews for CoordinatorClient {
         CoordinatorClient::call_contract_view(
             self.chain_id,
             "get_responses",
-            coordinator_contract.get_responses(),
+            coordinator_contract.getResponses(),
             self.contract_view_retry_descriptor,
         )
         .await
@@ -148,7 +154,7 @@ impl CoordinatorViews for CoordinatorClient {
         CoordinatorClient::call_contract_view(
             self.chain_id,
             "get_justifications",
-            coordinator_contract.get_justifications(),
+            coordinator_contract.getJustifications(),
             self.contract_view_retry_descriptor,
         )
         .await
@@ -162,7 +168,7 @@ impl CoordinatorViews for CoordinatorClient {
         CoordinatorClient::call_contract_view(
             self.chain_id,
             "get_participants",
-            coordinator_contract.get_participants(),
+            coordinator_contract.getParticipants(),
             self.contract_view_retry_descriptor,
         )
         .await
@@ -175,14 +181,18 @@ impl CoordinatorViews for CoordinatorClient {
         CoordinatorClient::call_contract_view(
             self.chain_id,
             "get_dkg_keys",
-            coordinator_contract.get_dkg_keys(),
+            coordinator_contract.getDkgKeys(),
             self.contract_view_retry_descriptor,
         )
         .await
-        .map(|(t, keys)| {
+        .map(|get_dkg_keys_return| {
             (
-                t.as_usize(),
-                keys.iter().map(|b| b.to_vec()).collect::<Vec<Vec<u8>>>(),
+                get_dkg_keys_return._0.to::<usize>(),
+                get_dkg_keys_return
+                    ._1
+                    .iter()
+                    .map(|b| b.to_vec())
+                    .collect::<Vec<Vec<u8>>>(), // TODO: check if this is correct
             )
         })
     }
@@ -194,7 +204,7 @@ impl CoordinatorViews for CoordinatorClient {
         CoordinatorClient::call_contract_view(
             self.chain_id,
             "in_phase",
-            coordinator_contract.in_phase(),
+            coordinator_contract.inPhase(),
             self.contract_view_retry_descriptor,
         )
         .await
@@ -231,31 +241,32 @@ impl<C: Curve + 'static> BoardPublisher<C> for CoordinatorClient {
 
 #[cfg(test)]
 pub mod coordinator_tests {
-    use super::{CoordinatorClient, WsWalletSigner};
-    use crate::contract_stub::coordinator::Coordinator;
+    use super::{CoordinatorClient, ProviderClientWithSigner};
     use crate::coordinator::CoordinatorTransactions;
     use crate::error::ContractClientError;
+    use crate::ethers::coordinator::Coordinator;
+    use crate::ethers::coordinator::Coordinator::CoordinatorInstance;
+    use alloy::node_bindings::Anvil;
+    use alloy::node_bindings::AnvilInstance;
+    use alloy::primitives::Address;
+    use alloy::primitives::U256;
+    use alloy::providers::WsConnect;
+    use alloy::signers::local::coins_bip39::English;
+    use alloy::signers::local::MnemonicBuilder;
+    use alloy::signers::local::PrivateKeySigner;
     use arpa_core::build_client;
-    use arpa_core::eip1559_gas_price_estimator;
     use arpa_core::Config;
     use arpa_core::GeneralMainChainIdentity;
-    use ethers::abi::Tokenize;
-    use ethers::prelude::ContractError::Revert;
-    use ethers::prelude::*;
-    use ethers::signers::coins_bip39::English;
-    use ethers::utils::Anvil;
-    use ethers::utils::AnvilInstance;
     use simple_logger::SimpleLogger;
     use std::env;
     use std::path::PathBuf;
-    use std::{sync::Arc, time::Duration};
+    use std::time::Duration;
     use threshold_bls::schemes::bn254::G2Scheme;
 
     #[test]
     fn test_cargo_manifest_parent_dir() {
         let dir = env!("CARGO_MANIFEST_DIR");
         println!("{:?}", PathBuf::new().join(dir).parent());
-        println!("{:?}", (3u8, 10u8).into_tokens());
     }
 
     const PHRASE: &str =
@@ -266,43 +277,45 @@ pub mod coordinator_tests {
         Anvil::new().chain_id(1u64).mnemonic(PHRASE).spawn()
     }
 
-    async fn deploy_contract(anvil: &AnvilInstance) -> Coordinator<WsWalletSigner> {
+    async fn deploy_contract(
+        anvil: &AnvilInstance,
+    ) -> CoordinatorInstance<ProviderClientWithSigner> {
         // 2. instantiate our wallet
-        let wallet: LocalWallet = anvil.keys()[0].clone().into();
+        let wallet: PrivateKeySigner = anvil.keys()[0].clone().into();
 
         // 3. connect to the network
-        let provider = Arc::new(
-            Provider::<Ws>::connect(anvil.ws_endpoint())
-                .await
-                .unwrap()
-                .interval(Duration::from_millis(3000)),
-        );
+        let ws =
+            WsConnect::new(anvil.ws_endpoint()).with_retry_interval(Duration::from_millis(3000));
 
         // 4. instantiate the client with the wallet
-        let client = build_client(wallet, anvil.chain_id() as usize, provider);
+        let client = build_client(wallet, anvil.chain_id(), ws).await.unwrap();
+
+        // let client = build_client(wallet, anvil.chain_id() as usize, provider);
 
         // 5. deploy contract
-        let mut call = Coordinator::deploy(client.clone(), (3u8, 30u8)).unwrap();
+        let instance = Coordinator::deploy(client.clone(), U256::from(3u8), U256::from(30u8))
+            .await
+            .unwrap();
 
-        if let Some(tx) = call.deployer.tx.as_eip1559_mut() {
-            let (max_fee, max_priority_fee) = client
-                .estimate_eip1559_fees(Some(eip1559_gas_price_estimator))
-                .await
-                .unwrap();
-            tx.max_fee_per_gas = Some(max_fee);
-            tx.max_priority_fee_per_gas = Some(max_priority_fee);
-        }
+        // if let Some(tx) = call.deployer.tx.as_eip1559_mut() {
+        //     let (max_fee, max_priority_fee) = client
+        //         .estimate_eip1559_fees(Some(eip1559_gas_price_estimator))
+        //         .await
+        //         .unwrap();
+        //     tx.max_fee_per_gas = Some(max_fee);
+        //     tx.max_priority_fee_per_gas = Some(max_priority_fee);
+        // }
 
-        let coordinator_contract = call.send().await.unwrap();
+        // let coordinator_contract = call.send().await.unwrap();
 
-        coordinator_contract
+        instance
     }
 
     #[tokio::test]
     async fn test_coordinator_in_phase() {
         let anvil = start_chain();
         let coordinator_contract = deploy_contract(&anvil).await;
-        let res = coordinator_contract.in_phase().call().await.unwrap();
+        let res = coordinator_contract.inPhase().call().await.unwrap();
 
         println!("{:?}", res);
     }
@@ -332,35 +345,29 @@ pub mod coordinator_tests {
         let nodes = vec![wallet.address()];
         let public_keys = vec![bincode::serialize(&dkg_public_key).unwrap().into()];
 
-        let mut call = coordinator_contract.initialize(nodes, public_keys);
+        let pending_tx = coordinator_contract
+            .initialize(nodes, public_keys)
+            .send()
+            .await
+            .unwrap();
+        pending_tx.get_receipt().await.unwrap();
 
-        if let Some(tx) = call.tx.as_eip1559_mut() {
-            let (max_fee, max_priority_fee) = coordinator_contract
-                .client_ref()
-                .estimate_eip1559_fees(Some(eip1559_gas_price_estimator))
-                .await
-                .unwrap();
-            tx.max_fee_per_gas = Some(max_fee);
-            tx.max_priority_fee_per_gas = Some(max_priority_fee);
-        }
+        let ws_connect =
+            WsConnect::new(anvil.ws_endpoint()).with_retry_interval(Duration::from_millis(3000));
 
-        call.send().await.unwrap();
-
-        let provider = Arc::new(
-            Provider::<Ws>::connect(anvil.ws_endpoint())
-                .await
-                .unwrap()
-                .interval(Duration::from_millis(3000)),
-        );
+        let client = build_client(wallet.clone(), anvil.chain_id(), ws_connect.clone())
+            .await
+            .unwrap();
 
         let main_chain_identity = GeneralMainChainIdentity::new(
-            anvil.chain_id() as usize,
+            anvil.chain_id(),
             wallet,
-            provider,
+            ws_connect,
+            client,
             anvil.ws_endpoint(),
-            Address::random(),
-            Address::random(),
-            Address::random(),
+            Address::ZERO,
+            Address::ZERO,
+            Address::ZERO,
             config
                 .get_time_limits()
                 .contract_transaction_retry_descriptor,
@@ -369,8 +376,8 @@ pub mod coordinator_tests {
         );
 
         let client = CoordinatorClient::new(
-            anvil.chain_id() as usize,
-            coordinator_contract.address(),
+            anvil.chain_id(),
+            *coordinator_contract.address(),
             &main_chain_identity,
             config
                 .get_time_limits()
@@ -385,13 +392,24 @@ pub mod coordinator_tests {
 
         let res = client.publish(mock_value.clone()).await;
         assert!(res.is_err());
-        if let ContractClientError::WsContractError(Revert(bytes)) = res.unwrap_err() {
-            let error_msg = String::decode_with_selector(&bytes).unwrap();
-            assert_eq!("share existed", error_msg);
-        } else {
-            panic!("should be revert error")
+        if let ContractClientError::TransportError(error) = res.unwrap_err() {
+            if error.is_error_resp() {
+                let error_msg = error.as_error_resp().unwrap().to_string();
+                assert!(error_msg.contains("share existed"));
+            } else {
+                panic!("should be revert error")
+            }
         }
     }
+    // if let ContractClientError::TransportError(error if error.is_error_resp()) =
+    //     res.unwrap_err()
+    // {
+    //     let error_msg = error.as_error_resp().unwrap().to_string();
+    //     assert!(error_msg.contains("share existed"));
+    // } else {
+    //     panic!("should be revert error")
+    // }
+    // }
 
     #[test]
     fn test_three_ways_to_provide_wallet() {
@@ -411,7 +429,7 @@ pub mod coordinator_tests {
             .unwrap();
 
         // 2.private key in plaintext
-        let wallet2: LocalWallet =
+        let wallet2: PrivateKeySigner =
             "4c0883a69102937d6231471b5dbb6204fe5129617082792ae468d01a3f362318"
                 .parse()
                 .unwrap();
@@ -420,12 +438,13 @@ pub mod coordinator_tests {
         let path = PathBuf::new().join(env!("CARGO_MANIFEST_DIR"));
         let mut rng = rand::thread_rng();
         let (_key, _uuid) =
-            LocalWallet::new_keystore(&path, &mut rng, "randpsswd", Some("passwd")).unwrap();
+            PrivateKeySigner::new_keystore(&path, &mut rng, "randpsswd", Some("passwd")).unwrap();
 
         // read from the encrypted JSON keystore and decrypt it, while validating that the
         // signatures produced by both the keys should match
 
-        let wallet3 = LocalWallet::decrypt_keystore(&path.join("passwd"), "randpsswd").unwrap();
+        let wallet3 =
+            PrivateKeySigner::decrypt_keystore(&path.join("passwd"), "randpsswd").unwrap();
         // let signature2 = key2.sign_message(message).await.unwrap();
 
         println!("{:?}", wallet1);

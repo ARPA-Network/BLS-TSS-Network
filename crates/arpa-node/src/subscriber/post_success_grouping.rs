@@ -39,7 +39,7 @@ impl<PC: Curve> PostSuccessGroupingSubscriber<PC> {
 impl<PC: Curve + std::fmt::Debug + Sync + Send + 'static> Subscriber
     for PostSuccessGroupingSubscriber<PC>
 {
-    async fn notify(&self, topic: Topic, payload: &(dyn DebuggableEvent)) -> NodeResult<()> {
+    async fn notify(&self, topic: Topic, payload: &dyn DebuggableEvent) -> NodeResult<()> {
         debug!("{:?}", topic);
 
         let DKGSuccess {
