@@ -90,8 +90,8 @@ mod tests {
     }
 
     impl BlockInfoFetcher for MockBlockInfoHandler {
-        fn get_chain_id(&self) -> usize {
-            self.chain_id
+        fn get_chain_id(&self) -> u64 {
+            self.chain_id.try_into().unwrap()
         }
 
         fn get_block_height(&self) -> usize {

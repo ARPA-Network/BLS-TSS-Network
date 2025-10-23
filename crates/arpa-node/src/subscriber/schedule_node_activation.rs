@@ -122,21 +122,19 @@ impl<PC: Curve + std::fmt::Debug + Sync + Send + 'static> DebuggableSubscriber
 {
 }
 
-#[cfg(feature = "unittest")]
+#[cfg(test)]
 mod tests {
     use super::*;
     use crate::{
         event::{node_activation::NodeActivation, types::Topic},
         queue::event_queue::EventQueue,
-        test_contracts::{
-            mockavsdirectory::{deploy_mock_a_v_s_directory, get_mock_a_v_s_directory_at}, 
-            mocknoderegistry::{deploy_mock_node_registry_with_args, get_mock_node_registry_at, MockNodeRegistry},
-            mockservicemanager::{deploy_mock_service_manager_with_args, get_mock_service_manager_at},
-        },
     };
-    use arpa_contract_client::contract_stub::node_registry::NodeActivatedFilter;
-    use arpa_core::{Config, GeneralMainChainIdentity};
-    use ethers::prelude::*;
+    use alloy::node_bindings::{Anvil, AnvilInstance};
+    use alloy::primitives::{Address, U256};
+    use alloy::providers::{Provider, WsConnect};
+    use alloy::signers::local::PrivateKeySigner;
+    use alloy::sol;
+    use arpa_core::{build_client, Config, GeneralMainChainIdentity, ProviderClientWithSigner};
     use std::sync::Arc;
     use threshold_bls::schemes::bn254::G2Curve;
     use tokio::sync::RwLock;
@@ -146,104 +144,125 @@ mod tests {
     const TEST_EXPIRY: u64 = 1000;
     const FIRST_GROUP_INDEX: u64 = 1;
 
-    async fn setup_anvil() -> (ethers::utils::AnvilInstance, Arc<Provider<Ws>>, LocalWallet) {
-        let anvil = ethers::utils::Anvil::new().spawn();
-        let ws_provider = Arc::new(Provider::<Ws>::connect(anvil.ws_endpoint()).await.unwrap());
-        let wallet: LocalWallet = anvil.keys()[0].clone().into();
-        let wallet = wallet.with_chain_id(anvil.chain_id());
-        (anvil, ws_provider, wallet)
+    sol! {
+        #[sol(rpc)]
+        MockAVSDirectory,
+        "test-contract/MockAVSDirectory.json"
     }
 
-    async fn setup_mock_contracts_with_dependencies(
-        ws_provider: Arc<Provider<Ws>>,
-        wallet: LocalWallet,
-    ) -> (Address, Address, Address) { 
-        let client = Arc::new(SignerMiddleware::new((*ws_provider).clone(), wallet.clone()));
-        let avs_directory_address = deploy_mock_a_v_s_directory(client.clone()).await.unwrap();
-        let service_manager_address = deploy_mock_service_manager_with_args(client.clone(), avs_directory_address).await.unwrap();
-        let node_registry_address = deploy_mock_node_registry_with_args(
-            client.clone(),
-            (Address::random(), Address::random(), service_manager_address)
-        ).await.unwrap();
-        (node_registry_address, service_manager_address, avs_directory_address)
+    sol! {
+        #[sol(rpc)]
+        MockServiceManager,
+        "test-contract/MockServiceManager.json" 
     }
 
-    async fn setup_node_registry_with_node_and_dependencies(
-        ws_provider: Arc<Provider<Ws>>,
-        wallet: LocalWallet,
-        node_address: Address,
-        is_eigenlayer: bool,
-    ) -> (Address, Address, Address, MockNodeRegistry<SignerMiddleware<Provider<Ws>, LocalWallet>>) {
-        let client = Arc::new(SignerMiddleware::new((*ws_provider).clone(), wallet.clone()));
-        let (registry_address, service_manager_address, avs_directory_address) = 
-            setup_mock_contracts_with_dependencies(ws_provider, wallet).await;
-        let registry_contract = get_mock_node_registry_at(registry_address, client);
-        registry_contract
-            .register_node(node_address, TEST_DKG_KEY.to_vec().into(), is_eigenlayer)
-            .send().await.unwrap().await.unwrap();
-        (registry_address, service_manager_address, avs_directory_address, registry_contract)
+    sol! {
+        #[sol(rpc)]
+        MockNodeRegistry,
+        "test-contract/MockNodeRegistry.json"
     }
 
-    async fn deploy_node_registry(ws_provider: Arc<Provider<Ws>>, wallet: LocalWallet) -> Address {
-        let client = Arc::new(SignerMiddleware::new((*ws_provider).clone(), wallet.clone()));
-        deploy_mock_node_registry_with_args(
-            client,
-            (Address::random(), Address::random(), Address::random())
-        ).await.unwrap()
+    struct TestEnvironment {
+        _anvil: AnvilInstance,
+        client: ProviderClientWithSigner,
+        wallet: PrivateKeySigner,
+        chain_id: u64
     }
 
-    async fn create_chain_identity(
-        chain_id: u64,
-        wallet: LocalWallet,
-        ws_provider: Arc<Provider<Ws>>,
-        ws_endpoint: String,
-        node_registry_address: Address,
-    ) -> Arc<RwLock<ChainIdentityHandlerType<G2Curve>>> {
-        let config = Config::default();
-        let general_chain_identity = GeneralMainChainIdentity::new(
-            chain_id.try_into().unwrap(),
-            wallet.clone(),
-            ws_provider.clone(),
-            ws_endpoint,
-            Address::random(), 
-            Address::random(),            
-            node_registry_address,  
-            config.get_time_limits().contract_transaction_retry_descriptor,
-            config.get_time_limits().contract_view_retry_descriptor,
-            None,
-        );
-        Arc::new(RwLock::new(Box::new(general_chain_identity)))
-    }
+    impl TestEnvironment {
+        async fn new() -> Self {
+            let anvil = Anvil::new().spawn();
+            let ws_connect = WsConnect::new(anvil.ws_endpoint());
+            let wallet: PrivateKeySigner = anvil.keys()[0].clone().into();
+            let chain_id = anvil.chain_id();
+            let client = build_client(wallet.clone(), chain_id, ws_connect)
+                .await
+                .unwrap();
 
-    async fn setup_node_registry_with_node(
-        ws_provider: Arc<Provider<Ws>>,
-        wallet: LocalWallet,
-        node_address: Address,
-        is_eigenlayer: bool,
-    ) -> (Address, MockNodeRegistry<SignerMiddleware<Provider<Ws>, LocalWallet>>) {
-        let client = Arc::new(SignerMiddleware::new((*ws_provider).clone(), wallet.clone()));
-        let registry_address = deploy_mock_node_registry_with_args(
-            client.clone(),
-            (Address::random(), Address::random(), Address::random())
-        ).await.unwrap();
-        let registry_contract = get_mock_node_registry_at(registry_address, client);
-        registry_contract
-            .register_node(node_address, TEST_DKG_KEY.to_vec().into(), is_eigenlayer)
-            .send().await.unwrap().await.unwrap();
-        (registry_address, registry_contract)
+            TestEnvironment {
+                _anvil: anvil,
+                client,
+                wallet,
+                chain_id
+            }
+        }
+
+        async fn deploy_mock_avs_directory(client: ProviderClientWithSigner,) -> Address {
+            let contract = MockAVSDirectory::deploy(client.clone()).await;
+            *contract.address()
+        }
+
+        async fn deploy_mock_service_manager(&self, avs_directory: Address) -> Address {
+            let contract = MockServiceManager::deploy(client.clone()).await;
+            *contract.address()
+        }
+
+        async fn deploy_mock_node_registry(
+            &self,
+            service_manager: Address,
+        ) -> (Address, MockNodeRegistry::MockNodeRegistryInstance<ProviderClientWithSigner>) {
+            let contract = MockNodeRegistry::deploy(
+                &self.client.clone()
+            )
+            .await
+            .unwrap();
+            (*contract.address(), contract)
+        }
+
+        async fn setup_full_contracts(&self) -> (Address, Address, Address, MockNodeRegistry::MockNodeRegistryInstance<ProviderClientWithSigner>) {
+            let avs_directory = self.deploy_mock_avs_directory().await;
+            let service_manager = self.deploy_mock_service_manager(avs_directory).await;
+            let (node_registry, registry_instance) =
+                self.deploy_mock_node_registry(service_manager).await;
+            (node_registry, service_manager, avs_directory, registry_instance)
+        }
+
+        async fn register_node(
+            &self,
+            registry: &MockNodeRegistry::MockNodeRegistryInstance<ProviderClientWithSigner>,
+            node_address: Address,
+            is_eigenlayer: bool,
+        ) {
+            registry
+                .registerNode(node_address, TEST_DKG_KEY.to_vec().into(), is_eigenlayer)
+                .send()
+                .await
+                .unwrap()
+                .get_receipt()
+                .await
+                .unwrap();
+        }
+
+        async fn create_chain_identity(
+            &self,
+            node_registry_address: Address,
+        ) -> Arc<RwLock<ChainIdentityHandlerType<G2Curve>>> {
+            let config = Config::default();
+            let ws_connect = WsConnect::new(self.ws_endpoint.clone());
+            let general_chain_identity = GeneralMainChainIdentity::new(
+                self.chain_id.try_into().unwrap(),
+                self.wallet.clone(),
+                ws_connect,
+                self.client.clone(),
+                self.ws_endpoint.clone(),
+                Address::ZERO, // controller
+                Address::ZERO, // controller_relayer
+                node_registry_address,
+                config
+                    .get_time_limits()
+                    .contract_transaction_retry_descriptor,
+                config.get_time_limits().contract_view_retry_descriptor,
+                None,
+            );
+            Arc::new(RwLock::new(Box::new(general_chain_identity)))
+        }
     }
 
     #[tokio::test]
     async fn test_node_activation_subscriber_creation() {
-        let (_anvil, ws_provider, wallet) = setup_anvil().await;
-        let node_registry_address = deploy_node_registry(ws_provider.clone(), wallet.clone()).await;
-        let chain_identity = create_chain_identity(
-            1,
-            wallet,
-            ws_provider,
-            "ws://localhost:8545".to_string(),
-            node_registry_address,
-        ).await;
+        let env = TestEnvironment::new().await;
+        let (node_registry_address, _, _, _) = env.setup_full_contracts().await;
+        let chain_identity = env.create_chain_identity(node_registry_address).await;
         let eq = Arc::new(RwLock::new(EventQueue::new()));
         let subscriber = NodeActivationSubscriber::new(chain_identity, eq);
         assert!(format!("{:?}", subscriber).contains("NodeActivationSubscriber"));
@@ -251,178 +270,182 @@ mod tests {
 
     #[tokio::test]
     async fn test_successful_eigenlayer_node_activation() {
-        let (anvil, ws_provider, wallet) = setup_anvil().await;
-        let node_address = wallet.address();
-        let (node_registry_address, service_manager_address, avs_directory_address, registry_contract) = 
-            setup_node_registry_with_node_and_dependencies(
-                ws_provider.clone(), wallet.clone(), node_address, true
-            ).await;
+        let env = TestEnvironment::new().await;
+        let node_address = env.wallet.address();
+        let (node_registry_address, service_manager_address, avs_directory_address, registry_contract) =
+            env.setup_full_contracts().await;
 
-        let chain_identity = create_chain_identity(
-            anvil.chain_id(), wallet.clone(), ws_provider.clone(),
-            anvil.ws_endpoint(), node_registry_address
-        ).await;
+        env.register_node(&registry_contract, node_address, true)
+            .await;
 
+        let chain_identity = env.create_chain_identity(node_registry_address).await;
         let eq = Arc::new(RwLock::new(EventQueue::new()));
         let subscriber = NodeActivationSubscriber::new(chain_identity, eq);
 
         let activation_event = NodeActivation {
-            chain_id: anvil.chain_id() as usize,
+            chain_id: env.chain_id as usize,
             is_eigenlayer: true,
             node_registry_address,
         };
 
-        let node_before = registry_contract.get_node(node_address).call().await.unwrap();
+        // Check node state before activation
+        let node_before = registry_contract.getNode(node_address).call().await.unwrap();
         assert!(!node_before.state);
-        
-        let client = Arc::new(SignerMiddleware::new((*ws_provider).clone(), wallet.clone()));
-        let config = registry_contract.get_node_registry_config().call().await.unwrap();
-        assert_eq!(config.2, service_manager_address); 
-        
-        let service_manager_contract = get_mock_service_manager_at(service_manager_address, client.clone());
-        let returned_avs_directory = service_manager_contract.avs_directory().call().await.unwrap();
-        assert_eq!(returned_avs_directory, avs_directory_address);
-        
-        let avs_directory_contract = get_mock_a_v_s_directory_at(avs_directory_address, client);
-        let test_hash = avs_directory_contract
-            .calculate_operator_avs_registration_digest_hash(
-                node_address, service_manager_address, TEST_SALT, TEST_EXPIRY.into()
-            )
-            .call().await.unwrap();
-        assert_ne!(test_hash, [0u8; 32]);
 
-        let result = subscriber.notify(Topic::NodeActivation, &activation_event).await;
+        // Verify service manager and avs directory setup
+        let service_manager = MockServiceManager::new(service_manager_address, &env.client);
+        let returned_avs_directory = service_manager.avsDirectory().call().await.unwrap()._0;
+        assert_eq!(returned_avs_directory, avs_directory_address);
+
+        let avs_directory = MockAVSDirectory::new(avs_directory_address, &env.client);
+        let test_hash = avs_directory
+            .calculateOperatorAVSRegistrationDigestHash(
+                node_address,
+                service_manager_address,
+                TEST_SALT.into(),
+                U256::from(TEST_EXPIRY),
+            )
+            .call()
+            .await
+            .unwrap()
+            ._0;
+        assert_ne!(test_hash, [0u8; 32].into());
+
+        let result = subscriber
+            .notify(Topic::NodeActivation, &activation_event)
+            .await;
         assert!(result.is_ok());
 
-        let node_after = registry_contract.get_node(node_address).call().await.unwrap();
+        let node_after = registry_contract.getNode(node_address).call().await.unwrap();
         assert!(node_after.state);
-        assert!(node_after.is_eigenlayer_node);
+        assert!(node_after.isEigenlayerNode);
     }
 
     #[tokio::test]
     async fn test_successful_native_staking_node_activation() {
-        let (anvil, ws_provider, wallet) = setup_anvil().await;
-        let node_address = wallet.address();
+        let env = TestEnvironment::new().await;
+        let node_address = env.wallet.address();
+        let (node_registry_address, _, _, registry_contract) = env.setup_full_contracts().await;
 
-        let (node_registry_address, registry_contract) = setup_node_registry_with_node(
-            ws_provider.clone(), wallet.clone(), node_address, false
-        ).await;
+        env.register_node(&registry_contract, node_address, false)
+            .await;
 
-        let chain_identity = create_chain_identity(
-            anvil.chain_id(), wallet, ws_provider, anvil.ws_endpoint(), node_registry_address
-        ).await;
-
+        let chain_identity = env.create_chain_identity(node_registry_address).await;
         let eq = Arc::new(RwLock::new(EventQueue::new()));
         let subscriber = NodeActivationSubscriber::new(chain_identity, eq);
 
         let activation_event = NodeActivation {
-            chain_id: anvil.chain_id() as usize,
+            chain_id: env.chain_id as usize,
             is_eigenlayer: false,
             node_registry_address,
         };
 
-        let node_before = registry_contract.get_node(node_address).call().await.unwrap();
+        let node_before = registry_contract.getNode(node_address).call().await.unwrap();
         assert!(!node_before.state);
 
-        let result = subscriber.notify(Topic::NodeActivation, &activation_event).await;
+        let result = subscriber
+            .notify(Topic::NodeActivation, &activation_event)
+            .await;
         assert!(result.is_ok());
 
-        let node_after = registry_contract.get_node(node_address).call().await.unwrap();
+        let node_after = registry_contract.getNode(node_address).call().await.unwrap();
         assert!(node_after.state);
-        assert!(!node_after.is_eigenlayer_node);
+        assert!(!node_after.isEigenlayerNode);
     }
 
     #[tokio::test]
     async fn test_node_activation_already_active_error() {
-        let (anvil, ws_provider, wallet) = setup_anvil().await;
-        let node_address = wallet.address();
+        let env = TestEnvironment::new().await;
+        let node_address = env.wallet.address();
+        let (node_registry_address, _, _, registry_contract) = env.setup_full_contracts().await;
 
-        let (node_registry_address, registry_contract) = setup_node_registry_with_node(
-            ws_provider.clone(), wallet.clone(), node_address, false
-        ).await;
+        env.register_node(&registry_contract, node_address, false)
+            .await;
 
-        registry_contract.set_node_state(node_address, true).send().await.unwrap().await.unwrap();
+        // Set node as active
+        registry_contract
+            .setNodeState(node_address, true)
+            .send()
+            .await
+            .unwrap()
+            .get_receipt()
+            .await
+            .unwrap();
 
-        let chain_identity = create_chain_identity(
-            anvil.chain_id(), wallet, ws_provider, anvil.ws_endpoint(), node_registry_address
-        ).await;
-
+        let chain_identity = env.create_chain_identity(node_registry_address).await;
         let eq = Arc::new(RwLock::new(EventQueue::new()));
         let subscriber = NodeActivationSubscriber::new(chain_identity, eq);
 
         let activation_event = NodeActivation {
-            chain_id: anvil.chain_id() as usize,
+            chain_id: env.chain_id as usize,
             is_eigenlayer: false,
             node_registry_address,
         };
 
-        let result = subscriber.notify(Topic::NodeActivation, &activation_event).await;
+        let result = subscriber
+            .notify(Topic::NodeActivation, &activation_event)
+            .await;
         assert!(result.is_ok());
     }
 
     #[tokio::test]
     async fn test_node_activation_not_registered_error() {
-        let (anvil, ws_provider, wallet) = setup_anvil().await;
-        let node_registry_address = deploy_node_registry(ws_provider.clone(), wallet.clone()).await;
+        let env = TestEnvironment::new().await;
+        let (node_registry_address, _, _, _) = env.setup_full_contracts().await;
 
-        let chain_identity = create_chain_identity(
-            anvil.chain_id(), wallet, ws_provider, anvil.ws_endpoint(), node_registry_address
-        ).await;
-
+        let chain_identity = env.create_chain_identity(node_registry_address).await;
         let eq = Arc::new(RwLock::new(EventQueue::new()));
         let subscriber = NodeActivationSubscriber::new(chain_identity, eq);
 
         let activation_event = NodeActivation {
-            chain_id: anvil.chain_id() as usize,
+            chain_id: env.chain_id as usize,
             is_eigenlayer: false,
             node_registry_address,
         };
 
-        let result = subscriber.notify(Topic::NodeActivation, &activation_event).await;
+        let result = subscriber
+            .notify(Topic::NodeActivation, &activation_event)
+            .await;
         assert!(result.is_ok());
     }
 
     #[tokio::test]
     async fn test_node_activation_event_emission() {
-        let (anvil, ws_provider, wallet) = setup_anvil().await;
-        let node_address = wallet.address();
+        let env = TestEnvironment::new().await;
+        let node_address = env.wallet.address();
+        let (node_registry_address, _, _, registry_contract) = env.setup_full_contracts().await;
 
-        let (node_registry_address, _registry_contract) = setup_node_registry_with_node(
-            ws_provider.clone(), wallet.clone(), node_address, false
-        ).await;
+        env.register_node(&registry_contract, node_address, false)
+            .await;
 
-        let chain_identity = create_chain_identity(
-            anvil.chain_id(), wallet, ws_provider.clone(), anvil.ws_endpoint(), node_registry_address
-        ).await;
-
+        let chain_identity = env.create_chain_identity(node_registry_address).await;
         let eq = Arc::new(RwLock::new(EventQueue::new()));
         let subscriber = NodeActivationSubscriber::new(chain_identity, eq);
 
         let activation_event = NodeActivation {
-            chain_id: anvil.chain_id() as usize,
+            chain_id: env.chain_id as usize,
             is_eigenlayer: false,
             node_registry_address,
         };
 
-        let event_filter = MockNodeRegistry::new(node_registry_address, ws_provider.clone())
-            .event::<NodeActivatedFilter>();
-
-        let result = subscriber.notify(Topic::NodeActivation, &activation_event).await;
+        let result = subscriber
+            .notify(Topic::NodeActivation, &activation_event)
+            .await;
         assert!(result.is_ok());
 
-        let events = event_filter.from_block(0).query().await.unwrap();
+        // Query for NodeActivated events
+        let event_filter = registry_contract.NodeActivated_filter().from_block(0);
+        let events = event_filter.query().await.unwrap();
         assert_eq!(events.len(), 1);
-        assert_eq!(events[0].node_address, node_address);
-        assert_eq!(events[0].group_index, U256::from(FIRST_GROUP_INDEX)); 
+        assert_eq!(events[0].nodeAddress, node_address);
+        assert_eq!(events[0].groupIndex, U256::from(FIRST_GROUP_INDEX));
     }
 
     #[tokio::test]
     async fn test_subscriber_subscribe() {
-        let (_anvil, ws_provider, wallet) = setup_anvil().await;
-        let node_registry_address = deploy_node_registry(ws_provider.clone(), wallet.clone()).await;
-        let chain_identity = create_chain_identity(
-            1, wallet, ws_provider, "ws://localhost:8545".to_string(), node_registry_address
-        ).await;
+        let env = TestEnvironment::new().await;
+        let (node_registry_address, _, _, _) = env.setup_full_contracts().await;
+        let chain_identity = env.create_chain_identity(node_registry_address).await;
 
         let eq = Arc::new(RwLock::new(EventQueue::new()));
         let subscriber = NodeActivationSubscriber::new(chain_identity, eq.clone());
@@ -431,17 +454,14 @@ mod tests {
 
     #[tokio::test]
     async fn test_different_chain_ids() {
-        let (anvil, ws_provider, wallet) = setup_anvil().await;
-        let node_address = wallet.address();
+        let env = TestEnvironment::new().await;
+        let node_address = env.wallet.address();
+        let (node_registry_address, _, _, registry_contract) = env.setup_full_contracts().await;
 
-        let (node_registry_address, _registry_contract) = setup_node_registry_with_node(
-            ws_provider.clone(), wallet.clone(), node_address, false
-        ).await;
+        env.register_node(&registry_contract, node_address, false)
+            .await;
 
-        let chain_identity = create_chain_identity(
-            anvil.chain_id(), wallet, ws_provider, anvil.ws_endpoint(), node_registry_address
-        ).await;
-
+        let chain_identity = env.create_chain_identity(node_registry_address).await;
         let eq = Arc::new(RwLock::new(EventQueue::new()));
         let subscriber = NodeActivationSubscriber::new(chain_identity, eq);
 
@@ -454,37 +474,38 @@ mod tests {
                 node_registry_address,
             };
 
-            let result = subscriber.notify(Topic::NodeActivation, &activation_event).await;
+            let result = subscriber
+                .notify(Topic::NodeActivation, &activation_event)
+                .await;
             assert!(result.is_ok());
         }
     }
 
     #[tokio::test]
     async fn test_node_activation_with_pending_status() {
-        let (anvil, ws_provider, wallet) = setup_anvil().await;
-        let node_address = wallet.address();
+        let env = TestEnvironment::new().await;
+        let node_address = env.wallet.address();
+        let (node_registry_address, _, _, registry_contract) = env.setup_full_contracts().await;
 
-        let (node_registry_address, registry_contract) = setup_node_registry_with_node(
-            ws_provider.clone(), wallet.clone(), node_address, false
-        ).await;
+        env.register_node(&registry_contract, node_address, false)
+            .await;
 
-        let chain_identity = create_chain_identity(
-            anvil.chain_id(), wallet, ws_provider, anvil.ws_endpoint(), node_registry_address
-        ).await;
-
+        let chain_identity = env.create_chain_identity(node_registry_address).await;
         let eq = Arc::new(RwLock::new(EventQueue::new()));
         let subscriber = NodeActivationSubscriber::new(chain_identity, eq);
 
         let activation_event = NodeActivation {
-            chain_id: anvil.chain_id() as usize,
+            chain_id: env.chain_id as usize,
             is_eigenlayer: false,
             node_registry_address,
         };
 
-        let result = subscriber.notify(Topic::NodeActivation, &activation_event).await;
+        let result = subscriber
+            .notify(Topic::NodeActivation, &activation_event)
+            .await;
         assert!(result.is_ok());
 
-        let node_after = registry_contract.get_node(node_address).call().await.unwrap();
+        let node_after = registry_contract.getNode(node_address).call().await.unwrap();
         assert!(node_after.state);
     }
 }

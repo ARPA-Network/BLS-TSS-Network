@@ -75,4 +75,3 @@ check-latest = { version = "1.0.2", default-features = false, features = [
 alloy = { workspace = true, features = ["full", "provider-anvil-node"] }
 arpa-node = { path = ".", features = [] }  
 regex = "1.11.1" 
-ethers-core.workspace = true

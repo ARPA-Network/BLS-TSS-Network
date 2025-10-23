@@ -227,7 +227,7 @@ impl<PC: Curve + std::fmt::Debug + Sync + Send + 'static> DebuggableSubscriber
 {
 }
 
-#[cfg(feature = "unittest")]
+#[cfg(test)]
 mod tests {
     use super::*;
     use crate::{
