@@ -151,8 +151,8 @@ mod tests {
         queue::event_queue::EventQueue,
     };
     use arpa_core::{Group, Member, DKGTask};
+    use alloy::primitives::{Address};
     use arpa_dal::{GroupInfoHandler, cache::InMemoryGroupInfoCache};
-    use ethers_core::types::Address;
     use std::{
         any::Any,
         collections::BTreeMap,
@@ -194,7 +194,7 @@ mod tests {
     }
 
     fn create_test_dkg_success(
-        chain_id: usize,
+        chain_id: u64,
         id_address: Address,
         has_public_key: bool,
     ) -> DKGSuccess<G2Curve> {
@@ -227,7 +227,7 @@ mod tests {
                 threshold: group.threshold,
                 members: group.members.keys().copied().collect(),
                 assignment_block_height: TEST_ASSIGNMENT_BLOCK_HEIGHT,
-                coordinator_address: Address::random(),
+                coordinator_address: Address::ZERO,
             };
             cache.save_task_info(TEST_CHAIN_ID, dkg_task).await.unwrap();
         }
@@ -236,7 +236,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_post_success_grouping_subscriber_creation() {
-        let id_address = Address::random();
+        let id_address = Address::ZERO;
         let group_cache = create_group_cache(id_address);
         let eq = create_event_queue();
         let subscriber = PostSuccessGroupingSubscriber::new(group_cache, eq);
@@ -245,7 +245,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_notify_successful_flow() {
-        let id_address = Address::random();
+        let id_address = Address::ZERO;
         let group_cache = create_group_cache(id_address);
         let eq = create_event_queue();
 
@@ -258,7 +258,7 @@ mod tests {
                 threshold: TEST_THRESHOLD,
                 members: vec![id_address], 
                 assignment_block_height: TEST_ASSIGNMENT_BLOCK_HEIGHT,
-                coordinator_address: Address::random(),
+                coordinator_address: Address::ZERO,
             };
             cache.save_task_info(TEST_CHAIN_ID, dkg_task).await.unwrap();
         }
@@ -275,8 +275,8 @@ mod tests {
 
     #[tokio::test]
     async fn test_notify_node_not_in_group_error() {
-        let id_address = Address::random();
-        let different_address = Address::random();
+        let id_address = Address::ZERO;
+        let different_address = Address::ZERO;
         let group = create_test_group(id_address, true);
         let group_cache = setup_group_cache_with_group(id_address, group).await;
         let eq = create_event_queue();
@@ -293,7 +293,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_notify_different_public_key_error() {
-        let id_address = Address::random();
+        let id_address = Address::ZERO;
         let group = create_test_group(id_address, true);
         let group_cache = setup_group_cache_with_group(id_address, group).await;
         let eq = create_event_queue();
@@ -310,7 +310,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_subscribe() {
-        let id_address = Address::random();
+        let id_address = Address::ZERO;
         let group_cache = create_group_cache(id_address);
         let eq = create_event_queue();
         let subscriber = PostSuccessGroupingSubscriber::new(group_cache, eq.clone());
@@ -319,7 +319,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_debuggable_subscriber_trait() {
-        let id_address = Address::random();
+        let id_address = Address::ZERO;
         let group_cache = create_group_cache(id_address);
         let eq = create_event_queue();
         let subscriber = PostSuccessGroupingSubscriber::new(group_cache, eq);
@@ -331,7 +331,7 @@ mod tests {
     #[tokio::test]
     #[should_panic]
     async fn test_notify_with_wrong_event_type() {
-        let id_address = Address::random();
+        let id_address = Address::ZERO;
         let group_cache = create_group_cache(id_address);
         let eq = create_event_queue();
         let subscriber = PostSuccessGroupingSubscriber::new(group_cache, eq);
@@ -357,7 +357,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_multiple_notifications() {
-        let id_address = Address::random();
+        let id_address = Address::ZERO;
         let group_cache = create_group_cache(id_address);
         let eq = create_event_queue();
         let subscriber = PostSuccessGroupingSubscriber::new(group_cache, eq);
@@ -371,7 +371,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_with_different_chain_ids() {
-        let id_address = Address::random();
+        let id_address = Address::ZERO;
         let group_cache = create_group_cache(id_address);
         let eq = create_event_queue();
         let subscriber = PostSuccessGroupingSubscriber::new(group_cache, eq);
@@ -390,7 +390,7 @@ mod tests {
 
         #[tokio::test]
         async fn test_full_workflow() {
-            let id_address = Address::random();
+            let id_address = Address::ZERO;
             let group_cache = create_group_cache(id_address);
             let eq = create_event_queue();
 

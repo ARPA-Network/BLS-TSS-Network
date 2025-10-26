@@ -130,8 +130,8 @@ mod tests {
         queue::event_queue::EventQueue,
     };
     use alloy::node_bindings::{Anvil, AnvilInstance};
-    use alloy::primitives::{Address, U256};
-    use alloy::providers::{Provider, WsConnect};
+    use alloy::primitives::{Address, U256, B256};
+    use alloy::providers::{WsConnect};
     use alloy::signers::local::PrivateKeySigner;
     use alloy::sol;
     use arpa_core::{build_client, Config, GeneralMainChainIdentity, ProviderClientWithSigner};
@@ -157,6 +157,7 @@ mod tests {
     }
 
     sol! {
+        #[sol(ignore_unlinked)]
         #[sol(rpc)]
         MockNodeRegistry,
         "test-contract/MockNodeRegistry.json"
@@ -166,13 +167,16 @@ mod tests {
         _anvil: AnvilInstance,
         client: ProviderClientWithSigner,
         wallet: PrivateKeySigner,
-        chain_id: u64
+        chain_id: u64,
+        ws_endpoint: String,
     }
+
 
     impl TestEnvironment {
         async fn new() -> Self {
             let anvil = Anvil::new().spawn();
-            let ws_connect = WsConnect::new(anvil.ws_endpoint());
+            let ws_endpoint = anvil.ws_endpoint();
+            let ws_connect = WsConnect::new(&ws_endpoint);
             let wallet: PrivateKeySigner = anvil.keys()[0].clone().into();
             let chain_id = anvil.chain_id();
             let client = build_client(wallet.clone(), chain_id, ws_connect)
@@ -183,17 +187,18 @@ mod tests {
                 _anvil: anvil,
                 client,
                 wallet,
-                chain_id
+                chain_id,
+                ws_endpoint,
             }
         }
 
-        async fn deploy_mock_avs_directory(client: ProviderClientWithSigner,) -> Address {
-            let contract = MockAVSDirectory::deploy(client.clone()).await;
+        async fn deploy_mock_avs_directory(&self,) -> Address {
+            let contract = MockAVSDirectory::deploy(self.client.clone()).await.unwrap();
             *contract.address()
         }
 
         async fn deploy_mock_service_manager(&self, avs_directory: Address) -> Address {
-            let contract = MockServiceManager::deploy(client.clone()).await;
+            let contract = MockServiceManager::deploy(self.client.clone(), avs_directory).await.unwrap();
             *contract.address()
         }
 
@@ -202,10 +207,14 @@ mod tests {
             service_manager: Address,
         ) -> (Address, MockNodeRegistry::MockNodeRegistryInstance<ProviderClientWithSigner>) {
             let contract = MockNodeRegistry::deploy(
-                &self.client.clone()
+                self.client.clone(),
+                Address::ZERO,
+                Address::ZERO,
+                service_manager
             )
             .await
             .unwrap();
+            
             (*contract.address(), contract)
         }
 
@@ -238,15 +247,15 @@ mod tests {
             node_registry_address: Address,
         ) -> Arc<RwLock<ChainIdentityHandlerType<G2Curve>>> {
             let config = Config::default();
-            let ws_connect = WsConnect::new(self.ws_endpoint.clone());
+            let ws_connect = WsConnect::new(&self.ws_endpoint);
             let general_chain_identity = GeneralMainChainIdentity::new(
                 self.chain_id.try_into().unwrap(),
                 self.wallet.clone(),
                 ws_connect,
                 self.client.clone(),
                 self.ws_endpoint.clone(),
-                Address::ZERO, // controller
-                Address::ZERO, // controller_relayer
+                Address::ZERO,
+                Address::ZERO,
                 node_registry_address,
                 config
                     .get_time_limits()
@@ -283,19 +292,17 @@ mod tests {
         let subscriber = NodeActivationSubscriber::new(chain_identity, eq);
 
         let activation_event = NodeActivation {
-            chain_id: env.chain_id as usize,
+            chain_id: env.chain_id,
             is_eigenlayer: true,
             node_registry_address,
         };
 
-        // Check node state before activation
         let node_before = registry_contract.getNode(node_address).call().await.unwrap();
         assert!(!node_before.state);
 
-        // Verify service manager and avs directory setup
         let service_manager = MockServiceManager::new(service_manager_address, &env.client);
-        let returned_avs_directory = service_manager.avsDirectory().call().await.unwrap()._0;
-        assert_eq!(returned_avs_directory, avs_directory_address);
+        let returned_avs_directory = service_manager.avsDirectory().call().await.unwrap().0;
+        assert_eq!(Address::from(returned_avs_directory), avs_directory_address);
 
         let avs_directory = MockAVSDirectory::new(avs_directory_address, &env.client);
         let test_hash = avs_directory
@@ -308,8 +315,9 @@ mod tests {
             .call()
             .await
             .unwrap()
-            ._0;
-        assert_ne!(test_hash, [0u8; 32].into());
+            .0;
+        
+        assert_ne!(test_hash, B256::ZERO);
 
         let result = subscriber
             .notify(Topic::NodeActivation, &activation_event)
@@ -335,7 +343,7 @@ mod tests {
         let subscriber = NodeActivationSubscriber::new(chain_identity, eq);
 
         let activation_event = NodeActivation {
-            chain_id: env.chain_id as usize,
+            chain_id: env.chain_id,
             is_eigenlayer: false,
             node_registry_address,
         };
@@ -362,7 +370,6 @@ mod tests {
         env.register_node(&registry_contract, node_address, false)
             .await;
 
-        // Set node as active
         registry_contract
             .setNodeState(node_address, true)
             .send()
@@ -377,7 +384,7 @@ mod tests {
         let subscriber = NodeActivationSubscriber::new(chain_identity, eq);
 
         let activation_event = NodeActivation {
-            chain_id: env.chain_id as usize,
+            chain_id: env.chain_id,
             is_eigenlayer: false,
             node_registry_address,
         };
@@ -398,7 +405,7 @@ mod tests {
         let subscriber = NodeActivationSubscriber::new(chain_identity, eq);
 
         let activation_event = NodeActivation {
-            chain_id: env.chain_id as usize,
+            chain_id: env.chain_id,
             is_eigenlayer: false,
             node_registry_address,
         };
@@ -423,7 +430,7 @@ mod tests {
         let subscriber = NodeActivationSubscriber::new(chain_identity, eq);
 
         let activation_event = NodeActivation {
-            chain_id: env.chain_id as usize,
+            chain_id: env.chain_id,
             is_eigenlayer: false,
             node_registry_address,
         };
@@ -433,12 +440,11 @@ mod tests {
             .await;
         assert!(result.is_ok());
 
-        // Query for NodeActivated events
         let event_filter = registry_contract.NodeActivated_filter().from_block(0);
         let events = event_filter.query().await.unwrap();
         assert_eq!(events.len(), 1);
-        assert_eq!(events[0].nodeAddress, node_address);
-        assert_eq!(events[0].groupIndex, U256::from(FIRST_GROUP_INDEX));
+        assert_eq!(events[0].0.nodeAddress, node_address);
+        assert_eq!(events[0].0.groupIndex, U256::from(FIRST_GROUP_INDEX));
     }
 
     #[tokio::test]
@@ -495,7 +501,7 @@ mod tests {
         let subscriber = NodeActivationSubscriber::new(chain_identity, eq);
 
         let activation_event = NodeActivation {
-            chain_id: env.chain_id as usize,
+            chain_id: env.chain_id,
             is_eigenlayer: false,
             node_registry_address,
         };

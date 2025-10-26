@@ -411,8 +411,13 @@ where
 mod tests {
     use super::*;
     use crate::{
-        algorithm::bls::SimpleBLSCore, committer::CommitterClient, event::{ready_to_handle_randomness_task::ReadyToHandleRandomnessTask, types::Topic}, queue::event_queue::EventQueue, scheduler::dynamic::SimpleDynamicTaskScheduler
+        algorithm::bls::SimpleBLSCore, 
+        committer::CommitterClient, 
+        event::{ready_to_handle_randomness_task::ReadyToHandleRandomnessTask, types::Topic}, 
+        queue::event_queue::EventQueue, 
+        scheduler::dynamic::SimpleDynamicTaskScheduler
     };
+    use alloy::primitives::{Address, U256};
     use arpa_core::{ExponentialBackoffRetryDescriptor, RandomnessTask};
     use arpa_dal::{
         cache::{InMemoryGroupInfoCache, InMemoryBLSTasksQueue, InMemorySignatureResultCache, RandomnessResultCache},
@@ -437,7 +442,7 @@ mod tests {
     const DEFAULT_THRESHOLD: usize = 2;
     const DEFAULT_GROUP_INDEX: u32 = 1;
     const DEFAULT_EPOCH: usize = 1;
-    const DEFAULT_CHAIN_ID: usize = 1;
+    const DEFAULT_CHAIN_ID: u64 = 1;
     const DEFAULT_BLOCK_HEIGHT: usize = 100;
     const DEFAULT_SUBSCRIPTION_ID: u64 = 1;
     const DEFAULT_CONFIRMATIONS: u16 = 6;
@@ -623,7 +628,7 @@ mod tests {
                 threshold,
                 assignment_block_height: DEFAULT_BLOCK_HEIGHT,
                 members: member_addresses.clone(),
-                coordinator_address: Address::random(),
+                coordinator_address: Address::ZERO,
             };
 
             group_cache_write.save_task_info(chain_id, dkg_task).await?;
@@ -695,7 +700,7 @@ mod tests {
             threshold,
             assignment_block_height: DEFAULT_BLOCK_HEIGHT,
             members: member_addresses.clone(),
-            coordinator_address: Address::random(),
+            coordinator_address: Address::ZERO,
         };
 
         {
@@ -738,11 +743,11 @@ mod tests {
             group_index: DEFAULT_GROUP_INDEX,
             request_type: arpa_core::RandomnessRequestType::Randomness,
             params: vec![],
-            requester: Address::random(),
-            seed: ethers::types::U256::from(DEFAULT_SEED),
+            requester: Address::ZERO,
+            seed: U256::from(DEFAULT_SEED),
             request_confirmations: DEFAULT_CONFIRMATIONS,
             callback_gas_limit: DEFAULT_GAS_LIMIT,
-            callback_max_gas_price: ethers::types::U256::from(DEFAULT_GAS_PRICE),
+            callback_max_gas_price: DEFAULT_GAS_PRICE as u128,
             assignment_block_height: DEFAULT_BLOCK_HEIGHT,
         }
     }
@@ -756,16 +761,16 @@ mod tests {
 
     #[tokio::test]
     async fn test_randomness_task_subscriber_creation() {
-        let id_address = Address::random();
+        let id_address = Address::ZERO;
 
         let group_cache = setup_group_cache_simple( 
             id_address,
-            DEFAULT_CHAIN_ID,
+            DEFAULT_CHAIN_ID as usize,
             DEFAULT_GROUP_INDEX as usize,
             DEFAULT_EPOCH,
             DEFAULT_GROUP_SIZE,
             DEFAULT_THRESHOLD,
-            vec![id_address, Address::random(), Address::random()],
+            vec![id_address, Address::ZERO, Address::ZERO],
         ).await.unwrap();
 
         let randomness_tasks_cache = setup_randomness_tasks_cache(vec![]).await;
@@ -795,8 +800,8 @@ mod tests {
         let _server_handle = start_mock_grpc_server(service.clone(), port).await;
         tokio::time::sleep(Duration::from_millis(100)).await;
 
-        let id_address = Address::random();
-        let committer_id_address = Address::random();
+        let id_address = Address::ZERO;
+        let committer_id_address = Address::ZERO;
         let server_address = format!("http://127.0.0.1:{}", port);
         
         let mock_client = MockCommitterClient::new(
@@ -807,7 +812,7 @@ mod tests {
 
         let result = mock_client
             .commit_partial_signature(
-                DEFAULT_CHAIN_ID,
+                DEFAULT_CHAIN_ID  as usize,
                 arpa_core::BLSTaskType::Randomness,
                 vec![1, 2, 3],
                 vec![4, 5, 6],
@@ -839,8 +844,8 @@ mod tests {
         let _server_handle = start_mock_grpc_server(service.clone(), port).await;
         tokio::time::sleep(Duration::from_millis(100)).await;
 
-        let id_address = Address::random();
-        let committer_id_address = Address::random();
+        let id_address = Address::ZERO;
+        let committer_id_address = Address::ZERO;
         let server_address = format!("http://127.0.0.1:{}", port);
         
         let mock_client = MockCommitterClient::new(
@@ -851,7 +856,7 @@ mod tests {
 
         let result = mock_client
             .commit_partial_signature(
-                DEFAULT_CHAIN_ID,
+                DEFAULT_CHAIN_ID as usize,
                 arpa_core::BLSTaskType::Randomness,
                 vec![1, 2, 3],
                 vec![4, 5, 6],
@@ -875,8 +880,8 @@ mod tests {
         let _server_handle = start_mock_grpc_server(service.clone(), port).await;
         tokio::time::sleep(Duration::from_millis(100)).await;
 
-        let id_address = Address::random();
-        let committer_id_address = Address::random();
+        let id_address = Address::ZERO;
+        let committer_id_address = Address::ZERO;
         let server_address = format!("http://127.0.0.1:{}", port);
         
         let mock_client = MockCommitterClient::new(
@@ -889,7 +894,7 @@ mod tests {
         
         let result = mock_client
             .commit_partial_signature(
-                DEFAULT_CHAIN_ID,
+                DEFAULT_CHAIN_ID as usize,
                 arpa_core::BLSTaskType::Randomness,
                 vec![1, 2, 3],
                 vec![4, 5, 6],
@@ -912,8 +917,8 @@ mod tests {
         let _server_handle = start_mock_grpc_server(service.clone(), port).await;
         tokio::time::sleep(Duration::from_millis(100)).await;
 
-        let id_address = Address::random();
-        let committer_id_address = Address::random();
+        let id_address = Address::ZERO;
+        let committer_id_address = Address::ZERO;
         let server_address = format!("http://127.0.0.1:{}", port);
         
         let mock_client = MockCommitterClient::new(
@@ -931,7 +936,7 @@ mod tests {
         for (i, task_type) in task_types.iter().enumerate() {
             let result = mock_client
                 .commit_partial_signature(
-                    DEFAULT_CHAIN_ID,
+                    DEFAULT_CHAIN_ID as usize,
                     task_type.clone(),
                     vec![i as u8],
                     vec![i as u8 + 10],
@@ -956,17 +961,17 @@ mod tests {
 
     #[tokio::test]
     async fn test_subscriber_notify_with_mock_grpc() {
-        let id_address = Address::random();
+        let id_address = Address::ZERO;
         let tasks = vec![create_test_randomness_task()];
 
         let group_cache = setup_group_cache_with_secret(
             id_address,
-            DEFAULT_CHAIN_ID,
+            DEFAULT_CHAIN_ID  as usize,
             DEFAULT_GROUP_INDEX as usize,
             DEFAULT_EPOCH,
             DEFAULT_GROUP_SIZE,
             DEFAULT_THRESHOLD,
-            vec![id_address, Address::random(), Address::random()],
+            vec![id_address, Address::ZERO, Address::ZERO],
         ).await.unwrap();
 
         let randomness_tasks_cache = setup_randomness_tasks_cache(tasks.clone()).await;
@@ -995,22 +1000,22 @@ mod tests {
 
     #[tokio::test]
     async fn test_partial_signature_generation() {
-        let id_address = Address::random();
+        let id_address = Address::ZERO;
         let task = create_test_randomness_task();
 
         let group_cache = setup_group_cache_with_secret(
             id_address,
-            DEFAULT_CHAIN_ID,
+            DEFAULT_CHAIN_ID as usize,
             DEFAULT_GROUP_INDEX as usize,
             DEFAULT_EPOCH,
             DEFAULT_GROUP_SIZE,
             DEFAULT_THRESHOLD,
-            vec![id_address, Address::random(), Address::random()],
+            vec![id_address, Address::ZERO, Address::ZERO],
         ).await.unwrap();
 
         let actual_seed = [
             &arpa_core::u256_to_vec(&task.seed)[..],
-            &arpa_core::u256_to_vec(&ethers::types::U256::from(task.assignment_block_height))[..],
+            &arpa_core::u256_to_vec(&U256::from(task.assignment_block_height))[..],
         ]
         .concat();
 
@@ -1050,13 +1055,13 @@ mod tests {
 
     #[tokio::test]
     async fn test_group_cache_committer_operations() {
-        let id_address = Address::random();
-        let committer_address = Address::random();
-        let non_committer_address = Address::random();
+        let id_address = Address::ZERO;
+        let committer_address = Address::ZERO;
+        let non_committer_address = Address::ZERO;
 
         let group_cache = setup_group_cache_simple(
             id_address,
-            DEFAULT_CHAIN_ID,
+            DEFAULT_CHAIN_ID as usize,
             DEFAULT_GROUP_INDEX as usize,
             DEFAULT_EPOCH,
             DEFAULT_GROUP_SIZE,
@@ -1086,20 +1091,20 @@ mod tests {
         tokio::time::sleep(Duration::from_millis(100)).await;
 
         let client1 = MockCommitterClient::new(
-            Address::random(),           
-            Address::random(),           
+            Address::ZERO,
+            Address::ZERO,
             format!("http://127.0.0.1:{}", port1),
         ).await.unwrap();
 
         let client2 = MockCommitterClient::new(
-            Address::random(),           
-            Address::random(),           
+            Address::ZERO,
+            Address::ZERO,
             format!("http://127.0.0.1:{}", port2),
         ).await.unwrap();
 
         let result1 = client1
             .commit_partial_signature(
-                DEFAULT_CHAIN_ID,
+                DEFAULT_CHAIN_ID as usize,
                 arpa_core::BLSTaskType::Randomness,
                 vec![1],
                 vec![2],
@@ -1109,7 +1114,7 @@ mod tests {
 
         let result2 = client2
             .commit_partial_signature(
-                DEFAULT_CHAIN_ID,
+                DEFAULT_CHAIN_ID as usize,
                 arpa_core::BLSTaskType::Randomness,
                 vec![4],
                 vec![5],

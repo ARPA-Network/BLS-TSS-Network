@@ -277,7 +277,7 @@ mod tests {
     ) -> Result<(Address, Address), Box<dyn std::error::Error>> {
         println!("Deploying mock contracts...");
 
-        let node_registry = MockNodeRegistry::deploy(client.clone()).await?;
+        let node_registry = MockNodeRegistry::deploy(client.clone(), Address::ZERO, Address::ZERO, Address::ZERO).await?;
         let node_registry_address = *node_registry.address();
         println!(
             "Node Registry contract deployed at: {}",

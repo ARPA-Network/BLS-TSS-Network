@@ -74,13 +74,13 @@ mod tests {
 
     #[derive(Debug)]
     struct MockBlockInfoHandler {
-        chain_id: usize,
+        chain_id: u64,
         block_height: Arc<RwLock<usize>>,
         block_time: usize,
     }
 
     impl MockBlockInfoHandler {
-        fn new(chain_id: usize, initial_block_height: usize, block_time: usize) -> Self {
+        fn new(chain_id: u64, initial_block_height: usize, block_time: usize) -> Self {
             Self {
                 chain_id,
                 block_height: Arc::new(RwLock::new(initial_block_height)),
@@ -115,7 +115,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_block_subscriber_creation() {
-        let chain_id = 1;
+        let chain_id = 1u64;
         let block_cache = Arc::new(RwLock::new(
             Box::new(MockBlockInfoHandler::new(chain_id, 100, 12)) as Box<dyn BlockInfoHandler>
         ));
@@ -128,7 +128,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_notify_updates_block_height() {
-        let chain_id = 1;
+        let chain_id = 1u64;
         let initial_height = 100;
         let mock_handler = MockBlockInfoHandler::new(chain_id, initial_height, 12);
         let block_cache = Arc::new(RwLock::new(
@@ -154,7 +154,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_notify_with_different_chain_id() {
-        let chain_id = 1;
+        let chain_id = 1u64;
         let different_chain_id = 2;
         let initial_height = 100;
         let mock_handler = MockBlockInfoHandler::new(chain_id, initial_height, 12);
@@ -175,7 +175,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_subscribe_registers_with_event_queue() {
-        let chain_id = 1;
+        let chain_id = 1u64;
         let block_cache = Arc::new(RwLock::new(
             Box::new(MockBlockInfoHandler::new(chain_id, 100, 12)) as Box<dyn BlockInfoHandler>
         ));
@@ -187,7 +187,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_multiple_notify_calls() {
-        let chain_id = 1;
+        let chain_id = 1u64;
         let initial_height = 100;
         let mock_handler = MockBlockInfoHandler::new(chain_id, initial_height, 12);
         let block_cache = Arc::new(RwLock::new(
@@ -216,7 +216,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_debuggable_subscriber_trait() {
-        let chain_id = 1;
+        let chain_id = 1u64;
         let block_cache = Arc::new(RwLock::new(
             Box::new(MockBlockInfoHandler::new(chain_id, 100, 12)) as Box<dyn BlockInfoHandler>
         ));
@@ -229,7 +229,7 @@ mod tests {
     #[tokio::test]
     #[should_panic]
     async fn test_notify_with_wrong_event_type() {
-        let chain_id = 1;
+        let chain_id = 1u64;
         let block_cache = Arc::new(RwLock::new(
             Box::new(MockBlockInfoHandler::new(chain_id, 100, 12)) as Box<dyn BlockInfoHandler>
         ));
@@ -263,7 +263,7 @@ mod tests {
 
         #[tokio::test]
         async fn test_block_subscriber_integration() {
-            let chain_id = 1;
+            let chain_id = 1u64;
             let mock_handler = MockBlockInfoHandler::new(chain_id, 0, 12);
             
             let block_cache = Arc::new(RwLock::new(

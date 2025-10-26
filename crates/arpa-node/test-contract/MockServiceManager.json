@@ -1,0 +1,111 @@
+{
+  "abi": [
+    {
+      "inputs": [
+        {
+          "internalType": "address",
+          "name": "_avsDirectory",
+          "type": "address"
+        }
+      ],
+      "stateMutability": "nonpayable",
+      "type": "constructor"
+    },
+    {
+      "inputs": [],
+      "name": "avsDirectory",
+      "outputs": [
+        {
+          "internalType": "address",
+          "name": "",
+          "type": "address"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    }
+  ],
+  "bytecode": {
+    "object": "0x6080604052348015600e575f5ffd5b50604051610112380380610112833981016040819052602b91604e565b5f80546001600160a01b0319166001600160a01b03929092169190911790556079565b5f60208284031215605d575f5ffd5b81516001600160a01b03811681146072575f5ffd5b9392505050565b608d806100855f395ff3fe6080604052348015600e575f5ffd5b50600436106026575f3560e01c80636b3aa72e14602a575b5f5ffd5b5f54603b906001600160a01b031681565b6040516001600160a01b03909116815260200160405180910390f3fea2646970667358221220436ef968b576911c4bbc003b5bd55757c61730b754b3d3c757b4fdd7ab7d1d0564736f6c634300081b0033",
+    "sourceMap": "",
+    "linkReferences": {}
+  },
+  "deployedBytecode": {
+    "object": "0x6080604052348015600e575f5ffd5b50600436106026575f3560e01c80636b3aa72e14602a575b5f5ffd5b5f54603b906001600160a01b031681565b6040516001600160a01b03909116815260200160405180910390f3fea2646970667358221220436ef968b576911c4bbc003b5bd55757c61730b754b3d3c757b4fdd7ab7d1d0564736f6c634300081b0033",
+    "sourceMap": "",
+    "linkReferences": {}
+  },
+  "methodIdentifiers": {},
+  "rawMetadata": "{\"compiler\":{\"version\":\"0.8.27+commit.40a35a09\"},\"language\":\"Solidity\",\"output\":{\"abi\":[{\"inputs\":[{\"internalType\":\"address\",\"name\":\"_avsDirectory\",\"type\":\"address\"}],\"stateMutability\":\"nonpayable\",\"type\":\"constructor\"},{\"inputs\":[],\"name\":\"avsDirectory\",\"outputs\":[{\"internalType\":\"address\",\"name\":\"\",\"type\":\"address\"}],\"stateMutability\":\"view\",\"type\":\"function\"}],\"devdoc\":{\"kind\":\"dev\",\"methods\":{},\"version\":1},\"userdoc\":{\"kind\":\"user\",\"methods\":{},\"version\":1}},\"settings\":{\"compilationTarget\":{\"MockServiceManager.sol\":\"MockServiceManager\"},\"evmVersion\":\"cancun\",\"libraries\":{},\"metadata\":{\"bytecodeHash\":\"ipfs\"},\"optimizer\":{\"enabled\":true,\"runs\":300},\"remappings\":[]},\"sources\":{\"MockServiceManager.sol\":{\"keccak256\":\"0x9c9807bf9a19b4d1d86094ea0be6b2a0829d5b0cf6840f953449788286523b3e\",\"license\":\"MIT\",\"urls\":[\"bzz-raw://62bc8ee5fa7fd899db2a87e650a41f0b3aa65d8326e2d44663909acf8344a521\",\"dweb:/ipfs/QmaXevm89unDQVfhfKCMHyVuZt6yhiPRNvs14hW2dndYYb\"]}},\"version\":1}",
+  "metadata": {
+    "compiler": {
+      "version": "0.8.27+commit.40a35a09"
+    },
+    "language": "Solidity",
+    "output": {
+      "abi": [
+        {
+          "inputs": [
+            {
+              "internalType": "address",
+              "name": "_avsDirectory",
+              "type": "address"
+            }
+          ],
+          "stateMutability": "nonpayable",
+          "type": "constructor"
+        },
+        {
+          "inputs": [],
+          "name": "avsDirectory",
+          "outputs": [
+            {
+              "internalType": "address",
+              "name": "",
+              "type": "address"
+            }
+          ],
+          "stateMutability": "view",
+          "type": "function"
+        }
+      ],
+      "devdoc": {
+        "kind": "dev",
+        "methods": {},
+        "version": 1
+      },
+      "userdoc": {
+        "kind": "user",
+        "methods": {},
+        "version": 1
+      }
+    },
+    "settings": {
+      "compilationTarget": {
+        "MockServiceManager.sol": "MockServiceManager"
+      },
+      "evmVersion": "cancun",
+      "libraries": {},
+      "metadata": {
+        "bytecodeHash": "ipfs"
+      },
+      "optimizer": {
+        "enabled": true,
+        "runs": 300
+      },
+      "remappings": []
+    },
+    "sources": {
+      "MockServiceManager.sol": {
+        "keccak256": "0x9c9807bf9a19b4d1d86094ea0be6b2a0829d5b0cf6840f953449788286523b3e",
+        "license": "MIT",
+        "urls": [
+          "bzz-raw://62bc8ee5fa7fd899db2a87e650a41f0b3aa65d8326e2d44663909acf8344a521",
+          "dweb:/ipfs/QmaXevm89unDQVfhfKCMHyVuZt6yhiPRNvs14hW2dndYYb"
+        ]
+      }
+    },
+    "version": 1
+  },
+  "id": 1
+}

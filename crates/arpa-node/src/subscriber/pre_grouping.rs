@@ -120,12 +120,12 @@ mod tests {
     };
     use arpa_core::DKGTask;
     use arpa_dal::{GroupInfoHandler, cache::InMemoryGroupInfoCache};
-    use ethers_core::types::Address;
+    use alloy::primitives::{Address};
     use std::{any::Any, sync::Arc};
     use threshold_bls::schemes::bn254::G2Curve;
     use tokio::sync::RwLock;
 
-    const CHAIN_ID: usize = 1;
+    const CHAIN_ID: u64 = 1;
     const GROUP_SIZE: usize = 3;
     const THRESHOLD: usize = 2;
     const ASSIGNMENT_BLOCK_HEIGHT: usize = 100;
@@ -137,9 +137,9 @@ mod tests {
             epoch,
             size: GROUP_SIZE,
             threshold: THRESHOLD,
-            members: vec![Address::random(), Address::random(), Address::random()],
+            members: vec![Address::ZERO, Address::ZERO, Address::ZERO],
             assignment_block_height: ASSIGNMENT_BLOCK_HEIGHT,
-            coordinator_address: Address::random(),
+            coordinator_address: Address::ZERO,
         }
     }
 
@@ -152,7 +152,7 @@ mod tests {
     }
 
     fn create_subscriber() -> (PreGroupingSubscriber<G2Curve>, Arc<RwLock<EventQueue>>) {
-        let id_address = Address::random();
+        let id_address = Address::ZERO;
         let group_cache: Arc<RwLock<Box<dyn GroupInfoHandler<G2Curve>>>> = Arc::new(RwLock::new(
             Box::new(InMemoryGroupInfoCache::<G2Curve>::new(id_address)),
         ));
