@@ -5,7 +5,7 @@ const PROTO_DIR: &str = "proto";
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("cargo:rerun-if-changed=proto");
-    println!("cargo:rerun-if-changed=src/listener/test-contract");
+    println!("cargo:rerun-if-changed=test-contract");
 
     let mut prost_build = tonic_prost_build::Config::new();
     prost_build.btree_map(["members"]);

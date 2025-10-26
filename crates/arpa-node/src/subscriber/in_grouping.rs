@@ -359,8 +359,6 @@ impl<PC: Curve + std::fmt::Debug + Sync + Send + 'static> Subscriber for InGroup
                     let cache_epoch = group_cache.clone().read().await.get_epoch().unwrap_or(0);
 
                     cache_index != task_group_index || cache_epoch != task_epoch
-                    //NodeError::GroupIndexObsolete(cache_index)
-                    //NodeError::GroupEpochObsolete(cache_epoch)
                 }
             },
             2000,
@@ -381,4 +379,364 @@ impl<PC: Curve + std::fmt::Debug + Sync + Send + 'static> Subscriber for InGroup
 impl<PC: Curve + std::fmt::Debug + Sync + Send + 'static> DebuggableSubscriber
     for InGroupingSubscriber<PC>
 {
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{
+        event::{run_dkg::RunDKG, types::Topic},
+        queue::event_queue::EventQueue,
+        scheduler::dynamic::SimpleDynamicTaskScheduler,
+    };
+    use alloy::node_bindings::{Anvil, AnvilInstance};
+    use alloy::primitives::{Address, U256};
+    use alloy::providers::WsConnect;
+    use alloy::signers::local::PrivateKeySigner;
+    use alloy::sol;
+    use arpa_core::{build_client, Config, DKGStatus, DKGTask, GeneralMainChainIdentity, ProviderClientWithSigner};
+    use arpa_dal::{
+        cache::{InMemoryGroupInfoCache, InMemoryNodeInfoCache},
+        GroupInfoHandler, NodeInfoHandler,
+    };
+    use rand::thread_rng;
+    use std::sync::Arc;
+    use threshold_bls::{group::Element, schemes::bn254::G2Curve};
+    use tokio::sync::RwLock;
+
+    sol! {
+        #[sol(rpc)]
+        MockController,
+        "test-contract/MockController.json"
+    }
+
+    sol! {
+        #[sol(rpc)]        
+        MockCoordinator,
+        "test-contract/MockCoordinator.json"
+    }
+
+    struct TestEnvironment {
+        _anvil: AnvilInstance,
+        client: ProviderClientWithSigner,
+        wallet: PrivateKeySigner,
+        chain_id: u64,
+        ws_endpoint: String,
+    }
+
+    impl TestEnvironment {
+        async fn new() -> Self {
+            let anvil = Anvil::new().spawn();
+            let ws_endpoint = anvil.ws_endpoint();
+            let ws_connect = WsConnect::new(&ws_endpoint);
+            let wallet: PrivateKeySigner = anvil.keys()[0].clone().into();
+            let chain_id = anvil.chain_id();
+            let client = build_client(wallet.clone(), chain_id, ws_connect)
+                .await
+                .unwrap();
+
+            TestEnvironment {
+                _anvil: anvil,
+                client,
+                wallet,
+                chain_id,
+                ws_endpoint,
+            }
+        }
+
+        async fn deploy_controller(&self) -> (Address, MockController::MockControllerInstance<ProviderClientWithSigner>) {
+            let contract = MockController::deploy(self.client.clone(), Address::ZERO)
+                .await
+                .unwrap();
+            
+            let _receipt = contract
+                .setShouldSucceed(true)
+                .send()
+                .await
+                .unwrap()
+                .get_receipt()
+                .await
+                .unwrap();
+            
+            (*contract.address(), contract)
+        }
+
+        async fn deploy_coordinator(&self, threshold: u64) -> (Address, MockCoordinator::MockCoordinatorInstance<ProviderClientWithSigner>) {
+            let contract = MockCoordinator::deploy(self.client.clone(), U256::from(threshold))
+                .await
+                .unwrap();
+            
+            (*contract.address(), contract)
+        }
+
+        async fn create_chain_identity(
+            &self,
+            controller_address: Address,
+        ) -> Arc<RwLock<ChainIdentityHandlerType<G2Curve>>> {
+            let config = Config::default();
+            let ws_connect = WsConnect::new(&self.ws_endpoint);
+            let general_chain_identity = GeneralMainChainIdentity::new(
+                self.chain_id.try_into().unwrap(),
+                self.wallet.clone(),
+                ws_connect,
+                self.client.clone(),
+                self.ws_endpoint.clone(),
+                controller_address,
+                Address::ZERO,
+                Address::ZERO,
+                config.get_time_limits().contract_transaction_retry_descriptor,
+                config.get_time_limits().contract_view_retry_descriptor,
+                None,
+            );
+            Arc::new(RwLock::new(Box::new(general_chain_identity)))
+        }
+    }
+
+    async fn setup_node_cache(id_address: Address) -> NodeResult<Arc<RwLock<Box<dyn NodeInfoHandler<G2Curve>>>>> {
+        let node_cache: Arc<RwLock<Box<dyn NodeInfoHandler<G2Curve>>>> = Arc::new(RwLock::new(
+            Box::new(InMemoryNodeInfoCache::<G2Curve>::new(id_address)),
+        ));
+        {
+            let mut node_cache_write = node_cache.write().await;
+            node_cache_write.set_node_rpc_endpoint("http://localhost:8545".to_string()).await?;
+            let private_key = <G2Curve as threshold_bls::group::Curve>::Scalar::rand(&mut thread_rng());
+            let mut public_key = <G2Curve as threshold_bls::group::Curve>::Point::one();
+            public_key.mul(&private_key);
+            node_cache_write.set_dkg_key_pair(private_key, public_key).await?;
+        }
+        Ok(node_cache)
+    }
+
+    async fn setup_group_cache(
+        id_address: Address,
+        chain_id: usize,
+        group_index: usize,
+        epoch: usize,
+        size: usize,
+        threshold: usize,
+        member_addresses: Vec<Address>,
+        dkg_status: DKGStatus,
+    ) -> NodeResult<Arc<RwLock<Box<dyn GroupInfoHandler<G2Curve>>>>> {
+        let group_cache: Arc<RwLock<Box<dyn GroupInfoHandler<G2Curve>>>> = Arc::new(RwLock::new(
+            Box::new(InMemoryGroupInfoCache::<G2Curve>::new(id_address)),
+        ));
+        {
+            let mut group_cache_write = group_cache.write().await;
+            let dkg_task = DKGTask {
+                group_index,
+                epoch,
+                size,
+                threshold,
+                assignment_block_height: 100,
+                members: member_addresses.clone(),
+                coordinator_address: Address::ZERO,
+            };
+            group_cache_write.save_task_info(chain_id, dkg_task).await?;
+            group_cache_write.update_dkg_status(group_index, epoch, dkg_status).await?;
+        }
+        Ok(group_cache)
+    }
+
+    fn create_schedulers() -> (Arc<RwLock<EventQueue>>, Arc<RwLock<SimpleDynamicTaskScheduler>>) {
+        (
+            Arc::new(RwLock::new(EventQueue::new())),
+            Arc::new(RwLock::new(SimpleDynamicTaskScheduler::new()))
+        )
+    }
+
+    #[tokio::test]
+    async fn test_in_grouping_subscriber_creation() {
+        let env = TestEnvironment::new().await;
+        let (controller_address, _) = env.deploy_controller().await;
+        let chain_identity = env.create_chain_identity(controller_address).await;
+        let id_address = Address::ZERO;
+        let node_cache = setup_node_cache(id_address).await.unwrap();
+        let group_cache = setup_group_cache(
+            id_address, 1, 1, 1, 3, 2,
+            vec![id_address, Address::ZERO, Address::ZERO],
+            DKGStatus::InPhase,
+        ).await.unwrap();
+        let (eq, ts) = create_schedulers();
+        let subscriber = InGroupingSubscriber::new(chain_identity, node_cache, group_cache, eq, ts, 1000);
+        assert_eq!(subscriber.dkg_wait_for_phase_interval_millis, 1000);
+    }
+
+    #[tokio::test]
+    async fn test_dkg_handler_creation() {
+        let env = TestEnvironment::new().await;
+        let (controller_address, _) = env.deploy_controller().await;
+        let (coordinator_address, _) = env.deploy_coordinator(2).await;
+        let chain_identity = env.create_chain_identity(controller_address).await;
+        let id_address = Address::ZERO;
+        let node_cache = setup_node_cache(id_address).await.unwrap();
+        let group_cache = setup_group_cache(
+            id_address, 1, 1, 1, 3, 2,
+            vec![id_address, Address::ZERO, Address::ZERO],
+            DKGStatus::InPhase,
+        ).await.unwrap();
+        let handler = AllInOneDKGHandler::new(|| thread_rng(), chain_identity, node_cache, group_cache.clone(), 1000);
+        let task = DKGTask {
+            group_index: 1,
+            epoch: 1,
+            size: 3,
+            threshold: 2,
+            members: vec![id_address, Address::ZERO, Address::ZERO],
+            assignment_block_height: 100,
+            coordinator_address,
+        };
+        assert_eq!(task.group_index, 1);
+        assert_eq!(task.epoch, 1);
+        assert_eq!(task.size, 3);
+        assert_eq!(task.threshold, 2);
+        assert_eq!(handler.dkg_wait_for_phase_interval_millis, 1000);
+    }
+
+    #[tokio::test]
+    async fn test_subscriber_notify() {
+        let env = TestEnvironment::new().await;
+        let (controller_address, _) = env.deploy_controller().await;
+        let (coordinator_address, _) = env.deploy_coordinator(2).await;
+        let chain_identity = env.create_chain_identity(controller_address).await;
+        let id_address = Address::ZERO;
+        let node_cache = setup_node_cache(id_address).await.unwrap();
+        let group_cache = setup_group_cache(
+            id_address, 1, 1, 1, 3, 2,
+            vec![id_address, Address::ZERO, Address::ZERO],
+            DKGStatus::InPhase,
+        ).await.unwrap();
+        let (eq, ts) = create_schedulers();
+        let subscriber = InGroupingSubscriber::new(chain_identity, node_cache, group_cache, eq, ts, 1000);
+        let task = DKGTask {
+            group_index: 1,
+            epoch: 1,
+            size: 3,
+            threshold: 2,
+            members: vec![id_address, Address::ZERO, Address::ZERO],
+            assignment_block_height: 100,
+            coordinator_address,
+        };
+        let run_dkg_event = RunDKG { dkg_task: task };
+        let result = subscriber.notify(Topic::RunDKG, &run_dkg_event).await;
+        assert!(result.is_ok());
+    }
+
+    #[tokio::test]
+    async fn test_subscriber_subscribe() {
+        let env = TestEnvironment::new().await;
+        let controller_address = Address::ZERO;
+        let chain_identity = env.create_chain_identity(controller_address).await;
+        let id_address = Address::ZERO;
+        let node_cache = setup_node_cache(id_address).await.unwrap();
+        let group_cache = setup_group_cache(
+            id_address, 1, 1, 1, 3, 2,
+            vec![id_address, Address::ZERO, Address::ZERO],
+            DKGStatus::InPhase,
+        ).await.unwrap();
+        let (eq, ts) = create_schedulers();
+        let subscriber = InGroupingSubscriber::new(chain_identity, node_cache, group_cache, eq.clone(), ts, 1000);
+        subscriber.subscribe().await;
+    }
+
+    #[tokio::test]
+    async fn test_group_cache_operations() {
+        let id_address = Address::ZERO;
+        let group_cache = setup_group_cache(
+            id_address, 1, 2, 2, 5, 3,
+            vec![id_address, Address::ZERO, Address::ZERO, Address::ZERO, Address::ZERO],
+            DKGStatus::InPhase,
+        ).await.unwrap();
+        {
+            let group_cache_read = group_cache.read().await;
+            assert_eq!(group_cache_read.get_index().unwrap(), 2);
+            assert_eq!(group_cache_read.get_epoch().unwrap(), 2);
+            assert_eq!(group_cache_read.get_size().unwrap(), 5);
+            assert_eq!(group_cache_read.get_threshold().unwrap(), 3);
+            assert_eq!(group_cache_read.get_self_id_address().unwrap(), id_address);
+            assert_eq!(group_cache_read.get_dkg_status().unwrap(), DKGStatus::InPhase);
+        }
+        {
+            let mut group_cache_write = group_cache.write().await;
+            let result = group_cache_write.update_dkg_status(2, 2, DKGStatus::CommitSuccess).await;
+            assert!(result.is_ok());
+        }
+        {
+            let group_cache_read = group_cache.read().await;
+            assert_eq!(group_cache_read.get_dkg_status().unwrap(), DKGStatus::CommitSuccess);
+        }
+    }
+
+    #[tokio::test]
+    async fn test_node_cache_operations() {
+        let id_address = Address::ZERO;
+        let node_cache = setup_node_cache(id_address).await.unwrap();
+        {
+            let node_cache_read = node_cache.read().await;
+            assert_eq!(node_cache_read.get_id_address().unwrap(), id_address);
+            assert_eq!(node_cache_read.get_node_rpc_endpoint().unwrap(), "http://localhost:8545");
+            assert!(node_cache_read.get_dkg_private_key().is_ok());
+            assert!(node_cache_read.get_dkg_public_key().is_ok());
+        }
+        {
+            let mut node_cache_write = node_cache.write().await;
+            let new_endpoint = "http://localhost:9545".to_string();
+            let result = node_cache_write.set_node_rpc_endpoint(new_endpoint.clone()).await;
+            assert!(result.is_ok());
+        }
+        {
+            let node_cache_read = node_cache.read().await;
+            assert_eq!(node_cache_read.get_node_rpc_endpoint().unwrap(), "http://localhost:9545");
+        }
+    }
+
+    #[tokio::test]
+    async fn test_dkg_task_with_different_statuses() {
+        let id_address = Address::ZERO;
+        let statuses = vec![DKGStatus::None, DKGStatus::InPhase, DKGStatus::WaitForPostProcess, DKGStatus::CommitSuccess];
+        for (i, status) in statuses.iter().enumerate() {
+            let group_cache = setup_group_cache(
+                id_address, 1, i + 1, 1, 3, 2,
+                vec![id_address, Address::ZERO, Address::ZERO],
+                *status,
+            ).await.unwrap();
+            let group_cache_read = group_cache.read().await;
+            assert_eq!(group_cache_read.get_index().unwrap(), i + 1);
+            assert_eq!(group_cache_read.get_dkg_status().unwrap(), *status);
+        }
+    }
+
+    #[tokio::test]
+    async fn test_multiple_group_members() {
+        let id_address = Address::ZERO;
+        let member_addresses = vec![
+            id_address, 
+            Address::from([1u8; 20]),
+            Address::from([2u8; 20]),
+            Address::from([3u8; 20]),
+            Address::from([4u8; 20])
+        ];
+        let group_cache = setup_group_cache(
+            id_address, 1, 1, 1, 5, 3,
+            member_addresses.clone(),
+            DKGStatus::InPhase,
+        ).await.unwrap();
+        let group_cache_read = group_cache.read().await;
+        assert_eq!(group_cache_read.get_size().unwrap(), 5);
+        assert_eq!(group_cache_read.get_threshold().unwrap(), 3);
+        let members = group_cache_read.get_members().unwrap();
+        assert_eq!(members.len(), 5);
+        assert!(members.contains_key(&id_address));
+    }
+
+    #[tokio::test]
+    async fn test_contract_integration() {
+        let env = TestEnvironment::new().await;
+        let (controller_address, _) = env.deploy_controller().await;
+        let (coordinator_address, _) = env.deploy_coordinator(2).await;
+        let chain_identity = env.create_chain_identity(controller_address).await;
+        assert_ne!(controller_address, Address::ZERO);
+        assert_ne!(coordinator_address, Address::ZERO);
+        let chain_identity_read = chain_identity.read().await;
+        chain_identity_read.build_controller_client();
+        chain_identity_read.build_coordinator_client(coordinator_address);
+    }
 }
